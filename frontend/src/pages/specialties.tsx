@@ -10,6 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import { getSpecialty, listSpecialties } from "../api/specialties";
 import type { Specialty } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { Stethoscope, Search } from "lucide-react";
 
 function formatSpecialties(
   specialties: Specialty[]
@@ -57,7 +58,7 @@ export function SpecialtyListPage() {
 
       {!loading && specialties && specialties.length === 0 && (
         <EmptyState
-          icon="🏥"
+          icon={<Stethoscope size={40} />}
           title="No specialties found"
           description="Specialty catalog is empty."
         />
@@ -69,7 +70,9 @@ export function SpecialtyListPage() {
             <Link key={specialty.id} to={`/specialties/${specialty.id}`} className="specialty-card">
               <Card className="specialty-card__inner">
                 <div className="specialty-card__header">
-                  <span className="specialty-card__icon">🏥</span>
+                  <span className="specialty-card__icon">
+                    <Stethoscope size={20} />
+                  </span>
                   <h2 className="specialty-card__name">{specialty.name}</h2>
                 </div>
                 {specialty.description && (
@@ -141,7 +144,9 @@ export function SpecialtyDetailPage() {
         <div className="specialty-detail">
           <Card className="specialty-detail__header">
             <div className="specialty-detail__title-row">
-              <span className="specialty-detail__icon">🏥</span>
+              <span className="specialty-detail__icon">
+                <Stethoscope size={24} />
+              </span>
               <h1 className="specialty-detail__name">{specialty.name}</h1>
             </div>
             {specialty.description && (
@@ -171,7 +176,7 @@ export function SpecialtyDetailPage() {
 
       {!loading && !specialty && !error && (
         <EmptyState
-          icon="🔍"
+          icon={<Search size={40} />}
           title="Specialty not found"
           description="This specialty doesn't exist or is no longer available."
           action={<Link to="/specialties">Browse all specialties</Link>}

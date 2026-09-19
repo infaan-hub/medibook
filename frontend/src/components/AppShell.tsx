@@ -3,40 +3,60 @@
  * tablet+ sidebar rail, install/update prompts, offline banner.
  * PHASE 5: navigation and the header user chip are role-aware.
  * PHASE 13: notification bell with unread count badge.
+ * Responsive: CSS Grid layout, hamburger toggle at all sizes,
+ * mobile/tablet drawer, desktop collapsible sidebar with localStorage persistence.
+ * Premium medical sidebar with Lucide icons.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
 import { useSession } from "../state/app-context";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
+import { isStandalone } from "../pwa/installPrompt";
+import {
+  Home,
+  Stethoscope,
+  Calendar,
+  LayoutDashboard,
+  HeartPulse,
+  User as UserIcon,
+  Bell,
+  Menu,
+  ChevronRight,
+  Shield,
+  X,
+} from "lucide-react";
+
+const DESKTOP_BP = 1200;
+const STORAGE_KEY = "medibook_sidebar_collapsed";
 
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: ReactNode;
 }
 
 function navItemsFor(user: User | null): NavItem[] {
   const items: NavItem[] = [
-    { to: "/", label: "Home", icon: "⌂" },
-    { to: "/doctors", label: "Doctors", icon: "✚" },
+    { to: "/", label: "Home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
   ];
   if (user?.role === "patient") {
-    items.push({ to: "/appointments", label: "Appointments", icon: "🗓" });
+    items.push({ to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> });
   }
   if (user?.role === "doctor") {
-    items.push({ to: "/appointments", label: "Schedule", icon: "🗓" });
-    items.push({ to: "/doctor/dashboard", label: "Dashboard", icon: "📋" });
+    items.push({ to: "/appointments", label: "Schedule", icon: <Calendar size={20} /> });
+    items.push({ to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> });
   }
   if (user?.role === "admin") {
-    items.push({ to: "/admin", label: "Admin", icon: "⚙" });
+    items.push({ to: "/admin", label: "Admin", icon: <Shield size={20} /> });
   }
   if (user?.role === "patient") {
-    items.push({ to: "/settings", label: "Settings", icon: "🩺" });
+    items.push({ to: "/settings", label: "Settings", icon: <HeartPulse size={20} /> });
   }
-  items.push({ to: "/profile", label: "Profile", icon: "👤" });
+  items.push({ to: "/profile", label: "Profile", icon: <UserIcon size={20} /> });
   return items;
 }
 
@@ -44,6 +64,21 @@ function initials(user: User): string {
   const first = user.first_name.trim()[0] ?? "";
   const last = user.last_name.trim()[0] ?? "";
   return (first + last).toUpperCase() || user.email[0].toUpperCase();
+}
+
+/** Hook: returns true when viewport >= DESKTOP_BP */
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= DESKTOP_BP
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${DESKTOP_BP}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    setIsDesktop(mq.matches);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
 }
 
 /** Notification bell with unread count badge. */
@@ -64,7 +99,7 @@ function NotificationBell() {
 
   return (
     <Link to="/notifications" className="notif-bell" title="Notifications">
-      <span className="notif-bell__icon">🔔</span>
+      <Bell size={20} />
       {unreadCount > 0 && (
         <span className="notif-bell__badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
       )}
@@ -108,7 +143,7 @@ function useOnline(): boolean {
   return online;
 }
 
-function NavLinks({ items, side = false }: { items: NavItem[]; side?: boolean }) {
+function NavLinks({ items, side = false, onNavigate }: { items: NavItem[]; side?: boolean; onNavigate?: () => void }) {
   return (
     <>
       {items.map((item) => (
@@ -121,11 +156,15 @@ function NavLinks({ items, side = false }: { items: NavItem[]; side?: boolean })
               .filter(Boolean)
               .join(" ")
           }
+          onClick={onNavigate}
         >
           <span className="nav-item__icon" aria-hidden="true">
             {item.icon}
           </span>
           <span className="nav-item__label">{item.label}</span>
+          {side && (
+            <ChevronRight size={16} className="nav-item__chevron" aria-hidden="true" />
+          )}
           {!side && <span className="nav-item__bar" aria-hidden="true" />}
         </NavLink>
       ))}
@@ -135,10 +174,15 @@ function NavLinks({ items, side = false }: { items: NavItem[]; side?: boolean })
 
 function InstallPrompt() {
   const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (isStandalone()) return;
+    const ua = navigator.userAgent;
+    setIsIOS(/iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in window));
     const onPrompt = (e: BeforeInstallPromptEvent) => {
-      e.preventDefault(); // §22.1: defer the native prompt to a user gesture
+      e.preventDefault();
       setEvent(e);
     };
     const onInstalled = () => setEvent(null);
@@ -150,37 +194,130 @@ function InstallPrompt() {
     };
   }, []);
 
-  if (!event) return null;
-  return (
-    <div className="prompt" role="dialog" aria-label="Install MediBook">
-      <span>Install MediBook for a faster, offline-capable experience.</span>
-      <button
-        type="button"
-        className="btn btn--secondary btn--sm"
-        onClick={() => {
-          void event.prompt();
-          setEvent(null);
-        }}
-      >
-        Install
-      </button>
-    </div>
-  );
+  if (dismissed || isStandalone()) return null;
+
+  if (event) {
+    return (
+      <div className="prompt" role="dialog" aria-label="Install MediBook">
+        <span>Install MediBook for a faster, offline-capable experience.</span>
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          onClick={() => {
+            void event.prompt();
+            setEvent(null);
+          }}
+        >
+          Install
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss install prompt"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  if (isIOS) {
+    return (
+      <div className="prompt" role="dialog" aria-label="Install MediBook">
+        <span>Tap <strong>Share</strong> then <strong>Add to Home Screen</strong> to install MediBook.</span>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { user } = useSession();
   const items = navItemsFor(user);
+  const isDesktop = useIsDesktop();
+  const location = useLocation();
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Sidebar open state: on desktop, defaults to "not collapsed"; on mobile, defaults to closed
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (window.innerWidth >= DESKTOP_BP) {
+      return localStorage.getItem(STORAGE_KEY) !== "true";
+    }
+    return false;
+  });
+
+  // Persist desktop sidebar state
+  useEffect(() => {
+    if (isDesktop) {
+      localStorage.setItem(STORAGE_KEY, String(!sidebarOpen));
+    }
+  }, [sidebarOpen, isDesktop]);
+
+  // Close mobile/tablet sidebar on route change
+  useEffect(() => {
+    if (!isDesktop) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname, isDesktop]);
+
+  // Close sidebar on Escape key
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [sidebarOpen]);
+
+  // Lock body scroll when mobile/tablet drawer is open
+  useEffect(() => {
+    if (isDesktop || !sidebarOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sidebarOpen, isDesktop]);
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((o) => !o);
+  }, []);
 
   return (
-    <div className="shell">
+    <div className={`shell${sidebarOpen && !isDesktop ? " shell--drawer-open" : ""}`}>
       <header className="shell__header">
+        <button
+          className="shell__hamburger"
+          type="button"
+          aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={sidebarOpen}
+          aria-controls="shell-sidebar"
+          onClick={toggleSidebar}
+        >
+          <Menu size={20} />
+        </button>
         <span className="shell__brand">
-          <span className="shell__logo" aria-hidden="true">
-            M
-          </span>
-          MediBook
+          <img className="shell__logo" src="/images/logo.jpeg" alt="MediBook" width={28} height={28} draggable={false} />
+          <span className="shell__brand-text">MediBook</span>
         </span>
         <div className="shell__header-actions">
           <NotificationBell />
@@ -188,9 +325,36 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
+      {sidebarOpen && !isDesktop && (
+        <div className="shell__overlay" onClick={closeSidebar} aria-hidden="true" />
+      )}
+
       <div className="shell__body">
-        <nav className="shell__nav--side" aria-label="Primary">
-          <NavLinks items={items} side />
+        <nav
+          ref={sidebarRef}
+          id="shell-sidebar"
+          className={`shell__nav--side${sidebarOpen ? " shell__nav--side--open" : ""}`}
+          aria-label="Primary"
+        >
+          <div className="sidebar__header">
+            <img className="sidebar__logo" src="/images/logo.jpeg" alt="" width={32} height={32} draggable={false} />
+            <span className="sidebar__title">MediBook</span>
+          </div>
+          <div className="sidebar__divider" />
+          <NavLinks items={items} side onNavigate={closeSidebar} />
+          <div className="sidebar__spacer" />
+          <div className="sidebar__divider" />
+          <div className="sidebar__user">
+            <span className="sidebar__user-avatar">
+              {user ? initials(user) : "?"}
+            </span>
+            <div className="sidebar__user-info">
+              <span className="sidebar__user-name">
+                {user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email : "Guest"}
+              </span>
+              <span className="sidebar__user-role">{user?.role ?? ""}</span>
+            </div>
+          </div>
         </nav>
 
         <main className="shell__content" id="main">

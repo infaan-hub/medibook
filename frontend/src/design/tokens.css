@@ -3,24 +3,29 @@
 
 :root {
   /* Brand (§22.3 theme colour) */
-  --color-primary: #0f62fe;
-  --color-primary-hover: #0353e9;
-  --color-primary-active: #0043ce;
-  --color-primary-soft: #e8f1ff;
-  --color-secondary: #009d9a;
-  --color-secondary-hover: #00857e;
-  --color-secondary-soft: #d9fbfb;
+  --color-primary: #09a99e;
+  --color-primary-hover: #087f79;
+  --color-primary-active: #076f6a;
+  --color-primary-soft: #e2f8f6;
+  --color-secondary: #087f79;
+  --color-secondary-hover: #066b66;
+  --color-secondary-soft: #d9f4f2;
   --color-accent: #8a3ffc;
 
   /* Neutrals */
-  --color-bg: #f4f4f6;
+  --color-bg: #f0fbfb;
   --color-surface: #ffffff;
   --color-surface-alt: #fafafb;
-  --color-text: #16191e;
-  --color-text-muted: #5b616a;
+  --color-text: #163c3c;
+  --color-text-muted: #668787;
   --color-text-inverse: #ffffff;
   --color-border: #d5d9de;
   --color-border-strong: #a8aeb8;
+
+  /* Auth/onboarding aliases: keep the requested token vocabulary available. */
+  --color-background: var(--color-bg);
+  --color-muted: var(--color-text-muted);
+  --color-white: #ffffff;
 
   /* Feedback states (§21 loading/empty/error/success) */
   --color-success: #24a148;

@@ -18,9 +18,9 @@ export function register(payload: RegisterPayload): Promise<Envelope<AuthPayload
   return apiPost<AuthPayload>("/auth/register/", payload);
 }
 
-/** POST /api/auth/login/ — email + password → JWT pair + user. */
-export function login(email: string, password: string): Promise<Envelope<AuthPayload>> {
-  return apiPost<AuthPayload>("/auth/login/", { email, password });
+/** POST /api/auth/login/ — username + password → JWT pair + user. */
+export function login(username: string, password: string): Promise<Envelope<AuthPayload>> {
+  return apiPost<AuthPayload>("/auth/login/", { username, password });
 }
 
 /** POST /api/auth/logout/ — blacklists the given refresh token. */

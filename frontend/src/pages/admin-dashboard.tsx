@@ -14,6 +14,7 @@ import { listDoctors } from "../api/doctors";
 import type { DoctorProfile, User } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { ArrowLeft } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -129,7 +130,7 @@ export function AdminUsersScreen() {
 
   return (
     <div className="page">
-      <Link to="/admin">← Dashboard</Link>
+      <Link to="/admin"><ArrowLeft size={16} /> Dashboard</Link>
       <h1 className="page__title">Users</h1>
 
       {/* Role filter */}
@@ -168,7 +169,7 @@ export function AdminUsersScreen() {
                   {u.email} &middot; {u.role}
                 </span>
                 <span className="admin-list__meta">
-                  Joined {formatDate(String(u.id))}
+                  Joined {u.date_joined ? formatDate(u.date_joined) : "—"}
                 </span>
               </div>
               <div className="admin-list__badge">
@@ -221,7 +222,7 @@ export function AdminDoctorsScreen() {
 
   return (
     <div className="page">
-      <Link to="/admin">← Dashboard</Link>
+      <Link to="/admin"><ArrowLeft size={16} /> Dashboard</Link>
       <h1 className="page__title">Doctors</h1>
 
       {loading ? (

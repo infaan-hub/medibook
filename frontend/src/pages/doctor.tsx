@@ -12,6 +12,7 @@ import { getDoctorReviews } from "../api/reviews";
 import type { DoctorAvailability, DoctorProfile, Review, ScheduleItem } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { DoctorReviewList, StarRating } from "../components/reviews";
+import { ArrowLeft } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -43,7 +44,7 @@ export function DoctorProfileScreen() {
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
   return (
     <div className="page">
-      <Link to="/doctors">← Back to doctors</Link>
+      <Link to="/doctors"><ArrowLeft size={16} /> Back to doctors</Link>
       <Card>
         <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
         <p>{doctor.qualifications || "Professional profile"}</p>

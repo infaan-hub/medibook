@@ -4,10 +4,11 @@
  * every app screen sits behind RequireAuth (+ RequireRole for /admin).
  * The Splash hides once the boot probe resolves.
  * PHASE 18: React.lazy + Suspense for code splitting.
+ * PHASE 21: Onboarding shown only on first visit; auto-login on return.
  */
 
 import { Suspense, lazy, useEffect, useState } from "react";
-import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AllowUnverified, RequireAuth, RequireGuest, RequireRole } from "./components/guards";
 import { SplashScreen } from "./components/Splash";
@@ -16,9 +17,11 @@ import { ToastViewport } from "./components/ToastViewport";
 import {
   ForgotPasswordScreen,
   LoginScreen,
+  OnboardingScreen,
   RegisterScreen,
   ResetPasswordScreen,
   VerifyEmailScreen,
+  WelcomeScreen,
 } from "./pages/auth";
 import { SettingsScreen } from "./pages/patient";
 import { ProfileScreen } from "./pages/profile";
@@ -26,7 +29,7 @@ import {
   HomeScreen,
   NotFoundPage,
 } from "./pages";
-import { SessionProvider, ToastProvider } from "./state/app-context";
+import { SessionProvider, ToastProvider, useSession } from "./state/app-context";
 
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
 
@@ -57,22 +60,53 @@ function PageFallback() {
   );
 }
 
+/**
+ * The root route is deliberately unguarded.  It resolves the launch destination
+ * before a guest can reach RequireAuth (which would otherwise redirect to login).
+ */
+function LaunchRoute() {
+  const { status, user } = useSession();
+
+  if (status === "booting") return null;
+
+  if (status === "guest") {
+    return <Navigate to={localStorage.getItem("medibook_onboarding_completed") ? "/welcome" : "/onboarding"} replace />;
+  }
+
+  if (!user) return null;
+  const dashboard = user.role === "doctor"
+    ? "/doctor/dashboard"
+    : user.role === "admin"
+      ? "/admin"
+      : "/dashboard";
+  return <Navigate to={dashboard} replace />;
+}
+
+/** Keep the splash visible until both its minimum duration and session restore finish. */
+function LaunchSplash({ timerComplete }: { timerComplete: boolean }) {
+  const { status } = useSession();
+  return <SplashScreen hidden={timerComplete && status !== "booting"} />;
+}
+
 export default function App() {
   const [booted, setBooted] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setBooted(true), 350);
+    const timer = window.setTimeout(() => setBooted(true), 5000);
     return () => window.clearTimeout(timer);
   }, []);
 
   return (
-    <SessionProvider>
-      <ToastProvider>
-        <SplashScreen hidden={booted} />
-        <BrowserRouter>
+    <BrowserRouter>
+      <SessionProvider>
+        <ToastProvider>
+          <LaunchSplash timerComplete={booted} />
           <Suspense fallback={<PageFallback />}>
             <Routes>
+              <Route path="/" element={<LaunchRoute />} />
               {/* Guest-only screens (no app shell) */}
+              <Route path="/onboarding" element={<OnboardingScreen />} />
+              <Route path="/welcome" element={<WelcomeScreen />} />
               <Route
                 path="/login"
                 element={
@@ -124,7 +158,7 @@ export default function App() {
                   </RequireAuth>
                 }
               >
-                <Route path="/" element={<HomeScreen />} />
+                <Route path="/dashboard" element={<HomeScreen />} />
                 <Route path="/doctors" element={<DoctorsPage />} />
                 <Route path="/doctors/:id" element={<DoctorProfileScreen />} />
                 <Route path="/booking/:id" element={<BookingScreen />} />
@@ -157,8 +191,8 @@ export default function App() {
             </Routes>
           </Suspense>
           <ToastViewport />
-        </BrowserRouter>
-      </ToastProvider>
-    </SessionProvider>
+        </ToastProvider>
+      </SessionProvider>
+    </BrowserRouter>
   );
 }

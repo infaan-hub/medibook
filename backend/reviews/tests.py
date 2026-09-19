@@ -16,14 +16,15 @@ PASSWORD = "StrongPass123!"
 
 def _user(email: str, role: str, **extra):
     return User.objects.create_user(
-        email=email, password=PASSWORD, role=role, is_verified=True, **extra
+        username=email.split("@")[0], email=email, password=PASSWORD, role=role, is_verified=True, **extra
     )
 
 
 def _auth(email: str) -> APIClient:
     client = APIClient()
+    username = email.split("@")[0]
     resp = client.post(
-        "/api/auth/login/", {"email": email, "password": PASSWORD}, format="json"
+        "/api/auth/login/", {"username": username, "password": PASSWORD}, format="json"
     )
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {resp.data['data']['access']}")
     return client

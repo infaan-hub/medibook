@@ -13,6 +13,7 @@ User = get_user_model()
 
 def _register(client: APIClient, **overrides) -> dict:
     payload = {
+        "username": "aminakhan",
         "email": "patient@example.com",
         "password": "StrongPass123!",
         "password_confirm": "StrongPass123!",
@@ -37,7 +38,7 @@ class AuthFlowTests(TestCase):
 
         login = self.client.post(
             "/api/auth/login/",
-            {"email": "patient@example.com", "password": "StrongPass123!"},
+            {"username": "aminakhan", "password": "StrongPass123!"},
             format="json",
         )
         self.assertEqual(login.status_code, 200)
@@ -131,7 +132,7 @@ class AuthFlowTests(TestCase):
         self.assertEqual(confirmed.status_code, 200)
         login = self.client.post(
             "/api/auth/login/",
-            {"email": "patient@example.com", "password": "NewStrong123!"},
+            {"username": "aminakhan", "password": "NewStrong123!"},
             format="json",
         )
         self.assertEqual(login.status_code, 200)

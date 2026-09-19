@@ -5,8 +5,8 @@ import { SplashScreen, UpdatePrompt } from "../components/Splash";
 describe("SplashScreen", () => {
   it("renders the brand logo and name", () => {
     render(<SplashScreen hidden={false} />);
-    expect(screen.getByText("M")).toBeInTheDocument();
-    expect(screen.getByText("MediBook")).toBeInTheDocument();
+    expect(screen.getByAltText("MediBook")).toBeInTheDocument();
+    expect(screen.getByAltText("MediBook")).toHaveAttribute("src", "/images/splash-screen.jpeg");
   });
 
   it("applies splash--hidden class when hidden", () => {
@@ -16,7 +16,8 @@ describe("SplashScreen", () => {
 
   it("sets aria-hidden when hidden", () => {
     render(<SplashScreen hidden={true} />);
-    expect(screen.getByText("M").closest("[aria-hidden]")).toHaveAttribute(
+    const img = screen.getByAltText("MediBook");
+    expect(img.closest("[aria-hidden]")).toHaveAttribute(
       "aria-hidden",
       "true"
     );

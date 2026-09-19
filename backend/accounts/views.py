@@ -13,7 +13,6 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.models import EmailVerificationToken, PasswordResetToken, Role
 from accounts.serializers import (
-    EmailLoginSerializer,
     LogoutSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
@@ -21,6 +20,7 @@ from accounts.serializers import (
     RegisterSerializer,
     ResendVerificationSerializer,
     UserSerializer,
+    UsernameLoginSerializer,
     VerifyEmailSerializer,
     user_payload,
 )
@@ -65,8 +65,8 @@ class RegisterView(APIView):
         )
 
 
-class EmailLoginView(APIView):
-    """POST /api/auth/login/ — email + password → JWT pair (§29)."""
+class UsernameLoginView(APIView):
+    """POST /api/auth/login/ — username + password → JWT pair (§29)."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
@@ -74,7 +74,7 @@ class EmailLoginView(APIView):
     throttle_scope = "auth"
 
     def post(self, request):
-        serializer = EmailLoginSerializer(
+        serializer = UsernameLoginSerializer(
             data=request.data, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)

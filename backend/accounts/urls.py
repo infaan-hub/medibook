@@ -3,7 +3,7 @@
 from django.urls import path
 
 from accounts.views import (
-    EmailLoginView,
+    UsernameLoginView,
     LogoutView,
     MeView,
     PasswordChangeView,
@@ -19,7 +19,7 @@ app_name = "accounts"
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/login/", EmailLoginView.as_view(), name="login"),
+    path("auth/login/", UsernameLoginView.as_view(), name="login"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/token/refresh/", RefreshView.as_view(), name="token-refresh"),
     path("auth/me/", MeView.as_view(), name="me"),

@@ -1,18 +1,25 @@
 {
-  "name": "MediBook",
+  "name": "MediBook — Doctor Appointment Booking",
   "short_name": "MediBook",
   "description": "Find doctors, check availability, and book healthcare appointments.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
-  "theme_color": "#0f62fe",
-  "background_color": "#f4f4f6",
+  "theme_color": "#08a79d",
+  "background_color": "#f0fbfb",
   "lang": "en",
+  "categories": ["health", "medical", "productivity"],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/logo.jpeg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "/icons/logo.jpeg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/logo.jpeg", "sizes": "180x180", "type": "image/jpeg" }
+  ],
+  "shortcuts": [
+    { "name": "My Appointments", "url": "/appointments", "icons": [{ "src": "/icons/logo.jpeg", "sizes": "192x192" }] },
+    { "name": "Find a Doctor", "url": "/doctors", "icons": [{ "src": "/icons/logo.jpeg", "sizes": "192x192" }] }
   ]
 }

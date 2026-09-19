@@ -17,6 +17,7 @@ import { getMyDoctorProfile } from "../api/doctors";
 import type { Appointment, DoctorProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { ArrowLeft } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -329,7 +330,7 @@ export function DoctorAppointmentsScreen() {
 
   return (
     <div className="page">
-      <Link to="/doctor/dashboard">← Dashboard</Link>
+      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
       <h1 className="page__title">Appointments</h1>
 
       {/* Tabs */}

@@ -23,6 +23,7 @@ import type {
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ReviewForm } from "../components/reviews";
 import { useToast } from "../state/app-context";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -123,7 +124,7 @@ export function BookingScreen() {
 
   return (
     <div className="page">
-      <Link to={`/doctors/${id}`}>← Back to doctor</Link>
+      <Link to={`/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
 
       <Card>
         <h1 className="page__title">Book appointment</h1>
@@ -214,7 +215,7 @@ export function BookingSuccessScreen() {
     <div className="page">
       <Card>
         <div className="booking-success">
-          <div className="booking-success__icon">✓</div>
+          <div className="booking-success__icon"><CheckCircle2 size={48} /></div>
           <h1 className="page__title">Appointment requested</h1>
           <p className="page__subtitle">
             Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects your request.
@@ -299,7 +300,7 @@ export function RescheduleScreen() {
   if (!canReschedule) {
     return (
       <div className="page">
-        <Link to={`/appointments/${id}`}>← Back to appointment</Link>
+        <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> Back to appointment</Link>
         <Card>
           <EmptyState title="Cannot reschedule" description="Only pending or confirmed appointments can be rescheduled." />
         </Card>
@@ -309,7 +310,7 @@ export function RescheduleScreen() {
 
   return (
     <div className="page">
-      <Link to={`/appointments/${id}`}>← Back to appointment</Link>
+      <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> Back to appointment</Link>
 
       <Card>
         <h1 className="page__title">Reschedule appointment</h1>
@@ -507,7 +508,7 @@ export function AppointmentDetailScreen() {
 
   return (
     <div className="page">
-      <Link to="/appointments">← Back to appointments</Link>
+      <Link to="/appointments"><ArrowLeft size={16} /> Back to appointments</Link>
 
       <Card>
         <div className="appt-detail__header">

@@ -15,8 +15,9 @@ PASSWORD = "StrongPass123!"
 
 
 def _user(email: str, role: str, **extra):
+    username = email.split("@")[0]
     user = User.objects.create_user(
-        email=email, password=PASSWORD, role=role, is_verified=True, **extra
+        username=username, email=email, password=PASSWORD, role=role, is_verified=True, **extra
     )
     return user
 

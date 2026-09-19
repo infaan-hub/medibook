@@ -4,6 +4,7 @@
 
 export interface User {
   id: number;
+  username: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -11,6 +12,7 @@ export interface User {
   phone: string;
   is_verified: boolean;
   profile_image: string | null;
+  date_joined: string | null;
 }
 
 export interface AuthPair {
@@ -25,6 +27,7 @@ export interface AuthPayload extends AuthPair {
 /* ---- Request payloads (§27 contracts, PHASE 5) ---- */
 
 export interface RegisterPayload {
+  username: string;
   email: string;
   password: string;
   password_confirm: string;

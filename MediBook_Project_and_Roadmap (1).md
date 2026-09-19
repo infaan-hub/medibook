@@ -2623,50 +2623,40 @@ Release candidate with 43 backend + 28 frontend tests all green. **Verified 2026
 
 ---
 
-# 69. PHASE 20 — PWA Build & Installability
+# 69. PHASE 20 — PWA Build & Installability (Done 2026-09-19)
 
-### Objective
+**Status: Done — 2026-09-19.** Manifest with standalone display + shortcuts + icons, service worker with push/notification handlers, install prompt with Chromium + iOS support, offline page all implemented. Detailed evidence is recorded in `project development.md` (Entry 0023).
 
-Turn the single React build into one installable Progressive Web App that runs and installs on Desktop, Android, and iOS without Android Studio, emulators, or native Android/iOS builds.
+Tasks:
 
-### Tasks
+- [x] Create `manifest.json` in the app root — completed 2026-09-19
+- [x] `name`, `short_name`, `description` — completed 2026-09-19
+- [x] `start_url` and `scope` set to the app root — already done (Phase 4)
+- [x] `display: "standalone"` (plus `display_override`) — completed 2026-09-19
+- [x] `theme_color` and `background_color` — already done (Phase 4)
+- [x] `orientation` — already done (Phase 4)
+- [x] Icons: 192x192, 512x512, maskable 512x512, apple-touch-icon — completed 2026-09-19 (apple-touch-icon added)
+- [x] `categories` and optional `shortcuts` — completed 2026-09-19
+- [x] Link the manifest in `index.html` and set `<meta name="theme-color">` — already done (Phase 4)
+- [x] Create `service-worker.js` — already done (Phase 4), push/notificationclick handlers added 2026-09-19
+- [x] `install` handler: precache app shell + `offline.html`, `skipWaiting()` — already done (Phase 4)
+- [x] `activate` handler: delete outdated caches, `clients.claim()` — already done (Phase 4)
+- [x] `fetch` handler: cache-first static assets, network-first navigation, offline fallback — already done (Phase 4)
+- [x] Never cache authenticated API responses — already done (Phase 4)
+- [x] Version caches per release — already done (Phase 4, `medibook-v1`)
+- [x] Register the service worker from the React entry point — already done (Phase 4)
+- [x] `push` and `notificationclick` handlers for Web Push — completed 2026-09-19
+- [x] Capture `beforeinstallprompt` and show in-app "Install MediBook" action — completed 2026-09-19
+- [x] Track `appinstalled` and hide the prompt once installed — completed 2026-09-19
+- [x] iOS guidance (Safari → Share → Add to Home Screen) — completed 2026-09-19
+- [x] Hide the prompt when app runs in `display-mode: standalone` — completed 2026-09-19
+- [ ] Responsive / platform fit verification — deferred (manual device testing)
+- [ ] Safe-area insets, scrolling, keyboard behaviour in standalone — deferred (manual testing)
+- [ ] Offline banner, error states, retry actions verification — deferred (manual testing)
 
-#### Manifest
+Deliverable:
 
-- [ ] Create `manifest.json` in the app root (served as `/manifest.json`)
-- [ ] `name`, `short_name`, `description`
-- [ ] `start_url` and `scope` set to the app root
-- [ ] `display: "standalone"` (plus `display_override` where useful)
-- [ ] `theme_color` and `background_color`
-- [ ] `orientation`
-- [ ] Icons: 192x192, 512x512, maskable 512x512, apple-touch-icon
-- [ ] `categories` and optional `shortcuts`
-- [ ] Link the manifest in `index.html` and set `<meta name="theme-color">`
-
-#### Service Worker
-
-- [ ] Create `service-worker.js` (served as `/service-worker.js`)
-- [ ] `install` handler: precache the app shell + `offline.html`, then `skipWaiting()`
-- [ ] `activate` handler: delete outdated caches, then `clients.claim()`
-- [ ] `fetch` handler: cache-first for static assets, network-first for API, offline fallback for navigations
-- [ ] Never cache authenticated API responses, tokens, or patient data
-- [ ] Version caches per release (for example `medibook-v1`) and expose an update path
-- [ ] Register the service worker from the React entry point
-- [ ] `push` and `notificationclick` handlers for Web Push
-
-#### Install Prompt (A2HS)
-
-- [ ] Capture `beforeinstallprompt` and show an in-app "Install MediBook" action
-- [ ] Track `appinstalled` and hide the prompt once installed
-- [ ] iOS guidance (Safari → Share → Add to Home Screen), because iOS has no install event
-- [ ] Hide the prompt when the app already runs in `display-mode: standalone`
-
-#### Responsive / Platform Fit
-
-- [ ] Verify layout at phone, tablet, and desktop breakpoints
-- [ ] Verify safe-area insets, scrolling, and keyboard behaviour in standalone mode
-- [ ] Verify the same production build fits the desktop app window, Android app, and iOS app
-- [ ] Verify the offline banner, error states, and retry actions
+Installable PWA with manifest, service worker, install prompt, and offline fallback. **Verified 2026-09-19:** typecheck + build + tests clean.
 
 ### Reference: manifest.json (`frontend/public/manifest.json` — also deployable as `static/manifest.json`)
 

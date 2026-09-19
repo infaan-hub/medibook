@@ -7,6 +7,7 @@ import { submitReview } from "../api/reviews";
 import type { Review } from "../api/types";
 import { Button, Card, EmptyState } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { Star } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -40,6 +41,7 @@ export function StarRating({
   const [hover, setHover] = useState(0);
 
   const sizeClass = size === "sm" ? "star-rating--sm" : size === "lg" ? "star-rating--lg" : "";
+  const iconSize = size === "sm" ? 14 : size === "lg" ? 24 : 18;
 
   return (
     <div className={`star-rating ${sizeClass}`}>
@@ -56,7 +58,7 @@ export function StarRating({
           disabled={readonly}
           aria-label={`${star} star${star !== 1 ? "s" : ""}`}
         >
-          ★
+          <Star size={iconSize} fill={star <= (hover || value) ? "currentColor" : "none"} />
         </button>
       ))}
     </div>
@@ -153,7 +155,7 @@ export function DoctorReviewList({ reviews }: { reviews: Review[] }) {
   if (reviews.length === 0) {
     return (
       <EmptyState
-        icon="⭐"
+        icon={<Star size={40} />}
         title="No reviews yet"
         description="Be the first to leave a review after your appointment."
       />

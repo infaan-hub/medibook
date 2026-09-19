@@ -15,6 +15,7 @@ def user_payload(user) -> dict:
     image = getattr(user, "profile_image", None)
     return {
         "id": user.pk,
+        "username": user.username,
         "email": user.email,
         "phone": user.phone,
         "first_name": user.first_name,
@@ -22,6 +23,7 @@ def user_payload(user) -> dict:
         "role": user.role,
         "profile_image": image.url if image else None,
         "is_verified": user.is_verified,
+        "date_joined": user.created_at.isoformat() if hasattr(user, "created_at") and user.created_at else None,
     }
 
 
@@ -29,14 +31,20 @@ class UserSerializer(serializers.ModelSerializer):
     """Public user representation returned by ``/api/auth/me/``."""
 
     profile_image = serializers.ImageField(required=False, allow_null=True)
+    date_joined = serializers.SerializerMethodField()
+
+    def get_date_joined(self, obj) -> str | None:
+        if hasattr(obj, "created_at") and obj.created_at:
+            return obj.created_at.isoformat()
+        return None
 
     class Meta:
         model = User
         fields = (
-            "id", "email", "phone", "first_name", "last_name",
-            "role", "profile_image", "is_verified",
+            "id", "username", "email", "phone", "first_name", "last_name",
+            "role", "profile_image", "is_verified", "date_joined",
         )
-        read_only_fields = ("id", "email", "role", "is_verified")
+        read_only_fields = ("id", "username", "email", "role", "is_verified")
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -50,7 +58,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            "email", "password", "password_confirm", "phone",
+            "username", "email", "password", "password_confirm", "phone",
             "first_name", "last_name", "role",
         )
         extra_kwargs = {
@@ -59,6 +67,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             "last_name": {"required": False},
             "role": {"required": False},
         }
+
+    def validate_username(self, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise serializers.ValidationError("Username must be at least 3 characters.")
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
 
     def validate_email(self, value: str) -> str:
         return User.objects.normalize_email(value.strip().lower())
@@ -94,22 +110,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-class EmailLoginSerializer(serializers.Serializer):
-    """Email + password login — issues JWT pair on success (§29)."""
+class UsernameLoginSerializer(serializers.Serializer):
+    """Username + password login — issues JWT pair on success (§29)."""
 
-    email = serializers.EmailField()
+    username = serializers.CharField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate(self, attrs: dict) -> dict:
         from django.contrib.auth import authenticate
 
-        email = User.objects.normalize_email(attrs["email"].strip().lower())
         user = authenticate(
-            self.context.get("request"), username=email, password=attrs["password"]
+            self.context.get("request"), username=attrs["username"].strip(), password=attrs["password"]
         )
         if user is None:
             raise serializers.ValidationError(
-                "The email address or password is incorrect."
+                "The username or password is incorrect."
             )
         if not user.is_active:
             raise serializers.ValidationError("This account has been deactivated.")

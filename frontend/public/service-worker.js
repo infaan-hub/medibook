@@ -3,7 +3,7 @@
  * Strategy: app-shell precache + network-first for navigation requests with
  * offline.html fallback; stale-while-revalidate for same-origin static assets.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -81,4 +81,36 @@ self.addEventListener("fetch", (event) => {
       return cached ?? network;
     })
   );
+});
+
+// Activate — purge old versioned caches.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key !== SHELL_CACHE && key !== RUNTIME_CACHE)
+          .map((key) => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// Web Push (§69) — show notification when a push event arrives.
+self.addEventListener("push", (event) => {
+  const payload = event.data ? event.data.json() : {};
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "MediBook", {
+      body: payload.body || "You have a new appointment update.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: payload.url || "/" },
+    })
+  );
+});
+
+// Notification click — open the relevant URL.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow(event.notification.data.url));
 });

@@ -9,14 +9,14 @@ from accounts.models import EmailVerificationToken, PasswordResetToken, User
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     list_display = (
-        "email", "role", "first_name", "last_name",
+        "username", "email", "role", "first_name", "last_name",
         "is_verified", "is_active", "is_staff",
     )
     list_filter = ("role", "is_verified", "is_active", "is_staff")
-    search_fields = ("email", "first_name", "last_name", "phone")
+    search_fields = ("username", "email", "first_name", "last_name", "phone")
     ordering = ("-created_at",)
     fieldsets = (
-        (None, {"fields": ("email", "password")}),
+        (None, {"fields": ("username", "email", "password")}),
         ("Personal info", {"fields": ("first_name", "last_name", "phone", "profile_image")}),
         ("Roles & status", {"fields": ("role", "is_verified", "is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Important dates", {"fields": ("last_login", "created_at", "updated_at")}),
@@ -25,7 +25,7 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = (
         (None, {
             "classes": ("wide",),
-            "fields": ("email", "password1", "password2", "role", "is_verified"),
+            "fields": ("username", "email", "password1", "password2", "role", "is_verified"),
         }),
     )
 

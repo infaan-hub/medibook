@@ -5,6 +5,7 @@
 
 import { Card, EmptyState } from "../components/ui";
 import { useSession } from "../state/app-context";
+import { Shield } from "lucide-react";
 
 export function AdminScreen() {
   const { user } = useSession();
@@ -19,7 +20,7 @@ export function AdminScreen() {
       </Card>
 
       <EmptyState
-        icon="⚙"
+        icon={<Shield size={40} />}
         title="Admin screens coming soon"
         description="The backend /api/admin/stats/ endpoint is live and tested; the dashboard UI is built in PHASE 14."
       />

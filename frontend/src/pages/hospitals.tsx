@@ -10,6 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import { getHospital, listHospitals } from "../api/specialties";
 import type { Hospital } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
+import { Hospital as HospitalIcon, Phone, Search } from "lucide-react";
 
 export function HospitalListPage() {
   const [hospitals, setHospitals] = useState<Hospital[] | null>(null);
@@ -68,7 +69,7 @@ export function HospitalListPage() {
 
       {!loading && hospitals && hospitals.length === 0 && (
         <EmptyState
-          icon="🏥"
+          icon={<HospitalIcon size={40} />}
           title="No hospitals found"
           description={city ? `No hospitals found in ${city}.` : "Hospital catalog is empty."}
         />
@@ -80,7 +81,9 @@ export function HospitalListPage() {
             <Link key={hospital.id} to={`/hospitals/${hospital.id}`} className="hospital-card">
               <Card className="hospital-card__inner">
                 <div className="hospital-card__header">
-                  <span className="hospital-card__icon">🏥</span>
+                  <span className="hospital-card__icon">
+                    <HospitalIcon size={20} />
+                  </span>
                   <h2 className="hospital-card__name">{hospital.name}</h2>
                 </div>
                 <p className="hospital-card__city">{hospital.city}</p>
@@ -88,7 +91,9 @@ export function HospitalListPage() {
                   <p className="hospital-card__address">{hospital.address}</p>
                 )}
                 {hospital.phone && (
-                  <p className="hospital-card__contact">📞 {hospital.phone}</p>
+                  <p className="hospital-card__contact">
+                    <Phone size={14} /> {hospital.phone}
+                  </p>
                 )}
               </Card>
             </Link>
@@ -156,7 +161,9 @@ export function HospitalDetailPage() {
         <div className="hospital-detail">
           <Card className="hospital-detail__header">
             <div className="hospital-detail__title-row">
-              <span className="hospital-detail__icon">🏥</span>
+              <span className="hospital-detail__icon">
+                <HospitalIcon size={24} />
+              </span>
               <h1 className="hospital-detail__name">{hospital.name}</h1>
             </div>
             <p className="hospital-detail__city">{hospital.city}</p>
@@ -224,7 +231,7 @@ export function HospitalDetailPage() {
 
       {!loading && !hospital && !error && (
         <EmptyState
-          icon="🔍"
+          icon={<Search size={40} />}
           title="Hospital not found"
           description="This hospital doesn't exist or is no longer available."
           action={<Link to="/hospitals">Browse all hospitals</Link>}

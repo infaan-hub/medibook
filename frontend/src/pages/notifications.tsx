@@ -12,6 +12,16 @@ import {
 import type { Notification, NotificationType } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import {
+  Bell,
+  CalendarCheck,
+  CheckCircle2,
+  XCircle,
+  ShieldX,
+  Star,
+  Info,
+  Trash2,
+} from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -27,14 +37,14 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-const TYPE_ICONS: Record<NotificationType, string> = {
-  appointment_request: "📅",
-  appointment_confirmed: "✅",
-  appointment_cancelled: "❌",
-  appointment_rejected: "🚫",
-  appointment_reminder: "🔔",
-  review: "⭐",
-  system: "ℹ️",
+const TYPE_ICONS: Record<NotificationType, React.ReactNode> = {
+  appointment_request: <CalendarCheck size={18} />,
+  appointment_confirmed: <CheckCircle2 size={18} />,
+  appointment_cancelled: <XCircle size={18} />,
+  appointment_rejected: <ShieldX size={18} />,
+  appointment_reminder: <Bell size={18} />,
+  review: <Star size={18} />,
+  system: <Info size={18} />,
 };
 
 /* ======================================
@@ -80,7 +90,7 @@ function NotificationRow({
         onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
         aria-label="Delete notification"
       >
-        ×
+        <Trash2 size={16} />
       </button>
     </div>
   );
@@ -158,7 +168,7 @@ export function NotificationsScreen() {
         <Skeleton lines={5} />
       ) : notifications.length === 0 ? (
         <EmptyState
-          icon="🔔"
+          icon={<Bell size={40} />}
           title={filter === "unread" ? "No unread notifications" : "No notifications"}
           description={
             filter === "unread"

@@ -102,12 +102,12 @@ export function Badge({ status }: { status: BadgeStatus }) {
 /* ---------------- EmptyState (§21 empty state) ---------------- */
 
 export function EmptyState({
-  icon = "☰",
+  icon,
   title,
   description,
   action,
 }: {
-  icon?: string;
+  icon?: ReactNode;
   title: string;
   description?: string;
   action?: ReactNode;

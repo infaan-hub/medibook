@@ -12,7 +12,7 @@ User = get_user_model()
 class DoctorProfileTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            email="doctor-profile@example.com", password="StrongPass123!", role="doctor"
+            username="doctor-profile", email="doctor-profile@example.com", password="StrongPass123!", role="doctor"
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
@@ -26,7 +26,7 @@ class DoctorProfileTests(TestCase):
         self.assertEqual(response.data["data"]["bio"], "Family physician")
 
     def test_patient_cannot_access_doctor_profile_endpoint(self):
-        patient = User.objects.create_user(email="patient-profile@example.com", password="StrongPass123!", role="patient")
+        patient = User.objects.create_user(username="patient-profile", email="patient-profile@example.com", password="StrongPass123!", role="patient")
         client = APIClient()
         client.force_authenticate(user=patient)
         self.assertEqual(client.get("/api/doctors/me/profile/").status_code, 403)

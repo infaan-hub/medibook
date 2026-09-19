@@ -90,7 +90,7 @@ export type SessionStatus = "booting" | "authed" | "guest";
 interface SessionContextValue {
   status: SessionStatus;
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   /** Replace the cached user (profile edits, verification, …). */
@@ -139,8 +139,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const envelope = await loginRequest(email, password);
+    async (username: string, password: string) => {
+      const envelope = await loginRequest(username, password);
       applyAuth(envelope.data);
     },
     [applyAuth]

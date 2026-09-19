@@ -21,24 +21,26 @@ class Role(models.TextChoices):
 
 
 class UserManager(BaseUserManager):
-    """Manager for the email-login custom user model."""
+    """Manager for the username-login custom user model."""
 
-    def _create_user(self, email, password, **extra_fields):
+    def _create_user(self, username, email, password, **extra_fields):
+        if not username:
+            raise ValueError("A username is required.")
         if not email:
             raise ValueError("An email address is required.")
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.full_clean(exclude={"password"})
         user.save(using=self._db)
         return user
 
-    def create_user(self, email, password=None, **extra_fields):
+    def create_user(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
-        return self._create_user(email, password, **extra_fields)
+        return self._create_user(username, email, password, **extra_fields)
 
-    def create_superuser(self, email, password=None, **extra_fields):
+    def create_superuser(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("role", Role.ADMIN)
@@ -47,12 +49,13 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
-        return self._create_user(email, password, **extra_fields)
+        return self._create_user(username, email, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
-    """MediBook user — email login, role-based access (§26 User table)."""
+    """MediBook user — username login, role-based access (§26 User table)."""
 
+    username = models.CharField(max_length=60, unique=True, db_index=True, default="")
     email = models.EmailField(unique=True, db_index=True)
     phone = models.CharField(
         max_length=16, blank=True, default="", validators=[PHONE_VALIDATOR]
@@ -65,22 +68,20 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     profile_image = models.ImageField(
         upload_to="profile_images/", blank=True, null=True
     )
-    # ``AbstractBaseUser`` does not provide these — required for admin/support.
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    # Email ownership confirmed (PHASE 3 verify-email flow).
     is_verified = models.BooleanField(default=False)
 
     objects = UserManager()
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS: list[str] = []
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS: list[str] = ["email"]
 
     class Meta:
         ordering = ("-created_at",)
 
     def __str__(self) -> str:
-        return self.email
+        return self.username
 
     # -- Role helpers used by permission classes (§30) ---------------------
     @property

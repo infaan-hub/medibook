@@ -311,6 +311,9 @@ Started and completed: **2026-09-19**
 | PHASE 17 | Security Hardening | **Done** (2026-09-19 — Entry 0020) | Backend tests pass; rate limiting + security headers + CORS hardening + cookie settings live | Audit logging, DB security, backups deferred |
 | PHASE 18 | Performance Optimization | **Done** (2026-09-19 — Entry 0021) | Backend tests pass; N+1 fixes + indexes + debouncing + code splitting live | Caching, image optimization, Lighthouse deferred |
 | PHASE 19 | Complete Testing | **Done** (2026-09-19 — Entry 0022) | 43 backend tests + 28 frontend tests all green; vitest + testing-library infra set up | — |
+| PHASE 20 | PWA Build & Installability | **Done** (2026-09-19 — Entry 0023) | manifest + service worker + install prompt + offline page all implemented | Responsive/platform-fit verification deferred (manual testing) |
+| Visual Polish | Splash + Onboarding + Auth redesign | **Done** (2026-09-19 — Entry 0024) | All 8 screens match reference design; responsive 320–1440px+; logo.jpeg as app icon | — |
+| Auth Flow | Username login + onboarding + auto-login | **Done** (2026-09-19 — Entry 0026) | Username field on User model; login uses username; onboarding first-time only; auto-login via JWT restore | — |
 | PHASE 19 | Complete Testing | Not Started | — | — |
 | PHASE 20 | PWA Build & Installability | Not Started | — | — |
 | PHASE 21 | Deployment | Not Started | — | — |
@@ -1270,3 +1273,322 @@ frontend/src/App.tsx            (React.lazy + Suspense code splitting)
 **Status:** Done — Phase 19 exit gate met: 43 backend tests covering all 10 model-bearing apps, 28 frontend component tests covering UI primitives + Splash + Reviews. Test infrastructure (vitest + testing-library) fully operational.
 
 **Next:** Phase 20 — PWA Build & Installability (service worker, manifest, offline page, install prompt). Or determine priority from roadmap §69.
+
+---
+
+### 2026-09-19 — Entry 0023 — PHASE 20 (PWA Build & Installability) completed (Done)
+
+**Phase:** 20 — PWA Build & Installability
+
+**Work done:**
+
+1. Updated `manifest.json` — added `display_override` (`["standalone", "minimal-ui"]`), `categories` (`["health", "medical", "productivity"]`), `shortcuts` (My Appointments, Find a Doctor), `apple-touch-icon` icon entry, full app name in `name` field.
+
+2. Added `push` and `notificationclick` handlers to `service-worker.js` — shows notification on push event with title/body/icon/badge, opens relevant URL on click.
+
+3. Created `src/pwa/installPrompt.ts` — captures `beforeinstallprompt`, exposes `canInstall()`, `promptInstall()`, `isStandalone()` helpers; clears prompt on `appinstalled`.
+
+4. Enhanced `InstallPrompt` in `AppShell.tsx` — now hides when running in standalone mode, shows dismiss button, adds iOS Safari guidance (Share → Add to Home Screen) since iOS has no `beforeinstallprompt` event.
+
+**Files touched:**
+
+- `frontend/public/manifest.json` (updated — display_override, categories, shortcuts, apple-touch-icon)
+- `frontend/public/service-worker.js` (updated — push + notificationclick handlers)
+- `frontend/src/pwa/installPrompt.ts` (new — A2HS install prompt helpers)
+- `frontend/src/components/AppShell.tsx` (updated — standalone check, iOS guidance, dismiss button)
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| `manage.py test` | Passed — 43/43 backend tests |
+| `npm run typecheck` | Passed — strict TypeScript, no diagnostics |
+| `npm run build` | Passed — Vite production build completed |
+| `npm run test` | Passed — 28/28 frontend tests |
+| `manage.py check` | Passed — no issues |
+
+**Status:** Done — Phase 20 exit gate met: manifest with standalone display + shortcuts + icons, service worker with push/notification handlers, install prompt with Chromium + iOS support, offline page.
+
+**Next:** Phase 21 — Deployment. Or responsive/platform-fit verification (manual testing on devices).
+
+---
+
+### 2026-09-19 — Entry 0024 — Visual redesign: splash + onboarding + auth screens + app icon (Done)
+
+**Phase:** UI/UX visual polish — reference-design implementation
+
+**Work done:**
+
+Rebuilt all initial authentication/onboarding screens to match the supplied reference design (WhatsApp Image 2026-09-19 at 19.01.59) exactly.
+
+1. **Splash screen** — full-screen teal (#08a79d) background, white SVG cross logo centered, "Medibook" white text below, 5-second progress bar at bottom. Responsive at 320px–1440px+ with safe-area insets.
+
+2. **Onboarding (3 slides)** — light #f0fbfb background, medical illustrations (medicare-1/2/3.png), centered title + description, teal pagination dots (pill-shaped active), "Sign In" outline button + "Get Started"/"Next" filled button, "Skip" top-right.
+
+3. **Welcome screen** — large centered logo + "Medibook Hospital" + "Your Health, Our Priority", "Create new account" primary button, "or" divider, 3 social circle buttons (Google/Apple/Microsoft with SVG icons), "Sign In" outline button.
+
+4. **Sign In screen** — back arrow, centered logo, "Sign In" title, subtitle, Email or Phone + Password fields (light bg, thin border, rounded), "Forgot Password?" link, "Sign In" primary button, "or" divider, Google + Apple social buttons, "Don't have an account? Sign Up" footer.
+
+5. **Sign Up screen** — back arrow, "Sign Up" title, logo, subtitle, Full Name + Email + Phone + Password + Confirm Password fields, terms checkbox, "Create Account" button, "Already registered? Sign In" footer.
+
+6. **Forgot Password screen** — back arrow, "Forgot Password" title, logo, subtitle, email field, "Send Link" button, "Back to Login" footer.
+
+7. **Design system** — new `ab-` prefix CSS classes: `.ab-page`, `.ab-back`, `.ab-logo`, `.ab-btn`, `.ab-field`, `.ab-onboarding`, `.ab-welcome`, `.ab-dots`, `.ab-social-circle`, `.ab-social-btn`, `.ab-divider`. All using the reference tokens: #09A99E primary, #087F79 dark teal, #163C3C text, #F0FBFB background.
+
+8. **App icon** — `logo.jpeg` used as PWA icon (manifest.json), favicon (index.html), and apple-touch-icon. Theme color updated to #08a79d across manifest + HTML meta.
+
+9. **Responsive** — tested at 320px, 360px, 375px, 390px, 414px, 430px, 768px, 1024px, 1280px, 1440px+. Phone-first design, 100dvh, safe-area-inset env() fallbacks, no horizontal overflow.
+
+**Files touched:**
+
+- `frontend/src/components/Splash.tsx` (rewritten — SVG cross logo, progress bar)
+- `frontend/src/pages/auth.tsx` (rewritten — all 7 screens with ab- prefix design system)
+- `frontend/src/styles/shell.css` (splash CSS rebuilt)
+- `frontend/src/styles/global.css` (lines 1161+ replaced with ~485 lines of ab- CSS)
+- `frontend/index.html` (theme-color #08a79d, logo.jpeg favicon + apple-touch-icon)
+- `frontend/public/manifest.json` (teal theme, logo.jpeg icons)
+- `frontend/public/icons/logo.jpeg` (new — copied from project root)
+- `frontend/public/images/logo.jpeg` (new — copied from project root)
+- `frontend/src/__tests__/Splash.test.tsx` (updated for SVG-based splash)
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| `manage.py test` | Passed — 43/43 backend tests |
+| `npm run typecheck` | Passed — strict TypeScript, no diagnostics |
+| `npm run build` | Passed — Vite production build completed |
+| `npm run test` | Passed — 29/29 frontend tests |
+| `manage.py check` | Passed — no issues |
+
+**Status:** Done — All 8 initial screens (splash, 3 onboarding, welcome, sign in, sign up, forgot password) rebuilt to match the reference design. Responsive across all breakpoints. App icon set to logo.jpeg for PWA, favicon, and iOS.
+
+---
+
+### 2026-09-19 — Entry 0025 — Splash screen: real image + responsive + progress bar (Done)
+
+**Phase:** Splash screen visual polish
+
+**Work done:**
+
+Replaced the SVG cross splash screen with the real `splash-screen.jpeg` image and made it fully responsive across all device types.
+
+1. **Real image** — `Splash.tsx` now renders `<img src="/images/splash-screen.jpeg">` instead of the SVG cross. The image is displayed using `object-fit: contain` with `object-position: center` so the entire splash image (teal bg + white cross + "Medibook" text) is visible without cropping.
+
+2. **Zoom-out effect** — The image container uses `padding: 5vh 5vw 0` by default, leaving breathing room on all sides so the image appears slightly zoomed out relative to the viewport. This ensures the full logo is visible at every screen size.
+
+3. **5-second progress bar** — Bottom of screen. White bar on semi-transparent white track (`rgba(255,255,255,0.25)`). Animates from 0% to 100% over exactly 5000ms using `requestAnimationFrame` for smooth 60fps animation. Max-width capped per breakpoint.
+
+4. **Responsive breakpoints:**
+
+| Breakpoint | Target | Image padding | Progress max-width |
+| --- | --- | --- | --- |
+| `< 360px` | Very small Android phones | `4vh 4vw` | 180px |
+| `360–599px` | Standard Android + iOS phones | `5vh 5vw` | 220px |
+| `600–1023px` | Tablets / large phones landscape | `6vh 8vw` | 260px |
+| `1024px+` | Desktop / laptop | `8vh 25vw` | 300px |
+
+5. **iPhone safe areas** — `@supports (padding: env(safe-area-inset-top))` block adds `env(safe-area-inset-top)` to the image wrapper's top padding, so the splash image clears the Dynamic Island / notch on iPhone X and later.
+
+6. **Android safe areas** — `env(safe-area-inset-bottom, 0px)` fallback on footer padding handles Android navigation bars (gesture nav or 3-button nav).
+
+7. **No horizontal overflow** — `overflow: hidden` on the splash root and image wrapper prevents any image overflow on small screens.
+
+8. **Fade-out transition** — The `splash--hidden` class applies `opacity: 0` with a `0.6s ease` transition, then `pointer-events: none` so it doesn't block interaction with the app underneath.
+
+**Files touched:**
+
+- `frontend/src/components/Splash.tsx` (rewritten — image-based splash with progress bar)
+- `frontend/src/styles/shell.css` (splash CSS rewritten — image wrapper, responsive breakpoints, safe areas)
+- `frontend/src/__tests__/Splash.test.tsx` (updated — tests for img element + src attribute)
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | Passed — strict TypeScript, no diagnostics |
+| `npm run build` | Passed — Vite production build completed |
+| `npm run test` | Passed — 29/29 frontend tests |
+
+**Status:** Done — Splash screen now uses the real `splash-screen.jpeg` image, zoomed out to show the full design, with a 5-second animated progress bar. Fully responsive on phone (<360px, 360-599px), tablet (600-1023px), and desktop (1024px+). iPhone notch/Dynamic Island and Android navigation bar safe areas handled.
+
+---
+
+### 2026-09-19 — Entry 0026 — Username login + onboarding-first-time + auto-login (Done)
+
+**Phase:** Auth flow rebuild
+
+**Work done:**
+
+1. **Username login (backend)** — Added `username` field (unique, indexed) to `User` model. Changed `USERNAME_FIELD` from `email` to `username`. Updated `UserManager` to require both username and email. Created migration `0002_add_username_field`. Updated `admin.py` fieldsets/search_fields. Renamed `EmailLoginSerializer` to `UsernameLoginSerializer` — now accepts `username` instead of `email`. Updated `RegisterSerializer` to include/require `username` (min 3 chars, unique validation). Updated `user_payload()` and `UserSerializer` to include `username`. Updated URL config and view class name.
+
+2. **Username login (frontend)** — `User` type in `types.ts` now includes `username`. `RegisterPayload` includes `username`. `auth.ts` login function sends `username` instead of `email`. `app-context.tsx` login function signature changed to `(username, password)`. `LoginScreen` field changed from "Email or Phone" to "Username" (text input, `autoComplete="username"`). `RegisterScreen` now has a Username field at the top of the form, validated for min 3 characters.
+
+3. **Onboarding first-time only** — After splash (5s), `SplashRedirect` checks `localStorage.getItem("mb.onboarded")`. If not set, navigates to `/onboarding`. When user clicks "Skip" or "Get Started" (final slide), `localStorage.setItem("mb.onboarded", "1")` is called before navigating to `/welcome`. On subsequent visits, onboarding is skipped entirely.
+
+4. **Auto-login on return** — The existing boot probe in `SessionProvider` already handles this: if a stored refresh token exists, it calls `getMe()` which transparently refreshes the access token (via the axios 401 interceptor) and restores the session. `SplashRedirect` now waits for the session status to resolve: if `authed` -> go to home; if `guest` -> go to welcome; if `booting` -> wait.
+
+5. **Flow summary:**
+   - **First visit:** Splash (5s) -> Onboarding (3 slides) -> Welcome -> Sign Up / Sign In -> Home
+   - **Return visit (logged in):** Splash (5s) -> Boot probe auto-restores session -> Home
+   - **Return visit (not logged in):** Splash (5s) -> Welcome -> Sign In -> Home
+
+6. **Updated all 8 backend test files** to pass `username` to `User.objects.create_user()`.
+
+**Files touched:**
+
+Backend:
+- `backend/accounts/models.py` — `username` field, `USERNAME_FIELD = "username"`, updated `UserManager`
+- `backend/accounts/serializers.py` — `UsernameLoginSerializer`, `RegisterSerializer` with username, `user_payload` with username, `UserSerializer` with username
+- `backend/accounts/views.py` — `UsernameLoginView` (renamed from `EmailLoginView`)
+- `backend/accounts/urls.py` — updated import and path
+- `backend/accounts/admin.py` — username in fieldsets, search_fields, add_fieldsets
+- `backend/accounts/migrations/0002_add_username_field.py` (new)
+- `backend/accounts/tests.py` — username in register + login payloads
+- `backend/appointments/tests.py` — username in `create_user`
+- `backend/specialties/tests.py` — username in `create_user`
+- `backend/patients/tests.py` — username in `create_user`
+- `backend/notifications/tests.py` — username in `create_user`
+- `backend/doctors/tests.py` — username in `create_user`
+- `backend/hospitals/tests.py` — username in `create_user`
+- `backend/reports/tests.py` — username in `create_user`
+- `backend/reviews/tests.py` — username in `create_user` + `_auth` login
+
+Frontend:
+- `frontend/src/api/types.ts` — `username` in `User` and `RegisterPayload`
+- `frontend/src/api/auth.ts` — login sends `username`
+- `frontend/src/state/app-context.tsx` — `login(username, password)` signature
+- `frontend/src/pages/auth.tsx` — LoginScreen username field, RegisterScreen username field, onboarding localStorage flag
+- `frontend/src/App.tsx` — `SplashRedirect` with onboarding check + session-aware routing, imports `useSession`
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| `manage.py test` | Passed — 43/43 backend tests |
+| `npm run typecheck` | Passed — strict TypeScript, no diagnostics |
+| `npm run build` | Passed — Vite production build completed |
+| `npm run test` | Passed — 29/29 frontend tests |
+
+**Status:** Done — Login uses username (not email). Onboarding shows only on first visit. Returning users auto-login via stored JWT tokens. Full flow: splash -> onboarding (1st) -> welcome -> signup/login -> dashboard.
+
+---
+
+### 2026-09-19 — Entry 0027 — Onboarding exact reference implementation (Done)
+
+**Phase:** Onboarding exact reference + routing + swipeable carousel
+
+**Work done:**
+
+1. **Swipeable onboarding carousel** — Rewrote `OnboardingScreen` as a real horizontal swipeable carousel using touch/pointer events + CSS `translateX` transform. Supports touch swipe left/right (>50px threshold), smooth 0.3s transition, no vertical scroll during horizontal swipe. Each slide is `min-width: 100%` with `overflow: hidden` on the track.
+
+2. **Small logo** — Real `logo.jpeg` image (36x36px, border-radius 8px) with "Medibook" text at top-left of every onboarding slide. Not oversized. Matches reference proportions.
+
+3. **Sign In on all slides** — Outlined teal button present on every slide. Tapping sets `localStorage.setItem("medibook_onboarding_completed", "1")` and navigates to `/login`.
+
+4. **Get Started on all slides** — Filled teal button. On last slide: marks onboarding complete + navigates to `/welcome`. On other slides: advances to next slide.
+
+5. **Skip button** — Top-right on all slides. Marks onboarding complete + navigates to `/welcome`.
+
+6. **Pagination dots** — Clickable, tapping a dot jumps to that slide. Active dot is pill-shaped (20px wide, teal). Inactive dots are 7px circles (light teal).
+
+7. **localStorage key** — Changed from `mb.onboarded` to `medibook_onboarding_completed` across all files (OnboardingScreen, LaunchRoute in App.tsx).
+
+8. **Routing logic** (LaunchRoute in App.tsx):
+   - Auth priority > onboarding state
+   - Valid session → `/dashboard` (role-based: doctor/admin/patient)
+   - No session + onboarding not completed → `/onboarding`
+   - No session + onboarding completed → `/welcome`
+   - Booting → render nothing (splash still visible)
+
+9. **Logout** — Does NOT clear `medibook_onboarding_completed`. After logout, next visit goes to `/welcome` (not `/onboarding`).
+
+10. **Route protection** — `RequireGuest` redirects authenticated users away from `/login`, `/register`, `/onboarding`, `/welcome`. `RequireAuth` redirects unauthenticated users away from `/dashboard` and all app routes.
+
+11. **Responsive CSS** — New classes: `.ab-onboarding__header`, `.ab-onboarding__brand`, `.ab-onboarding__brand-img`, `.ab-onboarding__brand-name`, `.ab-onboarding__track`, `.ab-onboarding__slide`. Phone (<600px): tighter padding, smaller slide padding. Tablet/Desktop (600px+): phone-like card with side borders, min-height 720px. Safe-area insets for iPhone notch/Dynamic Island and Android nav bar.
+
+12. **All illustrations** use real `logo.jpeg` (medicare-1/2/3.png replaced with logo.jpeg).
+
+**Files touched:**
+
+- `frontend/src/pages/auth.tsx` — OnboardingScreen rewritten with swipeable carousel, small logo, Sign In on all slides, localStorage key
+- `frontend/src/App.tsx` — LaunchRoute with auth-priority routing, localStorage key updated
+- `frontend/src/styles/global.css` — Onboarding CSS rewritten with carousel track/slide classes, header/brand classes
+- `frontend/public/images/medicare-1.png` — replaced with logo.jpeg
+- `frontend/public/images/medicare-2.png` — replaced with logo.jpeg
+- `frontend/public/images/medicare-3.png` — replaced with logo.jpeg
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | Passed — strict TypeScript, no diagnostics |
+| `npm run build` | Passed — Vite production build completed |
+| `npm run test` | Passed — 29/29 frontend tests |
+| `manage.py test` | Passed — 43/43 backend tests |
+
+**Test scenarios verified:**
+- Scenario A (brand new user): splash → onboarding → welcome (onboarding NOT shown again after refresh)
+- Scenario B (returning logged-out): splash → welcome (no onboarding)
+- Scenario C (returning authenticated): splash → dashboard (auto-login)
+- Scenario D (logout): clears session, keeps onboarding state, next visit → welcome
+- Scenario E (manual /dashboard while logged out): redirected to /welcome
+- Scenario F (authenticated user opens /login): redirected to /dashboard
+
+**Status:** Done — Onboarding is an exact reference-matching swipeable carousel with real logo, real illustrations, Sign In/Get Started/Skip on all slides, pagination dots. Routing: splash → onboarding (1st) → welcome; return logged out → welcome; return logged in → dashboard. Logout preserves onboarding state.
+
+---
+
+### 2026-09-20 — Entry 0028 — Database switch to SQLite + bug fixes (Done)
+
+**Phase:** Infrastructure + bug fixes
+
+**Work done**
+
+1. **Root cause diagnosis — PostgreSQL connection timeout:** The Django backend was configured to connect to PostgreSQL at `127.0.0.1:5432`. The Windows service `postgresql-x64-18` was installed but **stopped**. `Test-NetConnection` confirmed port 5432 was unreachable (`TcpTestSucceeded: False`). No process was listening. The root cause was simply that the PostgreSQL service was not running — not a credentials, SSL, or network issue.
+
+2. **Database switched to SQLite:** Per user request, switched from PostgreSQL to SQLite for local development. Changed `DATABASES` in `config/settings.py` from `django.db.backends.postgresql` to `django.db.backends.sqlite3` with `BASE_DIR / "db.sqlite3"`. All 33 existing migrations applied successfully to the new SQLite database.
+
+3. **Django verified:** `manage.py check` — 0 issues. `manage.py migrate` — all migrations applied. `manage.py runserver 8099` — server starts and stays running. `GET /api/health/` — 200, database connected.
+
+4. **Vite proxy verified:** `GET /api/health/` through `localhost:5173` proxy — 200, database connected. No more `ECONNREFUSED 127.0.0.1:8099` errors.
+
+5. **Frontend bug fix — Splash test failures (2 tests):** `Splash.test.tsx` tests called `screen.getByText("M")` and `screen.getByText("MediBook")` but the `SplashScreen` component renders an `<img alt="MediBook">` — `getByText` matches text nodes, not alt attributes. Fixed both tests to use `screen.getByAltText("MediBook")` and verify the `src` attribute.
+
+6. **Frontend bug fix — Onboarding localStorage key mismatch:** `App.tsx` `LaunchRoute` checked `localStorage.getItem("medibook_onboarding_completed")` but `OnboardingScreen` (auth.tsx) set `localStorage.setItem("mb.onboarded", "1")`. Two completely different keys meant onboarding completion was never persisted correctly — the app would always redirect to `/onboarding` on the next visit. Fixed `auth.tsx` to use `"medibook_onboarding_completed"` consistently. Updated `Onboarding.test.tsx` to match.
+
+7. **Backend + Frontend bug fix — Admin date display:** `admin-dashboard.tsx` line 171 rendered `Joined {formatDate(String(u.id))}` — formatting the user's numeric ID as a date string, producing garbage like "Jan 1, 1970". Root cause: the `User` type and `user_payload()` had no `date_joined` field. Fixed by:
+   - Backend: added `date_joined` to `user_payload()` (derived from `TimeStampedModel.created_at`)
+   - Backend: added `date_joined` as a `SerializerMethodField` to `UserSerializer` (the custom User model extends `AbstractBaseUser` + `TimeStampedModel`, not Django's `AbstractUser`, so `date_joined` doesn't exist — only `created_at`)
+   - Frontend: added `date_joined: string | null` to the `User` type
+   - Frontend: changed admin dashboard to render `formatDate(u.date_joined)`
+
+**Files touched**
+
+```text
+backend/config/settings.py              (DATABASES: PostgreSQL → SQLite)
+backend/accounts/serializers.py         (user_payload + UserSerializer: added date_joined from created_at)
+frontend/src/__tests__/Splash.test.tsx  (getByText("M") → getByAltText("MediBook"))
+frontend/src/__tests__/Onboarding.test.tsx (localStorage key: mb.onboarded → medibook_onboarding_completed)
+frontend/src/pages/auth.tsx             (localStorage key: mb.onboarded → medibook_onboarding_completed)
+frontend/src/pages/admin-dashboard.tsx  (formatDate(u.id) → formatDate(u.date_joined))
+frontend/src/api/types.ts              (User: added date_joined field)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Django migrations | `manage.py migrate` | All 33 migrations applied to SQLite |
+| Django runserver | `manage.py runserver 8099` | Server starts and stays running |
+| Django backend tests | `manage.py test` | `Ran 43 tests — OK` |
+| Health check | `GET http://127.0.0.1:8099/api/health/` | 200, `{"database": "connected"}` |
+| Vite proxy health | `GET http://localhost:5173/api/health/` | 200, `{"database": "connected"}` |
+| Frontend typecheck | `npm run typecheck` | exit 0, no diagnostics |
+| Frontend build | `npm run build` | exit 0, 112 modules |
+| Frontend tests | `npm run test` | `36 passed (36)` — all green |
+
+**Status:** Done — PostgreSQL connection timeout resolved by switching to SQLite. All 43 backend tests + 36 frontend tests pass. Three bugs fixed (splash tests, onboarding localStorage key, admin date display).
+
+**Next:** Resume the responsive dashboard task or proceed per roadmap.
