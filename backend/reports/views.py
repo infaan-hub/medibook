@@ -19,6 +19,17 @@ class AdminStatsView(APIView):
     permission_classes = (IsAuthenticated, IsAdminRole)
 
     def get(self, request):
+        from django.db.models import Q
+
+        # Single aggregation pass for all user counts.
+        user_counts = User.objects.aggregate(
+            total=Count("id"),
+            patients=Count("id", filter=Q(role="patient")),
+        )
+        # Single aggregation pass for appointment counts.
+        appt_counts = Appointment.objects.aggregate(
+            total=Count("id"),
+        )
         by_status = {
             row["status"]: row["total"]
             for row in Appointment.objects.values("status").annotate(
@@ -27,10 +38,10 @@ class AdminStatsView(APIView):
         }
         return success_response(
             data={
-                "users": User.objects.count(),
-                "patients": User.objects.filter(role="patient").count(),
+                "users": user_counts["total"],
+                "patients": user_counts["patients"],
                 "doctors": Doctor.objects.count(),
-                "appointments": Appointment.objects.count(),
+                "appointments": appt_counts["total"],
                 "appointments_by_status": by_status,
             }
         )

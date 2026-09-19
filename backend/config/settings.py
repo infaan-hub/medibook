@@ -9,6 +9,7 @@ backend/.env.example documents every supported variable.
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -91,6 +92,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "common.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -173,6 +175,18 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.exceptions.custom_exception_handler",
     # Timezone-aware datetimes everywhere (USE_TZ = True).
     "DATETIME_FORMAT": "iso-8601",
+    # Rate limiting — PHASE 17 security hardening.
+    # Disabled during `manage.py test` to allow rapid API calls.
+    "DEFAULT_THROTTLE_CLASSES": [] if "test" in " ".join(sys.argv) else [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/minute",
+        "user": "120/minute",
+        "auth": "10/minute",
+        "password_reset": "5/minute",
+    },
 }
 
 SIMPLE_JWT = {
@@ -193,6 +207,26 @@ CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 # ---------------------------------------------------------------------------
 # Static and media files
@@ -261,7 +295,15 @@ LOGGING = {
 }
 
 # ---------------------------------------------------------------------------
-# Production security baseline (§35, reviewed again in PHASE 17)
+# Cookie security — PHASE 17 (unconditional, not just production)
+# ---------------------------------------------------------------------------
+
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = True
+
+# ---------------------------------------------------------------------------
+# Production security baseline (§35, PHASE 17)
 # ---------------------------------------------------------------------------
 
 if not DEBUG:
@@ -273,3 +315,4 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

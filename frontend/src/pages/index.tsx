@@ -5,12 +5,15 @@ import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useSession } from "../state/app-context";
-import { DoctorDashboardScreen } from "./doctor";
+import { DoctorDashboardScreen } from "./doctor-dashboard";
 
-export { DoctorAvailabilityScreen, DoctorDashboardScreen, DoctorProfileScreen } from "./doctor";
+export { DoctorAvailabilityScreen, DoctorProfileScreen } from "./doctor";
+export { DoctorDashboardScreen, DoctorAppointmentsScreen } from "./doctor-dashboard";
 export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
+export { NotificationsScreen } from "./notifications";
+export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen } from "./admin-dashboard";
 
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
@@ -38,7 +41,7 @@ export function DoctorsPage() {
   const [search, setSearch] = useState(""); const [city, setCity] = useState("");
   const [results, setResults] = useState<DoctorProfile[] | null>(null); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(false);
   const load = useCallback(() => { setLoading(true); setError(null); const params: ListDoctorsParams = { search: search || undefined, city: city || undefined }; listDoctors(params).then((response) => setResults(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load doctors.")).finally(() => setLoading(false)); }, [search, city]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, []);
   return <div className="page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">City</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by city" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or city." />}{!loading && results?.map((doctor) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="doctor-card doctor-card--link"><Card><h2>{doctor.first_name} {doctor.last_name}</h2><p>{doctor.experience_years} years of experience</p><p>Consultation fee: {doctor.consultation_fee}</p></Card></Link>)}</div>;
 }
 

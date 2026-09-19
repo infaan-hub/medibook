@@ -37,6 +37,12 @@ class Doctor(TimeStampedModel):
 
     class Meta:
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=("is_available", "average_rating"),
+                name="dr_avail_rat_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"doctor:{self.user_id}"
@@ -65,6 +71,12 @@ class Availability(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(end_time__gt=models.F("start_time")),
                 name="availability_end_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("doctor", "weekday", "is_active"),
+                name="avail_dk_wd_act_idx",
             ),
         ]
 
@@ -121,6 +133,12 @@ class ScheduleException(TimeStampedModel):
                     | models.Q(end_time__gt=models.F("start_time"))
                 ),
                 name="schedule_exception_end_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("doctor", "date"),
+                name="sched_exc_dk_dt_idx",
             ),
         ]
 

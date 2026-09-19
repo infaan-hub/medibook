@@ -6,14 +6,16 @@ from rest_framework.test import APIClient
 from doctors.models import Availability, Doctor
 
 
+User = get_user_model()
+
+
 class DoctorProfileTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
+        self.user = User.objects.create_user(
             email="doctor-profile@example.com", password="StrongPass123!", role="doctor"
         )
-        login = APIClient().post("/api/auth/login/", {"email": self.user.email, "password": "StrongPass123!"}, format="json")
         self.client = APIClient()
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['data']['access']}")
+        self.client.force_authenticate(user=self.user)
 
     def test_doctor_can_read_and_update_own_profile(self):
         response = self.client.get("/api/doctors/me/profile/")
@@ -24,10 +26,9 @@ class DoctorProfileTests(TestCase):
         self.assertEqual(response.data["data"]["bio"], "Family physician")
 
     def test_patient_cannot_access_doctor_profile_endpoint(self):
-        patient = get_user_model().objects.create_user(email="patient-profile@example.com", password="StrongPass123!", role="patient")
-        login = APIClient().post("/api/auth/login/", {"email": patient.email, "password": "StrongPass123!"}, format="json")
+        patient = User.objects.create_user(email="patient-profile@example.com", password="StrongPass123!", role="patient")
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['data']['access']}")
+        client.force_authenticate(user=patient)
         self.assertEqual(client.get("/api/doctors/me/profile/").status_code, 403)
 
     def test_breaks_and_exceptions_are_removed_from_public_slots(self):

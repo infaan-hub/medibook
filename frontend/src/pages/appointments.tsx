@@ -1,6 +1,7 @@
 /**
  * PHASE 10–11 — Appointment Engine: booking flow, list, detail, cancel, reschedule, success.
  * Patient books from doctor profile → selects slot → confirms → views list/detail/cancel/reschedule.
+ * PHASE 15: Review form on completed appointments.
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -12,6 +13,7 @@ import {
   listMyAppointments,
 } from "../api/appointments";
 import { getDoctor, getDoctorAvailability } from "../api/doctors";
+import { getDoctorReviews } from "../api/reviews";
 import type {
   Appointment,
   AppointmentStatus,
@@ -19,6 +21,7 @@ import type {
   DoctorProfile,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { ReviewForm } from "../components/reviews";
 import { useToast } from "../state/app-context";
 
 /* ---------- helpers ---------- */
@@ -464,11 +467,19 @@ export function AppointmentDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelForm, setShowCancelForm] = useState(false);
+  const [hasReview, setHasReview] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
     setError(null);
-    getAppointment(Number(id)).then((r) => setAppointment(r.data)).catch((e) => setError(message(e)));
+    getAppointment(Number(id)).then((r) => {
+      setAppointment(r.data);
+      if (r.data.status === "completed" && r.data.doctor) {
+        getDoctorReviews(r.data.doctor).then((reviews) => {
+          setHasReview(reviews.data.some((rev) => rev.appointment === r.data.id));
+        }).catch(() => {});
+      }
+    }).catch((e) => setError(message(e)));
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -572,6 +583,19 @@ export function AppointmentDetailScreen() {
               </div>
             </form>
           )}
+        </Card>
+      )}
+
+      {appointment.status === "completed" && !hasReview && id && (
+        <ReviewForm appointmentId={Number(id)} onSuccess={load} />
+      )}
+
+      {appointment.status === "completed" && hasReview && (
+        <Card>
+          <p className="page__subtitle">You have already reviewed this appointment.</p>
+          <Link to={`/doctors/${appointment.doctor}`}>
+            <Button variant="secondary">View doctor profile</Button>
+          </Link>
         </Card>
       )}
     </div>

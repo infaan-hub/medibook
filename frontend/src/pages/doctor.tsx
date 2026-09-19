@@ -8,8 +8,10 @@ import {
   getMyDoctorProfile,
   getMySchedule,
 } from "../api/doctors";
-import type { DoctorAvailability, DoctorProfile, ScheduleItem } from "../api/types";
+import { getDoctorReviews } from "../api/reviews";
+import type { DoctorAvailability, DoctorProfile, Review, ScheduleItem } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { DoctorReviewList, StarRating } from "../components/reviews";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -19,6 +21,7 @@ export function DoctorProfileScreen() {
   const { id } = useParams<{ id: string }>();
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +29,7 @@ export function DoctorProfileScreen() {
     if (!id) return;
     setError(null);
     getDoctor(Number(id)).then((response) => setDoctor(response.data)).catch((reason: unknown) => setError(message(reason)));
+    getDoctorReviews(Number(id)).then((response) => setReviews(response.data)).catch(() => {});
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
@@ -37,7 +41,44 @@ export function DoctorProfileScreen() {
 
   if (error) return <div className="page"><ErrorState message={error} onRetry={load} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
-  return <div className="page"><Link to="/doctors">← Back to doctors</Link><Card><h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1><p>{doctor.qualifications || "Professional profile"}</p><p>{doctor.experience_years} years of experience</p><p>Consultation fee: {doctor.consultation_fee}</p>{doctor.bio && <p>{doctor.bio}</p>}<div style={{ marginTop: "var(--space-4)" }}><Link to={`/booking/${id}`}><Button>Book appointment</Button></Link></div></Card><Card><h2>Available slots</h2><div className="field"><label className="field__label" htmlFor="availability-date">Date</label><input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><Button onClick={loadSlots}>Check availability</Button>{availability && (availability.slots.length ? <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul> : <EmptyState title="No available slots" description="Try another date." />)}</Card></div>;
+  return (
+    <div className="page">
+      <Link to="/doctors">← Back to doctors</Link>
+      <Card>
+        <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
+        <p>{doctor.qualifications || "Professional profile"}</p>
+        <p>{doctor.experience_years} years of experience</p>
+        <p>Consultation fee: {doctor.consultation_fee}</p>
+        {doctor.average_rating != null && doctor.average_rating > 0 && (
+          <div className="doctor-profile__rating">
+            <StarRating value={doctor.average_rating} readonly size="sm" />
+            <span>{doctor.average_rating.toFixed(1)} ({doctor.total_reviews} review{doctor.total_reviews !== 1 ? "s" : ""})</span>
+          </div>
+        )}
+        {doctor.bio && <p>{doctor.bio}</p>}
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
+        </div>
+      </Card>
+      <Card>
+        <h2>Available slots</h2>
+        <div className="field">
+          <label className="field__label" htmlFor="availability-date">Date</label>
+          <input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </div>
+        <Button onClick={loadSlots}>Check availability</Button>
+        {availability && (availability.slots.length ? (
+          <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul>
+        ) : (
+          <EmptyState title="No available slots" description="Try another date." />
+        ))}
+      </Card>
+      <Card>
+        <h2>Reviews</h2>
+        <DoctorReviewList reviews={reviews} />
+      </Card>
+    </div>
+  );
 }
 
 export function DoctorDashboardScreen() {

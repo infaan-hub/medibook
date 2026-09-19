@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import status as http_status
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -38,10 +39,12 @@ User = get_user_model()
 
 
 class RegisterView(APIView):
-    """POST /api/auth/register/ â€” self-registration + JWT pair."""
+    """POST /api/auth/register/ — self-registration + JWT pair."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -63,10 +66,12 @@ class RegisterView(APIView):
 
 
 class EmailLoginView(APIView):
-    """POST /api/auth/login/ â€” email + password â†’ JWT pair (Â§29)."""
+    """POST /api/auth/login/ — email + password → JWT pair (§29)."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = EmailLoginSerializer(
@@ -82,10 +87,12 @@ class EmailLoginView(APIView):
 
 
 class RefreshView(TokenRefreshView):
-    """POST /api/auth/token/refresh/ â€” rotate refresh token (Â§29)."""
+    """POST /api/auth/token/refresh/ — rotate refresh token (§29)."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "auth"
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -128,10 +135,12 @@ class PasswordChangeView(APIView):
 
 
 class PasswordResetRequestView(APIView):
-    """POST /api/auth/password-reset/ â€” email the reset token (Â§27)."""
+    """POST /api/auth/password-reset/ — email the reset token (§27)."""
 
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "password_reset"
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)

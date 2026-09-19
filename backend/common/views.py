@@ -36,7 +36,6 @@ class HealthCheckView(APIView):
             data={
                 "service": "medibook-api",
                 "version": settings.APP_VERSION,
-                "debug": settings.DEBUG,
                 "database": database_status,
             },
         )

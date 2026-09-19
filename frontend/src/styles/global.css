@@ -816,3 +816,344 @@ a { color: var(--color-primary); }
   margin-top: var(--space-4);
   flex-wrap: wrap;
 }
+
+/* Doctor dashboard — stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.stats-row__card {
+  text-align: center;
+  padding: var(--space-4);
+}
+.stats-row__number {
+  display: block;
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary, #1565c0);
+}
+.stats-row__label {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+
+/* Dashboard quick links */
+.dash-links {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  border-bottom: 2px solid var(--color-border, #e0e0e0);
+  padding-bottom: 0;
+}
+.tabs__tab {
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tabs__tab:hover {
+  color: var(--color-text);
+}
+.tabs__tab--active {
+  color: var(--color-primary, #1565c0);
+  border-bottom-color: var(--color-primary, #1565c0);
+  font-weight: var(--weight-semibold);
+}
+
+/* Appointment row (doctor list) */
+.appt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+.appt-row__info { flex: 1; }
+.appt-row__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+.appt-row__date {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.appt-row__patient {
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1);
+}
+.appt-row__reason {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.appt-row__notes {
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+}
+.appt-row__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.appt-row__notes-form {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border, #e0e0e0);
+}
+
+@media (max-width: 600px) {
+  .appt-row {
+    flex-direction: column;
+  }
+  .appt-row__actions {
+    width: 100%;
+  }
+  .appt-row__actions .btn {
+    flex: 1;
+  }
+}
+
+/* Notification bell */
+.shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.notif-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.notif-bell:hover {
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.05));
+}
+.notif-bell__icon {
+  font-size: 1.25rem;
+}
+.notif-bell__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-error, #d32f2f);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: var(--weight-bold);
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Notification list */
+.notif-list {
+  padding: 0;
+}
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.notif-row:last-child {
+  border-bottom: none;
+}
+.notif-row:hover {
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.03));
+}
+.notif-row--unread {
+  background: var(--color-primary-soft, rgba(21, 101, 192, 0.04));
+}
+.notif-row--unread:hover {
+  background: var(--color-primary-soft, rgba(21, 101, 192, 0.07));
+}
+.notif-row__icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.notif-row__content {
+  flex: 1;
+  min-width: 0;
+}
+.notif-row__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.notif-row__title {
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+}
+.notif-row__time {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.notif-row__message {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+.notif-row__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.notif-row:hover .notif-row__delete {
+  opacity: 1;
+}
+.notif-row__delete:hover {
+  color: var(--color-error, #d32f2f);
+}
+
+/* Admin list */
+.admin-list {
+  padding: 0;
+}
+.admin-list__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+.admin-list__row:last-child {
+  border-bottom: none;
+}
+.admin-list__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.admin-list__name {
+  font-weight: var(--weight-semibold);
+}
+.admin-list__meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.admin-list__badge {
+  flex-shrink: 0;
+}
+.admin-list__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.stats-row__card--mini {
+  padding: var(--space-3);
+}
+.stats-row__card--mini .stats-row__number {
+  font-size: var(--text-xl);
+}
+
+/* Star rating */
+.star-rating {
+  display: inline-flex;
+  gap: 2px;
+}
+.star-rating__star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: var(--color-text-muted, #999);
+  padding: 0;
+  line-height: 1;
+  transition: color 0.12s;
+}
+.star-rating__star--filled {
+  color: #f59e0b;
+}
+.star-rating__star:disabled {
+  cursor: default;
+}
+.star-rating--sm .star-rating__star {
+  font-size: 1rem;
+}
+.star-rating--lg .star-rating__star {
+  font-size: 2rem;
+}
+
+/* Review card */
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.review-card {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+.review-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.review-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.review-card__time {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.review-card__comment {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  margin: 0;
+}
+
+/* Doctor profile rating */
+.doctor-profile__rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

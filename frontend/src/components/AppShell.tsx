@@ -2,6 +2,7 @@
  * App shell (§22.6 responsive layout): sticky header, phone bottom nav,
  * tablet+ sidebar rail, install/update prompts, offline banner.
  * PHASE 5: navigation and the header user chip are role-aware.
+ * PHASE 13: notification bell with unread count badge.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -9,6 +10,7 @@ import { Link, NavLink } from "react-router-dom";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
 import { useSession } from "../state/app-context";
 import type { User } from "../api/types";
+import { listUnreadNotifications } from "../api/notifications";
 
 interface NavItem {
   to: string;
@@ -42,6 +44,32 @@ function initials(user: User): string {
   const first = user.first_name.trim()[0] ?? "";
   const last = user.last_name.trim()[0] ?? "";
   return (first + last).toUpperCase() || user.email[0].toUpperCase();
+}
+
+/** Notification bell with unread count badge. */
+function NotificationBell() {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    listUnreadNotifications()
+      .then((r) => setUnreadCount(r.data.count))
+      .catch(() => {});
+    const interval = setInterval(() => {
+      listUnreadNotifications()
+        .then((r) => setUnreadCount(r.data.count))
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <Link to="/notifications" className="notif-bell" title="Notifications">
+      <span className="notif-bell__icon">🔔</span>
+      {unreadCount > 0 && (
+        <span className="notif-bell__badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+      )}
+    </Link>
+  );
 }
 
 /** Header chip: avatar initials + name + role, links to the profile screen. */
@@ -154,7 +182,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
           MediBook
         </span>
-        <UserChip />
+        <div className="shell__header-actions">
+          <NotificationBell />
+          <UserChip />
+        </div>
       </header>
 
       <div className="shell__body">

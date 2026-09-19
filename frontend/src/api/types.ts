@@ -192,3 +192,47 @@ export interface Hospital {
   email: string;
   location_details: Record<string, unknown>;
 }
+
+/* ---- PHASE 13 — Notifications ---- */
+
+export type NotificationType =
+  | "appointment_request"
+  | "appointment_confirmed"
+  | "appointment_cancelled"
+  | "appointment_rejected"
+  | "appointment_reminder"
+  | "review"
+  | "system";
+
+export interface Notification {
+  id: number;
+  notification_type: NotificationType;
+  title: string;
+  message: string;
+  related_appointment: number | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface PushSubscription {
+  id: number;
+  endpoint: string;
+  p256dh_key: string;
+  auth_key: string;
+  fcm_token: string | null;
+  device_info: Record<string, unknown>;
+  is_active: boolean;
+}
+
+/* ---- PHASE 15 — Reviews ---- */
+
+export interface Review {
+  id: number;
+  appointment: number;
+  patient: number;
+  doctor: number;
+  rating: number;
+  comment: string;
+  is_visible: boolean;
+  created_at: string;
+}

@@ -237,7 +237,9 @@ class DoctorAppointmentListView(APIView):
                 message="Create your doctor profile first.",
                 status_code=http_status.HTTP_404_NOT_FOUND,
             )
-        queryset = Appointment.objects.filter(doctor=doctor).order_by(
+        queryset = Appointment.objects.select_related(
+            "doctor__user", "hospital", "patient"
+        ).filter(doctor=doctor).order_by(
             "-appointment_date", "-start_time"
         )
         status_param = request.query_params.get("status")

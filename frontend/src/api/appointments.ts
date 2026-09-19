@@ -62,3 +62,10 @@ export function updateAppointment(
 ): Promise<Envelope<Appointment>> {
   return apiPatch<Appointment>(`/appointments/${id}/`, payload);
 }
+
+/** GET /api/doctor/appointments/ — doctor's own appointments (non-paginated). */
+export function listDoctorAppointments(
+  params?: Record<string, unknown>
+): Promise<Envelope<Appointment[]>> {
+  return apiGet<Appointment[]>("/doctor/appointments/", params);
+}

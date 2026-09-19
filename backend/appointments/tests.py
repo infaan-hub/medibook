@@ -21,15 +21,9 @@ def _user(email: str, role: str, **extra):
     return user
 
 
-def _auth(email: str) -> APIClient:
+def _auth(user) -> APIClient:
     client = APIClient()
-    response = client.post(
-        "/api/auth/login/", {"email": email, "password": PASSWORD}, format="json"
-    )
-    assert response.status_code == 200, response.data
-    client.credentials(
-        HTTP_AUTHORIZATION=f"Bearer {response.data['data']['access']}"
-    )
+    client.force_authenticate(user=user)
     return client
 
 
@@ -55,7 +49,7 @@ class BookingFlowTests(TestCase):
         )
 
     def test_booking_double_booking_and_history(self):
-        client = _auth("patient@example.com")
+        client = _auth(self.patient)
         payload = {
             "doctor": self.doctor.pk,
             "hospital": self.hospital.pk,
@@ -79,7 +73,7 @@ class BookingFlowTests(TestCase):
         self.assertEqual(len(history.data["data"]["results"]), 1)
 
         # Doctor confirms; availability no longer lists the slot.
-        doctor_client = _auth("doctor@example.com")
+        doctor_client = _auth(self.doctor_user)
         confirm = doctor_client.post(
             f"/api/appointments/{appointment_id}/confirm/", {}, format="json"
         )
@@ -95,7 +89,7 @@ class BookingFlowTests(TestCase):
         self.assertIn("09:30", starts)
 
     def test_doctor_search_filters(self):
-        client = _auth("patient@example.com")
+        client = _auth(self.patient)
         response = client.get(
             f"/api/doctors/?specialty={self.specialty.pk}&city=Lahore&search=doc"
         )
@@ -103,7 +97,7 @@ class BookingFlowTests(TestCase):
         self.assertEqual(len(response.data["data"]["results"]), 1)
 
     def test_review_only_after_completed(self):
-        client = _auth("patient@example.com")
+        client = _auth(self.patient)
         payload = {
             "doctor": self.doctor.pk,
             "appointment_date": str(date(2026, 9, 22)),
@@ -119,7 +113,7 @@ class BookingFlowTests(TestCase):
         )
         self.assertEqual(early.status_code, 400)
 
-        doctor_client = _auth("doctor@example.com")
+        doctor_client = _auth(self.doctor_user)
         doctor_client.post(
             f"/api/appointments/{appointment_id}/confirm/", {}, format="json"
         )

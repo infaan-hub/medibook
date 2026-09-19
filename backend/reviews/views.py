@@ -77,7 +77,9 @@ class DoctorReviewListView(APIView):
                 message="The requested resource was not found.",
                 status_code=http_status.HTTP_404_NOT_FOUND,
             )
-        reviews = doctor.reviews.filter(is_visible=True).order_by("-created_at")
+        reviews = doctor.reviews.select_related(
+            "patient", "doctor"
+        ).filter(is_visible=True).order_by("-created_at")
         return success_response(
             data=ReviewSerializer(reviews, many=True).data
         )
@@ -95,9 +97,10 @@ class ReviewViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base = Review.objects.select_related("patient", "doctor")
         if getattr(user, "role", None) == "admin" or user.is_superuser:
-            return Review.objects.all().order_by("-created_at")
-        return Review.objects.filter(patient=user).order_by("-created_at")
+            return base.all().order_by("-created_at")
+        return base.filter(patient=user).order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
