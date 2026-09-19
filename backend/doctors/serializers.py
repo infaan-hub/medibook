@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from doctors.models import Availability, Doctor
+from doctors.models import Availability, AvailabilityBreak, Doctor, ScheduleException
 
 
 class AvailabilitySerializer(serializers.ModelSerializer):
@@ -20,6 +20,40 @@ class AvailabilitySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"end_time": ["End time must be after start time."]}
             )
+        return attrs
+
+
+class AvailabilityBreakSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AvailabilityBreak
+        fields = ("id", "start_time", "end_time")
+
+    def validate(self, attrs: dict) -> dict:
+        start = attrs.get("start_time", getattr(self.instance, "start_time", None))
+        end = attrs.get("end_time", getattr(self.instance, "end_time", None))
+        window = self.context["availability"]
+        if start >= end:
+            raise serializers.ValidationError({"end_time": ["End time must be after start time."]})
+        if start < window.start_time or end > window.end_time:
+            raise serializers.ValidationError({"start_time": ["A break must stay within its availability window."]})
+        existing = AvailabilityBreak.objects.filter(availability=window).exclude(pk=getattr(self.instance, "pk", None))
+        if existing.filter(start_time__lt=end, end_time__gt=start).exists():
+            raise serializers.ValidationError({"start_time": ["Breaks cannot overlap."]})
+        return attrs
+
+
+class ScheduleExceptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScheduleException
+        fields = ("id", "date", "start_time", "end_time", "reason")
+
+    def validate(self, attrs: dict) -> dict:
+        start = attrs.get("start_time", getattr(self.instance, "start_time", None))
+        end = attrs.get("end_time", getattr(self.instance, "end_time", None))
+        if (start is None) != (end is None):
+            raise serializers.ValidationError("Provide both start_time and end_time, or neither for a full-day closure.")
+        if start is not None and end <= start:
+            raise serializers.ValidationError({"end_time": ["End time must be after start time."]})
         return attrs
 
 

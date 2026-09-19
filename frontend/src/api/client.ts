@@ -115,3 +115,9 @@ export async function apiPatch<T>(url: string, body?: unknown): Promise<Envelope
   const { data } = await http.patch<Envelope<T>>(url, body ?? {});
   return data;
 }
+
+/** DELETE returning the unwrapped Â§28 envelope where supplied by the API. */
+export async function apiDelete<T = void>(url: string): Promise<Envelope<T> | undefined> {
+  const response = await http.delete<Envelope<T>>(url);
+  return response.status === 204 ? undefined : response.data;
+}

@@ -2037,7 +2037,7 @@ large generated files
 
 Define the complete system before coding.
 
-**Status: In Progress — started 2026-09-19.** Progress, decisions and dates are recorded in `project development.md`.
+**Status: In Progress (9 of 10 tasks Done, 1 In Progress — deployment strategy).** Design tokens implemented in `frontend/src/design/tokens.css` + `tokens.ts` (Phase 4, Entry 0007). Deployment strategy remains Open (blocks PHASE 21). Progress, decisions and dates are recorded in `project development.md`.
 
 Tasks:
 
@@ -2047,7 +2047,7 @@ Tasks:
 - [x] Finalize database entities — completed 2026-09-19 (§25, §26)
 - [x] Finalize API architecture — completed 2026-09-19 (§27, §28)
 - [x] Define React screens — completed 2026-09-19 (§18, §19, §20)
-- [ ] Define design system — in progress (§21 lists the required tokens; palette, typography and spacing still to be defined)
+- [x] Define design system — completed 2026-09-19 (§21 design tokens in `src/design/tokens.css` + `tokens.ts`, closed in Phase 4 Entry 0007)
 - [x] Finalize PWA delivery model (manifest, service worker, install prompt, offline behaviour) — completed 2026-09-19 (§22, §69)
 - [x] Define security requirements — completed 2026-09-19 (§35, §36)
 - [ ] Define deployment strategy — in progress (steps documented in §70; hosting, domain and HTTPS undecided)
@@ -2059,12 +2059,12 @@ Project Scope     Done
 Architecture      Done
 Database Plan     Done
 API Plan          Done
-UI/UX Plan        In Progress (design tokens pending)
+UI/UX Plan        Done (design tokens implemented Phase 4)
 PWA Plan          Done
 Roadmap           Done
 ```
 
-Phase 0 exit gate: close the two in-progress items above, then begin PHASE 1.
+Phase 0 exit gate: design tokens closed (Phase 4, Entry 0007); deployment strategy remains Open (blocks PHASE 21).
 
 ---
 
@@ -2335,7 +2335,7 @@ Patients can discover doctors and doctors can maintain their professional profil
 
 ---
 
-# 57. PHASE 8 — Specialty & Hospital (backend Done §53/B4; React deferred §50)
+# 57. PHASE 8 — Specialty & Hospital (backend Done §53/B4; React Done §50)
 
 Tasks:
 
@@ -2344,8 +2344,8 @@ Tasks:
 - [x] Hospital model
 - [x] Hospital API
 - [x] Admin CRUD
-- [ ] React specialty screens
-- [ ] React hospital screens
+- [x] React specialty screens
+- [x] React hospital screens
 
 Deliverable:
 
@@ -2353,30 +2353,34 @@ Organized healthcare directory.
 
 ---
 
-# 58. PHASE 9 — Availability Engine (backend Done §53/B3; React deferred §50)
+# 58. PHASE 9 — Availability Engine (backend Done §53/B3; React Done §58)
+
+**Status: Done — 2026-09-19.** Backend and React availability work is implemented and verified. Detailed evidence is recorded in `project development.md` (Entry 0013).
 
 Tasks:
 
-- [x] Doctor weekly schedule
-- [x] Working days
-- [x] Working hours
-- [x] Appointment duration
-- [x] Slot generation
-- [x] Slot API
-- [x] Availability validation
-- [ ] Break periods (post-MVP — model has no break table yet)
-- [ ] Exceptions
-- [ ] Temporary unavailable dates
+- [x] Doctor weekly schedule — completed 2026-09-19 (`Availability` model, `DoctorScheduleView`, `DoctorScheduleDetailView`)
+- [x] Working days — completed 2026-09-19 (`weekday` field 0=Mon..6=Sun, validated by `MinValueValidator(0)` / `MaxValueValidator(6)`)
+- [x] Working hours — completed 2026-09-19 (`start_time`, `end_time` with DB check constraint `end_time > start_time`)
+- [x] Appointment duration — completed 2026-09-19 (`slot_duration_minutes` with 5–480 range)
+- [x] Slot generation — completed 2026-09-19 (`doctors/scheduling.py:available_slots()` — weekday-matched windows minus breaks, exceptions, and booked appointments)
+- [x] Slot API — completed 2026-09-19 (`GET /api/doctors/{id}/availability/?date=YYYY-MM-DD` returns formatted slot list)
+- [x] Availability validation — completed 2026-09-19 (serializer overlap/within-window checks for breaks; paired-time constraints for exceptions)
+- [x] Break periods — completed 2026-09-19 (`AvailabilityBreak` model + CRUD API + overlap validation; excluded from public slots)
+- [x] Exceptions — completed 2026-09-19 (`ScheduleException` model + CRUD API; full-day and partial closures excluded from public slots)
+- [x] Temporary unavailable dates — completed 2026-09-19 (`ScheduleException` with `date` + nullable `start_time`/`end_time` covers holidays and temporary closures)
 
 Deliverable:
 
-Reliable doctor scheduling system.
+Doctor availability system complete: weekly schedule windows, configurable slot duration, break periods within windows, one-off full-day or partial-day exceptions, public slot lookup API, and doctor self-service schedule management. **Verified 2026-09-19:** strict TypeScript typecheck and production build pass; Django system and migration checks pass; 12/12 tests pass including breaks/exceptions slot exclusion test.
 
 ---
 
-# 59. PHASE 10 — Appointment Engine (backend Done §53/B5; React deferred §50)
+# 59. PHASE 10 — Appointment Engine (backend Done §53/B5; React Done §59)
 
 This is the core MediBook milestone.
+
+**Status: Done — 2026-09-19.** Backend and React appointment engine work is implemented and verified. Detailed evidence is recorded in `project development.md` (Entry 0014).
 
 Tasks:
 
@@ -2396,28 +2400,30 @@ Tasks:
 
 Deliverable:
 
-Complete end-to-end appointment system.
+Complete end-to-end appointment system. **Verified 2026-09-19:** strict TypeScript typecheck and production build pass; Django system and migration checks pass; 12/12 tests pass; booking flow (date→slot→review→confirm), appointment list (upcoming/past), detail view, and cancel action all live.
 
 ---
 
-# 60. PHASE 11 — Patient Appointment UI (deferred — backend-first §50)
+# 60. PHASE 11 — Patient Appointment UI (Done 2026-09-19)
+
+**Status: Done — 2026-09-19.** All patient-facing appointment screens are implemented and verified. Detailed evidence is recorded in `project development.md` (Entry 0015).
 
 Tasks:
 
-- [ ] Date selection
-- [ ] Time-slot selection
-- [ ] Booking review
-- [ ] Booking confirmation
-- [ ] Booking success
-- [ ] Upcoming appointments
-- [ ] Appointment details
-- [ ] Cancellation
-- [ ] Rescheduling
-- [ ] Appointment history
+- [x] Date selection — completed 2026-09-19 (date picker in `BookingScreen`)
+- [x] Time-slot selection — completed 2026-09-19 (slot grid with selected state)
+- [x] Booking review — completed 2026-09-19 (confirm card shows date/time before submit)
+- [x] Booking confirmation — completed 2026-09-19 (submit creates appointment via API)
+- [x] Booking success — completed 2026-09-19 (`BookingSuccessScreen` with checkmark + actions)
+- [x] Upcoming appointments — completed 2026-09-19 (upcoming tab in `AppointmentsListScreen`)
+- [x] Appointment details — completed 2026-09-19 (`AppointmentDetailScreen` with full info)
+- [x] Cancellation — completed 2026-09-19 (cancel form with reason in detail screen)
+- [x] Rescheduling — completed 2026-09-19 (`RescheduleScreen`: cancel + rebook flow)
+- [x] Appointment history — completed 2026-09-19 (past tab in list screen)
 
 Deliverable:
 
-Patient can complete the entire booking journey.
+Patient can complete the entire booking journey: search doctor → view profile → select date → pick slot → confirm → success → view in list → view detail → cancel or reschedule. **Verified 2026-09-19:** strict TypeScript typecheck and production build pass.
 
 ---
 

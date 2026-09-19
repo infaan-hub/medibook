@@ -71,3 +71,59 @@ class Availability(TimeStampedModel):
     def __str__(self) -> str:
         return f"availability:{self.doctor_id}:{self.weekday}"
 
+
+class AvailabilityBreak(TimeStampedModel):
+    """A non-bookable interval inside one recurring availability window."""
+
+    availability = models.ForeignKey(
+        Availability, on_delete=models.CASCADE, related_name="breaks"
+    )
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        ordering = ("availability", "start_time")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_time__gt=models.F("start_time")),
+                name="availability_break_end_after_start",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"break:{self.availability_id}:{self.start_time}-{self.end_time}"
+
+
+class ScheduleException(TimeStampedModel):
+    """One-off full-day or partial-day closure for a doctor (holidays included)."""
+
+    doctor = models.ForeignKey(
+        Doctor, on_delete=models.CASCADE, related_name="schedule_exceptions"
+    )
+    date = models.DateField(db_index=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    reason = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ("doctor", "date", "start_time")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(start_time__isnull=True, end_time__isnull=True)
+                    | models.Q(start_time__isnull=False, end_time__isnull=False)
+                ),
+                name="schedule_exception_times_pair",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(start_time__isnull=True, end_time__isnull=True)
+                    | models.Q(end_time__gt=models.F("start_time"))
+                ),
+                name="schedule_exception_end_after_start",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"exception:{self.doctor_id}:{self.date}"
+

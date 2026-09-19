@@ -1,6 +1,7 @@
 """Appointment booking API (§24 appointments, §27)."""
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from appointments.serializers import (
 from common.pagination import StandardResultsSetPagination
 from common.responses import error_response, success_response
 from doctors.models import Doctor
+from doctors.scheduling import available_slots
 from notifications.helpers import notify
 from notifications.models import NotificationType
 
@@ -78,13 +80,32 @@ class AppointmentViewSet(ModelViewSet):
             )
         try:
             with transaction.atomic():
+                appointment_date = serializer.validated_data["appointment_date"]
+                start_time = serializer.validated_data["start_time"]
+                end_time = serializer.validated_data["end_time"]
+                if Appointment.objects.filter(
+                    doctor=doctor,
+                    appointment_date=appointment_date,
+                    start_time=start_time,
+                ).exclude(status__in=("cancelled", "rejected")).exists():
+                    return error_response(
+                        message="This appointment slot is no longer available. Please select another time.",
+                        errors={"start_time": ["This slot was just booked."]},
+                        status_code=http_status.HTTP_409_CONFLICT,
+                    )
+                if appointment_date < timezone.localdate() or (start_time, end_time) not in available_slots(doctor, appointment_date):
+                    return error_response(
+                        message="The selected appointment time is not available.",
+                        errors={"start_time": ["Choose an available appointment slot."]},
+                        status_code=http_status.HTTP_400_BAD_REQUEST,
+                    )
                 appointment = Appointment(
                     patient=request.user,
                     doctor=doctor,
                     hospital=serializer.validated_data.get("hospital"),
-                    appointment_date=serializer.validated_data["appointment_date"],
-                    start_time=serializer.validated_data["start_time"],
-                    end_time=serializer.validated_data["end_time"],
+                    appointment_date=appointment_date,
+                    start_time=start_time,
+                    end_time=end_time,
                     reason=serializer.validated_data.get("reason", ""),
                 )
                 appointment.full_clean(

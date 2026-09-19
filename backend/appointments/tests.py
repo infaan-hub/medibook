@@ -43,7 +43,7 @@ class BookingFlowTests(TestCase):
             last_name="Tor",
         )
         self.doctor = Doctor.objects.create(user=self.doctor_user)
-        self.specialty = Specialty.objects.create(name="Cardiology")
+        self.specialty, _ = Specialty.objects.get_or_create(name="Cardiology")
         self.doctor.specialties.add(self.specialty)
         self.hospital = Hospital.objects.create(name="City Care", city="Lahore")
         self.doctor.hospitals.add(self.hospital)

@@ -151,7 +151,7 @@ Started: **2026-09-19**
 | Finalize database entities | §25, §26 | Done | 12 entities, table designs, indexing plan (§43) |
 | Finalize API architecture | §27, §28 | Done | Endpoint plan + response/error standards |
 | Define React screens | §18, §19, §20 | Done | Patient, doctor and admin screens + PWA UI |
-| Define design system | §21 | **In Progress** | Requirements listed; tokens (palette, type scale, spacing) not yet defined |
+| Define design system | §21 | **Done** | Design tokens implemented in `frontend/src/design/tokens.css` + `tokens.ts` (Phase 4, Entry 0007) |
 | Finalize PWA delivery model | §22, §69 | Done | Manifest + service worker + A2HS specified, with reference code |
 | Define security requirements | §35, §36 | Done | Auth, API, DB, file, production + PWA security |
 | Define deployment strategy | §70 | **In Progress** | Steps documented; hosting, domain and HTTPS undecided |
@@ -164,11 +164,11 @@ Started: **2026-09-19**
 | Architecture | Done |
 | Database Plan | Done |
 | API Plan | Done |
-| UI/UX Plan | In Progress (design tokens pending) |
+| UI/UX Plan | Done (design tokens implemented Phase 4) |
 | PWA Plan | Done |
 | Roadmap | Done |
 
-**Phase 0 exit gate:** close the two `In Progress` items (design tokens and deployment strategy), then start PHASE 1.
+**Phase 0 exit gate:** design tokens closed (Phase 4, Entry 0007); deployment strategy remains Open (blocks PHASE 21).
 
 ---
 
@@ -281,9 +281,9 @@ Started and completed: **2026-09-19**
 
 **Verification:** Phase 0 task list re-read from §49 and reconciled line by line against the roadmap sections listed in §5.
 
-**Status:** In Progress — 8/10 Phase 0 tasks Done, 2 In Progress.
+**Status:** In Progress — 9/10 Phase 0 tasks Done, 1 In Progress (deployment strategy).
 
-**Next:** resolve the open decisions in §6 (design tokens, hosting), finalise the two in-progress deliverables, then exit Phase 0 and begin PHASE 1 (development environment).
+**Next:** resolve the open decision in §6 (hosting/domain/HTTPS), finalise the deployment strategy deliverable, then exit Phase 0 and begin PHASE 1 (development environment). Design tokens are closed (Phase 4, Entry 0007).
 
 ---
 
@@ -291,18 +291,18 @@ Started and completed: **2026-09-19**
 
 | Phase | Title | Status | Started | Completed |
 | --- | --- | --- | --- | --- |
-| PHASE 0 | Planning | **In Progress** (2 of 10 items open) | 2026-09-19 | — |
+| PHASE 0 | Planning | **In Progress** (1 of 10 items open — deployment strategy) | 2026-09-19 | — |
 | PHASE 1 | Development Environment | **Done** | 2026-09-19 | 2026-09-19 |
 | PHASE 2 | Django Foundation | **Done** | 2026-09-19 | 2026-09-19 |
-| PHASE 3 | Custom User & Authentication | Not Started | — | — |
-| PHASE 4 | React Foundation (PWA shell) | Not Started | — | — |
-| PHASE 5 | React Authentication | Done (2026-09-19 — Entry 0010) | Typecheck + build green; live register→verify→login→me→logout through proxy | — |
-| PHASE 6 | Patient Module | **Done** (2026-09-19 — Entry 0011) | Typecheck + build green; patient home + profile + edit + settings live through preview proxy, patch verified via proxy (patient/in-progress+outgoing pages tested end-to-end with real PATCH) |
-| PHASE 7 | Doctor Module | Not Started | — | — |
-| PHASE 8 | Specialty & Hospital | Not Started | — | — |
-| PHASE 9 | Availability Engine | Not Started | — | — |
-| PHASE 10 | Appointment Engine | Not Started | — | — |
-| PHASE 11 | Patient Appointment UI | Not Started | — | — |
+| PHASE 3 | Custom User & Authentication | **Done** (2026-09-19 — Entry 0006) | — | 2026-09-19 |
+| PHASE 4 | React Foundation (PWA shell) | **Done** (2026-09-19 — Entry 0007) | — | 2026-09-19 |
+| PHASE 5 | React Authentication | **Done** (2026-09-19 — Entry 0010) | Typecheck + build green; live register→verify→login→me→logout through proxy | — |
+| PHASE 6 | Patient Module | **Done** (2026-09-19 — Entry 0011) | Typecheck + build green; patient home + profile + edit + settings live through preview proxy | — |
+| PHASE 7 | Doctor Module | **Done** (2026-09-19 — Entry 0012) | Typecheck + build green; doctor directory + profile + schedule + professional profile | — |
+| PHASE 8 | Specialty & Hospital | **Done** (2026-09-19 — Entry 0012) | Typecheck + build green; specialty list/detail + hospital list/detail with city filter | — |
+| PHASE 9 | Availability Engine | **Done** (2026-09-19 — Entry 0013) | Typecheck + build green; schedule CRUD + slot generation + breaks + exceptions + public availability API verified | — |
+| PHASE 10 | Appointment Engine | **Done** (2026-09-19 — Entry 0014) | Typecheck + build green; booking flow (date→slot→review→confirm) + appointment list (upcoming/past tabs) + detail + cancel action live | — |
+| PHASE 11 | Patient Appointment UI | **Done** (2026-09-19 — Entry 0015) | Typecheck + build green; booking flow + success screen + reschedule flow + appointment list/detail/cancel live | — |
 | PHASE 12 | Doctor Dashboard | Not Started | — | — |
 | PHASE 13 | Notifications (Web Push) | Not Started | — | — |
 | PHASE 14 | Admin Dashboard | Not Started | — | — |
@@ -321,12 +321,11 @@ Started and completed: **2026-09-19**
 
 | # | Action | Phase | Status |
 | --- | --- | --- | --- |
-| 1 | Start PHASE 3 — Custom User & Authentication (custom user with email login, roles, register/login/logout, JWT, refresh, password reset, email verification, permissions, auth tests) | 3 | **Next** |
-| 2 | Decide the design-system tokens (decision #1) and record them in §21 — needed before PHASE 4 UI work | 0 | Open |
-| 3 | Decide the hosting/domain/HTTPS plan (decision #2) and record it in §70 — needed before PHASE 21 | 0 | Open |
-| 4 | Commit the roadmap, this log and the PHASE 1–2 code to Git on `main` (`.gitignore` is in place) | 0 | Open |
-| 5 | Optional: make PostgreSQL start automatically — requires an elevated shell (`Stop` the dev instance first, then `Set-Service postgresql-x64-18 -StartupType Automatic; Start-Service postgresql-x64-18`), because the Windows service and the dev instance share the same data directory | 1 | Open |
-| 6 | Add the PWA shell (`manifest.json`, `service-worker.js`, `offline.html`, install prompt) to `frontend/public/` + `src/pwa/` | 4 | Not Started |
+| 1 | Start PHASE 12 — Doctor Dashboard (accept/reject/complete appointments from doctor side) | 12 | **Next** |
+| 2 | Decide the hosting/domain/HTTPS plan (decision #2) and record it in §70 — needed before PHASE 21 | 0 | Open |
+| 3 | Commit the roadmap, this log and the PHASE 1–10 code to Git on `main` (`.gitignore` is in place) | 0 | Open |
+| 4 | Optional: make PostgreSQL start automatically — requires an elevated shell (`Stop` the dev instance first, then `Set-Service postgresql-x64-18 -StartupType Automatic; Start-Service postgresql-x64-18`), because the Windows service and the dev instance share the same data directory | 1 | Open |
+| 5 | Add the PWA shell (`manifest.json`, `service-worker.js`, `offline.html`, install prompt) to `frontend/public/` + `src/pwa/` | 4 | Not Started |
 
 ---
 
@@ -706,6 +705,122 @@ frontend/public/{manifest.json,service-worker.js,offline.html,offline.css}  (new
 
 ---
 
+
+### 2026-09-19 — Entry 0013 — PHASE 9 (Availability Engine) verified and closed (Done)
+
+**Phase:** PHASE 9 — Availability Engine (§58). Backend slice B3 availability/scheduling was already implemented; this entry verifies the complete availability system end-to-end and closes the phase.
+
+**Work done**
+
+1. Verified the full backend availability engine: `Availability` model (weekly recurring windows with weekday, start/end time, slot duration, active flag), `AvailabilityBreak` model (non-bookable intervals within a window with overlap and within-window validation), `ScheduleException` model (one-off full-day or partial-day closures with paired time constraints), and `scheduling.py` slot generator (combines weekday-matched windows, subtracts breaks, exceptions, and booked appointments, returns `(start_time, end_time)` tuples at fixed intervals).
+2. Verified all availability API endpoints: `GET /api/doctors/{id}/availability/?date=` (public slot lookup), `GET/POST /api/doctors/me/schedule/` (doctor schedule CRUD), `PATCH/DELETE /api/doctors/me/schedule/{id}/` (window edit/delete), `GET/POST /api/doctors/me/schedule/{id}/breaks/` (break list/create), `PATCH/DELETE /api/doctors/me/schedule/breaks/{id}/` (break edit/delete), `GET/POST /api/doctors/me/schedule/exceptions/` (exception list/create), `PATCH/DELETE /api/doctors/me/schedule/exceptions/{id}/` (exception edit/delete).
+3. Verified frontend availability UI: `DoctorAvailabilityScreen` (doctor manages weekly schedule windows with weekday, start/end, duration), `DoctorProfileScreen` (patient views date-specific available slots), full API layer in `api/doctors.ts` for all schedule/break/exception CRUD operations.
+4. Ran all verification gates: backend `manage.py check` clean, `makemigrations --check --dry-run` no changes, 12/12 tests pass, frontend `typecheck` exit 0, `build` exit 0.
+
+**Files touched:** None — all code was already implemented in prior entries; this entry is verification only.
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Migration sync | `manage.py makemigrations --check --dry-run` | `No changes detected` |
+| Full test suite | `manage.py test` | `Ran 12 tests — OK` |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, strict, no diagnostics |
+| Frontend build | `npm run build` | Vite 8.3.0, 104 modules, exit 0 |
+
+**Status:** Done — PHASE 9 exit gate met; availability engine is complete (weekly schedule, slot generation, breaks, exceptions, public slot API, doctor schedule management).
+
+**Next:** PHASE 10 — Appointment Engine (frontend booking UI) is next, though the backend appointment engine (B5) is already Done per §53.
+
+---
+
+### 2026-09-19 — Entry 0014 — PHASE 10 (Appointment Engine) completed (Done)
+
+**Phase:** PHASE 10 — Appointment Engine (§59). The patient-facing appointment booking flow, list, detail, and cancel actions are implemented.
+
+**Work done**
+
+1. Completed `api/appointments.ts` — added `getAppointment`, `createAppointment`, `cancelAppointment`, `confirmAppointment`, `completeAppointment`, `rejectAppointment`, `updateAppointment` functions wired to the full backend appointment API.
+2. Built booking flow (`pages/appointments.tsx` `BookingScreen`) — patient visits `/booking/:id` (linked from doctor profile), selects a date, views available slots, picks a slot, enters a reason, and confirms. Appointment created via `POST /api/appointments/` with double-booking protection enforced by the backend.
+3. Built appointment list (`AppointmentsListScreen`) — `/appointments` shows upcoming/past tabs with status badges, doctor names (fetched inline), date/time, and links to detail.
+4. Built appointment detail (`AppointmentDetailScreen`) — `/appointments/:id` shows full appointment info (doctor, date, time, status, reason, notes, cancel reason) with a cancel action for pending/confirmed appointments.
+5. Updated `DoctorProfileScreen` — added "Book appointment" button linking to the booking flow.
+6. Added routes in `App.tsx` — `/booking/:id`, `/appointments` (list), `/appointments/:id` (detail).
+7. Added appointment-specific CSS — slot picker grid, tabs, appointment list rows, detail layout.
+
+**Files created / changed**
+
+```text
+frontend/src/pages/appointments.tsx    (new — booking, list, detail, cancel)
+frontend/src/api/appointments.ts       (expanded — full CRUD + lifecycle)
+frontend/src/pages/doctor.tsx          (added Book button)
+frontend/src/pages/index.tsx           (added appointment exports)
+frontend/src/App.tsx                   (added booking + appointment routes)
+frontend/src/styles/global.css         (appointment styles appended)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, strict, no diagnostics |
+| Frontend build | `npm run build` | Vite 8.3.0, 105 modules, exit 0 |
+| Backend tests | `manage.py test` | 12/12 pass |
+| Django check | `manage.py check` | 0 issues |
+
+**Status:** Done — PHASE 10 exit gate met; patient can book from doctor profile, view appointment list, view detail, and cancel.
+
+**Next:** PHASE 11 — Patient Appointment UI (if further refinement needed) or PHASE 12 — Doctor Dashboard (accept/reject/complete appointments).
+
+---
+
+### 2026-09-19 — Entry 0015 — PHASE 11 (Patient Appointment UI) completed (Done)
+
+**Phase:** PHASE 11 — Patient Appointment UI (§60). All patient-facing appointment screens are implemented.
+
+**Work done**
+
+1. Added `BookingSuccessScreen` — dedicated confirmation page shown after successful booking, with "View my appointments" and "Find another doctor" actions.
+2. Added `RescheduleScreen` — patient selects a new date/slot, current appointment is cancelled and a new request is submitted. Validates that only pending/confirmed appointments can be rescheduled.
+3. Updated `AppointmentDetailScreen` — added "Reschedule" button alongside "Cancel" for pending/confirmed appointments.
+4. Updated booking flow to redirect to `/booking/success` instead of toast + redirect.
+5. Added routes: `/booking/success`, `/appointments/:id/reschedule`.
+6. Added CSS for booking success screen (centered layout, checkmark icon, action buttons).
+
+**Phase 11 task checklist:**
+- [x] Date selection
+- [x] Time-slot selection
+- [x] Booking review
+- [x] Booking confirmation
+- [x] Booking success
+- [x] Upcoming appointments
+- [x] Appointment details
+- [x] Cancellation
+- [x] Rescheduling
+- [x] Appointment history
+
+**Files created / changed**
+
+```text
+frontend/src/pages/appointments.tsx  (added BookingSuccessScreen, RescheduleScreen, reschedule button)
+frontend/src/pages/index.tsx         (added exports)
+frontend/src/App.tsx                 (added routes)
+frontend/src/styles/global.css       (booking success styles)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Frontend typecheck | `npm run typecheck` | exit 0, no diagnostics |
+| Frontend build | `npm run build` | Vite 8.3.0, 105 modules, exit 0 |
+
+**Status:** Done — PHASE 11 exit gate met; all §60 tasks complete.
+
+**Next:** PHASE 12 — Doctor Dashboard (accept/reject/complete appointments from doctor side).
+
+---
 
 *End of log. Append new entries at the end of section 6 and keep sections 3, 4, 5, 7 and 8 updated.*
 

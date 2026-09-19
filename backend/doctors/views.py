@@ -1,6 +1,6 @@
 """Doctor discovery + schedule management (§24 doctors, §27)."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from django.db.models import Avg, Q
 from rest_framework import status as http_status
@@ -13,11 +13,14 @@ from accounts.permissions import IsAdminRole, IsDoctor
 from appointments.models import Appointment
 from common.pagination import StandardResultsSetPagination
 from common.responses import error_response, success_response
-from doctors.models import Availability, Doctor
+from doctors.models import Availability, AvailabilityBreak, Doctor, ScheduleException
+from doctors.scheduling import available_slots
 from doctors.serializers import (
     AvailabilitySerializer,
+    AvailabilityBreakSerializer,
     DoctorSerializer,
     DoctorWriteSerializer,
+    ScheduleExceptionSerializer,
 )
 
 
@@ -140,32 +143,10 @@ class DoctorAvailabilityView(APIView):
                 errors={"date": ["Use date=YYYY-MM-DD."]},
                 status_code=http_status.HTTP_400_BAD_REQUEST,
             )
-        weekday = target.weekday()
-        windows = Availability.objects.filter(
-            doctor=doctor, weekday=weekday, is_active=True
-        ).order_by("start_time")
-        booked = set(
-            Appointment.objects.filter(
-                doctor=doctor, appointment_date=target
-            ).exclude(status__in=("cancelled", "rejected")).values_list(
-                "start_time", flat=True
-            )
-        )
-        slots: list[dict] = []
-        for window in windows:
-            cursor = datetime.combine(target, window.start_time)
-            end = datetime.combine(target, window.end_time)
-            step = timedelta(minutes=window.slot_duration_minutes or 30)
-            while cursor + step <= end + timedelta(seconds=1):
-                label = cursor.time()
-                if label not in booked:
-                    slots.append(
-                        {
-                            "start_time": label.strftime("%H:%M"),
-                            "end_time": (cursor + step).time().strftime("%H:%M"),
-                        }
-                    )
-                cursor += step
+        slots = [
+            {"start_time": start.strftime("%H:%M"), "end_time": end.strftime("%H:%M")}
+            for start, end in available_slots(doctor, target)
+        ]
         return success_response(
             data={"doctor": doctor.pk, "date": target.isoformat(), "slots": slots}
         )
@@ -267,6 +248,109 @@ class DoctorScheduleDetailView(APIView):
                 status_code=http_status.HTTP_404_NOT_FOUND,
             )
         window.delete()
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class AvailabilityBreakListView(APIView):
+    """GET/POST breaks inside one of the current doctor's weekly windows."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def _window(self, request, pk: int):
+        try:
+            return Availability.objects.get(pk=pk, doctor=request.user.doctor)
+        except (Availability.DoesNotExist, Doctor.DoesNotExist):
+            return None
+
+    def get(self, request, pk: int):
+        window = self._window(request, pk)
+        if window is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        return success_response(data=AvailabilityBreakSerializer(window.breaks.all(), many=True).data)
+
+    def post(self, request, pk: int):
+        window = self._window(request, pk)
+        if window is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        serializer = AvailabilityBreakSerializer(data=request.data, context={"availability": window})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(availability=window)
+        return success_response(data=serializer.data, message="Break added.", status_code=http_status.HTTP_201_CREATED)
+
+
+class AvailabilityBreakDetailView(APIView):
+    """PATCH/DELETE a break owned by the current doctor."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def _break(self, request, pk: int):
+        try:
+            return AvailabilityBreak.objects.select_related("availability").get(
+                pk=pk, availability__doctor=request.user.doctor
+            )
+        except (AvailabilityBreak.DoesNotExist, Doctor.DoesNotExist):
+            return None
+
+    def patch(self, request, pk: int):
+        item = self._break(request, pk)
+        if item is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        serializer = AvailabilityBreakSerializer(item, data=request.data, partial=True, context={"availability": item.availability})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return success_response(data=serializer.data, message="Break updated.")
+
+    def delete(self, request, pk: int):
+        item = self._break(request, pk)
+        if item is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        item.delete()
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class ScheduleExceptionListView(APIView):
+    """GET/POST one-off closures, temporary unavailability, and holidays."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def _doctor(self, request):
+        return Doctor.objects.get_or_create(user=request.user)[0]
+
+    def get(self, request):
+        return success_response(data=ScheduleExceptionSerializer(self._doctor(request).schedule_exceptions.all(), many=True).data)
+
+    def post(self, request):
+        serializer = ScheduleExceptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(doctor=self._doctor(request))
+        return success_response(data=serializer.data, message="Schedule exception added.", status_code=http_status.HTTP_201_CREATED)
+
+
+class ScheduleExceptionDetailView(APIView):
+    """PATCH/DELETE a one-off closure owned by the current doctor."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def _exception(self, request, pk: int):
+        try:
+            return ScheduleException.objects.get(pk=pk, doctor=request.user.doctor)
+        except (ScheduleException.DoesNotExist, Doctor.DoesNotExist):
+            return None
+
+    def patch(self, request, pk: int):
+        item = self._exception(request, pk)
+        if item is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        serializer = ScheduleExceptionSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return success_response(data=serializer.data, message="Schedule exception updated.")
+
+    def delete(self, request, pk: int):
+        item = self._exception(request, pk)
+        if item is None:
+            return error_response(message="The requested resource was not found.", status_code=http_status.HTTP_404_NOT_FOUND)
+        item.delete()
         return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 

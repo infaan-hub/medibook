@@ -150,6 +150,20 @@ export interface ScheduleItem {
   date_updated?: string;
 }
 
+export interface AvailabilityBreak {
+  id: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface ScheduleException {
+  id: number;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  reason: string;
+}
+
 export interface DoctorQueryParams {
   search?: string;
   specialty?: number;
@@ -158,4 +172,23 @@ export interface DoctorQueryParams {
   min_rating?: number;
   page?: number;
   page_size?: number;
+}
+
+/* ---- PHASE 8 — Specialty & Hospital module ---- */
+
+export interface Specialty {
+  id: number;
+  name: string;
+  description: string;
+  icon_url: string;
+}
+
+export interface Hospital {
+  id: number;
+  name: string;
+  city: string;
+  address: string;
+  phone: string;
+  email: string;
+  location_details: Record<string, unknown>;
 }

@@ -21,7 +21,23 @@ import {
 import { AdminScreen } from "./pages/admin";
 import { SettingsScreen } from "./pages/patient";
 import { ProfileScreen } from "./pages/profile";
-import { AppointmentsPage, DoctorsPage, DoctorDashboardScreen, DoctorProfileScreen, DoctorAvailabilityScreen, HomeScreen, NotFoundPage } from "./pages";
+import {
+  BookingScreen,
+  BookingSuccessScreen,
+  RescheduleScreen,
+  AppointmentsListScreen,
+  AppointmentDetailScreen,
+  DoctorsPage,
+  DoctorDashboardScreen,
+  DoctorProfileScreen,
+  DoctorAvailabilityScreen,
+  HomeScreen,
+  NotFoundPage,
+  SpecialtyListPage,
+  SpecialtyDetailPage,
+  HospitalListPage,
+  HospitalDetailPage,
+} from "./pages";
 import { SessionProvider, ToastProvider } from "./state/app-context";
 
 export default function App() {
@@ -93,7 +109,11 @@ export default function App() {
               <Route path="/" element={<HomeScreen />} />
               <Route path="/doctors" element={<DoctorsPage />} />
               <Route path="/doctors/:id" element={<DoctorProfileScreen />} />
-              <Route path="/appointments" element={<AppointmentsPage />} />
+              <Route path="/booking/:id" element={<BookingScreen />} />
+              <Route path="/booking/success" element={<BookingSuccessScreen />} />
+              <Route path="/appointments" element={<AppointmentsListScreen />} />
+              <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
+              <Route path="/appointments/:id/reschedule" element={<RescheduleScreen />} />
               <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
               <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
               <Route path="/profile" element={<ProfileScreen />} />
@@ -113,6 +133,10 @@ export default function App() {
                   </RequireRole>
                 }
               />
+              <Route path="/specialties" element={<SpecialtyListPage />} />
+              <Route path="/specialties/:id" element={<SpecialtyDetailPage />} />
+              <Route path="/hospitals" element={<HospitalListPage />} />
+              <Route path="/hospitals/:id" element={<HospitalDetailPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>

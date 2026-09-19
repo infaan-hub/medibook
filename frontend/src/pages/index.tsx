@@ -8,6 +8,9 @@ import { useSession } from "../state/app-context";
 import { DoctorDashboardScreen } from "./doctor";
 
 export { DoctorAvailabilityScreen, DoctorDashboardScreen, DoctorProfileScreen } from "./doctor";
+export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
+export { HospitalListPage, HospitalDetailPage } from "./hospitals";
+export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
