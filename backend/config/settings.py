@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # MediBook apps (§23, §24, §50 PHASE 2 — registered as scaffolding;
     # business logic is added phase by phase)
@@ -82,7 +83,6 @@ INSTALLED_APPS = [
     "specialties",
     "hospitals",
     "appointments",
-    "payments",
     "notifications",
     "reviews",
     "reports",
@@ -141,6 +141,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Authentication (§29, §30)
 # ---------------------------------------------------------------------------
 
+AUTH_USER_MODEL = "accounts.User"
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -177,9 +179,10 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES", 30)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env_int("JWT_REFRESH_DAYS", 7)),
     "ROTATE_REFRESH_TOKENS": True,
-    # Refresh-token revocation/blacklisting is decided in PHASE 3.
-    "BLACKLIST_AFTER_ROTATION": False,
+    # Blacklisting gives logout/rotation real revocation power (§35).
+    "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
 # ---------------------------------------------------------------------------
@@ -214,14 +217,23 @@ USE_I18N = True
 USE_TZ = True
 
 # ---------------------------------------------------------------------------
-# Email — the SMTP provider is configured in PHASE 3
+# Email — configurable backend + token lifetimes (PHASE 3, decision #9)
 # ---------------------------------------------------------------------------
 
-MAILERS = {
-    "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
-    },
-}
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = env("DJANGO_EMAIL_HOST", "")
+EMAIL_PORT = env_int("DJANGO_EMAIL_PORT", 587)
+EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", True)
+DEFAULT_FROM_EMAIL = env(
+    "DJANGO_DEFAULT_FROM_EMAIL", "MediBook <no-reply@medibook.local>"
+)
+# Single-use token lifetimes (hours).
+EMAIL_VERIFICATION_TOKEN_HOURS = env_int("EMAIL_VERIFICATION_TOKEN_HOURS", 24)
+PASSWORD_RESET_TOKEN_HOURS = env_int("PASSWORD_RESET_TOKEN_HOURS", 2)
 
 # ---------------------------------------------------------------------------
 # Logging

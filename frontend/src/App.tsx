@@ -1,45 +1,124 @@
-// PHASE 1 — Development Environment
-// This is the environment smoke-test screen only. Real screens, routing, state
-// management and the PWA shell are added in PHASE 4 — React Foundation.
-interface EnvironmentCheck {
-  label: string;
-  value: string;
-}
+/**
+ * MediBook root (PHASE 5 — React Authentication).
+ * Providers → routes. Guest-only screens render without the app shell;
+ * every app screen sits behind RequireAuth (+ RequireRole for /admin).
+ * The Splash hides once the boot probe resolves.
+ */
 
-const environmentChecks: EnvironmentCheck[] = [
-  { label: "React + Vite toolchain", value: "ready" },
-  { label: "TypeScript", value: "strict" },
-  {
-    label: "API base URL",
-    value: import.meta.env.VITE_API_BASE_URL ?? "not configured"
-  },
-  { label: "PWA manifest", value: "PHASE 4" },
-  { label: "Service worker", value: "PHASE 4" },
-  { label: "Authentication", value: "PHASE 5" }
-];
+import { useEffect, useState } from "react";
+import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import { AppShell } from "./components/AppShell";
+import { AllowUnverified, RequireAuth, RequireGuest, RequireRole } from "./components/guards";
+import { SplashScreen } from "./components/Splash";
+import { ToastViewport } from "./components/ToastViewport";
+import {
+  ForgotPasswordScreen,
+  LoginScreen,
+  RegisterScreen,
+  ResetPasswordScreen,
+  VerifyEmailScreen,
+} from "./pages/auth";
+import { AdminScreen } from "./pages/admin";
+import { SettingsScreen } from "./pages/patient";
+import { ProfileScreen } from "./pages/profile";
+import { AppointmentsPage, DoctorsPage, DoctorDashboardScreen, DoctorProfileScreen, DoctorAvailabilityScreen, HomeScreen, NotFoundPage } from "./pages";
+import { SessionProvider, ToastProvider } from "./state/app-context";
 
 export default function App() {
+  const [booted, setBooted] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBooted(true), 350);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <h1>MediBook</h1>
-        <p className="app-subtitle">Development environment status</p>
-      </header>
+    <SessionProvider>
+      <ToastProvider>
+        <SplashScreen hidden={booted} />
+        <BrowserRouter>
+          <Routes>
+            {/* Guest-only screens (no app shell) */}
+            <Route
+              path="/login"
+              element={
+                <RequireGuest>
+                  <LoginScreen />
+                </RequireGuest>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <RequireGuest>
+                  <RegisterScreen />
+                </RequireGuest>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <RequireGuest>
+                  <ForgotPasswordScreen />
+                </RequireGuest>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <RequireGuest>
+                  <ResetPasswordScreen />
+                </RequireGuest>
+              }
+            />
+            <Route
+              path="/verify-email"
+              element={
+                <AllowUnverified>
+                  <VerifyEmailScreen />
+                </AllowUnverified>
+              }
+            />
 
-      <section className="status-panel" aria-label="Environment status">
-        <ul className="status-list">
-          {environmentChecks.map((check) => (
-            <li key={check.label}>
-              <span className="status-label">{check.label}</span>
-              <span className="status-value">{check.value}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <footer className="app-footer">
-        <p>PHASE 1 — Development Environment</p>
-      </footer>
-    </main>
+            {/* Authenticated app screens (inside the shell) */}
+            <Route
+              element={
+                <RequireAuth>
+                  <AppShell>
+                    <Outlet />
+                  </AppShell>
+                </RequireAuth>
+              }
+            >
+              <Route path="/" element={<HomeScreen />} />
+              <Route path="/doctors" element={<DoctorsPage />} />
+              <Route path="/doctors/:id" element={<DoctorProfileScreen />} />
+              <Route path="/appointments" element={<AppointmentsPage />} />
+              <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
+              <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
+              <Route path="/profile" element={<ProfileScreen />} />
+              <Route
+                path="/settings"
+                element={
+                  <RequireRole role="patient">
+                    <SettingsScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireRole role="admin">
+                    <AdminScreen />
+                  </RequireRole>
+                }
+              />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+          <ToastViewport />
+        </BrowserRouter>
+      </ToastProvider>
+    </SessionProvider>
   );
 }

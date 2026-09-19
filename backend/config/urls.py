@@ -17,19 +17,25 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     # Health / readiness probe
     path("api/", include("common.urls")),
-    # Authentication (§27, §29) — issued for the custom user model in PHASE 3.
-    path("api/auth/login/", TokenObtainPairView.as_view(), name="auth-login"),
-    path(
-        "api/auth/token/refresh/",
-        TokenRefreshView.as_view(),
-        name="auth-token-refresh",
-    ),
+    # Authentication (§27, §29) — PHASE 3 custom user + JWT flows.
+    path("api/", include("accounts.urls")),
+    # Catalog + profiles + booking + notifications + reviews.
+    path("api/", include("specialties.urls")),
+    path("api/", include("hospitals.urls")),
+    path("api/", include("patients.urls")),
+    path("api/", include("doctors.urls")),
+    # Reviews before appointments: /api/appointments/{id}/review/ must not be
+    # captured by the appointments action route (<str:action> pattern).
+    path("api/", include("reviews.urls")),
+    path("api/", include("appointments.urls")),
+    path("api/", include("notifications.urls")),
+    # Admin dashboard statistics (§34).
+    path("api/", include("reports.urls")),
 ]
 
 if settings.DEBUG:

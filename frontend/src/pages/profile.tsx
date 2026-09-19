@@ -1,0 +1,228 @@
+/**
+ * PHASE 5 — Profile screens (§54).
+ *
+ * ProfileScreen — account details, email-verification banner, edit
+ *                name/phone, change password, sign out.
+ */
+
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { changePassword, resendVerification, updateMe } from "../api/auth";
+import { ApiError } from "../api/client";
+import { useSession, useToast } from "../state/app-context";
+import { Button, Card, TextField } from "../components/ui";
+
+function fieldErrors(error: unknown): Record<string, string> {
+  if (error instanceof ApiError) {
+    return Object.fromEntries(
+      Object.entries(error.errors).map(([field, messages]) => [
+        field,
+        messages[0] ?? "Invalid value.",
+      ])
+    );
+  }
+  return {};
+}
+
+export function ProfileScreen() {
+  const { user, setUser, logout } = useSession();
+  const { notify } = useToast();
+  const navigate = useNavigate();
+
+  const [name, setName] = useState({
+    first_name: user?.first_name ?? "",
+    last_name: user?.last_name ?? "",
+    phone: user?.phone ?? "",
+  });
+  const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
+  const [savingName, setSavingName] = useState(false);
+
+  const [passwords, setPasswords] = useState({
+    old_password: "",
+    new_password: "",
+    new_password_confirm: "",
+  });
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
+  const [savingPw, setSavingPw] = useState(false);
+
+  const [resent, setResent] = useState(false);
+
+  if (!user) return null; // guarded by RequireAuth
+
+  async function onSaveName(event: FormEvent) {
+    event.preventDefault();
+    setNameErrors({});
+    setSavingName(true);
+    try {
+      const envelope = await updateMe({
+        first_name: name.first_name.trim(),
+        last_name: name.last_name.trim(),
+        phone: name.phone.trim(),
+      });
+      setUser(envelope.data);
+      notify("success", "Profile updated.");
+    } catch (error) {
+      const fields = fieldErrors(error);
+      setNameErrors(fields);
+      if (!Object.keys(fields).length) notify("error", "Could not update profile.");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function onResend() {
+    if (resent) return;
+    try {
+      await resendVerification(user!.email);
+      setResent(true);
+    } catch {
+      notify("error", "Could not send the code. Try again later.");
+    }
+  }
+
+  async function onChangePassword(event: FormEvent) {
+    event.preventDefault();
+    setPwErrors({});
+    if (passwords.new_password !== passwords.new_password_confirm) {
+      setPwErrors({ new_password_confirm: "Passwords do not match." });
+      return;
+    }
+    setSavingPw(true);
+    try {
+      await changePassword({
+        old_password: passwords.old_password,
+        new_password: passwords.new_password,
+        new_password_confirm: passwords.new_password_confirm,
+      });
+      setPasswords({ old_password: "", new_password: "", new_password_confirm: "" });
+      notify("success", "Password updated.");
+    } catch (error) {
+      const fields = fieldErrors(error);
+      setPwErrors(fields);
+      if (!Object.keys(fields).length) notify("error", "Could not change password.");
+    } finally {
+      setSavingPw(false);
+    }
+  }
+
+  async function onLogout() {
+    await logout();
+    notify("info", "Signed out.");
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <div className="page">
+      <h1 className="page__title">Profile</h1>
+      <p className="page__subtitle">Account settings and security.</p>
+
+      {!user.is_verified && (
+        <div className="verify-banner" role="status">
+          <span>
+            Your email is not verified yet.
+            {resent
+              ? " A new code was requested — check your inbox."
+              : " Check your inbox for the code."}
+          </span>
+          <span className="verify-banner__actions">
+            <Link to="/verify-email">Enter code</Link>
+            {!resent && (
+              <button type="button" className="link-btn" onClick={onResend}>
+                Resend
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
+      <Card>
+        <h2 className="card__title">Account</h2>
+        <p className="card__text">{user.email}</p>
+        <p className="card__text">
+          <span className={`role-pill role-pill--${user.role}`}>{user.role}</span>
+          {user.is_verified ? " · verified" : " · not verified"}
+        </p>
+        <Button variant="danger" onClick={onLogout}>
+          Sign out
+        </Button>
+      </Card>
+
+      <Card>
+        <h2 className="card__title">Personal details</h2>
+        <form className="form" onSubmit={onSaveName} noValidate>
+          <div className="form__row">
+            <TextField
+              id="prof-first"
+              label="First name"
+              autoComplete="given-name"
+              value={name.first_name}
+              error={nameErrors.first_name}
+              onChange={(e) => setName({ ...name, first_name: e.target.value })}
+            />
+            <TextField
+              id="prof-last"
+              label="Last name"
+              autoComplete="family-name"
+              value={name.last_name}
+              error={nameErrors.last_name}
+              onChange={(e) => setName({ ...name, last_name: e.target.value })}
+            />
+          </div>
+          <TextField
+            id="prof-phone"
+            label="Phone"
+            type="tel"
+            autoComplete="tel"
+            value={name.phone}
+            error={nameErrors.phone}
+            onChange={(e) => setName({ ...name, phone: e.target.value })}
+          />
+          <Button type="submit" loading={savingName}>
+            Save details
+          </Button>
+        </form>
+      </Card>
+
+      <Card>
+        <h2 className="card__title">Change password</h2>
+        <form className="form" onSubmit={onChangePassword} noValidate>
+          <TextField
+            id="pw-old"
+            label="Current password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={passwords.old_password}
+            error={pwErrors.old_password}
+            onChange={(e) => setPasswords({ ...passwords, old_password: e.target.value })}
+          />
+          <div className="form__row">
+            <TextField
+              id="pw-new"
+              label="New password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={passwords.new_password}
+              error={pwErrors.new_password}
+              onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })}
+            />
+            <TextField
+              id="pw-confirm"
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={passwords.new_password_confirm}
+              error={pwErrors.new_password_confirm}
+              onChange={(e) => setPasswords({ ...passwords, new_password_confirm: e.target.value })}
+            />
+          </div>
+          <Button type="submit" loading={savingPw}>
+            Update password
+          </Button>
+        </form>
+      </Card>
+    </div>
+  );
+}

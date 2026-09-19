@@ -1,7 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import "./design/tokens.css";
 import "./styles/global.css";
+import "./styles/shell.css";
+import { registerServiceWorker } from "./lib/pwa";
 
 const container = document.getElementById("root");
 
@@ -14,3 +17,5 @@ ReactDOM.createRoot(container).render(
     <App />
   </React.StrictMode>
 );
+
+registerServiceWorker();

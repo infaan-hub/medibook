@@ -1,0 +1,176 @@
+/* MediBook app shell, prompts and splash (§21, §22.6, §18 PWA UI).
+   Tokens: ../design/tokens.css. Component primitives: global.css. */
+
+/* ---- App shell / responsive navigation (§22.6) ---- */
+.shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.shell__header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: calc(var(--header-height) + var(--safe-top));
+  padding: var(--safe-top) var(--space-4) 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.shell__body {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+.shell__content {
+  flex: 1;
+  padding: var(--space-5) var(--space-4)
+    calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-6));
+  min-width: 0;
+}
+.shell__nav--bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  height: calc(var(--bottom-nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.shell__nav--side {
+  display: none;
+  width: 240px;
+  flex-shrink: 0;
+  padding: calc(var(--safe-top) + var(--space-6)) var(--space-4);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.nav-item:hover,
+.nav-item:focus-visible {
+  text-decoration: none;
+}
+.nav-item--active {
+  color: var(--color-primary);
+}
+.nav-item--active .nav-item__bar {
+  opacity: 1;
+}
+.nav-item__bar {
+  width: 28px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Tablet+: sidebar rail replaces the phone bottom nav (§22.6) */
+@media (min-width: 600px) {
+  .shell__nav--side {
+    display: block;
+  }
+  .nav-item--side {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-md);
+  }
+  .nav-item--side:hover {
+    background: var(--color-primary-soft);
+  }
+  .nav-item--side .nav-item__bar {
+    display: none;
+  }
+}
+@media (min-width: 1024px) {
+  .shell__content {
+    padding: var(--space-8) var(--space-8) var(--space-12);
+  }
+  .shell__nav--bottom {
+    display: none;
+  }
+}
+
+/* ---- Install / update / offline prompts (§18 PWA UI) ---- */
+.prompt {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-3));
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+}
+@media (min-width: 1024px) {
+  .prompt {
+    bottom: var(--space-4);
+    left: auto;
+    right: var(--space-4);
+    width: 380px;
+  }
+}
+
+/* ---- Splash screen (§18) ---- */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  transition: opacity 0.3s ease;
+}
+.splash--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.splash__logo {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+}
+.splash__name {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}

@@ -1,0 +1,42 @@
+"""Doctor routes (§27)."""
+
+from django.urls import path
+from rest_framework.routers import DefaultRouter
+
+from doctors.views import (
+    AdminDoctorApprovalView,
+    DoctorAvailabilityView,
+    DoctorScheduleDetailView,
+    DoctorScheduleView,
+    MyDoctorProfileView,
+    DoctorViewSet,
+)
+
+app_name = "doctors"
+
+router = DefaultRouter()
+router.register("doctors", DoctorViewSet, basename="doctor")
+
+urlpatterns = [
+    path("doctors/me/profile/", MyDoctorProfileView.as_view(), name="my-doctor-profile"),
+    path(
+        "doctors/<int:pk>/availability/",
+        DoctorAvailabilityView.as_view(),
+        name="doctor-availability",
+    ),
+    path(
+        "doctors/me/schedule/",
+        DoctorScheduleView.as_view(),
+        name="doctor-schedule",
+    ),
+    path(
+        "doctors/me/schedule/<int:pk>/",
+        DoctorScheduleDetailView.as_view(),
+        name="doctor-schedule-detail",
+    ),
+    path(
+        "admin/doctors/<int:pk>/approve/",
+        AdminDoctorApprovalView.as_view(),
+        name="admin-doctor-approve",
+    ),
+] + router.urls

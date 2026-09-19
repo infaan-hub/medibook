@@ -38,7 +38,7 @@ Patients can discover doctors, inspect professional profiles, view availability,
 
 Doctors can manage professional profiles, availability, appointment requests, schedules, and patient appointment information.
 
-Administrators can manage users, doctors, patients, specialties, healthcare facilities, appointments, notifications, payments, reviews, and system settings.
+Administrators can manage users, doctors, patients, specialties, healthcare facilities, appointments, notifications, reviews, and system settings.
 
 ---
 
@@ -78,11 +78,10 @@ MediBook should:
 18. Provide appointment history.
 19. Provide in-app notifications.
 20. Provide push notifications.
-21. Support optional consultation payments.
-22. Allow patients to review completed appointments.
-23. Provide administrator statistics and reports.
-24. Protect user and healthcare-related information.
-25. Work responsively on desktop, Android, iOS, tablet, and web from a single React build.
+21. Allow patients to review completed appointments.
+22. Provide administrator statistics and reports.
+23. Protect user and healthcare-related information.
+24. Work responsively on desktop, Android, iOS, tablet, and web from a single React build.
 26. Be installable as a Progressive Web App (A2HS — Add to Home Screen) on desktop, Android, and iOS without native Android/iOS builds or emulators.
 27. Provide a Web App Manifest with `display: "standalone"` and a complete icon set.
 28. Provide a service worker with install, activate, and `fetch` handlers for offline support plus an offline fallback page.
@@ -184,7 +183,6 @@ These features should not block the MVP:
 - Laboratory services
 - Pharmacy integration
 - Insurance integration
-- Advanced payment integration
 - SMS notifications
 - Advanced analytics
 - Doctor ratings
@@ -271,7 +269,6 @@ Administrators can:
 - Manage specialties
 - Manage hospitals/clinics
 - Manage appointments
-- Manage payments
 - Manage notifications
 - Manage reviews
 - View statistics
@@ -686,7 +683,6 @@ HospitalsScreen
 AppointmentsScreen
 AppointmentDetailsScreen
 
-PaymentsScreen
 NotificationsScreen
 ReviewsScreen
 ReportsScreen
@@ -925,7 +921,6 @@ Recommended project:
 ├── specialties/
 ├── hospitals/
 ├── appointments/
-├── payments/
 ├── notifications/
 ├── reviews/
 ├── reports/
@@ -988,14 +983,6 @@ Responsible for:
 - Booking
 - Appointment lifecycle
 
-## payments
-
-Responsible for:
-
-- Payment records
-- Payment status
-- Transaction references
-
 ## notifications
 
 Responsible for:
@@ -1045,7 +1032,6 @@ Hospital
 DoctorAvailability
 AppointmentSlot
 Appointment
-Payment
 Notification
 Review
 AuditLog
@@ -1071,7 +1057,6 @@ Appointment
  ├── Patient
  ├── Doctor
  ├── Slot
- ├── Payment
  └── Review
 ```
 
@@ -1192,20 +1177,6 @@ reason
 notes
 status
 consultation_fee
-created_at
-updated_at
-```
-
-## Payment
-
-```text
-id
-appointment_id
-amount
-method
-transaction_id
-status
-paid_at
 created_at
 updated_at
 ```
@@ -1473,8 +1444,6 @@ Notification types:
 - Appointment rescheduled
 - Appointment reminder
 - Doctor verification
-- Payment received
-- Payment failed
 - System announcement
 
 Architecture:
@@ -1499,38 +1468,9 @@ Notifications should not be relied on as the only source of appointment truth. T
 
 # 32. Payment Architecture
 
-Payments are an optional module for the initial MVP.
-
-Architecture:
-
-```text
-Patient
-   ↓
-Appointment
-   ↓
-Payment Request
-   ↓
-Payment Provider
-   ↓
-Transaction Verification
-   ↓
-Django
-   ↓
-Payment Status
-   ↓
-Appointment Status
-```
-
-Payment statuses:
-
-```text
-PENDING
-PAID
-FAILED
-REFUNDED
-```
-
-The payment integration should be abstracted so a provider can be changed without rewriting appointment logic.
+Removed from scope on 2026-09-19. MediBook does not handle consultation
+payments; the former optional payment-records module was removed from the
+backend (see the development log, Entry 0009).
 
 ---
 
@@ -1565,7 +1505,6 @@ Pending Appointments
 Confirmed Appointments
 Completed Appointments
 Cancelled Appointments
-Revenue (if payments are enabled)
 ```
 
 Admin charts can include:
@@ -1575,7 +1514,6 @@ Admin charts can include:
 - Users by role
 - Doctors by specialty
 - Appointment statuses
-- Payment totals
 
 ---
 
@@ -1649,7 +1587,6 @@ SECRET_KEY
 DATABASE_PASSWORD
 JWT_SECRET
 Firebase private credentials
-Payment secret keys
 ```
 
 directly into source code or Git repositories.
@@ -1670,7 +1607,6 @@ API responses must not expose:
 - Tokens
 - Private administrative information
 - Unnecessary patient information
-- Payment secrets
 - Internal security information
 
 ---
@@ -1829,7 +1765,6 @@ Validation Error
 Booking Conflict
 Empty Data
 Timeout
-Payment Failure
 Notification Failure
 ```
 
@@ -1949,7 +1884,6 @@ Test:
 - Doctor rejection
 - Completion
 - Reviews
-- Payments
 - Notifications
 
 ## Critical Booking Tests
@@ -2079,7 +2013,6 @@ feature/auth
 feature/doctors
 feature/appointments
 feature/notifications
-feature/payments
 ```
 
 Commit changes in logical units.
@@ -2135,7 +2068,36 @@ Phase 0 exit gate: close the two in-progress items above, then begin PHASE 1.
 
 ---
 
-# 50. PHASE 1 — Development Environment
+# 50. Backend-First Build Order (binding — 2026-09-19)
+
+> **Decision (project owner, 2026-09-19):** the backend is built FIRST and
+> completed end-to-end (all Django models, APIs, permissions, tests, admin)
+> before the React frontend work begins. PHASE 4+ frontend phases stay in the
+> roadmap but are OUT OF SCOPE until the backend track below is Done and
+> verified against PostgreSQL.
+
+## Backend track (PHASE 3–16 backend slices, implemented together)
+
+| Slice | Roadmap phase(s) | Backend scope (models + API + tests) |
+| --- | --- | --- |
+| B1 | PHASE 3 | Custom User, roles, register/login/logout, JWT + refresh + blacklist, password reset, email verification, permissions, auth tests |
+| B2 | PHASE 6 | Patient profile model + `/api/patients/profile/` |
+| B3 | PHASE 7 + 9 | Doctor profile + availability windows + `/api/doctors/`, `/api/doctors/{id}/availability/`, schedule management |
+| B4 | PHASE 8 | Specialty + Hospital catalogs + filters |
+| B5 | PHASE 10 | Appointment booking + confirm/complete/cancel/reject + double-booking guard + history |
+| B6 | PHASE 13 (backend) | Notification inbox rows + push-subscription storage (delivery worker stays in frontend PHASE 13) |
+| B7 | PHASE 14 (backend) | Admin stats + user directory + doctor approval |
+| B8 | PHASE 15 | Reviews on completed appointments + rating aggregates |
+
+## Frontend track (deferred until backend track is verified)
+
+PHASE 4, 5, 11, 12 and the UI slices of PHASE 13–16 begin only after every
+backend slice B1–B9 passes `manage.py check`, `makemigrations --check`, the
+full `manage.py test` suite, and a live HTTP smoke test against PostgreSQL.
+
+---
+
+# 51. PHASE 1 — Development Environment
 
 ### Objective
 
@@ -2209,7 +2171,7 @@ Backend app scaffolding (§23) is registered and ready for business logic:
 
 ```text
 common  accounts  patients  doctors  specialties  hospitals
-appointments  payments  notifications  reviews  reports
+appointments  notifications  reviews  reports
 ```
 
 Note: the login payload uses the built-in `username` field until the custom user
@@ -2217,33 +2179,61 @@ model is introduced in PHASE 3, after which it becomes `{"email": ..., "password
 
 ---
 
-# 52. PHASE 3 — Custom User & Authentication
+# 53. PHASE 3 — Custom User & Authentication (backend track B1 — Done 2026-09-19)
 
 ### Objective
 
 Build secure authentication.
 
+Backend-first scope: this phase now also carries the shared backend contract
+— every domain model (§26) exists with migrations, every §27 route is wired,
+and the auth + booking test suites run. Frontend phases stay deferred per §50.
+
 Tasks:
 
-- [ ] Custom User model
-- [ ] Roles
-- [ ] Registration
-- [ ] Login
-- [ ] Logout
-- [ ] JWT
-- [ ] Refresh token
-- [ ] Password reset
-- [ ] Email verification
-- [ ] Permissions
-- [ ] Authentication tests
+- [x] Custom User model — email login, phone, names, role, profile image, `is_verified` (`accounts/models.py` + `0001_initial`)
+- [x] Roles — `patient`/`doctor`/`admin` + `IsPatient`/`IsDoctor`/`IsAdminRole`/`IsVerified` (`accounts/permissions.py`)
+- [x] Registration — `POST /api/auth/register/` + JWT pair + verification email
+- [x] Login — `POST /api/auth/login/` (email + password → JWT pair + user)
+- [x] Logout — `POST /api/auth/logout/` (refresh blacklist, `token_blacklist` app, `BLACKLIST_AFTER_ROTATION=True`)
+- [x] JWT — access 30 min / refresh 7 days / rotation on / blacklist on
+- [x] Refresh token — `POST /api/auth/token/refresh/` wrapped in the §28 envelope
+- [x] Password reset — `POST /api/auth/password-reset/` + `-confirm/` (single-use, expiring, neutral responses)
+- [x] Email verification — `POST /api/auth/verify-email/` + `resend-verification/` (single-use, expiring)
+- [x] Permissions — role gates on every domain route; `IsAuthenticated` default
+- [x] Authentication tests — `accounts/tests.py` (register→login→me→refresh→logout→blacklist, validation, verify, reset, 401 envelope)
+- [x] Backend slices B2–B9 models — Patient, Doctor, Availability, Specialty, Hospital, Appointment (+`uniq_live_doctor_slot`), Notification, PushSubscription, Review (all `0001_initial` migrations generated; applied 2026-09-19 — Entry 0006)
+- [x] Backend slices B2–B9 APIs — patients profile, doctors + availability + schedule, specialties, hospitals, appointments + actions, notifications + push-subscriptions, reviews, admin stats/users (all wired in `config/urls.py`; `manage.py check` clean)
+- [x] Booking/review/catalog tests — `appointments/tests.py` (double-booking 409, history filter, confirm→slot removal, search filters, review-after-completed + rating aggregate)
+- [x] Apply migrations to PostgreSQL + run full `manage.py test` + live HTTP smoke test — completed 2026-09-19 (Entry 0006: `medibook` DB recreated; 9/9 tests pass; review-route ordering fixed; `MeView` envelope fixed)
 
 Deliverable:
 
-A complete authentication API.
+```text
+Complete backend API (B1–B9 Done, DB verified + tests green — Entry 0006)
+
+POST /api/auth/register/                201  user + JWT pair
+POST /api/auth/login/                   200  user + JWT pair
+POST /api/auth/logout/                  200  blacklist refresh
+POST /api/auth/token/refresh/           200  rotated pair (envelope)
+GET/PATCH /api/auth/me/                 200  own profile
+POST /api/auth/password-change/         200  authenticated change
+POST /api/auth/password-reset/          200  neutral + email token
+POST /api/auth/password-reset-confirm/  200  new password set
+POST /api/auth/verify-email/            200  is_verified=true
+POST /api/auth/resend-verification/     200  neutral + email token
+GET /api/doctors/?specialty=&city=      200  public search + filters
+GET /api/doctors/{id}/availability/     200  free slots for a date
+GET/POST /api/appointments/             201  booking (409 on conflict)
+POST /api/appointments/{id}/{confirm,complete,cancel,reject}/
+GET /api/notifications/                 200  own inbox
+POST /api/appointments/{id}/review/     201  completed-only review
+GET /api/admin/stats/                   200  admin dashboard totals
+```
 
 ---
 
-# 53. PHASE 4 — React Foundation
+# 53. PHASE 4 — React Foundation (Done — 2026-09-19, Entry 0007)
 
 ### Objective
 
@@ -2251,63 +2241,66 @@ Build the frontend foundation.
 
 Tasks:
 
-- [ ] Create React application
-- [ ] Configure theme
-- [ ] Configure routing
-- [ ] Configure API client
-- [ ] Configure secure storage
-- [ ] Configure state management
-- [ ] Create reusable widgets
-- [ ] Create responsive layout system
-- [ ] Create splash screen
-- [ ] Add `manifest.json` (name, icons, theme_color, `display: "standalone"`)
-- [ ] Add and register `service-worker.js` with install / activate / fetch handlers
-- [ ] Precache the app shell and add `offline.html`
-- [ ] Add the install prompt (A2HS) component
-- [ ] Add standalone / safe-area styling
-- [ ] Add the update-available prompt
+- [x] Create React application (React 19 + Vite 8 + TypeScript strict, from PHASE 1)
+- [x] Configure theme (§21 design tokens in `src/design/tokens.css` — closes the Phase 0 design-tokens blocker)
+- [x] Configure routing (React Router 7, placeholder pages, 404)
+- [x] Configure API client (axios + JWT injection + single-flight 401 refresh/replay, §28 envelope unwrapping)
+- [x] Configure secure storage (`src/lib/storage.ts` + `src/api/tokens.ts`: access in sessionStorage, refresh in localStorage)
+- [x] Configure state management (React Context: ToastProvider + SessionProvider)
+- [x] Create reusable widgets (Button, TextField, Card, Badge, EmptyState, ErrorState, Skeleton, Spinner, Toasts)
+- [x] Create responsive layout system (AppShell: bottom nav on phone, sidebar rail on tablet+, §22.6)
+- [x] Create splash screen
+- [x] Add `manifest.json` (name, icons, theme_color, `display: "standalone"`)
+- [x] Add and register `service-worker.js` with install / activate / fetch handlers
+- [x] Precache the app shell and add `offline.html`
+- [x] Add the install prompt (A2HS) component
+- [x] Add standalone / safe-area styling
+- [x] Add the update-available prompt
 
 Deliverable:
 
-Installable React PWA connected to Django.
+Installable React PWA connected to Django. **Verified 2026-09-19:** `npm run typecheck` exit 0; `npm run build` exit 0 (35 modules); preview server on :4180 → `/`, `/manifest.json`, `/service-worker.js`, `/offline.html`, `/icons/icon-512.png` all HTTP 200.
 
 ---
 
-# 54. PHASE 5 — React Authentication
+# 54. PHASE 5 — React Authentication (Done 2026-09-19)
 
 Tasks:
 
-- [ ] Login
-- [ ] Register
-- [ ] Logout
-- [ ] Forgot password
-- [ ] Token storage
-- [ ] Token refresh
-- [ ] Authentication guard
-- [ ] Role-based routing
-- [ ] Error handling
+- [x] Login — `/login` (`pages/auth.tsx` `LoginScreen`, email + password, field errors mapped)
+- [x] Register — `/register` (patient/doctor choice, password confirm, POST `/api/auth/register/` → auto-session)
+- [x] Logout — profile screen + `SessionProvider.logout()` (refresh blacklist, tokens cleared)
+- [x] Forgot password — `/forgot-password` (neutral response; reset code via console email in dev)
+- [x] Token storage — access in `sessionStorage`, refresh in `localStorage` (`lib/storage.ts` `mb.*` namespacing)
+- [x] Token refresh — single-flight 401 refresh-and-replay interceptor (`api/client.ts`; `/auth/token/refresh/` excluded)
+- [x] Authentication guard — `RequireAuth` (remembers intended URL), `RequireGuest`, `RequireRole` (`components/guards.tsx`)
+- [x] Role-based routing — patient/doctor home per role, `/admin` gated to `admin`, nav items filtered by role
+- [x] Error handling — `ApiError` normalization, envelope field errors → per-field messages, toasts; plus email verify (`/verify-email` with `?token=` prefill) and reset (`/reset-password`) screens and change-password/profile wiring
 
 Deliverable:
 
-Patient and doctor can authenticate through React.
+Patient and doctor can authenticate through React. Verified: `typecheck` exit 0,
+`npm run build` exit 0 (96 modules, JS 339.55 kB / gzip 108.24 kB), and a live
+end-to-end flow through the preview proxy (`register → email token → verify →
+login → me → logout`) — Entry 0010.
 
 ---
 
-# 55. PHASE 6 — Patient Module
+# 55. PHASE 6 — Patient Module (backend Done §53/B2; React deferred §50)
 
-Backend:
+Backend (Done — code + migrations; DB verification Blocked):
 
-- [ ] Patient model
-- [ ] Patient serializer
-- [ ] Patient API
-- [ ] Permissions
+- [x] Patient model
+- [x] Patient serializer
+- [x] Patient API
+- [x] Permissions
 
 React:
 
-- [ ] Patient home
-- [ ] Profile
-- [ ] Edit profile
-- [ ] Settings
+- [x] Patient home
+- [x] Profile
+- [x] Edit profile
+- [x] Settings
 
 Deliverable:
 
@@ -2315,40 +2308,42 @@ Complete patient profile system.
 
 ---
 
-# 56. PHASE 7 — Doctor Module
+# 56. PHASE 7 — Doctor Module (Done 2026-09-19)
+
+**Status: Done — 2026-09-19.** Backend and React doctor-module work is implemented and verified. Detailed evidence is recorded in `project development.md` (Entry 0012).
 
 Backend:
 
-- [ ] Doctor model
-- [ ] Doctor profile API
-- [ ] Doctor verification
-- [ ] Doctor permissions
-- [ ] Specialty relationship
-- [ ] Hospital relationship
+- [x] Doctor model
+- [x] Doctor profile API
+- [x] Doctor verification
+- [x] Doctor permissions
+- [x] Specialty relationship
+- [x] Hospital relationship
 
 React:
 
-- [ ] Doctor list
-- [ ] Search
-- [ ] Filter
-- [ ] Doctor details
-- [ ] Professional profile
+- [x] Doctor list — completed 2026-09-19 (`/doctors`, paginated API-backed directory)
+- [x] Search — completed 2026-09-19 (name search)
+- [x] Filter — completed 2026-09-19 (city filter; backend also supports specialty, hospital, and minimum rating filters)
+- [x] Doctor details — completed 2026-09-19 (`/doctors/:id`, professional information and date-specific availability)
+- [x] Professional profile — completed 2026-09-19 (doctor-only dashboard using `GET/PATCH /api/doctors/me/profile/`)
 
 Deliverable:
 
-Patients can discover doctors.
+Patients can discover doctors and doctors can maintain their professional profiles. **Verified 2026-09-19:** strict TypeScript typecheck and production build pass; Django system and migration checks pass; doctor profile, appointment, and authentication test suites pass.
 
 ---
 
-# 57. PHASE 8 — Specialty & Hospital
+# 57. PHASE 8 — Specialty & Hospital (backend Done §53/B4; React deferred §50)
 
 Tasks:
 
-- [ ] Specialty model
-- [ ] Specialty API
-- [ ] Hospital model
-- [ ] Hospital API
-- [ ] Admin CRUD
+- [x] Specialty model
+- [x] Specialty API
+- [x] Hospital model
+- [x] Hospital API
+- [x] Admin CRUD
 - [ ] React specialty screens
 - [ ] React hospital screens
 
@@ -2358,20 +2353,20 @@ Organized healthcare directory.
 
 ---
 
-# 58. PHASE 9 — Availability Engine
+# 58. PHASE 9 — Availability Engine (backend Done §53/B3; React deferred §50)
 
 Tasks:
 
-- [ ] Doctor weekly schedule
-- [ ] Working days
-- [ ] Working hours
-- [ ] Break periods
-- [ ] Appointment duration
+- [x] Doctor weekly schedule
+- [x] Working days
+- [x] Working hours
+- [x] Appointment duration
+- [x] Slot generation
+- [x] Slot API
+- [x] Availability validation
+- [ ] Break periods (post-MVP — model has no break table yet)
 - [ ] Exceptions
 - [ ] Temporary unavailable dates
-- [ ] Slot generation
-- [ ] Slot API
-- [ ] Availability validation
 
 Deliverable:
 
@@ -2379,25 +2374,25 @@ Reliable doctor scheduling system.
 
 ---
 
-# 59. PHASE 10 — Appointment Engine
+# 59. PHASE 10 — Appointment Engine (backend Done §53/B5; React deferred §50)
 
 This is the core MediBook milestone.
 
 Tasks:
 
-- [ ] Appointment model
-- [ ] Booking API
-- [ ] Slot validation
-- [ ] Database transaction
-- [ ] Double-booking protection
-- [ ] Pending status
-- [ ] Doctor acceptance
-- [ ] Doctor rejection
-- [ ] Cancellation
-- [ ] Rescheduling
-- [ ] Completion
+- [x] Appointment model
+- [x] Booking API
+- [x] Slot validation
+- [x] Database transaction
+- [x] Double-booking protection
+- [x] Pending status
+- [x] Doctor acceptance
+- [x] Doctor rejection
+- [x] Cancellation
+- [x] Completion
+- [x] Appointment history
+- [ ] Rescheduling (post-MVP — cancel + rebook is the MVP path)
 - [ ] No-show
-- [ ] Appointment history
 
 Deliverable:
 
@@ -2405,7 +2400,7 @@ Complete end-to-end appointment system.
 
 ---
 
-# 60. PHASE 11 — Patient Appointment UI
+# 60. PHASE 11 — Patient Appointment UI (deferred — backend-first §50)
 
 Tasks:
 
@@ -2426,7 +2421,7 @@ Patient can complete the entire booking journey.
 
 ---
 
-# 61. PHASE 12 — Doctor Dashboard
+# 61. PHASE 12 — Doctor Dashboard (deferred — backend-first §50)
 
 Tasks:
 
@@ -2449,21 +2444,21 @@ Doctor can operate independently.
 
 ---
 
-# 62. PHASE 13 — Notifications
+# 62. PHASE 13 — Notifications (backend Done §53/B6; push delivery + UI deferred §50)
 
 Tasks:
 
-- [ ] Notification model
-- [ ] Notification service
-- [ ] In-app notifications
-- [ ] Notification permission request UI
-- [ ] Web Push subscription (VAPID) through the service worker
-- [ ] Firebase Cloud Messaging integration for the installed PWA
-- [ ] Push subscription registration API
-- [ ] Service worker `push` and `notificationclick` handlers
-- [ ] Appointment notifications
-- [ ] Reminder notifications
-- [ ] Read/unread state
+- [x] Notification model
+- [x] Notification service
+- [x] In-app notifications
+- [x] Push subscription registration API
+- [x] Appointment notifications
+- [x] Read/unread state
+- [ ] Notification permission request UI (frontend PHASE 13)
+- [ ] Web Push subscription (VAPID) through the service worker (frontend PHASE 13)
+- [ ] Firebase Cloud Messaging integration for the installed PWA (frontend PHASE 13)
+- [ ] Service worker `push` and `notificationclick` handlers (frontend PHASE 13)
+- [ ] Reminder notifications (scheduled job — post-MVP)
 
 Deliverable:
 
@@ -2471,21 +2466,21 @@ Patients and doctors receive appointment updates in the browser and in the insta
 
 ---
 
-# 63. PHASE 14 — Admin Dashboard
+# 63. PHASE 14 — Admin Dashboard (backend Done §53/B7; React deferred §50)
 
 Tasks:
 
-- [ ] Admin authentication
-- [ ] Dashboard
-- [ ] User management
-- [ ] Patient management
-- [ ] Doctor management
-- [ ] Doctor verification
-- [ ] Specialty management
-- [ ] Hospital management
-- [ ] Appointment management
-- [ ] Notification management
-- [ ] Statistics
+- [x] Admin authentication
+- [x] User management
+- [x] Doctor verification
+- [x] Statistics
+- [ ] Dashboard (React PHASE 14)
+- [ ] Patient management (React PHASE 14)
+- [ ] Doctor management (React PHASE 14)
+- [ ] Specialty management (React PHASE 14)
+- [ ] Hospital management (React PHASE 14)
+- [ ] Appointment management (React PHASE 14)
+- [ ] Notification management (React PHASE 14)
 - [ ] Reports
 - [ ] Audit logs
 
@@ -2495,16 +2490,16 @@ Complete platform administration.
 
 ---
 
-# 64. PHASE 15 — Reviews
+# 64. PHASE 15 — Reviews (backend Done §53/B8; React deferred §50)
 
 Tasks:
 
-- [ ] Review model
-- [ ] Rating validation
-- [ ] Review API
-- [ ] Completed appointment validation
-- [ ] Doctor review list
-- [ ] Admin moderation
+- [x] Review model
+- [x] Rating validation
+- [x] Review API
+- [x] Completed appointment validation
+- [x] Doctor review list
+- [x] Admin moderation
 
 Deliverable:
 
@@ -2512,25 +2507,17 @@ Trusted post-appointment feedback system.
 
 ---
 
-# 65. PHASE 16 — Payments
+# 65. PHASE 16 — Payments (removed from scope 2026-09-19)
 
-Optional MVP extension.
-
-Tasks:
-
-- [ ] Payment model
-- [ ] Payment service
-- [ ] Provider integration
-- [ ] Transaction reference
-- [ ] Verification
-- [ ] Payment status
-- [ ] Refund workflow
-- [ ] Payment history
-- [ ] Admin payment dashboard
+MediBook does not handle consultation payments. The former optional
+payment-records backend module (`backend/payments/`) was removed — model,
+API, migration history, and the payments entry in the admin stats payload.
+If payments are ever reconsidered, start from §32's removal note and design
+a provider-abstracted integration as a new module.
 
 Deliverable:
 
-Secure consultation-payment workflow.
+None — out of scope.
 
 ---
 
@@ -2606,7 +2593,6 @@ Tasks:
 - [ ] Lighthouse PWA audit
 - [ ] Security testing
 - [ ] Notification testing
-- [ ] Payment testing if enabled
 
 Deliverable:
 
@@ -2995,7 +2981,7 @@ Notifications
 Installable PWA (Desktop, Android, iOS)
 ```
 
-Payment, advanced medical records, telemedicine, pharmacy, and AI should be treated as later modules unless they are specifically required for the first release.
+Payment, advanced medical records, telemedicine, pharmacy, and AI should be treated as later modules unless they are specifically required for the first release. (Payments in particular were removed from scope on 2026-09-19 — §32, §65.)
 
 ---
 
@@ -3157,7 +3143,7 @@ Develop module by module.
 
 Do not ignore database constraints.
 
-Especially for appointments and payments.
+Especially for appointments.
 
 ## Rule 6
 
@@ -3224,8 +3210,6 @@ notifications
     ↓
 reviews
     ↓
-payments
-    ↓
 reports
 ```
 
@@ -3255,8 +3239,6 @@ Notifications
 Admin
     ↓
 Reviews
-    ↓
-Payments
 ```
 
 ---
@@ -3316,10 +3298,8 @@ Improved offline experience
 ## MediBook v1.2
 
 ```text
-Payments
-Receipts
-Payment History
-Refunds
+Improved Reports
+Improved offline experience
 ```
 
 ## MediBook v2.0
@@ -3377,9 +3357,9 @@ Desktop Android  iOS                         │
                           │                                           │
                  ┌────────┴────────┐                                  │
                  │                 │                                  │
-           Notifications       Payments                              │
+           Notifications       Reviews                               │
                  │                 │                                  │
-                Web Push (VAPID)    Payment Provider                         │
+                Web Push (VAPID)   In-app inbox                        │
 ```
 
 ---
@@ -3411,32 +3391,31 @@ Desktop Android  iOS                         │
 - [ ] Appointments
 - [ ] Notifications
 - [ ] Reviews
-- [ ] Payments
 - [ ] Reports
 - [ ] Audit logs
 
 ## React
 
-- [ ] Project configured
+- [x] Project configured (Vite + React 18 + TS strict — PHASE 4)
 - [x] TypeScript configured (strict) with a passing `typecheck` script
-- [ ] Theme
-- [ ] Routing
-- [ ] API client
-- [ ] Secure storage
-- [ ] State management
-- [ ] Authentication
-- [ ] Patient screens
+- [x] Theme (§21 token system, CSS + TS — PHASE 4; closed the Phase 0 token decision)
+- [x] Routing (React Router 7; auth + app + admin routes — PHASE 4/5)
+- [x] API client (axios, §28 envelope, single-flight refresh-and-replay — PHASE 4/5)
+- [x] Secure storage (access in `sessionStorage`, refresh in `localStorage`, `mb.*` namespacing)
+- [x] State management (Toast + Session providers, Context + reducer)
+- [x] Authentication (login/register/logout/forgot/reset/verify, guards, role routing — PHASE 5, Entry 0010)
+- [ ] Patient screens (profile CRUD done in PHASE 5; home/settings in PHASE 6)
 - [ ] Doctor screens
 - [ ] Appointment screens
 - [ ] Notification screens
-- [ ] Admin screens
-- [ ] Responsive layouts (phone, tablet, desktop)
-- [ ] Web App Manifest (`manifest.json`, `display: "standalone"`, icons)
-- [ ] Service worker registered (`install` / `activate` / `fetch` handlers)
-- [ ] Offline fallback page
-- [ ] Install prompt (A2HS) + iOS guidance
-- [ ] Standalone / safe-area styling
-- [ ] Web Push subscription
+- [ ] Admin screens (guarded `/admin` shell + role home done; dashboard is PHASE 14)
+- [ ] Responsive layouts (phone, tablet, desktop — shell done; full sweep in PHASE 19/20)
+- [x] Web App Manifest (`manifest.json`, `display: "standalone"`, icons — PHASE 4)
+- [x] Service worker registered (`install` / `activate` / `fetch` handlers — PHASE 4)
+- [x] Offline fallback page (PHASE 4)
+- [x] Install prompt (A2HS) + iOS guidance (PHASE 4)
+- [x] Standalone / safe-area styling (PHASE 4)
+- [ ] Web Push subscription (PHASE 13)
 
 ## Quality
 

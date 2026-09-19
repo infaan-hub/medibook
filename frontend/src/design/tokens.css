@@ -1,0 +1,95 @@
+/* MediBook design tokens (§21) — single source of truth for the design system.
+   Screens must never hardcode visual values; consume these variables instead. */
+
+:root {
+  /* Brand (§22.3 theme colour) */
+  --color-primary: #0f62fe;
+  --color-primary-hover: #0353e9;
+  --color-primary-active: #0043ce;
+  --color-primary-soft: #e8f1ff;
+  --color-secondary: #009d9a;
+  --color-secondary-hover: #00857e;
+  --color-secondary-soft: #d9fbfb;
+  --color-accent: #8a3ffc;
+
+  /* Neutrals */
+  --color-bg: #f4f4f6;
+  --color-surface: #ffffff;
+  --color-surface-alt: #fafafb;
+  --color-text: #16191e;
+  --color-text-muted: #5b616a;
+  --color-text-inverse: #ffffff;
+  --color-border: #d5d9de;
+  --color-border-strong: #a8aeb8;
+
+  /* Feedback states (§21 loading/empty/error/success) */
+  --color-success: #24a148;
+  --color-success-soft: #e3f7e8;
+  --color-warning: #b21800;
+  --color-warning-soft: #fde8e4;
+  --color-error: #da1e28;
+  --color-error-soft: #ffe9ea;
+  --color-info: #0f62fe;
+  --color-info-soft: #e8f1ff;
+
+  /* Appointment status colours (§9 workflow) */
+  --color-status-pending: #f1c21b;
+  --color-status-confirmed: #0f62fe;
+  --color-status-completed: #24a148;
+  --color-status-cancelled: #8d8d8d;
+  --color-status-rejected: #da1e28;
+  --color-status-no-show: #a56eff;
+
+  /* Typography (§21) */
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.875rem; /* 14 */
+  --text-md: 1rem; /* 16 */
+  --text-lg: 1.125rem; /* 18 */
+  --text-xl: 1.25rem; /* 20 */
+  --text-2xl: 1.5rem; /* 24 */
+  --text-3xl: 2rem; /* 32 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Spacing scale (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgb(22 25 30 / 0.08);
+  --shadow-2: 0 2px 8px rgb(22 25 30 / 0.1);
+  --shadow-3: 0 8px 24px rgb(22 25 30 / 0.14);
+
+  /* Layout */
+  --header-height: 56px;
+  --bottom-nav-height: 64px;
+  --content-max: 1120px;
+
+  /* Safe areas (§21 standalone) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Breakpoints (§22.5) — reference in CSS via media queries below */
+  --bp-phone: 600px;
+  --bp-tablet: 1024px;
+  --bp-desktop: 1440px;
+}
