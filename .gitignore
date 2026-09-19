@@ -1,0 +1,42 @@
+# MediBook — repository-wide ignores
+
+# --- Python / Django ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+db.sqlite3
+db.sqlite3-journal
+
+# --- Node / React ---
+node_modules/
+dist/
+.vite/
+*.local
+
+# --- Environment & secrets (Rule 6: never commit secrets) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Media / static uploaded by users ---
+backend/media/
+backend/staticfiles/
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Logs ---
+*.log
+npm-debug.log*
