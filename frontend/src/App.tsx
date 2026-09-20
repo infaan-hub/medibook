@@ -10,7 +10,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { AllowUnverified, RequireAuth, RequireGuest, RequireRole } from "./components/guards";
+import { RequireAuth, RequireGuest, RequireRole } from "./components/guards";
 import { SplashScreen } from "./components/Splash";
 import { Spinner } from "./components/ui";
 import { ToastViewport } from "./components/ToastViewport";
@@ -20,7 +20,6 @@ import {
   OnboardingScreen,
   RegisterScreen,
   ResetPasswordScreen,
-  VerifyEmailScreen,
   WelcomeScreen,
 } from "./pages/auth";
 import { SettingsScreen } from "./pages/patient";
@@ -47,6 +46,9 @@ const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default:
 const AdminDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDoctorsScreen })));
+const AdminCreateUserScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminCreateUserScreen })));
+const AdminCreateDoctorScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminCreateDoctorScreen })));
+const AdminAuditScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminAuditScreen })));
 const SpecialtyListPage = lazy(() => import("./pages").then((m) => ({ default: m.SpecialtyListPage })));
 const SpecialtyDetailPage = lazy(() => import("./pages").then((m) => ({ default: m.SpecialtyDetailPage })));
 const HospitalListPage = lazy(() => import("./pages").then((m) => ({ default: m.HospitalListPage })));
@@ -76,7 +78,7 @@ function LaunchRoute() {
   if (!user) return null;
   const dashboard = user.role === "doctor"
     ? "/doctor/dashboard"
-    : user.role === "admin"
+    : user.role === "admin" && user.is_superuser
       ? "/admin"
       : "/dashboard";
   return <Navigate to={dashboard} replace />;
@@ -139,15 +141,6 @@ export default function App() {
                   </RequireGuest>
                 }
               />
-              <Route
-                path="/verify-email"
-                element={
-                  <AllowUnverified>
-                    <VerifyEmailScreen />
-                  </AllowUnverified>
-                }
-              />
-
               {/* Authenticated app screens (inside the shell) */}
               <Route
                 element={
@@ -182,6 +175,9 @@ export default function App() {
                 <Route path="/admin" element={<RequireRole role="admin"><AdminDashboardScreen /></RequireRole>} />
                 <Route path="/admin/users" element={<RequireRole role="admin"><AdminUsersScreen /></RequireRole>} />
                 <Route path="/admin/doctors" element={<RequireRole role="admin"><AdminDoctorsScreen /></RequireRole>} />
+                <Route path="/admin/users/new" element={<RequireRole role="admin"><AdminCreateUserScreen /></RequireRole>} />
+                <Route path="/admin/doctors/new" element={<RequireRole role="admin"><AdminCreateDoctorScreen /></RequireRole>} />
+                <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAuditScreen /></RequireRole>} />
                 <Route path="/specialties" element={<SpecialtyListPage />} />
                 <Route path="/specialties/:id" element={<SpecialtyDetailPage />} />
                 <Route path="/hospitals" element={<HospitalListPage />} />

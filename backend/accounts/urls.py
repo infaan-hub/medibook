@@ -3,6 +3,7 @@
 from django.urls import path
 
 from accounts.views import (
+    SocialLoginView,
     UsernameLoginView,
     LogoutView,
     MeView,
@@ -11,8 +12,6 @@ from accounts.views import (
     PasswordResetRequestView,
     RefreshView,
     RegisterView,
-    ResendVerificationView,
-    VerifyEmailView,
 )
 
 app_name = "accounts"
@@ -20,6 +19,7 @@ app_name = "accounts"
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", UsernameLoginView.as_view(), name="login"),
+    path("auth/social/", SocialLoginView.as_view(), name="social-login"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/token/refresh/", RefreshView.as_view(), name="token-refresh"),
     path("auth/me/", MeView.as_view(), name="me"),
@@ -33,11 +33,5 @@ urlpatterns = [
         "auth/password-reset-confirm/",
         PasswordResetConfirmView.as_view(),
         name="password-reset-confirm",
-    ),
-    path("auth/verify-email/", VerifyEmailView.as_view(), name="verify-email"),
-    path(
-        "auth/resend-verification/",
-        ResendVerificationView.as_view(),
-        name="resend-verification",
     ),
 ]

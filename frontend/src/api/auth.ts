@@ -4,6 +4,7 @@
  */
 
 import { apiGet, apiPatch, apiPost } from "./client";
+import { http } from "./client";
 import type {
   AuthPayload,
   ChangePasswordPayload,
@@ -23,6 +24,14 @@ export function login(username: string, password: string): Promise<Envelope<Auth
   return apiPost<AuthPayload>("/auth/login/", { username, password });
 }
 
+/** POST /api/auth/social/ — Google or Apple OAuth login. */
+export function socialLogin(
+  provider: "google" | "apple",
+  token: string
+): Promise<Envelope<AuthPayload>> {
+  return apiPost<AuthPayload>("/auth/social/", { provider, token });
+}
+
 /** POST /api/auth/logout/ — blacklists the given refresh token. */
 export function logout(refresh: string): Promise<Envelope<null>> {
   return apiPost<null>("/auth/logout/", { refresh });
@@ -40,6 +49,22 @@ export function updateMe(
   return apiPatch<User>("/auth/me/", patch);
 }
 
+/** PATCH /api/auth/me/ — upload profile image (multipart/form-data). */
+export function uploadProfileImage(file: File): Promise<Envelope<User>> {
+  const form = new FormData();
+  form.append("profile_image", file);
+  return http
+    .patch<Envelope<User>>("/auth/me/", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+}
+
+/** PATCH /api/auth/me/ — remove profile image. */
+export function removeProfileImage(): Promise<Envelope<User>> {
+  return apiPatch<User>("/auth/me/", { profile_image: null });
+}
+
 /** POST /api/auth/password-change/ — authenticated password change. */
 export function changePassword(payload: ChangePasswordPayload): Promise<Envelope<null>> {
   return apiPost<null>("/auth/password-change/", payload);
@@ -55,12 +80,3 @@ export function confirmPasswordReset(payload: ResetConfirmPayload): Promise<Enve
   return apiPost<null>("/auth/password-reset-confirm/", payload);
 }
 
-/** POST /api/auth/verify-email/ — confirm email ownership (single-use token). */
-export function verifyEmail(token: string): Promise<Envelope<{ user: User }>> {
-  return apiPost<{ user: User }>("/auth/verify-email/", { token });
-}
-
-/** POST /api/auth/resend-verification/ — neutral response (§36). */
-export function resendVerification(email: string): Promise<Envelope<null>> {
-  return apiPost<null>("/auth/resend-verification/", { email });
-}

@@ -1076,7 +1076,6 @@ last_name
 role
 profile_image
 is_active
-is_verified
 created_at
 updated_at
 ```
@@ -2080,7 +2079,7 @@ Phase 0 exit gate: design tokens closed (Phase 4, Entry 0007); deployment strate
 
 | Slice | Roadmap phase(s) | Backend scope (models + API + tests) |
 | --- | --- | --- |
-| B1 | PHASE 3 | Custom User, roles, register/login/logout, JWT + refresh + blacklist, password reset, email verification, permissions, auth tests |
+| B1 | PHASE 3 | Custom User, roles, register/login/logout, JWT + refresh + blacklist, password reset, permissions, auth tests |
 | B2 | PHASE 6 | Patient profile model + `/api/patients/profile/` |
 | B3 | PHASE 7 + 9 | Doctor profile + availability windows + `/api/doctors/`, `/api/doctors/{id}/availability/`, schedule management |
 | B4 | PHASE 8 | Specialty + Hospital catalogs + filters |
@@ -2191,9 +2190,9 @@ and the auth + booking test suites run. Frontend phases stay deferred per §50.
 
 Tasks:
 
-- [x] Custom User model — email login, phone, names, role, profile image, `is_verified` (`accounts/models.py` + `0001_initial`)
-- [x] Roles — `patient`/`doctor`/`admin` + `IsPatient`/`IsDoctor`/`IsAdminRole`/`IsVerified` (`accounts/permissions.py`)
-- [x] Registration — `POST /api/auth/register/` + JWT pair + verification email
+- [x] Custom User model — email login, phone, names, role, profile image (`accounts/models.py` + `0001_initial`)
+- [x] Roles — `patient`/`doctor`/`admin` + `IsPatient`/`IsDoctor`/`IsAdminRole` (`accounts/permissions.py`)
+- [x] Registration — `POST /api/auth/register/` + JWT pair
 - [x] Login — `POST /api/auth/login/` (email + password → JWT pair + user)
 - [x] Logout — `POST /api/auth/logout/` (refresh blacklist, `token_blacklist` app, `BLACKLIST_AFTER_ROTATION=True`)
 - [x] JWT — access 30 min / refresh 7 days / rotation on / blacklist on
@@ -2220,8 +2219,6 @@ GET/PATCH /api/auth/me/                 200  own profile
 POST /api/auth/password-change/         200  authenticated change
 POST /api/auth/password-reset/          200  neutral + email token
 POST /api/auth/password-reset-confirm/  200  new password set
-POST /api/auth/verify-email/            200  is_verified=true
-POST /api/auth/resend-verification/     200  neutral + email token
 GET /api/doctors/?specialty=&city=      200  public search + filters
 GET /api/doctors/{id}/availability/     200  free slots for a date
 GET/POST /api/appointments/             201  booking (409 on conflict)

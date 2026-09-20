@@ -3,7 +3,7 @@
  * with accept/reject/complete/cancel actions, pending/confirmed/completed tabs.
  */
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   cancelAppointment,
@@ -17,7 +17,19 @@ import { getMyDoctorProfile } from "../api/doctors";
 import type { Appointment, DoctorProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { ArrowLeft } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  ArrowUpRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  MoreHorizontal,
+  Settings2,
+  Stethoscope,
+  Users,
+} from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -216,65 +228,53 @@ export function DoctorDashboardScreen() {
   const pending = appointments.filter((a) => a.status === "pending");
   const confirmed = appointments.filter((a) => a.status === "confirmed");
   const completed = appointments.filter((a) => a.status === "completed");
+  const cancelled = appointments.filter((a) => a.status === "cancelled" || a.status === "rejected");
+  const statusTotal = Math.max(appointments.length, 1);
+  const visibleAppointments = [...todayAppts, ...pending.filter((item) => !todayAppts.some((today) => today.id === item.id))].slice(0, 5);
 
   return (
-    <div className="page">
-      <h1 className="page__title">
-        Welcome{profile ? `, Dr. ${profile.first_name}` : ""}
-      </h1>
-      <p className="page__subtitle">Your practice at a glance.</p>
+    <div className="page doctor-workspace">
+      <div className="doctor-page-header">
+        <div>
+          <p className="doctor-eyebrow">Practice overview</p>
+          <h1>Good morning{profile ? `, Dr. ${profile.first_name}` : ""}</h1>
+          <p>Here is what is happening in your practice today.</p>
+        </div>
+        <div className="doctor-header-actions">
+          <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
+          <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
+        </div>
+      </div>
 
-      {/* Stats row */}
-      <div className="stats-row">
-        <Card className="stats-row__card">
-          <span className="stats-row__number">{todayAppts.length}</span>
-          <span className="stats-row__label">Today</span>
+      <div className="doctor-metrics">
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>Today's visits</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? "Schedule is active" : "No visits scheduled"}</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span><span>Pending requests</span><strong>{pending.length}</strong><small>{pending.length ? "Needs your review" : "All caught up"}</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span><span>Confirmed</span><strong>{confirmed.length}</strong><small>Upcoming appointments</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>Completed visits</span><strong>{completed.length}</strong><small>Recorded in your practice</small></Card>
+      </div>
+
+      <div className="doctor-dashboard-grid">
+        <Card className="doctor-chart-card">
+          <div className="doctor-card-heading"><div><h2>Appointment overview</h2><p>Live distribution of your appointment pipeline</p></div><span className="doctor-live"><Activity size={14} /> Live data</span></div>
+          <div className="doctor-chart-layout">
+            <div className="doctor-donut" style={{ "--doctor-donut": `${(completed.length / statusTotal) * 100}%` } as CSSProperties}><span>{Math.round((completed.length / statusTotal) * 100)}%<small>completed</small></span></div>
+            <div className="doctor-legend"><span><i className="doctor-dot doctor-dot--teal" /> Confirmed <b>{confirmed.length}</b></span><span><i className="doctor-dot doctor-dot--amber" /> Pending <b>{pending.length}</b></span><span><i className="doctor-dot doctor-dot--blue" /> Completed <b>{completed.length}</b></span><span><i className="doctor-dot doctor-dot--muted" /> Closed <b>{cancelled.length}</b></span></div>
+          </div>
         </Card>
-        <Card className="stats-row__card">
-          <span className="stats-row__number">{pending.length}</span>
-          <span className="stats-row__label">Pending</span>
-        </Card>
-        <Card className="stats-row__card">
-          <span className="stats-row__number">{confirmed.length}</span>
-          <span className="stats-row__label">Confirmed</span>
-        </Card>
-        <Card className="stats-row__card">
-          <span className="stats-row__number">{completed.length}</span>
-          <span className="stats-row__label">Completed</span>
+        <Card className="doctor-chart-card doctor-workload-card">
+          <div className="doctor-card-heading"><div><h2>Practice workload</h2><p>Current appointment volume</p></div><MoreHorizontal size={18} /></div>
+          <div className="doctor-workload-number"><strong>{appointments.length}</strong><span>total visits</span></div>
+          <div className="doctor-progress"><span style={{ width: `${Math.min((confirmed.length / statusTotal) * 100, 100)}%` }} /></div>
+          <div className="doctor-workload-footer"><span><CheckCircle2 size={14} /> {completed.length} completed</span><span><Clock3 size={14} /> {pending.length} pending</span></div>
         </Card>
       </div>
 
-      {/* Quick links */}
-      <div className="dash-links">
-        <Link to="/doctor/appointments?tab=pending">
-          <Button variant="secondary">Manage pending requests ({pending.length})</Button>
-        </Link>
-        <Link to="/doctor/availability">
-          <Button variant="secondary">Manage availability</Button>
-        </Link>
-      </div>
-
-      {/* Today's appointments */}
-      <Card>
-        <h2>Today's appointments</h2>
-        {todayAppts.length === 0 ? (
-          <EmptyState title="No appointments today" description="Your schedule for today is clear." />
-        ) : (
-          todayAppts.map((a) => (
-            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} />
-          ))
-        )}
+      <Card className="doctor-appointments-card">
+        <div className="doctor-card-heading"><div><h2>Today's schedule</h2><p>Appointments that need your attention</p></div><Link to="/doctor/appointments"><span>View all</span><ArrowUpRight size={15} /></Link></div>
+        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="doctor-appointment-grid">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} />)}</div>}
       </Card>
 
-      {/* Pending requests */}
-      {pending.length > 0 && (
-        <Card>
-          <h2>Pending requests</h2>
-          {pending.map((a) => (
-            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} />
-          ))}
-        </Card>
-      )}
+      <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link></div>
     </div>
   );
 }

@@ -10,9 +10,21 @@ from accounts.models import Role
 User = get_user_model()
 
 
-def user_payload(user) -> dict:
+def _absolute_url(request, url: str | None) -> str | None:
+    """Convert a relative media URL to an absolute URL using the request."""
+    if not url:
+        return None
+    if url.startswith("http"):
+        return url
+    if request is not None:
+        return request.build_absolute_uri(url)
+    return url
+
+
+def user_payload(user, request=None) -> dict:
     """Public user dict shared by auth responses."""
     image = getattr(user, "profile_image", None)
+    image_url = image.url if image else None
     return {
         "id": user.pk,
         "username": user.username,
@@ -21,8 +33,8 @@ def user_payload(user) -> dict:
         "first_name": user.first_name,
         "last_name": user.last_name,
         "role": user.role,
-        "profile_image": image.url if image else None,
-        "is_verified": user.is_verified,
+        "profile_image": _absolute_url(request, image_url),
+        "is_superuser": user.is_superuser,
         "date_joined": user.created_at.isoformat() if hasattr(user, "created_at") and user.created_at else None,
     }
 
@@ -38,13 +50,20 @@ class UserSerializer(serializers.ModelSerializer):
             return obj.created_at.isoformat()
         return None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["profile_image"] = _absolute_url(request, data.get("profile_image"))
+        return data
+
     class Meta:
         model = User
         fields = (
             "id", "username", "email", "phone", "first_name", "last_name",
-            "role", "profile_image", "is_verified", "date_joined",
+            "role", "profile_image", "date_joined",
+            "is_superuser",
         )
-        read_only_fields = ("id", "username", "email", "role", "is_verified")
+        read_only_fields = ("id", "username", "email", "role", "is_superuser")
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -206,16 +225,5 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             ) from exc
         return attrs
 
-
-class VerifyEmailSerializer(serializers.Serializer):
-    """Confirm email ownership with the single-use token."""
-
-    token = serializers.CharField(max_length=128)
-
-
-class ResendVerificationSerializer(serializers.Serializer):
-    """Re-send the verification email (never reveals whether email exists)."""
-
-    email = serializers.EmailField()
 
 

@@ -4,7 +4,7 @@
  */
 
 import { apiGet, apiPost } from "./client";
-import type { DoctorProfile, Envelope, Paginated, User } from "./types";
+import type { AuditEvent, DoctorProfile, Envelope, Paginated, User } from "./types";
 
 /** Admin dashboard statistics. */
 export interface AdminStats {
@@ -34,4 +34,38 @@ export function approveDoctor(
   return apiPost<DoctorProfile>(`/admin/doctors/${doctorId}/approve/`, {
     is_available: isAvailable,
   });
+}
+
+export interface CreateUserPayload {
+  username: string;
+  email: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  role: "patient" | "doctor";
+}
+
+export interface CreateDoctorPayload {
+  username: string;
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  qualifications?: string;
+  experience_years?: number;
+  consultation_fee?: string;
+  bio?: string;
+}
+
+export function createAdminUser(payload: CreateUserPayload): Promise<Envelope<User>> {
+  return apiPost<User>("/admin/users/create/", payload);
+}
+
+export function createAdminDoctor(payload: CreateDoctorPayload): Promise<Envelope<DoctorProfile>> {
+  return apiPost<DoctorProfile>("/admin/doctors/create/", payload);
+}
+
+export function listAuditEvents(): Promise<Envelope<AuditEvent[]>> {
+  return apiGet<AuditEvent[]>("/admin/audit/");
 }

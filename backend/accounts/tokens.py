@@ -9,10 +9,6 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-def verification_lifetime() -> int:
-    return int(settings.EMAIL_VERIFICATION_TOKEN_HOURS)
-
-
 def reset_lifetime() -> int:
     return int(settings.PASSWORD_RESET_TOKEN_HOURS)
 
@@ -35,22 +31,6 @@ def jwt_pair_for(user) -> dict:
     """Access + refresh pair for an authenticated user."""
     refresh = RefreshToken.for_user(user)
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
-
-
-def send_verification_email(user, raw_token: str) -> None:
-    send_mail(
-        subject="Verify your MediBook email address",
-        message=(
-            f"Hello {user.get_short_name()},\n\n"
-            "Use this code to verify your MediBook email address:\n\n"
-            f"{raw_token}\n\n"
-            "It expires in "
-            f"{settings.EMAIL_VERIFICATION_TOKEN_HOURS} hours."
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
 
 
 def send_password_reset_email(user, raw_token: str) -> None:

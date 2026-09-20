@@ -1,13 +1,12 @@
 /**
  * PHASE 5 — Profile screens (§54).
  *
- * ProfileScreen — account details, email-verification banner, edit
- *                name/phone, change password, sign out.
+ * ProfileScreen — account details, edit name/phone, change password, sign out.
  */
 
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { changePassword, resendVerification, updateMe } from "../api/auth";
+import { useState, useRef, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { changePassword, updateMe, uploadProfileImage, removeProfileImage } from "../api/auth";
 import { ApiError } from "../api/client";
 import { useSession, useToast } from "../state/app-context";
 import { Button, Card, TextField } from "../components/ui";
@@ -37,6 +36,10 @@ export function ProfileScreen() {
   const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
   const [savingName, setSavingName] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const [passwords, setPasswords] = useState({
     old_password: "",
     new_password: "",
@@ -44,8 +47,6 @@ export function ProfileScreen() {
   });
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
   const [savingPw, setSavingPw] = useState(false);
-
-  const [resent, setResent] = useState(false);
 
   if (!user) return null; // guarded by RequireAuth
 
@@ -67,16 +68,6 @@ export function ProfileScreen() {
       if (!Object.keys(fields).length) notify("error", "Could not update profile.");
     } finally {
       setSavingName(false);
-    }
-  }
-
-  async function onResend() {
-    if (resent) return;
-    try {
-      await resendVerification(user!.email);
-      setResent(true);
-    } catch {
-      notify("error", "Could not send the code. Try again later.");
     }
   }
 
@@ -111,40 +102,101 @@ export function ProfileScreen() {
     navigate("/login", { replace: true });
   }
 
+  function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      notify("error", "Please select an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify("error", "Image must be under 5 MB.");
+      return;
+    }
+    setPreviewUrl(URL.createObjectURL(file));
+    uploadImage(file);
+  }
+
+  async function uploadImage(file: File) {
+    setUploading(true);
+    try {
+      const envelope = await uploadProfileImage(file);
+      setUser(envelope.data);
+      notify("success", "Profile picture updated.");
+    } catch {
+      setPreviewUrl(null);
+      notify("error", "Could not upload profile picture.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function onRemoveImage() {
+    setPreviewUrl(null);
+    setUploading(true);
+    removeProfileImage()
+      .then((envelope) => {
+        setUser(envelope.data);
+        notify("success", "Profile picture removed.");
+      })
+      .catch(() => notify("error", "Could not remove profile picture."))
+      .finally(() => setUploading(false));
+  }
+
   return (
     <div className="page">
       <h1 className="page__title">Profile</h1>
       <p className="page__subtitle">Account settings and security.</p>
 
-      {!user.is_verified && (
-        <div className="verify-banner" role="status">
-          <span>
-            Your email is not verified yet.
-            {resent
-              ? " A new code was requested — check your inbox."
-              : " Check your inbox for the code."}
-          </span>
-          <span className="verify-banner__actions">
-            <Link to="/verify-email">Enter code</Link>
-            {!resent && (
-              <button type="button" className="link-btn" onClick={onResend}>
-                Resend
+      <Card>
+        <div className="profile-hero">
+          <div className="profile-hero__avatar-wrap">
+            <div className="profile-hero__avatar" onClick={() => !uploading && fileInputRef.current?.click()}>
+              {previewUrl || user.profile_image ? (
+                <img
+                  src={previewUrl || user.profile_image!}
+                  alt={[user.first_name, user.last_name].filter(Boolean).join(" ")}
+                  className="profile-hero__img"
+                />
+              ) : (
+                <span className="profile-hero__initials">
+                  {(() => {
+                    const first = user.first_name.trim()[0] ?? "";
+                    const last = user.last_name.trim()[0] ?? "";
+                    return (first + last).toUpperCase() || user.email[0].toUpperCase();
+                  })()}
+                </span>
+              )}
+              <div className="profile-hero__overlay">
+                {uploading ? "Uploading…" : "Change photo"}
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={onFileSelect}
+            />
+            {(user.profile_image || previewUrl) && !uploading && (
+              <button
+                type="button"
+                className="profile-hero__remove"
+                onClick={onRemoveImage}
+                aria-label="Remove profile picture"
+              >
+                Remove
               </button>
             )}
-          </span>
+          </div>
+          <div className="profile-hero__info">
+            <h2 className="profile-hero__name">
+              {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+            </h2>
+            <p className="profile-hero__email">{user.email}</p>
+            <span className={`role-pill role-pill--${user.role}`}>{user.role}</span>
+          </div>
         </div>
-      )}
-
-      <Card>
-        <h2 className="card__title">Account</h2>
-        <p className="card__text">{user.email}</p>
-        <p className="card__text">
-          <span className={`role-pill role-pill--${user.role}`}>{user.role}</span>
-          {user.is_verified ? " · verified" : " · not verified"}
-        </p>
-        <Button variant="danger" onClick={onLogout}>
-          Sign out
-        </Button>
       </Card>
 
       <Card>
@@ -222,6 +274,13 @@ export function ProfileScreen() {
             Update password
           </Button>
         </form>
+      </Card>
+
+      <Card>
+        <h2 className="card__title">Account</h2>
+        <Button variant="danger" onClick={onLogout}>
+          Sign out
+        </Button>
       </Card>
     </div>
   );

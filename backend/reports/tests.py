@@ -15,8 +15,12 @@ PASSWORD = "StrongPass123!"
 
 
 def _user(email: str, role: str, **extra):
+    if role == "admin":
+        return User.objects.create_superuser(
+            username=email.split("@")[0], email=email, password=PASSWORD, **extra
+        )
     return User.objects.create_user(
-        username=email.split("@")[0], email=email, password=PASSWORD, role=role, is_verified=True, **extra
+        username=email.split("@")[0], email=email, password=PASSWORD, role=role, **extra
     )
 
 
@@ -59,6 +63,13 @@ class AdminStatsTests(TestCase):
     def test_non_admin_cannot_access_stats(self):
         client = _auth(self.patient)
         resp = client.get("/api/admin/stats/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_role_without_superuser_cannot_access_stats(self):
+        role_only_admin = _user("role-admin@example.com", "admin")
+        role_only_admin.is_superuser = False
+        role_only_admin.save(update_fields=["is_superuser"])
+        resp = _auth(role_only_admin).get("/api/admin/stats/")
         self.assertEqual(resp.status_code, 403)
 
     def test_unauthenticated_cannot_access_stats(self):

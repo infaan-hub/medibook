@@ -46,20 +46,6 @@ export function RequireGuest({ children }: { children?: ReactNode }) {
   return children ? <>{children}</> : <Outlet />;
 }
 
-/**
- * AllowUnverified — /verify-email must be reachable by guests AND by authed
- * users who have not verified yet (the profile/home banner links here).
- * Verified users are bounced home. Fixes the Phase 5 gap where RequireGuest
- * made the verification screen unreachable after registering.
- */
-export function AllowUnverified({ children }: { children?: ReactNode }) {
-  const { status, user } = useSession();
-
-  if (status === "booting") return <BootScreen />;
-  if (status === "authed" && user?.is_verified) return <Navigate to="/" replace />;
-  return children ? <>{children}</> : <Outlet />;
-}
-
 export function RequireRole({
   role,
   children,
@@ -73,6 +59,8 @@ export function RequireRole({
   if (status !== "authed" || !user) {
     return <Navigate to="/login" replace />;
   }
-  if (user.role !== role) return <Navigate to="/" replace />;
+  if (user.role !== role || (role === "admin" && !user.is_superuser)) {
+    return <Navigate to="/" replace />;
+  }
   return children ? <>{children}</> : <Outlet />;
 }

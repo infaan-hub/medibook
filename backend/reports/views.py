@@ -1,16 +1,109 @@
 """Admin dashboard statistics (§24 reports, §34)."""
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework import serializers
 
 from accounts.permissions import IsAdminRole
 from appointments.models import Appointment
 from common.responses import success_response
 from doctors.models import Doctor
+from reports.models import AuditEvent
 
 User = get_user_model()
+
+
+def _django_error_to_drf(exc):
+    """Convert Django model ValidationError / IntegrityError to DRF 400."""
+    if isinstance(exc, DjangoValidationError):
+        if hasattr(exc, "message_dict") and exc.message_dict:
+            raise serializers.ValidationError(exc.message_dict)
+        raise serializers.ValidationError({"non_field_errors": list(exc.messages)})
+    raise serializers.ValidationError(
+        {"non_field_errors": ["A record with these details already exists."]}
+    )
+
+
+class AdminUserCreateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=60)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8, max_length=128)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=("patient", "doctor"))
+
+    def validate_username(self, value):
+        value = value.strip()
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = User(**validated_data)
+        user.set_password(password)
+        try:
+            user.full_clean(exclude={"password"})
+            user.save()
+        except (DjangoValidationError, IntegrityError) as exc:
+            _django_error_to_drf(exc)
+        return user
+
+
+class AdminDoctorCreateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=60)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8, max_length=128)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    qualifications = serializers.CharField(required=False, allow_blank=True)
+    experience_years = serializers.IntegerField(required=False, min_value=0, default=0)
+    consultation_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0"))
+    bio = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_username(self, value):
+        value = value.strip()
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        profile_data = {
+            key: validated_data.pop(key)
+            for key in ("qualifications", "experience_years", "consultation_fee", "bio")
+            if key in validated_data
+        }
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(**validated_data, password=password, role="doctor")
+                doctor = Doctor.objects.create(user=user, **profile_data)
+        except (DjangoValidationError, IntegrityError) as exc:
+            _django_error_to_drf(exc)
+        return doctor
+
+
+def record(actor, action, target="", detail=""):
+    AuditEvent.objects.create(actor=actor, action=action, target=target, detail=detail)
 
 
 class AdminStatsView(APIView):
@@ -66,4 +159,44 @@ class AdminUserListView(APIView):
         if page is not None:
             return paginator.get_paginated_response(serializer.data)
         return success_response(data=serializer.data)
+
+
+class AdminUserCreateView(APIView):
+    permission_classes = (IsAuthenticated, IsAdminRole)
+
+    def post(self, request):
+        serializer = AdminUserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        record(request.user, "user.created", user.username, f"Created {user.role} account")
+        from accounts.serializers import user_payload
+        return success_response(data=user_payload(user), message="User created.", status_code=201)
+
+
+class AdminDoctorCreateView(APIView):
+    permission_classes = (IsAuthenticated, IsAdminRole)
+
+    def post(self, request):
+        serializer = AdminDoctorCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        doctor = serializer.save()
+        record(request.user, "doctor.created", str(doctor.pk), f"Created Dr. {doctor.user.get_full_name()}")
+        from doctors.serializers import DoctorSerializer
+        return success_response(data=DoctorSerializer(doctor).data, message="Doctor created.", status_code=201)
+
+
+class AdminAuditView(APIView):
+    permission_classes = (IsAuthenticated, IsAdminRole)
+
+    def get(self, request):
+        events = AuditEvent.objects.select_related("actor")[:50]
+        data = [{
+            "id": event.id,
+            "action": event.action,
+            "target": event.target,
+            "detail": event.detail,
+            "actor": event.actor.get_full_name() if event.actor else "System",
+            "created_at": event.created_at.isoformat(),
+        } for event in events]
+        return success_response(data=data)
 

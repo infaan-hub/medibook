@@ -10,9 +10,18 @@ export interface User {
   last_name: string;
   role: "patient" | "doctor" | "admin";
   phone: string;
-  is_verified: boolean;
+  is_superuser: boolean;
   profile_image: string | null;
   date_joined: string | null;
+}
+
+export interface AuditEvent {
+  id: number;
+  action: string;
+  target: string;
+  detail: string;
+  actor: string;
+  created_at: string;
 }
 
 export interface AuthPair {

@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import EmailVerificationToken, PasswordResetToken
+from accounts.models import PasswordResetToken
 
 User = get_user_model()
 
@@ -94,20 +94,6 @@ class AuthFlowTests(TestCase):
             format="json",
         )
         self.assertEqual(mismatch.status_code, 400)
-
-    def test_verify_email_and_resend(self):
-        _register(self.client)
-        token = EmailVerificationToken.objects.get(used_at__isnull=True)
-        ok = self.client.post(
-            "/api/auth/verify-email/", {"token": token.token}, format="json"
-        )
-        self.assertEqual(ok.status_code, 200)
-        self.assertTrue(ok.data["data"]["user"]["is_verified"])
-        # Single-use: second attempt fails.
-        again = self.client.post(
-            "/api/auth/verify-email/", {"token": token.token}, format="json"
-        )
-        self.assertEqual(again.status_code, 400)
 
     def test_password_reset_flow(self):
         data = _register(self.client)

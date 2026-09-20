@@ -44,7 +44,6 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("role", Role.ADMIN)
-        extra_fields.setdefault("is_verified", True)
         if extra_fields.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
@@ -70,8 +69,6 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    is_verified = models.BooleanField(default=False)
-
     objects = UserManager()
 
     USERNAME_FIELD = "username"
@@ -101,22 +98,6 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     def get_short_name(self) -> str:
         return self.first_name or self.email
-
-
-class EmailVerificationToken(TimeStampedModel):
-    """Single-use token proving ownership of a user's email address."""
-
-    user = models.ForeignKey(
-        "accounts.User", on_delete=models.CASCADE, related_name="email_tokens"
-    )
-    token = models.CharField(max_length=128, unique=True, db_index=True)
-    used_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ("-created_at",)
-
-    def __str__(self) -> str:
-        return f"verify:{self.user_id}"
 
 
 class PasswordResetToken(TimeStampedModel):

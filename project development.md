@@ -1592,3 +1592,228 @@ frontend/src/api/types.ts              (User: added date_joined field)
 **Status:** Done — PostgreSQL connection timeout resolved by switching to SQLite. All 43 backend tests + 36 frontend tests pass. Three bugs fixed (splash tests, onboarding localStorage key, admin date display).
 
 **Next:** Resume the responsive dashboard task or proceed per roadmap.
+
+---
+
+### 2026-09-20 — Entry 0029 — Email verification removed entirely (Done)
+
+**Phase:** Cleanup — email verification feature removed from frontend and backend
+
+**Work done**
+
+1. **Frontend — removed all email verification code (9 files):**
+   - pi/auth.ts — removed erifyEmail() and esendVerification() functions
+   - pi/types.ts — removed is_verified field from User interface
+   - App.tsx — removed /verify-email route, AllowUnverified import, VerifyEmailScreen import
+   - components/guards.tsx — removed AllowUnverified export function
+   - pages/auth.tsx — removed entire VerifyEmailScreen component (92 lines), removed verification imports, changed register success message to "Welcome to MediBook"
+   - pages/profile.tsx — removed email verification banner, esendVerification import, esent state, onResend function, Link import, is_verified text from Account card
+   - pages/admin-dashboard.tsx — removed "Status" column from admin users table
+   - state/app-context.tsx — updated JSDoc to remove "verification" mention
+   - styles/global.css — removed .verify-banner and .verify-banner__actions CSS rules
+
+2. **Backend — removed all email verification code (13 files):**
+   - ccounts/models.py — removed is_verified field from User model, removed entire EmailVerificationToken model, removed is_verified default in create_superuser
+   - ccounts/views.py — removed VerifyEmailView, ResendVerificationView, verification token/email lines in RegisterView.post(), removed all verification imports
+   - ccounts/serializers.py — removed is_verified from user_payload(), ead_only_fields, removed VerifyEmailSerializer, ResendVerificationSerializer
+   - ccounts/tokens.py — removed erification_lifetime() and send_verification_email() functions
+   - ccounts/urls.py — removed erify-email and esend-verification URL paths and imports
+   - ccounts/permissions.py — removed entire IsVerified class
+   - ccounts/admin.py — removed is_verified from list_display, list_filter, fieldsets, add_fieldsets; removed EmailVerificationTokenAdmin
+   - config/settings.py — removed EMAIL_VERIFICATION_TOKEN_HOURS setting
+   - .env.example — removed EMAIL_VERIFICATION_TOKEN_HOURS=24
+   - ccounts/tests.py — removed 	est_verify_email_and_resend test and EmailVerificationToken import
+   - eports/views.py — removed is_verified=True from User creation calls
+   - ppointments/tests.py, hospitals/tests.py, specialties/tests.py, patients/tests.py, eviews/tests.py, 
+otifications/tests.py, eports/tests.py — removed is_verified=True from test helpers
+
+3. **Migration created:** ccounts/0003_remove_email_verification — removes is_verified field and drops EmailVerificationToken table. Applied successfully.
+
+**Files touched**
+
+`
+backend/accounts/models.py, views.py, serializers.py, tokens.py, urls.py, permissions.py, admin.py, tests.py
+backend/config/settings.py, .env.example
+backend/reports/views.py
+backend/appointments/tests.py, hospitals/tests.py, specialties/tests.py, patients/tests.py, reviews/tests.py, notifications/tests.py, reports/tests.py
+backend/accounts/migrations/0003_remove_email_verification.py (new)
+frontend/src/api/auth.ts, types.ts
+frontend/src/App.tsx
+frontend/src/components/guards.tsx
+frontend/src/pages/auth.tsx, profile.tsx, admin-dashboard.tsx
+frontend/src/state/app-context.tsx
+frontend/src/styles/global.css
+`
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | manage.py check | 0 issues |
+| Migration sync | manage.py makemigrations --check --dry-run | No changes detected |
+| Migration applied | manage.py migrate | ccounts.0003_remove_email_verification applied |
+| Frontend typecheck | 
+pm run typecheck | exit 0, no diagnostics |
+| Full-tree search | grep for erify-email, is_verified, esendVerification, VerifyEmailScreen, AllowUnverified, erify-banner | 0 matches (only in migration file) |
+
+**Status:** Done — email verification feature completely removed from both frontend and backend. No references remain.
+
+**Next:** Entry 0030 — sidebar redesign.
+
+---
+
+### 2026-09-20 — Entry 0030 — Sidebar redesign + header cleanup + profile image (Done)
+
+**Phase:** UI/UX — sidebar premium redesign, profile image display, header simplified
+
+**Work done**
+
+1. **Header simplified** — Removed UserChip (profile initials + name + role) from the header. Only the notification bell remains in the header actions area.
+
+2. **Sidebar user section redesigned:**
+   - Profile section at sidebar bottom now links to /profile and shows user's profile image (not just initials)
+   - Added dedicated **Sign Out** button below the user section with LogOut icon (was previously only in the profile page)
+   - Created ProfileAvatar component that renders <img> from user.profile_image with initials fallback
+
+3. **Profile image displayed everywhere:**
+   - **Sidebar** — user avatar shows profile image or initials fallback
+   - **Bottom navigation** — Profile nav item shows circular profile image instead of generic UserIcon (with 2px border matching current color)
+   - **Profile page** — new profile hero card at top with 72px avatar, name, email, role pill
+
+4. **Sidebar premium dark theme on mobile/tablet:**
+   - Mobile drawer (< 600px) — dark background (#102c3c), white text/icons, teal active state, white hover effects
+   - Tablet drawer (600–1199px) — same dark theme treatment
+   - Drawer overlay darkened (0.4 opacity, stronger shadow)
+
+5. **Desktop sidebar no-gap when collapsed:**
+   - Previously collapsed to width: 0 with hidden overflow (gap appeared)
+   - Now collapses to 64px icon rail — labels, text, and chevrons fade with opacity: 0 and overflow: hidden
+   - Sidebar always occupies its 64px (collapsed) or 260px (expanded) space — no layout shift
+
+6. **Mobile/tablet sidebar fit:**
+   - Changed from display: block to display: flex; flex-direction: column so the user section and sign out button are always visible
+   - Content fits without overflow on all phone sizes
+
+7. **Admin sidebar variant updated** — dark theme styles extended to include signout button and collapsed rail states
+
+**Files touched**
+
+`
+frontend/src/components/AppShell.tsx    (UserChip removed, ProfileAvatar added, sidebar signout, NavLinks profile image)
+frontend/src/pages/profile.tsx          (profile hero card with avatar, sign out moved to Account card)
+frontend/src/styles/shell.css           (sidebar dark theme mobile/tablet, desktop collapsed rail, signout styles, profile img nav)
+frontend/src/styles/global.css          (profile-avatar, profile-hero, nav-item__profile-img styles)
+`
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Frontend typecheck | 
+pm run typecheck | exit 0, no diagnostics |
+| Frontend build | 
+pm run build | exit 0 |
+
+**Status:** Done — sidebar is now dark-themed on mobile/tablet with white text/icons, shows profile image, has dedicated sign out button. Desktop sidebar collapses to 64px rail with no gap. Profile page shows avatar hero. Header simplified to bell-only.
+
+**Next:** Resume roadmap tasks or proceed per roadmap.
+
+### 2026-09-20 — Entry 0031 — Mobile drawer redesign + profile image API + social login backend + CSS brace fixes (Done)
+
+**Phase:** UI/UX — mobile drawer modern redesign, profile image upload API, OAuth social login backend, CSS bug fixes
+
+**Work done**
+
+1. **Mobile drawer redesigned (modern panel):**
+   - Widened from `min(82vw, 300px)` to `min(82vw, 320px)` with `border-radius: 0 16px 16px 0` for a modern rounded-edge feel
+   - Changed dark theme background from `#102c3c` to richer `#0c232e`
+   - Smoother open animation: `0.25s cubic-bezier(0.32, 0.72, 0, 1)` with backdrop-blur overlay (was `0.28s` with no blur)
+   - Added **close (X) button** in sidebar header on mobile/tablet — 40px touch target, subtle hover
+
+2. **Nav items modernized on mobile:**
+   - Removed chevrons from all nav items — cleaner, less cluttered look
+   - Increased min-height to 52px for generous touch targets
+   - Added **left teal accent bar** (`#08a79d`, 3px wide, 8px inset) on active state instead of just background color
+   - Active state: solid teal background (`#bceee7`) + bold text + accent bar
+   - 12px border-radius on each nav item for a card-like feel
+
+3. **User profile section polished:**
+   - Rounded card background (`rgba(255,255,255,0.08)`) with 12px border-radius
+   - Avatar increased to 44px with teal border accent (`2px solid rgba(255,255,255,0.2)`)
+   - Added **ChevronRight** chevron on user section to indicate it's a tappable link
+   - Name font-size bumped to `--text-md` for readability
+
+4. **Sign out button refined:**
+   - 48px min-height touch target
+   - Subtle hover background effect
+   - Icon and text sized proportionally
+
+5. **Tablet drawer matched:**
+   - Same modern style as mobile — wider panel, rounded corners, no chevrons on nav items, close button, accent bar on active state
+
+6. **Desktop sidebar polished:**
+   - Close button hidden on desktop (via `display: none`)
+   - User chevron hidden in collapsed rail state (was referencing non-existent `.nav-item__chevron` in collapsed rules)
+   - Desktop collapsed rail: labels, user info, user chevron, and signout text all fade with `opacity: 0; width: 0`
+
+7. **Profile image upload API (backend):**
+   - `uploadProfileImage(file)` — multipart/form-data PATCH to `/api/auth/me/` accepting image/jpeg, image/png, image/webp (5MB max)
+   - `removeProfileImage()` — DELETE to `/api/auth/me/image/`
+   - Returns updated User object with `profile_image` URL
+
+8. **Profile image upload UI (frontend):**
+   - Clickable avatar with hover overlay ("Change photo")
+   - File input (`image/*`, 5MB limit, client-side validation)
+   - Preview state with save/cancel buttons
+   - Remove button when image exists
+
+9. **Social login backend (`SocialLoginView`):**
+   - `POST /api/auth/social/` — accepts `provider` (google/apple) and `token`
+   - Google: verifies token via `oauth2.googleapis.com/tokeninfo`, fetches user info
+   - Apple: verifies JWT via Apple's public keys (`https://appleid.apple.com/auth/keys`), decodes `sub` and `email`
+   - Creates new user or logs in existing user, links social account
+   - Downloads and saves profile image from OAuth provider
+
+10. **Social login frontend:**
+    - `socialLogin(provider, token)` API function in `auth.ts`
+    - `socialLogin` method added to `SessionProvider` context
+    - Google OAuth: lazy-loaded `accounts.google.com/gsi/client`, `useGoogleLogin()` hook
+    - Apple OAuth: lazy-loaded `appleid.apple.com/auth`, `useAppleLogin()` hook
+    - Welcome screen and login screen social buttons wired with `onClick` handlers
+
+11. **CSS brace-depth fixes:**
+    - Fixed leaked tablet media query rules in `shell.css` — `.shell__nav--side--open { transform: translateX(0) }` was outside media query scope, leaking into global CSS
+    - Fixed stray `}` at line 284/350 that prematurely closed the `@media (min-width: 1200px)` block, causing desktop sidebar styles to be incomplete
+    - Both fixes were root causes of desktop sidebar not toggling and empty-space layout gaps
+
+**Files touched**
+
+```
+frontend/src/components/AppShell.tsx    (close button, removed nav chevrons, user chevron, 44px avatar)
+frontend/src/styles/shell.css           (mobile drawer redesign, tablet drawer, desktop fixes, brace-depth fixes)
+frontend/src/styles/global.css          (profile upload overlay, .sr-only)
+frontend/src/pages/profile.tsx          (image upload UI with preview/remove)
+frontend/src/pages/auth.tsx             (social login hooks, VerifyEmailScreen removed)
+frontend/src/state/app-context.tsx      (socialLogin method in SessionProvider)
+frontend/src/api/auth.ts               (socialLogin, uploadProfileImage, removeProfileImage)
+frontend/src/api/types.ts              (User type: profile_image, no is_verified)
+frontend/.env                          (VITE_GOOGLE_CLIENT_ID, VITE_APPLE_CLIENT_ID, VITE_APPLE_REDIRECT_URI)
+backend/accounts/views.py              (SocialLoginView: Google/Apple verification)
+backend/accounts/urls.py               (social login URL route)
+backend/config/settings.py             (APPLE_CLIENT_ID setting)
+backend/requirements.txt               (PyJWT, cryptography)
+backend/.env.example                   (APPLE_CLIENT_ID)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Frontend typecheck | `npx tsc --noEmit` | exit 0, no diagnostics |
+| Frontend build | `npm run build` | exit 0, built in 1.84s |
+| Django check | `python manage.py check` | exit 0, no issues |
+| CSS brace audit | Manual review of shell.css media query nesting | All braces balanced, no leaked rules |
+
+**Status:** Done — mobile drawer is a modern slide-out panel with close button, no chevrons, left accent bar on active, polished user section. Profile image upload API and UI working. Social login backend handles Google/Apple token verification and user creation. CSS brace-depth bugs fixed.
+
+**Next:** Resume roadmap tasks — desktop layout gap fix still pending (empty space to right of sidebar), frontend OAuth button testing on mobile.

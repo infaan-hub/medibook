@@ -127,13 +127,8 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("POSTGRES_DB", "medibook"),
-        "USER": env("POSTGRES_USER", "medibook_user"),
-        "PASSWORD": env("POSTGRES_PASSWORD", ""),
-        "HOST": env("POSTGRES_HOST", "127.0.0.1"),
-        "PORT": env("POSTGRES_PORT", "5432"),
-        "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE", 60),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -266,8 +261,12 @@ DEFAULT_FROM_EMAIL = env(
     "DJANGO_DEFAULT_FROM_EMAIL", "MediBook <no-reply@medibook.local>"
 )
 # Single-use token lifetimes (hours).
-EMAIL_VERIFICATION_TOKEN_HOURS = env_int("EMAIL_VERIFICATION_TOKEN_HOURS", 24)
 PASSWORD_RESET_TOKEN_HOURS = env_int("PASSWORD_RESET_TOKEN_HOURS", 2)
+
+# ---------------------------------------------------------------------------
+# Social OAuth providers
+# ---------------------------------------------------------------------------
+APPLE_CLIENT_ID = env("APPLE_CLIENT_ID", "")
 
 # ---------------------------------------------------------------------------
 # Logging

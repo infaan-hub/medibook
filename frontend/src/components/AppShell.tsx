@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
 import { useSession } from "../state/app-context";
 import type { User } from "../api/types";
@@ -26,7 +26,12 @@ import {
   Menu,
   ChevronRight,
   Shield,
+  Activity,
+  FilePlus2,
+  Users as UsersIcon,
+  UserPlus,
   X,
+  LogOut,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
@@ -39,6 +44,16 @@ interface NavItem {
 }
 
 function navItemsFor(user: User | null): NavItem[] {
+  if (user?.role === "admin" && user.is_superuser) {
+    return [
+      { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/admin/users", label: "Users", icon: <UsersIcon size={20} /> },
+      { to: "/admin/users/new", label: "Add user", icon: <UserPlus size={20} /> },
+      { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+      { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
+      { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
+    ];
+  }
   const items: NavItem[] = [
     { to: "/", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
@@ -50,7 +65,7 @@ function navItemsFor(user: User | null): NavItem[] {
     items.push({ to: "/appointments", label: "Schedule", icon: <Calendar size={20} /> });
     items.push({ to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> });
   }
-  if (user?.role === "admin") {
+  if (user?.role === "admin" && user.is_superuser) {
     items.push({ to: "/admin", label: "Admin", icon: <Shield size={20} /> });
   }
   if (user?.role === "patient") {
@@ -107,22 +122,37 @@ function NotificationBell() {
   );
 }
 
-/** Header chip: avatar initials + name + role, links to the profile screen. */
-function UserChip() {
-  const { user } = useSession();
+/** Avatar that shows profile image or initials fallback. */
+function ProfileAvatar({
+  user,
+  size = 36,
+  className = "",
+}: {
+  user: User | null;
+  size?: number;
+  className?: string;
+}) {
   if (!user) return null;
+  if (user.profile_image) {
+    return (
+      <img
+        src={user.profile_image}
+        alt={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+        className={`profile-avatar ${className}`}
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
-    <Link to="/profile" className="user-chip" title="Open profile">
-      <span className="user-chip__avatar" aria-hidden="true">
-        {initials(user)}
-      </span>
-      <span className="user-chip__text">
-        <span className="user-chip__name">
-          {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
-        </span>
-        <span className="user-chip__role">{user.role}</span>
-      </span>
-    </Link>
+    <span
+      className={`profile-avatar profile-avatar--initials ${className}`}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      {initials(user)}
+    </span>
   );
 }
 
@@ -143,7 +173,7 @@ function useOnline(): boolean {
   return online;
 }
 
-function NavLinks({ items, side = false, onNavigate }: { items: NavItem[]; side?: boolean; onNavigate?: () => void }) {
+function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
   return (
     <>
       {items.map((item) => (
@@ -152,19 +182,26 @@ function NavLinks({ items, side = false, onNavigate }: { items: NavItem[]; side?
           to={item.to}
           end={item.to === "/"}
           className={({ isActive }) =>
-            ["nav-item", side ? "nav-item--side" : "", isActive ? "nav-item--active" : ""]
+            ["nav-item", side ? "nav-item--side" : "", isActive ? "nav-item--active" : "", side && isActive ? "nav-item--side--active" : ""]
               .filter(Boolean)
               .join(" ")
           }
           onClick={onNavigate}
         >
           <span className="nav-item__icon" aria-hidden="true">
-            {item.icon}
+            {item.to === "/profile" && user?.profile_image && !side ? (
+              <img
+                src={user.profile_image}
+                alt=""
+                className="nav-item__profile-img"
+                width={22}
+                height={22}
+              />
+            ) : (
+              item.icon
+            )}
           </span>
           <span className="nav-item__label">{item.label}</span>
-          {side && (
-            <ChevronRight size={16} className="nav-item__chevron" aria-hidden="true" />
-          )}
           {!side && <span className="nav-item__bar" aria-hidden="true" />}
         </NavLink>
       ))}
@@ -243,10 +280,11 @@ function InstallPrompt() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
-  const { user } = useSession();
+  const { user, logout } = useSession();
   const items = navItemsFor(user);
   const isDesktop = useIsDesktop();
   const location = useLocation();
+  const navigate = useNavigate();
   const sidebarRef = useRef<HTMLElement>(null);
 
   // Sidebar open state: on desktop, defaults to "not collapsed"; on mobile, defaults to closed
@@ -303,7 +341,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className={`shell${sidebarOpen && !isDesktop ? " shell--drawer-open" : ""}`}>
+    <div className={`shell${sidebarOpen && !isDesktop ? " shell--drawer-open" : ""}${user?.role === "admin" && user.is_superuser ? " shell--admin" : ""}`}>
       <header className="shell__header">
         <button
           className="shell__hamburger"
@@ -321,7 +359,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </span>
         <div className="shell__header-actions">
           <NotificationBell />
-          <UserChip />
         </div>
       </header>
 
@@ -339,22 +376,48 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="sidebar__header">
             <img className="sidebar__logo" src="/images/logo.jpeg" alt="" width={32} height={32} draggable={false} />
             <span className="sidebar__title">MediBook</span>
+            {!isDesktop && (
+              <button
+                type="button"
+                className="sidebar__close"
+                onClick={closeSidebar}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
           <div className="sidebar__divider" />
-          <NavLinks items={items} side onNavigate={closeSidebar} />
+          <NavLinks items={items} side onNavigate={closeSidebar} user={user} />
           <div className="sidebar__spacer" />
           <div className="sidebar__divider" />
-          <div className="sidebar__user">
-            <span className="sidebar__user-avatar">
-              {user ? initials(user) : "?"}
-            </span>
+          <Link
+            to="/profile"
+            className="sidebar__user"
+            onClick={closeSidebar}
+          >
+            <ProfileAvatar user={user} size={44} className="sidebar__user-avatar" />
             <div className="sidebar__user-info">
               <span className="sidebar__user-name">
                 {user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email : "Guest"}
               </span>
               <span className="sidebar__user-role">{user?.role ?? ""}</span>
             </div>
-          </div>
+            <ChevronRight size={16} className="sidebar__user-chevron" aria-hidden="true" />
+          </Link>
+          <button
+            type="button"
+            className="sidebar__signout"
+            onClick={() => {
+              closeSidebar();
+              logout().then(() => {
+                navigate("/login", { replace: true });
+              });
+            }}
+          >
+            <LogOut size={18} />
+            <span>Sign out</span>
+          </button>
         </nav>
 
         <main className="shell__content" id="main">
@@ -368,7 +431,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="shell__nav--bottom" aria-label="Primary">
-        <NavLinks items={items} />
+        <NavLinks items={items} user={user} />
       </nav>
 
       <InstallPrompt />

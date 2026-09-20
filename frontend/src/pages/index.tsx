@@ -21,7 +21,7 @@ export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 export { NotificationsScreen } from "./notifications";
-export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen } from "./admin-dashboard";
+export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen } from "./admin-dashboard";
 
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
@@ -133,7 +133,7 @@ export function HomeScreen() {
   const { user } = useSession();
   if (!user) return <NotFoundPage />;
   if (user.role === "doctor") return <DoctorDashboardScreen />;
-  if (user.role === "admin") return <div className="page"><h1 className="page__title">MediBook administration</h1><Link to="/admin">Open admin dashboard</Link></div>;
+  if (user.role === "admin" && user.is_superuser) return <div className="page"><h1 className="page__title">MediBook administration</h1><Link to="/admin">Open admin dashboard</Link></div>;
   return <PatientHome user={user} />;
 }
 

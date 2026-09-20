@@ -22,6 +22,7 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   register as registerRequest,
+  socialLogin as socialLoginRequest,
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import type { RegisterPayload, User } from "../api/types";
@@ -92,8 +93,9 @@ interface SessionContextValue {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
+  socialLogin: (provider: "google" | "apple", token: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** Replace the cached user (profile edits, verification, …). */
+  /** Replace the cached user (profile edits, …). */
   setUser: (user: User) => void;
 }
 
@@ -154,6 +156,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [applyAuth]
   );
 
+  const socialLogin = useCallback(
+    async (provider: "google" | "apple", token: string) => {
+      const envelope = await socialLoginRequest(provider, token);
+      applyAuth(envelope.data);
+    },
+    [applyAuth]
+  );
+
   // Best-effort server-side blacklist; the local session is always cleared.
   const logout = useCallback(async () => {
     const refresh = tokenStore.getRefresh();
@@ -175,8 +185,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, login, register, logout, setUser }),
-    [status, user, login, register, logout, setUser]
+    () => ({ status, user, login, register, socialLogin, logout, setUser }),
+    [status, user, login, register, socialLogin, logout, setUser]
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
