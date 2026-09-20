@@ -4,8 +4,9 @@ import { listMyAppointments } from "../api/appointments";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { formatRating } from "../components/reviews";
 import { useSession } from "../state/app-context";
-import { DoctorDashboardScreen } from "./doctor-dashboard";
+import { useRealtimeEvent } from "../realtime/socket";
 import {
   Calendar,
   Bell,
@@ -15,13 +16,20 @@ import {
   Star,
 } from "lucide-react";
 
-export { DoctorAvailabilityScreen, DoctorProfileScreen } from "./doctor";
+/** Photo shown on every doctor card: uploaded picture first, placeholder last. */
+export function doctorCardImage(doctor: DoctorProfile, index = 0): string {
+  if (doctor.profile_image) return doctor.profile_image;
+  return dashboardDoctorImages[index % dashboardDoctorImages.length];
+}
+
+export { DoctorAvailabilityScreen, DoctorProfileScreen, DoctorPersonalScreen } from "./doctor";
 export { DoctorDashboardScreen, DoctorAppointmentsScreen } from "./doctor-dashboard";
+export { DoctorMedicalTreatmentScreen } from "./doctor-medical-treatment";
 export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 export { NotificationsScreen } from "./notifications";
-export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen } from "./admin-dashboard";
+export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen, AdminAppointmentsScreen } from "./admin-dashboard";
 
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
@@ -41,10 +49,23 @@ function PatientHome({ user }: { user: User }) {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    listMyAppointments().then((response) => setAppointments(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load appointments."));
-    listDoctors().then((response) => setDoctors(response.data.results.slice(0, 3))).catch(() => setDoctors([]));
+  const loadAppointments = useCallback(() => {
+    listMyAppointments()
+      .then((response) => setAppointments(response.data?.results ?? []))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load appointments."));
   }, []);
+
+  useEffect(() => {
+    loadAppointments();
+    listDoctors()
+      .then((response) => setDoctors((response.data?.results ?? []).slice(0, 3)))
+      .catch(() => setDoctors([]));
+  }, [loadAppointments]);
+
+  // Live home: upcoming appointment reacts to bookings/status changes instantly.
+  useRealtimeEvent((event) => {
+    if (event === "appointment.created" || event === "appointment.updated") loadAppointments();
+  });
   const next = appointments?.filter((item) => item.status === "pending" || item.status === "confirmed").sort((a, b) => formatAppointment(a).localeCompare(formatAppointment(b)))[0];
 
   return (
@@ -52,11 +73,11 @@ function PatientHome({ user }: { user: User }) {
       <header className="home__topbar">
         <div className="home__greeting">
           <span className="home__avatar">
-            {user.profile_image ? <img src={user.profile_image} alt="" /> : (user.first_name[0] || "M").toUpperCase()}
+            {user.profile_image ? <img src={user.profile_image} alt="" /> : ((user.first_name || "")[0] || (user.last_name || "")[0] || "M").toUpperCase()}
           </span>
           <span>
-            <strong>Good morning!</strong>
-            <span>{user.first_name || "there"}</span>
+            <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
+            <span>{user.first_name || user.last_name || "there"}</span>
           </span>
         </div>
         <Link to="/notifications" className="home__notification" aria-label="Notifications">
@@ -84,11 +105,11 @@ function PatientHome({ user }: { user: User }) {
           <div className="home__doctor-list">
             {doctors.map((doctor, index) => (
               <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-                <img src={dashboardDoctorImages[index % dashboardDoctorImages.length]} alt={formatDoctorName(doctor)} />
+                <img src={doctorCardImage(doctor, index)} alt={formatDoctorName(doctor)} />
                 <span className="home__doctor-info">
                   <strong>{formatDoctorName(doctor)}</strong>
                   <span>{doctor.qualifications || "Medical specialist"}</span>
-                  <span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {doctor.average_rating?.toFixed(1) || "New"}</span>
+                  <span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span>
                 </span>
                 <ChevronRight size={17} />
               </Link>
@@ -131,9 +152,9 @@ function PatientHome({ user }: { user: User }) {
 
 export function HomeScreen() {
   const { user } = useSession();
-  if (!user) return <NotFoundPage />;
-  if (user.role === "doctor") return <DoctorDashboardScreen />;
-  if (user.role === "admin" && user.is_superuser) return <div className="page"><h1 className="page__title">MediBook administration</h1><Link to="/admin">Open admin dashboard</Link></div>;
+  // Route-level RequirePatient guarantees patient-only. Any non-patient
+  // reaching here (stale render) shows nothing — guards redirect.
+  if (!user || user.role !== "patient") return null;
   return <PatientHome user={user} />;
 }
 
@@ -142,7 +163,7 @@ export function DoctorsPage() {
   const [results, setResults] = useState<DoctorProfile[] | null>(null); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(false);
   const load = useCallback(() => { setLoading(true); setError(null); const params: ListDoctorsParams = { search: search || undefined, city: city || undefined }; listDoctors(params).then((response) => setResults(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load doctors.")).finally(() => setLoading(false)); }, [search, city]);
   useEffect(() => { load(); }, []);
-  return <div className="page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">City</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by city" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or city." />}{!loading && results?.map((doctor) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="doctor-card doctor-card--link"><Card><h2>{doctor.first_name} {doctor.last_name}</h2><p>{doctor.experience_years} years of experience</p><p>Consultation fee: {doctor.consultation_fee}</p></Card></Link>)}</div>;
+  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">City</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by city" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or city." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong><span>{doctor.qualifications || "Medical specialist"}</span><span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
 }
 
 export function AppointmentsPage() {

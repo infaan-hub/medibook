@@ -13,6 +13,11 @@ export function getPatientProfile(): Promise<Envelope<PatientProfile>> {
   return apiGet<PatientProfile>("/patients/profile/");
 }
 
+/** GET /api/patients/<userId>/ — view a patient's profile (doctors with appointments only). */
+export function getPatientProfileById(userId: number): Promise<Envelope<PatientProfile>> {
+  return apiGet<PatientProfile>(`/patients/${userId}/`);
+}
+
 /** PATCH /api/patients/profile/ — update clinical/contact details. */
 export function updatePatientProfile(
   patch: UpdatePatientProfilePayload

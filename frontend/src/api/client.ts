@@ -50,7 +50,8 @@ http.interceptors.request.use((config) => {
 // Single-flight refresh: one shared promise for all concurrent 401s.
 let refreshInFlight: Promise<string | null> | null = null;
 
-function refreshAccessToken(): Promise<string | null> {
+/** Visible to the realtime socket: transparent single-flight token refresh. */
+export function refreshAccessToken(): Promise<string | null> {
   refreshInFlight ??= (async () => {
     try {
       const refresh = tokenStore.getRefresh();

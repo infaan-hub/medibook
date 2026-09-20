@@ -66,6 +66,8 @@ export type Gender = "" | "male" | "female" | "other";
 export interface PatientProfile {
   id: number;
   email: string;
+  first_name: string;
+  last_name: string;
   date_of_birth: string | null;
   gender: Gender;
   address: string;
@@ -127,6 +129,7 @@ export interface DoctorProfile {
   email: string;
   first_name: string;
   last_name: string;
+  profile_image: string | null;
   specialties: number[];
   hospitals: number[];
   qualifications: string;
@@ -134,7 +137,8 @@ export interface DoctorProfile {
   consultation_fee: string;
   bio: string;
   is_available: boolean;
-  average_rating: number | null;
+  /* DRF DecimalField serializes as a string ("0.00"), so accept both. */
+  average_rating: number | string | null;
   total_reviews: number;
 }
 
@@ -149,6 +153,13 @@ export interface DoctorAvailability {
   doctor: number;
   date: string;
   slots: AvailabilitySlot[];
+}
+
+export interface DoctorAvailableDays {
+  doctor: number;
+  year: number;
+  month: number;
+  available_days: string[];
 }
 
 export interface ScheduleItem {

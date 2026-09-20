@@ -65,6 +65,9 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 # ---------------------------------------------------------------------------
 
 INSTALLED_APPS = [
+    # Daphne must stay first: it swaps runserver to the ASGI dev server so
+    # WebSockets (/ws/notifications/) are served in development.
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -75,6 +78,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "channels",
     # MediBook apps (§23, §24, §50 PHASE 2 — registered as scaffolding;
     # business logic is added phase by phase)
     "common",
@@ -87,6 +91,7 @@ INSTALLED_APPS = [
     "notifications",
     "reviews",
     "reports",
+    "treatments",
 ]
 
 MIDDLEWARE = [
@@ -120,6 +125,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
+
+# Realtime (PHASE 13): personal push channels over /ws/notifications/.
+# InMemoryChannelLayer fits the single-process dev server; production should
+# swap in channels_redis.core.RedisChannelLayer (cross-process layer).
+CHANNEL_LAYERS = {
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+}
 
 # ---------------------------------------------------------------------------
 # Database — PostgreSQL (§25, §26)

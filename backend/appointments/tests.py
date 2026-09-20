@@ -4,10 +4,12 @@ from datetime import date, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from doctors.models import Availability, Doctor
 from hospitals.models import Hospital
+from notifications.models import Notification
 from specialties.models import Specialty
 
 User = get_user_model()
@@ -130,4 +132,93 @@ class BookingFlowTests(TestCase):
         self.doctor.refresh_from_db()
         self.assertEqual(float(self.doctor.average_rating), 5.0)
         self.assertEqual(self.doctor.total_reviews, 1)
+
+
+class DoctorRescheduleTests(TestCase):
+    """Doctor reschedules in place; patient is notified, status preserved."""
+
+    def setUp(self):
+        self.patient = _user("patient@example.com", "patient")
+        self.other_patient = _user("other@example.com", "patient")
+        self.doctor_user = _user(
+            "doctor@example.com", "doctor", first_name="Doc", last_name="Tor"
+        )
+        self.doctor = Doctor.objects.create(user=self.doctor_user)
+        # The next two Tuesdays — Availability weekday=1 covers both.
+        today = timezone.localdate()
+        delta = (1 - today.weekday()) % 7 or 7
+        self.tuesday = today + timedelta(days=delta)
+        self.next_tuesday = self.tuesday + timedelta(days=7)
+        Availability.objects.create(
+            doctor=self.doctor, weekday=1,
+            start_time=time(9, 0), end_time=time(11, 0),
+            slot_duration_minutes=30,
+        )
+
+    def _book(self, patient, day, start="09:00", end="09:30") -> int:
+        client = _auth(patient)
+        response = client.post(
+            "/api/appointments/",
+            {
+                "doctor": self.doctor.pk,
+                "appointment_date": str(day),
+                "start_time": start,
+                "end_time": end,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data["data"]["id"]
+
+    def test_doctor_reschedule_moves_time_and_notifies_patient(self):
+        appointment_id = self._book(self.patient, self.tuesday)
+
+        client = _auth(self.doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appointment_id}/",
+            {
+                "appointment_date": str(self.next_tuesday),
+                "start_time": "09:30",
+                "end_time": "10:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["success"])
+        data = response.data["data"]
+        self.assertEqual(data["appointment_date"], str(self.next_tuesday))
+        self.assertEqual(data["start_time"], "09:30:00")
+        self.assertEqual(data["status"], "pending")
+
+        # The patient received an inbox notification about the new time.
+        notification = Notification.objects.filter(
+            recipient=self.patient, related_appointment_id=appointment_id
+        ).latest("id")
+        self.assertIn("rescheduled", notification.message.lower())
+
+        # The patient may NOT move the time themselves.
+        forbidden = _auth(self.patient).patch(
+            f"/api/appointments/{appointment_id}/",
+            {"appointment_date": str(self.tuesday)},
+            format="json",
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_reschedule_rejects_booked_slot(self):
+        appointment_id = self._book(self.patient, self.tuesday)
+        # A different patient fills 09:30 on the target day.
+        self._book(self.other_patient, self.next_tuesday, start="09:30", end="10:00")
+
+        client = _auth(self.doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appointment_id}/",
+            {
+                "appointment_date": str(self.next_tuesday),
+                "start_time": "09:30",
+                "end_time": "10:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(response.data["success"])
 

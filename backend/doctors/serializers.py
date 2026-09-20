@@ -61,18 +61,33 @@ class DoctorSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
+    profile_image = serializers.SerializerMethodField()
     specialties = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     hospitals = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
     class Meta:
         model = Doctor
         fields = (
-            "id", "email", "first_name", "last_name", "specialties",
+            "id", "email", "first_name", "last_name", "profile_image", "specialties",
             "hospitals", "qualifications", "experience_years",
             "consultation_fee", "bio", "is_available",
             "average_rating", "total_reviews",
         )
         read_only_fields = ("average_rating", "total_reviews")
+
+    def get_profile_image(self, obj) -> str | None:
+        """Surface the linked user's profile picture for doctor cards."""
+        user = getattr(obj, "user", None)
+        image = getattr(user, "profile_image", None)
+        url = image.url if image else None
+        if not url:
+            return None
+        if url.startswith("http"):
+            return url
+        request = self.context.get("request")
+        if request is not None:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class DoctorWriteSerializer(serializers.ModelSerializer):

@@ -1817,3 +1817,104 @@ backend/.env.example                   (APPLE_CLIENT_ID)
 **Status:** Done — mobile drawer is a modern slide-out panel with close button, no chevrons, left accent bar on active, polished user section. Profile image upload API and UI working. Social login backend handles Google/Apple token verification and user creation. CSS brace-depth bugs fixed.
 
 **Next:** Resume roadmap tasks — desktop layout gap fix still pending (empty space to right of sidebar), frontend OAuth button testing on mobile.
+
+---
+
+### 2026-09-20 — Entry 0032 — Admin-create 500 fix, dashboard crash fix, doctor self-service card, strict role isolation, /doctors card restyle, realtime WebSocket push (Done)
+
+**Phase:** Bug fixing + feature delivery (PHASE 13 realtime push) — six work items in one session, each verified independently
+
+**Work done**
+
+1. **500 on `POST /api/admin/doctors/create/` fixed (backend):**
+   - Root cause: `AdminDoctorCreateSerializer` validated `username` only; `User.email` is `unique=True` and Django's `UserManager._create_user()` runs `full_clean()`, raising a Django `ValidationError` (not DRF's). `common.exceptions.custom_exception_handler` returned `None` for non-DRF exceptions → bare 500 with no envelope. Same exposure in `AdminUserCreateView`.
+   - `backend/reports/views.py`: single `User = get_user_model()` at module top; case-insensitive `validate_email` added to both create serializers; `create()` wrapped in `try/except (DjangoValidationError, IntegrityError)` → converted to DRF `ValidationError` (HTTP 400 envelope, transaction rollback — no half-created user); `consultation_fee` default `0` → `Decimal("0")`.
+   - Result: duplicate email/username now returns `400 {success:false, errors:{email:[...]}}` instead of 500.
+
+2. **Patient `/dashboard` white screen fixed (frontend):**
+   - Root cause: DRF serializes `Doctor.average_rating` (`DecimalField`) as a string `"0.00"`; `PatientHome` called `doctor.average_rating?.toFixed(1)` → `TypeError` → React unmounted the whole tree (white screen; `ErrorBoundary` only wraps the root). Same crash in doctor profile and admin dashboard.
+   - `frontend/src/api/types.ts` — `average_rating: number | string | null`
+   - `frontend/src/components/reviews.tsx` — new `ratingNumber()` / `formatRating()` coercion helpers; `StarRating` accepts `number|string|null`
+   - `frontend/src/pages/index.tsx`, `frontend/src/pages/doctor.tsx`, `frontend/src/pages/admin-dashboard.tsx` — all render ratings via `formatRating()`
+
+3. **Doctor self-service card `/doctor/personal` (new) + photos on `/doctors` cards:**
+   - `backend/doctors/serializers.py` — `DoctorSerializer` exposes `profile_image` (from linked `User.profile_image`, absolute URL) plus `first_name`/`last_name`/`email`
+   - `backend/doctors/views.py` — `MyDoctorProfileView` GET/PATCH pass `context={"request": request}`; `PATCH /api/doctors/me/profile/` accepts `first_name`/`last_name` (saved on `User`) plus `experience_years`, `consultation_fee`, `qualifications`, `bio` (saved on `Doctor`)
+   - Card photo upload reuses the existing multipart `PATCH /api/auth/me/` (`profile_image`) — the same image the doctor card reads, so no new model/migration
+   - `frontend/src/pages/doctor.tsx` — new `DoctorPersonalScreen` at `/doctor/personal`: patient-style preview card (photo, name, experience, fee, rating) + "Edit card details" form (first/last name, experience, consultation fee) + card-photo upload (≤5MB, image-only)
+   - `frontend/src/App.tsx` — `RequireRole(doctor)` route `/doctor/personal`; `frontend/src/components/AppShell.tsx` — doctor nav "Doctors" → "My card"
+   - `frontend/src/pages/index.tsx` — `doctorCardImage()` helper (uploaded photo first, placeholder fallback); `DoctorsPage` cards render `<img class="doctor-card__photo">`; patient home Top Doctors uses the same helper
+
+4. **Strict role isolation; sign-out always lands on `/signin`:**
+   - Problem: patient routes had only `RequireAuth`, so a signed-in doctor/admin could open `/dashboard`, `/doctors`, `/settings` directly; wrong-role bounces went to `/` (`LaunchRoute`); post-login navigated to `from ?? "/"`, so a saved `/admin` URL could land a fresh patient login on an admin page.
+   - `frontend/src/components/guards.tsx` — `homeForRole(user)` as the single source (doctor → `/doctor/dashboard`, admin → `/admin`, else → `/dashboard`); `RequireRole` wrong-role → own home (never another role's page); new `RequirePatient` guard (guest → `/login` with `from`, doctor/admin → own home)
+   - `frontend/src/App.tsx` — `LaunchRoute` uses `homeForRole`; guest-only `/signin` route (`/login` kept as alias); `/dashboard`, `/doctors`, `/doctors/:id`, `/booking/*`, `/settings` wrapped in `RequirePatient`
+   - `frontend/src/pages/auth.tsx` — post-login honours `from` only if role-neutral (`isSafeRedirect` rejects `/admin*`, `/doctor/*`, and auth pages); otherwise lands on that role's dashboard via `freshHomeForRole()`
+   - `frontend/src/pages/index.tsx` — `HomeScreen` is patient-only; `frontend/src/pages/profile.tsx` + `frontend/src/components/AppShell.tsx` — both sign-out buttons → `navigate("/signin", { replace: true })`
+   - Result: signing out in any role always lands on `/signin`; back-button revisits to any role route hit a guard as guest → login; no role change without a fresh login.
+
+5. **`/doctors` card styling fixed:**
+   - Root cause: `DoctorsPage` used `className="doctor-card"` which has no CSS rule anywhere in the stylesheets → unstyled stacked cards.
+   - `frontend/src/pages/index.tsx` — `DoctorsPage` renders the same markup as patient home Top Doctors (`home__doctor-card`) inside `home__doctor-list doctors__grid`
+   - `frontend/src/styles/global.css` — `.doctors-page .doctors__filters` (3-column desktop, stacked mobile) and `.doctors__grid` (`repeat(auto-fill, minmax(220px, 1fr))` responsive grid, no horizontal scroll on phones)
+
+6. **Realtime WebSocket updates — no refresh needed (PHASE 13 push):**
+   - `backend/requirements.txt` — `channels[daphne]==4.3.2` installed into `backend/.venv` (daphne 4.2.3 pulled in)
+   - `backend/config/settings.py` — `daphne` (must stay first in `INSTALLED_APPS`: swaps runserver to the ASGI dev server) + `channels`; `CHANNEL_LAYERS` = `InMemoryChannelLayer` (single-process dev; production should switch to `channels_redis`)
+   - `backend/config/asgi.py` — `ProtocolTypeRouter`: `http` → Django ASGI app, `websocket` → `URLRouter(websocket_urlpatterns)`; routing imported only after Django setup
+   - `backend/notifications/consumers.py` (new) — `NotificationConsumer` at `/ws/notifications/?token=<JWT>` (query param because browsers cannot set an Authorization header on the WS handshake); missing/invalid token → close code `4001` before accept; joins personal group `user_<pk>`; `{"type":"ping"}` → `pong` keepalive; `notify_event` group handler
+   - `backend/notifications/routing.py` (new) — `path("ws/notifications/", NotificationConsumer.as_asgi())`
+   - `backend/notifications/helpers.py` — `user_group_name()`; `notify()` now also pushes `notification.created` via `transaction.on_commit` (never sends for a rolled-back transaction); new `broadcast_appointment_event()`
+   - `backend/appointments/views.py` — booking creation and every status change (confirm/reject/complete/cancel) broadcast `appointment.created` / `appointment.updated` to both patient and doctor
+   - `frontend/src/realtime/socket.ts` (new) — singleton WS manager: `setIdentity(userId|null)` wired to session changes (socket closed on sign-out so a logged-out tab receives nothing); connects with `?token=`; on close `4001` silently single-flight-refreshes the access token (shared `refreshAccessToken()`) and reconnects; exponential backoff 1s→30s; 25s ping; multi-subscriber safe dispatch; `useRealtimeEvent(handler)` hook
+   - Wired consumers: `AppShell` bell (unread badge +1 + toast), `NotificationsScreen` (reload), `AppointmentsList` / `AppointmentDetail` (reload; detail matches `payload.id`), `PatientHome`, `DoctorDashboard`, `DoctorAppointmentsScreen`
+   - `frontend/vite.config.ts` — `/ws` proxy (dev + preview) already in place
+
+**Files touched**
+
+```
+backend/requirements.txt                (channels[daphne]==4.3.2)
+backend/config/settings.py              (daphne + channels apps, CHANNEL_LAYERS)
+backend/config/asgi.py                  (ProtocolTypeRouter with websocket routing)
+backend/notifications/consumers.py      (NEW — NotificationConsumer, JWT via ?token=)
+backend/notifications/routing.py        (NEW — /ws/notifications/ route)
+backend/notifications/helpers.py        (WS push on notify(), broadcast_appointment_event)
+backend/notifications/tests_realtime.py (NEW — 5 WebSocket tests)
+backend/appointments/views.py           (broadcast on create + status changes)
+backend/reports/views.py                (admin create 500 → 400 fix)
+backend/doctors/serializers.py          (profile_image + user names exposed)
+backend/doctors/views.py                (MyDoctorProfileView name updates, request context)
+frontend/src/realtime/socket.ts         (NEW — WS manager + useRealtimeEvent hook)
+frontend/src/components/guards.tsx      (homeForRole, RequirePatient)
+frontend/src/components/AppShell.tsx    (bell realtime, "My card" nav, sign-out → /signin)
+frontend/src/components/reviews.tsx     (ratingNumber / formatRating)
+frontend/src/App.tsx                    (/signin route, RequirePatient wraps, /doctor/personal)
+frontend/src/pages/auth.tsx             (role-safe post-login redirect)
+frontend/src/pages/index.tsx            (doctorCardImage, /doctors cards, patient-only HomeScreen)
+frontend/src/pages/doctor.tsx           (DoctorPersonalScreen, profile photo, rating fix)
+frontend/src/pages/doctor-dashboard.tsx (realtime reload)
+frontend/src/pages/admin-dashboard.tsx  (rating fix)
+frontend/src/pages/appointments.tsx     (realtime reload — list + detail)
+frontend/src/pages/notifications.tsx    (realtime reload)
+frontend/src/pages/profile.tsx          (sign-out → /signin)
+frontend/src/api/types.ts               (average_rating union, profile_image)
+frontend/src/api/doctors.ts             (updateMyDoctorProfile with names)
+frontend/src/styles/global.css          (doctor-card__photo, doctors__grid / filters)
+frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `.venv\Scripts\python.exe manage.py check` | exit 0, no issues |
+| Notifications + realtime suite | `manage.py test notifications` | 12/12 OK — 5 new WS tests: token rejection ×2, connect + group push, ping/pong, raw `user_<id>` group send |
+| Full backend suite | `manage.py test` | 47/48 — single failure is a pre-existing `accounts` welcome-email outbox test (fails on clean `main` too, unrelated to this session) |
+| Frontend typecheck | `npm run typecheck` | exit 0, no diagnostics |
+| Frontend build | `npm run build` | exit 0, success |
+| Frontend unit tests | `npm run test` | 36/36 pass |
+| Doctors module tests | `manage.py test doctors` | 3/3 OK |
+
+**Status:** Done — all six items completed and verified with the commands above. Realtime requires restarting `manage.py runserver` (Daphne replaces the WSGI dev server and serves `/ws/notifications/`); with the server up, two open browsers (patient `/appointments`, doctor `/doctor/dashboard`) see bookings and status changes instantly.
+
+**Next:** production channel layer (`channels_redis`) for multi-process deployments; move WS auth from query param to a header/subprotocol or short-lived ticket; investigate the pre-existing `accounts` test failure; desktop OAuth button testing on mobile.

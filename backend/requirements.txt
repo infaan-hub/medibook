@@ -7,3 +7,4 @@ Pillow==12.3.0
 python-dotenv==1.2.3
 PyJWT==2.10.1
 cryptography==50.0.1
+channels[daphne]==4.3.2

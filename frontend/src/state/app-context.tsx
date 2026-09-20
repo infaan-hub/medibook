@@ -25,6 +25,7 @@ import {
   socialLogin as socialLoginRequest,
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
+import { realtime } from "../realtime/socket";
 import type { RegisterPayload, User } from "../api/types";
 
 /* ---------------- Toasts ---------------- */
@@ -183,6 +184,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUserState(next);
     tokenStore.setUser(next);
   }, []);
+
+  // Realtime (PHASE 13): one live WebSocket per signed-in session; closed on
+  // sign-out so a logged-out tab stops receiving pushes immediately.
+  useEffect(() => {
+    realtime.setIdentity(status === "authed" ? user?.id ?? null : null);
+  }, [status, user]);
 
   const value = useMemo(
     () => ({ status, user, login, register, socialLogin, logout, setUser }),

@@ -1,131 +1,135 @@
 /**
- * PHASE 6 — Patient settings (§55): medical & emergency details.
- * Edits the extended /api/patients/profile/ record (backend slice B2).
- * Account fields (name/phone/email) and password live on the Profile screen.
+ * Patient medical detail — read-only view with edit toggle.
+ * /settings — patient can view and edit their medical information.
  */
 
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError } from "../api/client";
 import { getPatientProfile, updatePatientProfile } from "../api/patients";
 import type { Gender, PatientProfile } from "../api/types";
-import { Button, Card, ErrorState, Skeleton, TextField } from "../components/ui";
+import { ApiError } from "../api/client";
+import { Button, Card, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import {
+  User,
+  Droplet,
+  MapPin,
+  AlertTriangle,
+  FileText,
+  Calendar,
+  Heart,
+  Shield,
+  Edit3,
+  X,
+  Save,
+} from "lucide-react";
 
-const GENDERS: { value: Gender; label: string }[] = [
-  { value: "", label: "Prefer not to say" },
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "other", label: "Other" },
-];
+function formatGender(g: string): string {
+  if (!g) return "Not specified";
+  return g.charAt(0).toUpperCase() + g.slice(1);
+}
+
+function formatDateOfBirth(d: string | null): string {
+  if (!d) return "Not specified";
+  const dt = new Date(d + "T00:00:00");
+  const age = Math.floor((Date.now() - dt.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  return `${dt.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} (${age} yrs)`;
+}
 
 function fieldErrors(error: unknown): Record<string, string> {
   if (error instanceof ApiError) {
     return Object.fromEntries(
-      Object.entries(error.errors).map(([field, messages]) => [
-        field,
-        messages[0] ?? "Invalid value.",
-      ])
+      Object.entries(error.errors).map(([field, messages]) => [field, messages[0] ?? "Invalid value."])
     );
   }
   return {};
 }
 
-/** Select styled exactly like TextField (shares the .field classes). */
-function SelectField({
-  id,
-  label,
-  value,
-  options,
-  error,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: Gender;
-  options: { value: Gender; label: string }[];
-  error?: string;
-  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
-}) {
+/* ---------- Medical Detail Card (read-only) ---------- */
+
+function MedicalDetailCard({ profile }: { profile: PatientProfile }) {
   return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <select
-        id={id}
-        className={`field__input${error ? " field__input--error" : ""}`}
-        aria-invalid={error ? true : undefined}
-        value={value}
-        onChange={onChange}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <p className="field__error" id={`${id}-error`} role="alert">
-          {error}
-        </p>
+    <div className="med-detail">
+      <div className="med-detail__grid">
+        <div className="med-detail__item">
+          <div className="med-detail__icon"><Calendar size={16} /></div>
+          <div className="med-detail__content">
+            <span className="med-detail__label">Date of Birth</span>
+            <span className="med-detail__value">{formatDateOfBirth(profile.date_of_birth)}</span>
+          </div>
+        </div>
+        <div className="med-detail__item">
+          <div className="med-detail__icon"><User size={16} /></div>
+          <div className="med-detail__content">
+            <span className="med-detail__label">Gender</span>
+            <span className="med-detail__value">{formatGender(profile.gender)}</span>
+          </div>
+        </div>
+        <div className="med-detail__item">
+          <div className="med-detail__icon"><Droplet size={16} /></div>
+          <div className="med-detail__content">
+            <span className="med-detail__label">Blood Group</span>
+            <span className="med-detail__value">{profile.blood_group || "Not specified"}</span>
+          </div>
+        </div>
+        <div className="med-detail__item">
+          <div className="med-detail__icon"><MapPin size={16} /></div>
+          <div className="med-detail__content">
+            <span className="med-detail__label">City</span>
+            <span className="med-detail__value">{profile.city || "Not specified"}</span>
+          </div>
+        </div>
+      </div>
+
+      {profile.address && (
+        <div className="med-detail__section">
+          <div className="med-detail__section-icon"><MapPin size={16} /></div>
+          <div>
+            <span className="med-detail__section-label">Address</span>
+            <span className="med-detail__section-value">{profile.address}</span>
+          </div>
+        </div>
+      )}
+
+      {(profile.emergency_contact_name || profile.emergency_contact_phone) && (
+        <div className="med-detail__section">
+          <div className="med-detail__section-icon"><Shield size={16} /></div>
+          <div>
+            <span className="med-detail__section-label">Emergency Contact</span>
+            <span className="med-detail__section-value">
+              {profile.emergency_contact_name}
+              {profile.emergency_contact_phone && ` · ${profile.emergency_contact_phone}`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {profile.allergies && (
+        <div className="med-detail__section">
+          <div className="med-detail__section-icon"><AlertTriangle size={16} /></div>
+          <div>
+            <span className="med-detail__section-label">Allergies</span>
+            <span className="med-detail__section-value">{profile.allergies}</span>
+          </div>
+        </div>
+      )}
+
+      {profile.medical_history && (
+        <div className="med-detail__section">
+          <div className="med-detail__section-icon"><FileText size={16} /></div>
+          <div>
+            <span className="med-detail__section-label">Medical History</span>
+            <span className="med-detail__section-value">{profile.medical_history}</span>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-/** Textarea styled exactly like TextField (shares the .field classes). */
-function TextAreaField({
-  id,
-  label,
-  value,
-  rows = 3,
-  hint,
-  error,
-  placeholder,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  rows?: number;
-  hint?: string;
-  error?: string;
-  placeholder?: string;
-  onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
-}) {
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <textarea
-        id={id}
-        rows={rows}
-        placeholder={placeholder}
-        className={`field__input${error ? " field__input--error" : ""}`}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-        value={value}
-        onChange={onChange}
-      />
-      {hint && !error && (
-        <p className="field__hint" id={`${id}-hint`}>
-          {hint}
-        </p>
-      )}
-      {error && (
-        <p className="field__error" id={`${id}-error`} role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
+/* ---------- Medical Edit Form ---------- */
 
-/* ---------------- Settings screen (§55 — patient medical & emergency details) ---------------- */
-
-interface SettingsForm {
+interface MedForm {
   date_of_birth: string;
   gender: Gender;
   address: string;
@@ -137,45 +141,135 @@ interface SettingsForm {
   medical_history: string;
 }
 
-function toForm(profile: PatientProfile): SettingsForm {
+function profileToForm(p: PatientProfile): MedForm {
   return {
-    date_of_birth: profile.date_of_birth ?? "",
-    gender: profile.gender,
-    address: profile.address,
-    city: profile.city,
-    emergency_contact_name: profile.emergency_contact_name,
-    emergency_contact_phone: profile.emergency_contact_phone,
-    blood_group: profile.blood_group,
-    allergies: profile.allergies,
-    medical_history: profile.medical_history,
+    date_of_birth: p.date_of_birth ?? "",
+    gender: p.gender,
+    address: p.address,
+    city: p.city,
+    emergency_contact_name: p.emergency_contact_name,
+    emergency_contact_phone: p.emergency_contact_phone,
+    blood_group: p.blood_group,
+    allergies: p.allergies,
+    medical_history: p.medical_history,
   };
 }
 
+function MedicalEditForm({
+  form,
+  setForm,
+  onSave,
+  onCancel,
+  saving,
+  errors,
+}: {
+  form: MedForm;
+  setForm: (f: MedForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  errors: Record<string, string>;
+}) {
+  function update<K extends keyof MedForm>(key: K, value: MedForm[K]) {
+    setForm({ ...form, [key]: value });
+  }
+
+  return (
+    <div className="med-detail">
+      <div className="med-edit-form">
+        <div className="form__row">
+          <div className="field">
+            <label className="field__label" htmlFor="med-dob">Date of birth</label>
+            <input id="med-dob" className={`field__input${errors.date_of_birth ? " field__input--error" : ""}`} type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} />
+            {errors.date_of_birth && <p className="field__error">{errors.date_of_birth}</p>}
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="med-gender">Gender</label>
+            <select id="med-gender" className="field__input" value={form.gender} onChange={(e) => update("gender", e.target.value as Gender)}>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div className="form__row">
+          <div className="field">
+            <label className="field__label" htmlFor="med-blood">Blood group</label>
+            <input id="med-blood" className="field__input" placeholder="e.g. O+" value={form.blood_group} onChange={(e) => update("blood_group", e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="med-city">City</label>
+            <input id="med-city" className="field__input" placeholder="e.g. Colombo" value={form.city} onChange={(e) => update("city", e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor="med-address">Address</label>
+          <input id="med-address" className="field__input" value={form.address} onChange={(e) => update("address", e.target.value)} />
+        </div>
+        <div className="form__row">
+          <div className="field">
+            <label className="field__label" htmlFor="med-ec-name">Emergency contact name</label>
+            <input id="med-ec-name" className="field__input" value={form.emergency_contact_name} onChange={(e) => update("emergency_contact_name", e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="med-ec-phone">Emergency contact phone</label>
+            <input id="med-ec-phone" className="field__input" type="tel" placeholder="+94 …" value={form.emergency_contact_phone} onChange={(e) => update("emergency_contact_phone", e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor="med-allergies">Allergies</label>
+          <textarea id="med-allergies" className="field__input" rows={2} placeholder="One per line, or leave empty." value={form.allergies} onChange={(e) => update("allergies", e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor="med-history">Medical history</label>
+          <textarea id="med-history" className="field__input" rows={4} placeholder="Conditions, surgeries, medication — anything a doctor should know." value={form.medical_history} onChange={(e) => update("medical_history", e.target.value)} />
+        </div>
+        <div className="med-edit-actions">
+          <Button onClick={onSave} loading={saving}><Save size={14} /> Save</Button>
+          <Button variant="secondary" onClick={onCancel}><X size={14} /> Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main Settings Screen ---------- */
+
 export function SettingsScreen() {
   const { notify } = useToast();
-  const [form, setForm] = useState<SettingsForm | null>(null);
+  const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<MedForm | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(null);
-    setForm(null);
+    setProfile(null);
+    setEditing(false);
     getPatientProfile()
-      .then((envelope) => setForm(toForm(envelope.data)))
+      .then((envelope) => setProfile(envelope.data))
       .catch(() => setLoadError("Could not load your medical details."));
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  function update<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {
-    setForm((current) => (current === null ? current : { ...current, [key]: value }));
+  function handleEdit() {
+    if (!profile) return;
+    setForm(profileToForm(profile));
+    setErrors({});
+    setEditing(true);
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleCancel() {
+    setEditing(false);
+    setForm(null);
+    setErrors({});
+  }
+
+  async function handleSave() {
     if (!form) return;
     setSaving(true);
     setErrors({});
@@ -191,8 +285,10 @@ export function SettingsScreen() {
         allergies: form.allergies,
         medical_history: form.medical_history,
       });
-      setForm(toForm(envelope.data));
-      notify("success", "Medical details saved.");
+      setProfile(envelope.data);
+      setEditing(false);
+      setForm(null);
+      notify("success", "Medical details saved successfully.");
     } catch (error) {
       const fieldMap = fieldErrors(error);
       if (Object.keys(fieldMap).length > 0) {
@@ -207,109 +303,54 @@ export function SettingsScreen() {
 
   if (loadError) {
     return (
-      <div className="page">
-        <h1 className="page__title">Medical details</h1>
+      <div className="page med-page">
+        <h1 className="page__title">Medical Details</h1>
         <ErrorState message={loadError} onRetry={load} />
       </div>
     );
   }
 
-  return (
-    <div className="page">
-      <h1 className="page__title">Medical details</h1>
-      <p className="page__subtitle">
-        Shared with doctors during your visits. Name, phone and password live in{" "}
-        <Link to="/profile">Profile</Link>.
-      </p>
+  if (!profile) return <div className="page med-page"><h1 className="page__title">Medical Details</h1><Skeleton lines={6} /></div>;
 
-      <Card>
-        {form === null ? (
-          <Skeleton lines={6} />
-        ) : (
-          <form className="form" onSubmit={onSubmit} noValidate>
-            <div className="form__row">
-              <TextField
-                id="settings-dob"
-                label="Date of birth"
-                type="date"
-                value={form.date_of_birth}
-                error={errors.date_of_birth}
-                onChange={(event) => update("date_of_birth", event.target.value)}
-              />
-              <SelectField
-                id="settings-gender"
-                label="Gender"
-                value={form.gender}
-                options={GENDERS}
-                error={errors.gender}
-                onChange={(event) => update("gender", event.target.value as Gender)}
-              />
+  return (
+    <div className="page med-page">
+      <div className="med-page__header">
+        <div>
+          <h1 className="page__title">Medical Details</h1>
+          <p className="page__subtitle">
+            Your health profile shared with your doctors during visits. Account info lives in{" "}
+            <Link to="/profile">Profile</Link>.
+          </p>
+        </div>
+      </div>
+
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><Heart size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Medical Information</h2>
+              <p className="med-detail__subtitle">Your health profile shared with your doctors</p>
             </div>
-            <div className="form__row">
-              <TextField
-                id="settings-blood"
-                label="Blood group"
-                placeholder="e.g. O+"
-                value={form.blood_group}
-                error={errors.blood_group}
-                onChange={(event) => update("blood_group", event.target.value)}
-              />
-              <TextField
-                id="settings-city"
-                label="City"
-                placeholder="e.g. Colombo"
-                value={form.city}
-                error={errors.city}
-                onChange={(event) => update("city", event.target.value)}
-              />
-            </div>
-            <TextField
-              id="settings-address"
-              label="Address"
-              value={form.address}
-              error={errors.address}
-              onChange={(event) => update("address", event.target.value)}
-            />
-            <div className="form__row">
-              <TextField
-                id="settings-ec-name"
-                label="Emergency contact name"
-                value={form.emergency_contact_name}
-                error={errors.emergency_contact_name}
-                onChange={(event) => update("emergency_contact_name", event.target.value)}
-              />
-              <TextField
-                id="settings-ec-phone"
-                label="Emergency contact phone"
-                type="tel"
-                placeholder="+94 …"
-                value={form.emergency_contact_phone}
-                error={errors.emergency_contact_phone}
-                onChange={(event) => update("emergency_contact_phone", event.target.value)}
-              />
-            </div>
-            <TextAreaField
-              id="settings-allergies"
-              label="Allergies"
-              rows={2}
-              hint="One per line, or leave empty."
-              value={form.allergies}
-              error={errors.allergies}
-              onChange={(event) => update("allergies", event.target.value)}
-            />
-            <TextAreaField
-              id="settings-history"
-              label="Medical history"
-              rows={4}
-              hint="Conditions, surgeries, medication — anything a doctor should know."
-              value={form.medical_history}
-              error={errors.medical_history}
-              onChange={(event) => update("medical_history", event.target.value)}
-            />
-            <Button type="submit" loading={saving}>
-              Save changes
+          </div>
+          {!editing && (
+            <Button variant="secondary" onClick={handleEdit}>
+              <Edit3 size={14} /> Edit
             </Button>
-          </form>
+          )}
+        </div>
+
+        {editing && form ? (
+          <MedicalEditForm
+            form={form}
+            setForm={setForm}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            saving={saving}
+            errors={errors}
+          />
+        ) : (
+          <MedicalDetailCard profile={profile} />
         )}
       </Card>
     </div>

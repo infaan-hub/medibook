@@ -12,6 +12,7 @@ import {
 import type { Notification, NotificationType } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { useRealtimeEvent } from "../realtime/socket";
 import {
   Bell,
   CalendarCheck,
@@ -119,6 +120,11 @@ export function NotificationsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Live inbox: new notifications appear without a manual refresh.
+  useRealtimeEvent((event) => {
+    if (event === "notification.created") load();
+  });
+
   async function handleRead(id: number) {
     try {
       await markNotificationRead(id);
@@ -177,7 +183,7 @@ export function NotificationsScreen() {
           }
         />
       ) : (
-        <Card className="notif-list">
+        <Card className="card--fit notif-list">
           {notifications.map((n) => (
             <NotificationRow
               key={n.id}

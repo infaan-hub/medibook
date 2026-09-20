@@ -10,7 +10,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { RequireAuth, RequireGuest, RequireRole } from "./components/guards";
+import { RequireAuth, RequireGuest, RequirePatient, RequireRole, homeForRole } from "./components/guards";
 import { SplashScreen } from "./components/Splash";
 import { Spinner } from "./components/ui";
 import { ToastViewport } from "./components/ToastViewport";
@@ -29,6 +29,7 @@ import {
   NotFoundPage,
 } from "./pages";
 import { SessionProvider, ToastProvider, useSession } from "./state/app-context";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
 
@@ -41,7 +42,9 @@ const AppointmentsListScreen = lazy(() => import("./pages").then((m) => ({ defau
 const AppointmentDetailScreen = lazy(() => import("./pages").then((m) => ({ default: m.AppointmentDetailScreen })));
 const DoctorDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorDashboardScreen })));
 const DoctorAppointmentsScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorAppointmentsScreen })));
+const DoctorMedicalTreatmentScreen = lazy(() => import("./pages/doctor-medical-treatment").then((m) => ({ default: m.DoctorMedicalTreatmentScreen })));
 const DoctorAvailabilityScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorAvailabilityScreen })));
+const DoctorPersonalScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorPersonalScreen })));
 const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default: m.NotificationsScreen })));
 const AdminDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminUsersScreen })));
@@ -49,6 +52,7 @@ const AdminDoctorsScreen = lazy(() => import("./pages").then((m) => ({ default: 
 const AdminCreateUserScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminCreateUserScreen })));
 const AdminCreateDoctorScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminCreateDoctorScreen })));
 const AdminAuditScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminAuditScreen })));
+const AdminAppointmentsScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminAppointmentsScreen })));
 const SpecialtyListPage = lazy(() => import("./pages").then((m) => ({ default: m.SpecialtyListPage })));
 const SpecialtyDetailPage = lazy(() => import("./pages").then((m) => ({ default: m.SpecialtyDetailPage })));
 const HospitalListPage = lazy(() => import("./pages").then((m) => ({ default: m.HospitalListPage })));
@@ -72,16 +76,11 @@ function LaunchRoute() {
   if (status === "booting") return null;
 
   if (status === "guest") {
-    return <Navigate to={localStorage.getItem("medibook_onboarding_completed") ? "/welcome" : "/onboarding"} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (!user) return null;
-  const dashboard = user.role === "doctor"
-    ? "/doctor/dashboard"
-    : user.role === "admin" && user.is_superuser
-      ? "/admin"
-      : "/dashboard";
-  return <Navigate to={dashboard} replace />;
+  return <Navigate to={homeForRole(user)} replace />;
 }
 
 /** Keep the splash visible until both its minimum duration and session restore finish. */
@@ -99,6 +98,7 @@ export default function App() {
   }, []);
 
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <SessionProvider>
         <ToastProvider>
@@ -111,6 +111,15 @@ export default function App() {
               <Route path="/welcome" element={<WelcomeScreen />} />
               <Route
                 path="/login"
+                element={
+                  <RequireGuest>
+                    <LoginScreen />
+                  </RequireGuest>
+                }
+              />
+              {/* /signin is the canonical sign-out landing: always guest-only. */}
+              <Route
+                path="/signin"
                 element={
                   <RequireGuest>
                     <LoginScreen />
@@ -151,25 +160,27 @@ export default function App() {
                   </RequireAuth>
                 }
               >
-                <Route path="/dashboard" element={<HomeScreen />} />
-                <Route path="/doctors" element={<DoctorsPage />} />
-                <Route path="/doctors/:id" element={<DoctorProfileScreen />} />
-                <Route path="/booking/:id" element={<BookingScreen />} />
-                <Route path="/booking/success" element={<BookingSuccessScreen />} />
-                <Route path="/appointments" element={<AppointmentsListScreen />} />
+                <Route path="/dashboard" element={<RequirePatient><HomeScreen /></RequirePatient>} />
+                <Route path="/doctors" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
+                <Route path="/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
+                <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
+                <Route path="/booking/success" element={<RequirePatient><BookingSuccessScreen /></RequirePatient>} />
+                <Route path="/appointments" element={<RequirePatient><AppointmentsListScreen /></RequirePatient>} />
                 <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
-                <Route path="/appointments/:id/reschedule" element={<RescheduleScreen />} />
+                <Route path="/appointments/:id/reschedule" element={<RequirePatient><RescheduleScreen /></RequirePatient>} />
                 <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
+                <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
+                <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
                 <Route path="/profile" element={<ProfileScreen />} />
                 <Route
                   path="/settings"
                   element={
-                    <RequireRole role="patient">
+                    <RequirePatient>
                       <SettingsScreen />
-                    </RequireRole>
+                    </RequirePatient>
                   }
                 />
                 <Route path="/admin" element={<RequireRole role="admin"><AdminDashboardScreen /></RequireRole>} />
@@ -178,6 +189,7 @@ export default function App() {
                 <Route path="/admin/users/new" element={<RequireRole role="admin"><AdminCreateUserScreen /></RequireRole>} />
                 <Route path="/admin/doctors/new" element={<RequireRole role="admin"><AdminCreateDoctorScreen /></RequireRole>} />
                 <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAuditScreen /></RequireRole>} />
+                <Route path="/admin/appointments" element={<RequireRole role="admin"><AdminAppointmentsScreen /></RequireRole>} />
                 <Route path="/specialties" element={<SpecialtyListPage />} />
                 <Route path="/specialties/:id" element={<SpecialtyDetailPage />} />
                 <Route path="/hospitals" element={<HospitalListPage />} />
@@ -190,5 +202,6 @@ export default function App() {
         </ToastProvider>
       </SessionProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

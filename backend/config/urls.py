@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/", include("hospitals.urls")),
     path("api/", include("patients.urls")),
     path("api/", include("doctors.urls")),
+    path("api/", include("treatments.urls")),
     # Reviews before appointments: /api/appointments/{id}/review/ must not be
     # captured by the appointments action route (<str:action> pattern).
     path("api/", include("reviews.urls")),

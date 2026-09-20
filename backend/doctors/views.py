@@ -152,6 +152,60 @@ class DoctorAvailabilityView(APIView):
         )
 
 
+class DoctorAvailableDaysView(APIView):
+    """GET /api/doctors/{id}/available-days/?year=YYYY&month=MM
+    Returns which days in a month the doctor has available slots."""
+
+    permission_classes = (AllowAny,)
+
+    def get(self, request, pk: int):
+        import calendar
+
+        try:
+            doctor = Doctor.objects.get(pk=pk)
+        except Doctor.DoesNotExist:
+            return error_response(
+                message="The requested resource was not found.",
+                status_code=http_status.HTTP_404_NOT_FOUND,
+            )
+        today = date.today()
+        try:
+            year = int(request.query_params.get("year", today.year))
+            month = int(request.query_params.get("month", today.month))
+        except (TypeError, ValueError):
+            year, month = today.year, today.month
+
+        active_weekdays = set(
+            Availability.objects.filter(
+                doctor=doctor, is_active=True
+            ).values_list("weekday", flat=True)
+        )
+
+        _, days_in_month = calendar.monthrange(year, month)
+        available_days = []
+        for day in range(1, days_in_month + 1):
+            d = date(year, month, day)
+            if d < today:
+                continue
+            if d.weekday() not in active_weekdays:
+                continue
+            if ScheduleException.objects.filter(
+                doctor=doctor, date=d, start_time__isnull=True
+            ).exists():
+                continue
+            if available_slots(doctor, d):
+                available_days.append(d.isoformat())
+
+        return success_response(
+            data={
+                "doctor": doctor.pk,
+                "year": year,
+                "month": month,
+                "available_days": available_days,
+            }
+        )
+
+
 class DoctorScheduleView(APIView):
     """GET/POST /api/doctors/me/schedule/ — owner availability windows."""
 
@@ -203,16 +257,26 @@ class MyDoctorProfileView(APIView):
         return Doctor.objects.get_or_create(user=request.user)[0]
 
     def get(self, request):
-        return success_response(data=DoctorSerializer(self._doctor(request)).data)
+        return success_response(data=DoctorSerializer(self._doctor(request), context={"request": request}).data)
 
     def patch(self, request):
-        serializer = DoctorWriteSerializer(
-            self._doctor(request), data=request.data, partial=True
-        )
+        doctor = self._doctor(request)
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        # Display name lives on the linked User; professional fields on Doctor.
+        first_name = data.pop("first_name", None)
+        last_name = data.pop("last_name", None)
+        if first_name is not None or last_name is not None:
+            user = doctor.user
+            if first_name is not None:
+                user.first_name = str(first_name).strip()
+            if last_name is not None:
+                user.last_name = str(last_name).strip()
+            user.save(update_fields=["first_name", "last_name", "updated_at"])
+        serializer = DoctorWriteSerializer(doctor, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return success_response(
-            data=DoctorSerializer(serializer.instance).data,
+            data=DoctorSerializer(serializer.instance, context={"request": request}).data,
             message="Doctor profile updated.",
         )
 

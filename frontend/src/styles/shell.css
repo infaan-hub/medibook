@@ -125,7 +125,7 @@
 .shell__nav--side {
   display: none;
   flex-shrink: 0;
-  background: var(--color-secondary);
+  background: #09A99E;
   border-right: 0;
   border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
   color: var(--color-text-inverse);
@@ -287,7 +287,7 @@
     transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
     padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px);
     box-shadow: none;
-    background: #0c232e;
+    background: #09A99E;
     border-right: 0;
     border-radius: 0 16px 16px 0;
   }
@@ -331,13 +331,13 @@
 
   /* Divider */
   .shell__nav--side .sidebar__divider {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.15);
     margin: var(--space-1) var(--space-5);
   }
 
   /* Nav items — modern mobile drawer style */
   .shell__nav--side .nav-item--side {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.8);
     min-height: 52px;
     gap: var(--space-3);
     margin: 2px var(--space-3);
@@ -350,12 +350,12 @@
   }
   .shell__nav--side .nav-item--side:hover {
     color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.15);
   }
   .shell__nav--side .nav-item--side.nav-item--active,
   .shell__nav--side .nav-item--side.nav-item--active:hover {
-    color: #0c232e;
-    background: #bceee7;
+    color: #09A99E;
+    background: #fff;
     font-weight: var(--weight-semibold);
   }
   .shell__nav--side .nav-item--side.nav-item--active::before {
@@ -366,7 +366,7 @@
     bottom: 8px;
     width: 3px;
     border-radius: 0 3px 3px 0;
-    background: #08a79d;
+    background: #fff;
   }
   .shell__nav--side .nav-item--side .nav-item__icon {
     width: 24px;
@@ -459,7 +459,7 @@
     transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
     padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px);
     box-shadow: none;
-    background: #0c232e;
+    background: #09A99E;
     border-right: 0;
     border-radius: 0 16px 16px 0;
   }
@@ -473,11 +473,11 @@
   .shell__nav--side .sidebar__title { color: #fff; }
   .shell__nav--side .sidebar__close { color: rgb(255 255 255 / 0.5); }
   .shell__nav--side .sidebar__close:hover { background: rgb(255 255 255 / 0.1); color: #fff; }
-  .shell__nav--side .sidebar__divider { background: rgba(255,255,255,.08); }
-  .shell__nav--side .nav-item--side { color: rgba(255,255,255,.7); }
-  .shell__nav--side .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .shell__nav--side .sidebar__divider { background: rgba(255,255,255,.15); }
+  .shell__nav--side .nav-item--side { color: rgba(255,255,255,.8); }
+  .shell__nav--side .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.15); }
   .shell__nav--side .nav-item--side.nav-item--active,
-  .shell__nav--side .nav-item--side.nav-item--active:hover { color: #0c232e; background: #bceee7; font-weight: var(--weight-semibold); }
+  .shell__nav--side .nav-item--side.nav-item--active:hover { color: #09A99E; background: #fff; font-weight: var(--weight-semibold); }
   .shell__nav--side .nav-item--side.nav-item--active::before {
     content: "";
     position: absolute;
@@ -486,15 +486,15 @@
     bottom: 8px;
     width: 3px;
     border-radius: 0 3px 3px 0;
-    background: #08a79d;
+    background: #fff;
   }
-  .shell__nav--side .sidebar__user { color: #fff; background: rgba(255,255,255,.08); }
-  .shell__nav--side .sidebar__user:hover { background: rgba(255,255,255,.14); }
+  .shell__nav--side .sidebar__user { color: #fff; background: rgba(255,255,255,.12); }
+  .shell__nav--side .sidebar__user:hover { background: rgba(255,255,255,.2); }
   .shell__nav--side .sidebar__user-name { color: #fff; }
-  .shell__nav--side .sidebar__user-role { color: rgba(255,255,255,.5); }
-  .shell__nav--side .sidebar__user-chevron { color: rgba(255,255,255,.3); }
-  .shell__nav--side .sidebar__signout { color: rgba(255,255,255,.6); }
-  .shell__nav--side .sidebar__signout:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .shell__nav--side .sidebar__user-role { color: rgba(255,255,255,.6); }
+  .shell__nav--side .sidebar__user-chevron { color: rgba(255,255,255,.4); }
+  .shell__nav--side .sidebar__signout { color: rgba(255,255,255,.7); }
+  .shell__nav--side .sidebar__signout:hover { color: #fff; background: rgba(255,255,255,.15); }
   .shell__nav--side .nav-item--side .nav-item__chevron { display: none; }
 }
 
@@ -835,20 +835,20 @@
 @media (min-width: 1200px) {
   .shell--admin .shell__body { max-width: none; }
   .shell--admin .shell__content { padding: var(--space-8) clamp(2rem, 4vw, 5rem); background: #f7f9fc; }
-  .shell--admin .shell__nav--side { width: 248px; min-width: 248px; background: #102c3c; border: 0; }
+  .shell--admin .shell__nav--side { width: 248px; min-width: 248px; background: #09A99E; border: 0; }
   .shell--admin .shell__nav--side--open { width: 248px; min-width: 248px; }
   .shell--admin .shell__nav--side:not(.shell__nav--side--open) { width: 64px; min-width: 64px; }
   .shell--admin .sidebar__title { color: #fff; }
-  .shell--admin .sidebar__divider { background: rgba(255,255,255,.12); }
-  .shell--admin .nav-item--side { color: rgba(255,255,255,.66); margin: 2px 12px; padding: 12px 14px; border-radius: 10px; }
-  .shell--admin .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.08); }
-  .shell--admin .nav-item--side.nav-item--active { color: #102c3c; background: #bceee7; }
+  .shell--admin .sidebar__divider { background: rgba(255,255,255,.15); }
+  .shell--admin .nav-item--side { color: rgba(255,255,255,.8); margin: 2px 12px; padding: 12px 14px; border-radius: 10px; }
+  .shell--admin .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.15); }
+  .shell--admin .nav-item--side.nav-item--active { color: #09A99E; background: #fff; }
   .shell--admin .nav-item--side.nav-item--active::before { display: none; }
-  .shell--admin .nav-item--side.nav-item--active .nav-item__chevron { color: #102c3c; }
-  .shell--admin .sidebar__user { color: #fff; background: rgba(255,255,255,.08); }
-  .shell--admin .sidebar__user:hover { background: rgba(255,255,255,.14); }
+  .shell--admin .nav-item--side.nav-item--active .nav-item__chevron { color: #09A99E; }
+  .shell--admin .sidebar__user { color: #fff; background: rgba(255,255,255,.12); }
+  .shell--admin .sidebar__user:hover { background: rgba(255,255,255,.2); }
   .shell--admin .sidebar__user-name { color: #fff; }
   .shell--admin .sidebar__user-role { color: rgba(255,255,255,.6); }
-  .shell--admin .sidebar__signout { color: rgba(255,255,255,.66); }
-  .shell--admin .sidebar__signout:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .shell--admin .sidebar__signout { color: rgba(255,255,255,.7); }
+  .shell--admin .sidebar__signout:hover { color: #fff; background: rgba(255,255,255,.15); }
 }

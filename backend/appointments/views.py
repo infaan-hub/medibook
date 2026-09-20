@@ -18,7 +18,7 @@ from common.pagination import StandardResultsSetPagination
 from common.responses import error_response, success_response
 from doctors.models import Doctor
 from doctors.scheduling import available_slots
-from notifications.helpers import notify
+from notifications.helpers import broadcast_appointment_event, notify
 from notifications.models import NotificationType
 
 
@@ -134,11 +134,124 @@ class AppointmentViewSet(ModelViewSet):
             f"New appointment request from {request.user.email}.",
             appointment=appointment,
         )
+        # Realtime: the doctor's open browser refreshes without a reload.
+        broadcast_appointment_event(
+            appointment,
+            "appointment.created",
+            recipient_ids=(appointment.patient_id, appointment.doctor.user_id),
+        )
         return success_response(
             data=AppointmentSerializer(appointment).data,
             message="Appointment requested.",
             status_code=http_status.HTTP_201_CREATED,
         )
+
+    def partial_update(self, request, *args, **kwargs):
+        """PATCH — notes/reason for the appointment's parties; in-place
+        reschedule (date/time) restricted to the owning doctor or an admin,
+        validated against open slots and double-bookings (§27)."""
+        appointment = self.get_object()
+        payload = request.data
+
+        if "status" in payload:
+            return error_response(
+                message="Status changes must use the confirm/cancel/complete/reject endpoints.",
+                errors={"status": ["Use the status action endpoints instead of PATCH."]},
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        time_fields = ("appointment_date", "start_time", "end_time")
+        changing_time = any(field in payload for field in time_fields)
+
+        serializer = self.get_serializer(appointment, data=payload, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        role = getattr(request.user, "role", None)
+        is_admin = role == "admin" or request.user.is_superuser
+        is_owner_doctor = (
+            role == "doctor"
+            and getattr(request.user, "doctor", None) is not None
+            and appointment.doctor_id == request.user.doctor.pk
+        )
+
+        before = (appointment.appointment_date, appointment.start_time, appointment.end_time)
+        if changing_time:
+            if not (is_owner_doctor or is_admin):
+                return error_response(
+                    message="Only the doctor who owns this appointment can reschedule it.",
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                )
+            new_date = serializer.validated_data.get(
+                "appointment_date", appointment.appointment_date
+            )
+            new_start = serializer.validated_data.get("start_time", appointment.start_time)
+            new_end = serializer.validated_data.get("end_time", appointment.end_time)
+            if new_date < timezone.localdate():
+                return error_response(
+                    message="The new appointment date must be today or later.",
+                    errors={"appointment_date": ["Choose a future date."]},
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                )
+            booked = Appointment.objects.filter(
+                doctor=appointment.doctor,
+                appointment_date=new_date,
+                start_time=new_start,
+            ).exclude(status__in=("cancelled", "rejected")).exclude(pk=appointment.pk)
+            if booked.exists():
+                return error_response(
+                    message="That time slot is already booked. Choose another.",
+                    errors={"start_time": ["This slot was just booked."]},
+                    status_code=http_status.HTTP_409_CONFLICT,
+                )
+            if (new_start, new_end) not in available_slots(appointment.doctor, new_date):
+                return error_response(
+                    message="The new appointment time is not an open slot.",
+                    errors={"start_time": ["Choose an available appointment slot."]},
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                )
+
+        appointment = serializer.save()
+        after = (appointment.appointment_date, appointment.start_time, appointment.end_time)
+        time_changed = changing_time and after != before
+
+        if time_changed:
+            doctor_user = appointment.doctor.user
+            doctor_name = (
+                f"Dr. {doctor_user.first_name} {doctor_user.last_name}".strip()
+                or f"Dr. {doctor_user.username}"
+            )
+            notify(
+                appointment.patient,
+                NotificationType.APPOINTMENT_REMINDER,
+                f"Appointment rescheduled to {appointment.appointment_date} at "
+                f"{appointment.start_time.strftime('%H:%M')}\u2013"
+                f"{appointment.end_time.strftime('%H:%M')} by {doctor_name}.",
+                appointment=appointment,
+            )
+        # Realtime: both parties' open browsers refresh without a reload.
+        broadcast_appointment_event(
+            appointment,
+            "appointment.updated",
+            recipient_ids=(appointment.patient_id, appointment.doctor.user_id),
+        )
+        return success_response(
+            data=AppointmentSerializer(appointment).data,
+            message="Appointment rescheduled." if time_changed else "Appointment updated.",
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        appointment = self.get_object()
+        patient_id = appointment.patient_id
+        doctor_user_id = appointment.doctor.user_id
+        appointment_id = appointment.pk
+        appointment.delete()
+        from notifications.helpers import _push
+        _push(
+            "appointment.deleted",
+            {"id": appointment_id},
+            (patient_id, doctor_user_id),
+        )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
 class AppointmentActionView(APIView):
@@ -217,6 +330,12 @@ class AppointmentActionView(APIView):
             self._NOTIFY[target_status],
             f"Appointment {target_status}: {appointment.appointment_date} {appointment.start_time}.",
             appointment=appointment,
+        )
+        # Realtime: both parties' open browsers refresh without a reload.
+        broadcast_appointment_event(
+            appointment,
+            "appointment.updated",
+            recipient_ids=(appointment.patient_id, appointment.doctor.user_id),
         )
         return success_response(
             data=AppointmentSerializer(appointment).data,

@@ -39,6 +39,30 @@ function errorMessage(error: unknown): string {
     : "Something went wrong. Please try again.";
 }
 
+/** Redirects the login screen may honour — same-app role-neutral pages only. */
+function isSafeRedirect(target: string): boolean {
+  if (!target.startsWith("/") || target.startsWith("//")) return false;
+  if (target.startsWith("/admin") || target.startsWith("/doctor/")) return false;
+  if (target.startsWith("/login") || target.startsWith("/signin")) return false;
+  if (target.startsWith("/register") || target.startsWith("/onboarding")) return false;
+  return true;
+}
+
+/** Dashboard for the just-authenticated user (read from storage synchronously). */
+function freshHomeForRole(): string {
+  try {
+    const raw = localStorage.getItem("mb.auth.user");
+    if (raw) {
+      const stored = JSON.parse(raw) as { role?: string; is_superuser?: boolean };
+      if (stored.role === "doctor") return "/doctor/dashboard";
+      if (stored.role === "admin" && stored.is_superuser) return "/admin";
+    }
+  } catch {
+    /* fall through to patient dashboard */
+  }
+  return "/dashboard";
+}
+
 /** Single-column centered layout shared by every auth screen. */
 function AuthLayout({
   title,
@@ -390,7 +414,10 @@ export function LoginScreen() {
     try {
       await login(username.trim(), password);
       notify("success", "Welcome back to MediBook.");
-      navigate(from ?? "/", { replace: true });
+      // Fresh login: go to the saved page ONLY if it belongs to this role.
+      // Otherwise land on your own dashboard — never another role's page.
+      const target = from && isSafeRedirect(from) ? from : freshHomeForRole();
+      navigate(target, { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);
       setFormErrors(fields);

@@ -4,7 +4,7 @@
  * ProfileScreen — account details, edit name/phone, change password, sign out.
  */
 
-import { useState, useRef, type FormEvent } from "react";
+import { useCallback, useState, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { changePassword, updateMe, uploadProfileImage, removeProfileImage } from "../api/auth";
 import { ApiError } from "../api/client";
@@ -96,11 +96,13 @@ export function ProfileScreen() {
     }
   }
 
-  async function onLogout() {
+  const onLogout = useCallback(async () => {
     await logout();
     notify("info", "Signed out.");
-    navigate("/login", { replace: true });
-  }
+    // Every role lands on the guest-only sign-in screen. RequireGuest +
+    // cleared tokens make cross-role revisits bounce back to /signin.
+    navigate("/signin", { replace: true });
+  }, [logout, notify, navigate]);
 
   function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

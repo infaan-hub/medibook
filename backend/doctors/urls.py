@@ -8,6 +8,7 @@ from doctors.views import (
     AvailabilityBreakDetailView,
     AvailabilityBreakListView,
     DoctorAvailabilityView,
+    DoctorAvailableDaysView,
     DoctorScheduleDetailView,
     DoctorScheduleView,
     MyDoctorProfileView,
@@ -27,6 +28,11 @@ urlpatterns = [
         "doctors/<int:pk>/availability/",
         DoctorAvailabilityView.as_view(),
         name="doctor-availability",
+    ),
+    path(
+        "doctors/<int:pk>/available-days/",
+        DoctorAvailableDaysView.as_view(),
+        name="doctor-available-days",
     ),
     path(
         "doctors/me/schedule/",

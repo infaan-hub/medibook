@@ -11,9 +11,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
-import { useSession } from "../state/app-context";
+import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
+import { useRealtimeEvent } from "../realtime/socket";
 import { isStandalone } from "../pwa/installPrompt";
 import {
   Home,
@@ -25,7 +26,6 @@ import {
   Bell,
   Menu,
   ChevronRight,
-  Shield,
   Activity,
   FilePlus2,
   Users as UsersIcon,
@@ -52,27 +52,56 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
+      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
   }
-  const items: NavItem[] = [
+  if (user?.role === "doctor") {
+    return [
+      { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
+      { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
+      { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    ];
+  }
+  return [
     { to: "/", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+    { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
+    { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+    { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
   ];
-  if (user?.role === "patient") {
-    items.push({ to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> });
+}
+
+/** Bottom nav: exactly 5 items per role (mobile only). */
+function bottomNavItemsFor(user: User | null): NavItem[] {
+  if (user?.role === "admin" && user.is_superuser) {
+    return [
+      { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/admin/users", label: "Users", icon: <UsersIcon size={20} /> },
+      { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+      { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
+      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    ];
   }
   if (user?.role === "doctor") {
-    items.push({ to: "/appointments", label: "Schedule", icon: <Calendar size={20} /> });
-    items.push({ to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> });
+    return [
+      { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
+      { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    ];
   }
-  if (user?.role === "admin" && user.is_superuser) {
-    items.push({ to: "/admin", label: "Admin", icon: <Shield size={20} /> });
-  }
-  if (user?.role === "patient") {
-    items.push({ to: "/settings", label: "Settings", icon: <HeartPulse size={20} /> });
-  }
-  items.push({ to: "/profile", label: "Profile", icon: <UserIcon size={20} /> });
-  return items;
+  return [
+    { to: "/", label: "Home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+    { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+    { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+  ];
 }
 
 function initials(user: User): string {
@@ -96,21 +125,37 @@ function useIsDesktop(): boolean {
   return isDesktop;
 }
 
-/** Notification bell with unread count badge. */
+/** Notification bell with unread count badge (live via WebSocket + poll fallback). */
 function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
+  const { notify } = useToast();
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     listUnreadNotifications()
       .then((r) => setUnreadCount(r.data.count))
       .catch(() => {});
-    const interval = setInterval(() => {
-      listUnreadNotifications()
-        .then((r) => setUnreadCount(r.data.count))
-        .catch(() => {});
-    }, 30_000);
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    refresh();
+    // Polling stays as a safety net while the realtime socket reconnects.
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  // Live updates: badge + toast the moment the server pushes an event.
+  useRealtimeEvent((event, payload) => {
+    if (event === "notification.created") {
+      setUnreadCount((count) => count + 1);
+      notify(
+        "info",
+        typeof payload.message === "string" ? payload.message : "New notification"
+      );
+      refresh();
+    } else if (event === "appointment.created" || event === "appointment.updated") {
+      refresh();
+    }
+  });
 
   return (
     <Link to="/notifications" className="notif-bell" title="Notifications">
@@ -282,6 +327,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { user, logout } = useSession();
   const items = navItemsFor(user);
+  const bottomItems = bottomNavItemsFor(user);
   const isDesktop = useIsDesktop();
   const location = useLocation();
   const navigate = useNavigate();
@@ -411,7 +457,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => {
               closeSidebar();
               logout().then(() => {
-                navigate("/login", { replace: true });
+                // Every role lands on the guest-only sign-in screen.
+                navigate("/signin", { replace: true });
               });
             }}
           >
@@ -431,7 +478,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="shell__nav--bottom" aria-label="Primary">
-        <NavLinks items={items} user={user} />
+        <NavLinks items={bottomItems} user={user} />
       </nav>
 
       <InstallPrompt />

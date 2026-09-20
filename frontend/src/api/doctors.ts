@@ -15,6 +15,7 @@ import type {
   Paginated,
   DoctorProfile,
   DoctorAvailability,
+  DoctorAvailableDays,
   AvailabilityBreak,
   ScheduleException,
   ScheduleItem,
@@ -53,6 +54,15 @@ export function getDoctorAvailability(
   return apiGet<DoctorAvailability>(`/doctors/${id}/availability/`, params);
 }
 
+/** GET /api/doctors/:id/available-days/?year=YYYY&month=MM — days with slots in a month. */
+export function getDoctorAvailableDays(
+  id: number,
+  year: number,
+  month: number
+): Promise<Envelope<DoctorAvailableDays>> {
+  return apiGet<DoctorAvailableDays>(`/doctors/${id}/available-days/`, { year, month });
+}
+
 /** GET /api/doctors/me/schedule/ — the signed-in doctor's schedule windows. */
 export function getMySchedule(): Promise<Envelope<ScheduleItem[]>> {
   return apiGet<ScheduleItem[]>("/doctors/me/schedule/");
@@ -68,7 +78,20 @@ export function getMyDoctorProfile(): Promise<Envelope<DoctorProfile>> {
 }
 
 export function updateMyDoctorProfile(
-  payload: Partial<Pick<DoctorProfile, "specialties" | "hospitals" | "qualifications" | "experience_years" | "consultation_fee" | "bio" | "is_available">>
+  payload: Partial<
+    Pick<
+      DoctorProfile,
+      | "first_name"
+      | "last_name"
+      | "specialties"
+      | "hospitals"
+      | "qualifications"
+      | "experience_years"
+      | "consultation_fee"
+      | "bio"
+      | "is_available"
+    >
+  >
 ): Promise<Envelope<DoctorProfile>> {
   return apiPatch<DoctorProfile>("/doctors/me/profile/", payload);
 }

@@ -3,7 +3,7 @@
  * Booking, list, detail, and lifecycle actions (confirm/cancel/complete/reject).
  */
 
-import { apiGet, apiPatch, apiPost } from "./client";
+import { apiGet, apiPatch, apiPost, apiDelete } from "./client";
 import type { Appointment, Envelope, Paginated } from "./types";
 
 /** GET /api/appointments/ — the signed-in user's appointments (paginated). */
@@ -63,9 +63,22 @@ export function updateAppointment(
   return apiPatch<Appointment>(`/appointments/${id}/`, payload);
 }
 
+/** PATCH /api/appointments/:id/ — doctor/admin in-place reschedule. */
+export function rescheduleAppointment(
+  id: number,
+  payload: { appointment_date: string; start_time: string; end_time: string }
+): Promise<Envelope<Appointment>> {
+  return apiPatch<Appointment>(`/appointments/${id}/`, payload);
+}
+
 /** GET /api/doctor/appointments/ — doctor's own appointments (non-paginated). */
 export function listDoctorAppointments(
   params?: Record<string, unknown>
 ): Promise<Envelope<Appointment[]>> {
   return apiGet<Appointment[]>("/doctor/appointments/", params);
+}
+
+/** DELETE /api/appointments/:id/ — delete an appointment (admin/doctor/patient). */
+export function deleteAppointment(id: number) {
+  return apiDelete(`/appointments/${id}/`);
 }

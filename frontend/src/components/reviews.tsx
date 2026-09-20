@@ -13,6 +13,19 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
+/** Backend sends average_rating as a Decimal string — coerce safely. */
+export function ratingNumber(value: number | string | null | undefined): number {
+  const num = typeof value === "string" ? Number(value) : (value ?? 0);
+  return Number.isFinite(num) ? num : 0;
+}
+
+/** Format a rating for display without crashing on Decimal strings. */
+export function formatRating(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "New";
+  const num = ratingNumber(value);
+  return num.toFixed(1);
+}
+
 function timeAgo(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
@@ -33,7 +46,7 @@ export function StarRating({
   readonly = false,
   size = "md",
 }: {
-  value: number;
+  value: number | string | null | undefined;
   onChange?: (rating: number) => void;
   readonly?: boolean;
   size?: "sm" | "md" | "lg";
@@ -42,6 +55,7 @@ export function StarRating({
 
   const sizeClass = size === "sm" ? "star-rating--sm" : size === "lg" ? "star-rating--lg" : "";
   const iconSize = size === "sm" ? 14 : size === "lg" ? 24 : 18;
+  const numericValue = ratingNumber(value);
 
   return (
     <div className={`star-rating ${sizeClass}`}>
@@ -50,7 +64,7 @@ export function StarRating({
           key={star}
           type="button"
           className={`star-rating__star ${
-            star <= (hover || value) ? "star-rating__star--filled" : ""
+            star <= (hover || numericValue) ? "star-rating__star--filled" : ""
           }`}
           onClick={() => !readonly && onChange?.(star)}
           onMouseEnter={() => !readonly && setHover(star)}
@@ -58,7 +72,7 @@ export function StarRating({
           disabled={readonly}
           aria-label={`${star} star${star !== 1 ? "s" : ""}`}
         >
-          <Star size={iconSize} fill={star <= (hover || value) ? "currentColor" : "none"} />
+          <Star size={iconSize} fill={star <= (hover || numericValue) ? "currentColor" : "none"} />
         </button>
       ))}
     </div>
