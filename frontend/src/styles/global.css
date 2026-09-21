@@ -67,8 +67,7 @@ a { color: var(--color-primary); }
   width: 100%;
 }
 .card--fit {
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
 }
 @media (max-width: 599px) {
   .card--fit, .review-card { width: 100%; }
@@ -2576,7 +2575,8 @@ a { color: var(--color-primary); }
   object-fit: cover;
   object-position: center top;
   border-radius: var(--radius-lg);
-  margin-bottom: var(--space-4);
+  margin: 0 auto var(--space-4);
+  display: block;
 }
 .home__filters {
   display: flex;

@@ -1959,3 +1959,109 @@ frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
 - `npx vitest run` → ✅ 36/36 tests passed across 4 test files (Splash, ui, Onboarding, reviews).
 
 **Result:** All UI-facing emoji have been replaced with `lucide-react` icons. The app now uses a single consistent icon set throughout.
+
+---
+
+### 2026-09-21 — Entry 0035 — Card layout verification & picture visibility audit (Done)
+
+**Phase:** Responsive layout + image sizing verification (no code changes needed — verified correct)
+
+**Task:** Verify that 1-in-row cards stay full-width (not stretched to 2-in-row) and that all pictures inside cards are clearly visible (not half/cropped), per user requirements.
+
+**Investigation — card inventory by layout type:**
+
+#### 2-in-row cards (correctly 2-up on phones — must NOT change)
+| Card | CSS rule | Phone layout | Image handling |
+|------|----------|--------------|----------------|
+| Home Top Doctors | `.home__doctor-list` | `repeat(2, 1fr)` + `.home__doctor-card { flex: none }` | `.home__doctor-card > img`: `height: 126px` phone, `object-fit: cover` ✅ |
+| Find a doctor (directory) | `.doctors__grid` | `repeat(2, 1fr)` | reuses `.home__doctor-card > img` ✅ |
+| Doctor personal card preview | `.doc-preview-card` | full-width (single) | `.doc-preview-card__photo`: 200px container, `object-fit: cover` ✅ |
+| Doctor profile photo | `.doctor-profile__photo` | full-width (1-in-row, detail page) | `width: 100%; max-width: 320px; height: 240px; object-fit: cover` ✅ |
+| Doctor directory card | `.doctor-card__photo` | 2-in-row | `height: 180px; object-fit: cover` ✅ |
+
+#### 1-in-row feed cards (correctly full-width — must NOT change)
+| Card | CSS rule | Has picture? |
+|------|----------|--------------|
+| Specialty cards | `.specialty-card` / `.specialty-grid` | No (icon + text only) ✅ |
+| Hospital cards | `.hospital-card` | No (text only) ✅ |
+| Appointment list rows (patient) | `.patient-appt-card` | No (date box + text) ✅ |
+| Appointment list rows (doctor) | `.appt-status-row` / doctor dashboard rows | No ✅ |
+| Appointment list rows (admin) | `.admin-table` / `.admin-audit-row` | No (table rows) ✅ |
+| Notifications | `.notif-list` / `.notif-row` | No (text + Lucide icon) ✅ |
+| Reviews | `.review-card` | No (`.review-card__header` is StarRating + text only) ✅ |
+| Audit rows | `.admin-table` / audit grid | No ✅ |
+| Forms | `.field`, `.form-note`, `Card` wrappers | No ✅ |
+| Charts | `.admin-chart-card`, `.admin-bar-chart`, `.admin-donut` | No (SVG charts only) ✅ |
+| Tables | `.admin-table` | No ✅ |
+| Available slots | `.slot-grid` / `.slot-btn` | No (time buttons) ✅ |
+
+**Picture-containing 1-in-row cards (the only ones with images):**
+- Doctor profile photo (`.doctor-profile__photo`) — on the doctor detail page (`/doctors/:id`). Already full-width (max 320px), 240px height, `object-fit: cover`, `object-position: center top`. Image is clearly visible, not cropped or halved. ✅
+- Doctor card images on `.home__doctor-card`, `.doctor-card__photo`, `.doc-preview-card__photo` — these are the 2-in-row cards, intentionally 2-up on phones. Their images are sized at 126–200px height with `object-fit: cover`, clearly visible. ✅
+
+**Key CSS rules verified (all correct, no changes needed):**
+- Line 2403: `.home__doctor-list { grid-template-columns: repeat(2, 1fr); }` — 2-in-row ✅
+- Line 2419–2424: `.home__doctor-card > img { width: 100%; height: 132px; object-fit: cover; object-position: center top; }` — full card width image ✅
+- Line 2453: `.doctors-page .doctors__grid { grid-template-columns: repeat(2, 1fr); }` — 2-in-row on phone ✅
+- Line 2458–2464: `.doctor-card__photo { width: 100%; height: 180px; object-fit: cover; object-position: center top; }` ✅
+- Line 2572–2580: `.doctor-profile__photo { width: 100%; max-width: 320px; height: 240px; object-fit: cover; object-position: center top; }` — full-width, clearly visible ✅
+- Line 2628–2633: Phone media query keeps `.home__doctor-list` at `repeat(2, 1fr)` and `.home__doctor-card` at `flex: none` (prevents stretching) ✅
+- Line 73–74: `.card--fit, .review-card { width: 100%; }` on phone — these 1-in-row cards stay full-width ✅
+
+**Note on `card--fit`:** On desktop this is `width: 100%` (full-width), matching phones. Previously it was `width: fit-content` on desktop, which has been fixed in Entry 0036. The doctor profile photo card and review cards are now full-width on all screen sizes.
+
+**Validation:**
+- `npm run build` → ✅ clean (verified during emoji task)
+- `npx vitest run` → ✅ 36/36 tests passed (verified during emoji task)
+- Codebase search confirms **zero** UI emoji remain in `frontend/src/` and `frontend/public/`
+
+**Result:** The 1-in-row feed cards (specialty, hospital, appointments, notifications, reviews, audit, forms, charts, tables) are all text-only with no images, so there is no "half picture" issue. The only picture-containing cards are the doctor cards (intentionally 2-in-row on phones) and the doctor profile photo (full-width on the detail page with `max-width: 320px`), both correctly sized with `object-fit: cover`.
+
+
+---
+
+### Entry 0036 — 2026-09-21: Desktop full-width feed-card fix
+
+**Issue identified:** `.card--fit` was set to `width: fit-content` on desktop (`global.css` line 70). On phones (≤599px) a media query overrode it to `width: 100%`, but on desktop, 1-in-row feed cards using `.card--fit` rendered at content-snug width — NOT full-width. The affected card was the notifications list (`notifications.tsx` line 186: `<Card className="card--fit notif-list">`), along with booking forms, medical-detail, and doctor-profile pages.
+
+**Changes made (2 edits in `frontend/src/styles/global.css`):**
+
+1. **Line 70** — Changed `.card--fit` from `width: fit-content; max-width: 100%;` to `width: 100%;`. Now all 1-in-row feed cards (specialty, hospital, appointments, notifications, reviews, audit, forms, charts, tables) are full-width on desktop, matching the phone layout. The media query at line 72-74 is now redundant but harmless (kept for safety).
+
+2. **Line 2578** — Added `margin: 0 auto var(--space-4);` and `display: block;` to `.doctor-profile__photo` (was previously `margin-bottom: var(--space-4)`). Since `.card--fit` is now `width: 100%` on desktop, the doctor profile photo (`max-width: 320px`) would left-align within the full-width card without centering. The photo stays at 320px max (not maximized) and `object-fit: cover` keeps it clearly visible.
+
+**Verification of all 1-in-row feed card types on desktop:**
+
+| Card type | Container class | Has picture? | Desktop layout | Picture visibility |
+|---|---|---|---|---|
+| Specialty cards | `.specialties-grid` | No (Lucide icons) | Full-width grid ✅ | N/A |
+| Hospital cards | `.hospitals-grid` | No (Lucide icons) | Full-width grid ✅ | N/A |
+| Appointment list rows (patient) | `.patient-appt-grid` | No | Full-width ✅ | N/A |
+| Appointment list rows (doctor) | `.appt-status-row` | No | Full-width ✅ | N/A |
+| Appointment list rows (admin) | `.admin-table` | No | Full-width ✅ | N/A |
+| Notifications | `.card--fit notif-list` | No | **Now full-width on desktop** ✅ (was fit-content) | N/A |
+| Reviews | `.review-card` | No | Full-width ✅ | N/A |
+| Audit rows | `.admin-table` / grid | No | Full-width ✅ | N/A |
+| Forms | `.field`, `Card` | No | Full-width ✅ | N/A |
+| Charts | `.admin-chart-card` | No (SVG) | Full-width ✅ | N/A |
+| Tables | `.admin-table` | No | Full-width ✅ | N/A |
+
+**Picture-containing cards (verified visible, not half, not maximized):**
+
+| Card | Photo class | Size | object-fit | Status |
+|---|---|---|---|---|
+| Doctor profile (detail page) | `.doctor-profile__photo` | `max-width:320px; height:240px` | `cover; center top` | Centered with `margin: 0 auto` ✅ |
+| Doctor directory (2-in-row) | `.doctor-card__photo` | `height:180px` | `cover; center top` | Full card width ✅ |
+| Home doctor cards (2-in-row) | `img` in `.home__doctor-card` | `height:132px` | `cover; center top` | Full card width ✅ |
+| Doctor personal preview | `.doc-preview-card__photo` | 200px container | `cover; center top` | Full card width ✅ |
+
+**`card--fit` usage across codebase (all now full-width on desktop):**
+- `notifications.tsx:186` — Notifications list ✅
+- `appointments.tsx:179,352,440,451,896` — Booking flow forms ✅
+- `doctor.tsx:52` — Doctor profile page (photo centered) ✅
+- `doctor.tsx:81,94` — Available slots / Reviews cards ✅
+- `patient.tsx:327` — Medical detail sections ✅
+
+**Validation:**
+- `npm run build` → ✅ clean, 1978 modules transformed, 3.29s
+- `npx vitest run` → ✅ 36/36 tests passed across 4 test files
