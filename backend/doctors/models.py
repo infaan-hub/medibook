@@ -28,6 +28,8 @@ class Doctor(TimeStampedModel):
         validators=[MinValueValidator(0)],
     )
     bio = models.TextField(blank=True, default="")
+    city = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    office_address = models.TextField(blank=True, default="")
     is_available = models.BooleanField(default=True, db_index=True)
     average_rating = models.DecimalField(
         max_digits=3, decimal_places=2, default=0,

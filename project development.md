@@ -1918,3 +1918,44 @@ frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
 **Status:** Done — all six items completed and verified with the commands above. Realtime requires restarting `manage.py runserver` (Daphne replaces the WSGI dev server and serves `/ws/notifications/`); with the server up, two open browsers (patient `/appointments`, doctor `/doctor/dashboard`) see bookings and status changes instantly.
 
 **Next:** production channel layer (`channels_redis`) for multi-process deployments; move WS auth from query param to a header/subprotocol or short-lived ticket; investigate the pre-existing `accounts` test failure; desktop OAuth button testing on mobile.
+
+---
+
+### 2026-09-21 — Entry 0034 — Emoji → Lucide React icon replacement (Done)
+
+**Phase:** Frontend polish — iconography consistency
+
+**Task:** Search the entire codebase for emoji used in UI markup/text and replace every instance with a Lucide React icon (the project's icon set: `lucide-react` v1.47.0).
+
+**Findings — emoji located:**
+
+| File | Line | Emoji | Context | Replacement |
+|------|------|-------|---------|-------------|
+| `frontend/src/pages/appointments.tsx` | 550 | ⏰ | Pending status icon string | `<Clock3 size={14} />` |
+| `frontend/src/pages/appointments.tsx` | 551 | ✓ | Confirmed status icon string | `<CheckCircle2 size={14} />` |
+| `frontend/src/pages/appointments.tsx` | 552 | ✓✓ | Completed status icon string | `<CheckCircle2 size={14} />` (single icon, label "Completed") |
+| `frontend/src/pages/appointments.tsx` | 553 | ✕ | Cancelled status icon string | `<XCircle size={14} />` |
+| `frontend/src/pages/appointments.tsx` | 554 | ✕ | Rejected status icon string | `<XCircle size={14} />` |
+| `frontend/src/pages/appointments.tsx` | 589 | 📅 | Empty-state illustration | `<Calendar size={40} />` (inside `<div className="patient-appt-empty__icon">`) |
+| `frontend/src/components/ToastViewport.tsx` | 22 | × | Toast dismiss close button | `<X size={16} aria-hidden="true" />` |
+| `frontend/public/offline.html` | 12 | ⚠ | Offline page warning icon | Inline `<svg>` of Lucide `AlertTriangle` (40×40, inherits `color` from parent) |
+
+**Approach:**
+1. Searched all `*.tsx`, `*.ts`, `*.css`, `*.html`, `*.json`, `*.md` files under `frontend/` and `backend/` for Unicode emoji ranges (U+1F300–1FAFF, U+2600–27BF, U+2B00–2BFF) plus common symbol emoji (✓ ✕ ✗ ✗ ⚠ ❗ ❌ ❤ ❌ ✔ ✖).
+2. Excluded non-UI emoji found in documentation (`project development.md` table cells using `×` as a multiplication sign in prose like "curl.exe × 4" and "×2" = "twice") — these are not rendered UI elements and were left unchanged.
+3. Excluded text arrows (`→`, `←`, `↓`, `↑`) in code comments and architecture diagrams — these are ASCII-style directional arrows, not emoji.
+4. Changed `statusConfig` type from `{ icon: string }` to `{ icon: React.ReactNode }` and rendered the icon JSX alongside the status label in the `<span className="patient-appt-card__status">`.
+5. Updated `.patient-appt-empty__icon` CSS in `global.css` from `font-size: 48px` (emoji-only) to `display: flex; width: 64px; height: 64px; color: #94a3b8` so the `<Calendar>` SVG center-renders correctly.
+6. For `offline.html` (a static HTML file, no React runtime), inlined the raw SVG path data of Lucide's `AlertTriangle` icon so the visual matches the rest of the app.
+
+**Files modified:**
+- `frontend/src/pages/appointments.tsx` — added `Clock3`, `XCircle`, `Calendar` to the existing `lucide-react` import; replaced 5 emoji string icons with JSX components; replaced 📅 with `<Calendar size={40} />`; rendered `{sc.icon}` in the status span.
+- `frontend/src/components/ToastViewport.tsx` — added `import { X } from "lucide-react"`; replaced `×` text with `<X size={16} aria-hidden="true" />`.
+- `frontend/src/styles/global.css` — updated `.patient-appt-empty__icon` rule (2677) for SVG layout.
+- `frontend/public/offline.html` — replaced ⚠ with inline AlertTriangle SVG.
+
+**Validation:**
+- `npm run build` → ✅ built in 806ms, 1978 modules transformed, no errors/warnings.
+- `npx vitest run` → ✅ 36/36 tests passed across 4 test files (Splash, ui, Onboarding, reviews).
+
+**Result:** All UI-facing emoji have been replaced with `lucide-react` icons. The app now uses a single consistent icon set throughout.

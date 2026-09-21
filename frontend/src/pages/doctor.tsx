@@ -16,7 +16,7 @@ import type { DoctorAvailability, DoctorProfile, Review, ScheduleItem } from "..
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -59,6 +59,11 @@ export function DoctorProfileScreen() {
           />
         )}
         <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
+        {(doctor.office_address || doctor.city) && (
+          <p className="doctor-profile__location">
+            <MapPin size={14} /> {doctor.office_address || doctor.city}
+          </p>
+        )}
         <p>{doctor.qualifications || "Professional profile"}</p>
         <p>{doctor.experience_years} years of experience</p>
         <p>Consultation fee: TSh {doctor.consultation_fee}</p>
@@ -84,13 +89,9 @@ export function DoctorProfileScreen() {
           <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul>
         ) : (
           <EmptyState title="No available slots" description="Try another date." />
-        )}
+        ))}
       </Card>
       <Card className="card--fit">
-        <h2>Reviews</h2>
-        <DoctorReviewList reviews={reviews} />
-      </Card>
-      <Card>
         <h2>Reviews</h2>
         <DoctorReviewList reviews={reviews} />
       </Card>
@@ -134,6 +135,11 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
             <BadgeIndianRupee size={14} /> TSh {profile.consultation_fee}
           </span>
         </div>
+        {(profile.office_address || profile.city) && (
+          <p className="doc-preview-card__location">
+            <MapPin size={13} /> <span>{profile.office_address || profile.city}</span>
+          </p>
+        )}
       </div>
     </Card>
   );
@@ -148,7 +154,7 @@ export function DoctorPersonalScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -164,6 +170,8 @@ export function DoctorPersonalScreen() {
           last_name: response.data.last_name ?? "",
           experience_years: response.data.experience_years?.toString() ?? "",
           consultation_fee: response.data.consultation_fee?.toString() ?? "",
+          city: response.data.city ?? "",
+          office_address: response.data.office_address ?? "",
         });
       })
       .catch((reason: unknown) => setError(message(reason)));
@@ -184,6 +192,8 @@ export function DoctorPersonalScreen() {
         last_name: form.last_name.trim(),
         experience_years: form.experience_years === "" ? 0 : Number(form.experience_years),
         consultation_fee: form.consultation_fee.trim() === "" ? "0" : form.consultation_fee.trim(),
+        city: form.city.trim(),
+        office_address: form.office_address.trim(),
       });
       setProfile(envelope.data);
       notify("success", "Your card has been updated.");
@@ -242,6 +252,10 @@ export function DoctorPersonalScreen() {
           <div className="form__row">
             <TextField id="doc-exp" label="Experience (years)" type="number" min="0" value={form.experience_years} error={fieldErrors.experience_years} onChange={(e) => update("experience_years", e.target.value)} />
             <TextField id="doc-fee" label="Consultation fee (TSh)" inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
+          </div>
+          <div className="form__row">
+            <TextField id="doc-city" label="City / area (nearby search)" value={form.city} error={fieldErrors.city} onChange={(e) => update("city", e.target.value)} />
+            <TextField id="doc-address" label="Office address (shown on your card)" value={form.office_address} error={fieldErrors.office_address} onChange={(e) => update("office_address", e.target.value)} />
           </div>
           <Button type="submit" loading={saving}>Save changes</Button>
         </form>

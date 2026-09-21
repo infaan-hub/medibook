@@ -136,6 +136,8 @@ export interface DoctorProfile {
   experience_years: number | null;
   consultation_fee: string;
   bio: string;
+  city: string;
+  office_address: string;
   is_available: boolean;
   /* DRF DecimalField serializes as a string ("0.00"), so accept both. */
   average_rating: number | string | null;

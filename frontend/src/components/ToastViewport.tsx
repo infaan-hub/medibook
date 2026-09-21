@@ -3,6 +3,7 @@
  */
 
 import { useToast } from "../state/app-context";
+import { X } from "lucide-react";
 
 export function ToastViewport() {
   const { toasts, dismiss } = useToast();
@@ -19,7 +20,7 @@ export function ToastViewport() {
             aria-label="Dismiss notification"
             onClick={() => dismiss(toast.id)}
           >
-            ×
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
       ))}

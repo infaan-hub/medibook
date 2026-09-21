@@ -57,3 +57,49 @@ class DoctorProfileTests(TestCase):
         self.assertEqual(full_day.status_code, 201, full_day.data)
         slots = self.client.get(f"/api/doctors/{doctor.pk}/availability/?date=2026-09-22")
         self.assertEqual(slots.data["data"]["slots"], [])
+
+
+class DoctorLocationTests(TestCase):
+    """Location fields on the doctor card + nearby-aware directory filters."""
+
+    def setUp(self):
+        self.dar_user = User.objects.create_user(
+            username="doc-dar", email="doc-dar@example.com", password="StrongPass123!",
+            role="doctor", first_name="Amina", last_name="Juma",
+        )
+        self.dar = Doctor.objects.create(
+            user=self.dar_user, city="Dar es Salaam", office_address="Plot 12, Mikocheni Street"
+        )
+        self.mwanza_user = User.objects.create_user(
+            username="doc-mwanza", email="doc-mwanza@example.com", password="StrongPass123!",
+            role="doctor", first_name="Peter", last_name="Mushi",
+        )
+        self.mwanza = Doctor.objects.create(
+            user=self.mwanza_user, city="Mwanza", office_address="Kenyatta Rd Clinic"
+        )
+
+    def test_location_fields_in_public_serializer(self):
+        data = APIClient().get(f"/api/doctors/{self.dar.pk}/").data["data"]
+        self.assertEqual(data["city"], "Dar es Salaam")
+        self.assertEqual(data["office_address"], "Plot 12, Mikocheni Street")
+
+    def test_location_filter_matches_doctor_city(self):
+        results = APIClient().get("/api/doctors/?city=dar").data["data"]["results"]
+        self.assertEqual([d["id"] for d in results], [self.dar.id])
+
+    def test_search_matches_office_address(self):
+        results = APIClient().get("/api/doctors/?search=mikocheni").data["data"]["results"]
+        self.assertEqual([d["id"] for d in results], [self.dar.id])
+
+    def test_doctor_can_update_own_location(self):
+        client = APIClient()
+        client.force_authenticate(user=self.dar_user)
+        resp = client.patch(
+            "/api/doctors/me/profile/",
+            {"city": "Arusha", "office_address": "Sokoine Road 4"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.dar.refresh_from_db()
+        self.assertEqual(self.dar.city, "Arusha")
+        self.assertEqual(self.dar.office_address, "Sokoine Road 4")

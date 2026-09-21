@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listMyAppointments } from "../api/appointments";
+import { getPatientProfile } from "../api/patients";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -109,6 +110,7 @@ function PatientHome({ user }: { user: User }) {
                 <span className="home__doctor-info">
                   <strong>{formatDoctorName(doctor)}</strong>
                   <span>{doctor.qualifications || "Medical specialist"}</span>
+                  {(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}
                   <span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span>
                 </span>
                 <ChevronRight size={17} />
@@ -159,11 +161,27 @@ export function HomeScreen() {
 }
 
 export function DoctorsPage() {
+  const { user } = useSession();
   const [search, setSearch] = useState(""); const [city, setCity] = useState("");
   const [results, setResults] = useState<DoctorProfile[] | null>(null); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(false);
-  const load = useCallback(() => { setLoading(true); setError(null); const params: ListDoctorsParams = { search: search || undefined, city: city || undefined }; listDoctors(params).then((response) => setResults(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load doctors.")).finally(() => setLoading(false)); }, [search, city]);
-  useEffect(() => { load(); }, []);
-  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">City</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by city" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or city." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong><span>{doctor.qualifications || "Medical specialist"}</span><span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
+  const fetchDoctors = useCallback((params: ListDoctorsParams) => { setLoading(true); setError(null); listDoctors(params).then((response) => setResults(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load doctors.")).finally(() => setLoading(false)); }, []);
+  const load = useCallback(() => { fetchDoctors({ search: search || undefined, city: city || undefined }); }, [fetchDoctors, search, city]);
+  // First visit: patients get their saved location pre-filled so doctors near
+  // them surface first; everyone else sees the full directory.
+  useEffect(() => {
+    if (user?.role !== "patient") { load(); return; }
+    let cancelled = false;
+    getPatientProfile()
+      .then((response) => {
+        if (cancelled) return;
+        const homeCity = response.data.city?.trim() ?? "";
+        if (homeCity) setCity(homeCity);
+        fetchDoctors({ search: search || undefined, city: homeCity || undefined });
+      })
+      .catch(() => { if (!cancelled) load(); });
+    return () => { cancelled = true; };
+  }, []);
+  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">Location</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by location / area" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or location." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong><span>{doctor.qualifications || "Medical specialist"}</span>{(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}<span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
 }
 
 export function AppointmentsPage() {

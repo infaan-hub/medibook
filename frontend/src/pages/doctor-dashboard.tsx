@@ -15,6 +15,7 @@ import {
   rescheduleAppointment,
   updateAppointment,
 } from "../api/appointments";
+import { apiGet } from "../api/client";
 import { getDoctorAvailability, getMyDoctorProfile } from "../api/doctors";
 import { getPatientProfileById } from "../api/patients";
 import type { Appointment, DoctorAvailability, DoctorProfile, PatientProfile } from "../api/types";
@@ -67,16 +68,14 @@ function formatTime(t: string): string {
 function PatientName({ patientId }: { patientId: number }) {
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
-    import("../api/client").then(({ apiGet }) =>
-      apiGet<{ first_name: string; last_name: string; email: string }>(`/patients/${patientId}/`)
-        .then((r) => {
-          const fn = r.data.first_name || "";
-          const ln = r.data.last_name || "";
-          const full = `${fn} ${ln}`.trim();
-          setName(full || r.data.email || `Patient #${patientId}`);
-        })
-        .catch(() => setName(`Patient #${patientId}`))
-    );
+    apiGet<{ first_name: string; last_name: string; email: string }>(`/patients/${patientId}/`)
+      .then((r) => {
+        const fn = r.data.first_name || "";
+        const ln = r.data.last_name || "";
+        const full = `${fn} ${ln}`.trim();
+        setName(full || r.data.email || `Patient #${patientId}`);
+      })
+      .catch(() => setName(`Patient #${patientId}`));
   }, [patientId]);
   return <>{name ?? `Patient #${patientId}`}</>;
 }

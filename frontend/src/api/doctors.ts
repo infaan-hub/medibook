@@ -89,6 +89,8 @@ export function updateMyDoctorProfile(
       | "experience_years"
       | "consultation_fee"
       | "bio"
+      | "city"
+      | "office_address"
       | "is_available"
     >
   >

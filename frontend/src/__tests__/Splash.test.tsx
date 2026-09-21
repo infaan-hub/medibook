@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { SplashScreen, UpdatePrompt } from "../components/Splash";
 
@@ -32,7 +32,9 @@ describe("UpdatePrompt", () => {
 
   it("shows prompt after medibook:update-ready event", async () => {
     render(<UpdatePrompt />);
-    window.dispatchEvent(new Event("medibook:update-ready"));
+    act(() => {
+      window.dispatchEvent(new Event("medibook:update-ready"));
+    });
     await waitFor(() => {
       expect(screen.getByText(/new version/i)).toBeInTheDocument();
     });

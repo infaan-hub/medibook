@@ -28,7 +28,7 @@ import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui
 import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -546,12 +546,12 @@ export function AppointmentsListScreen() {
   );
   const visible = tab === "upcoming" ? upcoming : past;
 
-  const statusConfig: Record<string, { icon: string; color: string; bg: string }> = {
-    pending: { icon: "⏰", color: "#d97706", bg: "#fef3c7" },
-    confirmed: { icon: "✓", color: "#059669", bg: "#d1fae5" },
-    completed: { icon: "✓✓", color: "#2563eb", bg: "#dbeafe" },
-    cancelled: { icon: "✕", color: "#dc2626", bg: "#fee2e2" },
-    rejected: { icon: "✕", color: "#9333ea", bg: "#ede9fe" },
+  const statusConfig: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
+    pending: { icon: <Clock3 size={14} />, color: "#d97706", bg: "#fef3c7" },
+    confirmed: { icon: <CheckCircle2 size={14} />, color: "#059669", bg: "#d1fae5" },
+    completed: { icon: <CheckCircle2 size={14} />, color: "#2563eb", bg: "#dbeafe" },
+    cancelled: { icon: <XCircle size={14} />, color: "#dc2626", bg: "#fee2e2" },
+    rejected: { icon: <XCircle size={14} />, color: "#9333ea", bg: "#ede9fe" },
   };
 
   if (error) return <div className="page"><h1 className="page__title">My Appointments</h1><ErrorState message={error} onRetry={load} /></div>;
@@ -586,7 +586,7 @@ export function AppointmentsListScreen() {
         <Skeleton lines={4} />
       ) : visible.length === 0 ? (
         <div className="patient-appt-empty">
-          <div className="patient-appt-empty__icon">📅</div>
+          <div className="patient-appt-empty__icon"><Calendar size={40} /></div>
           <h3>{tab === "upcoming" ? "No upcoming appointments" : "No past appointments"}</h3>
           <p>{tab === "upcoming" ? "Find a doctor to book your next visit." : "Your completed and cancelled appointments will appear here."}</p>
           {tab === "upcoming" && <Link to="/doctors"><Button>Find a Doctor</Button></Link>}
@@ -615,13 +615,13 @@ export function AppointmentsListScreen() {
                       <div className="patient-appt-card__time">
                         {formatTime(a.start_time)} – {formatTime(a.end_time)}
                       </div>
+                      <span
+                        className="patient-appt-card__status"
+                        style={{ color: sc.color, background: sc.bg }}
+                      >
+                        {sc.icon} {STATUS_LABELS[a.status]}
+                      </span>
                     </div>
-                    <span
-                      className="patient-appt-card__status"
-                      style={{ color: sc.color, background: sc.bg }}
-                    >
-                      {STATUS_LABELS[a.status]}
-                    </span>
                   </div>
                   {a.reason && (
                     <div className="patient-appt-card__reason">{a.reason}</div>

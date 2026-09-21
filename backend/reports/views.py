@@ -9,10 +9,12 @@ from django.db.models import Count
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework import serializers
+from rest_framework import status as http_status
 
+from accounts.models import Role
 from accounts.permissions import IsAdminRole
 from appointments.models import Appointment
-from common.responses import success_response
+from common.responses import error_response, success_response
 from doctors.models import Doctor
 from reports.models import AuditEvent
 
@@ -73,6 +75,8 @@ class AdminDoctorCreateSerializer(serializers.Serializer):
     experience_years = serializers.IntegerField(required=False, min_value=0, default=0)
     consultation_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0"))
     bio = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    office_address = serializers.CharField(required=False, allow_blank=True)
 
     def validate_username(self, value):
         value = value.strip()
@@ -90,7 +94,7 @@ class AdminDoctorCreateSerializer(serializers.Serializer):
         password = validated_data.pop("password")
         profile_data = {
             key: validated_data.pop(key)
-            for key in ("qualifications", "experience_years", "consultation_fee", "bio")
+            for key in ("qualifications", "experience_years", "consultation_fee", "bio", "city", "office_address")
             if key in validated_data
         }
         try:
@@ -183,6 +187,62 @@ class AdminDoctorCreateView(APIView):
         record(request.user, "doctor.created", str(doctor.pk), f"Created Dr. {doctor.user.get_full_name()}")
         from doctors.serializers import DoctorSerializer
         return success_response(data=DoctorSerializer(doctor).data, message="Doctor created.", status_code=201)
+
+
+class AdminUserDeleteView(APIView):
+    """DELETE /api/admin/users/{id}/ — remove a patient or doctor account (§34)."""
+
+    permission_classes = (IsAuthenticated, IsAdminRole)
+
+    def delete(self, request, pk: int):
+        if request.user.pk == pk:
+            return error_response(message="You cannot delete your own account.")
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return error_response(
+                message="User not found.", status_code=http_status.HTTP_404_NOT_FOUND
+            )
+        if user.is_superuser or user.role == Role.ADMIN:
+            return error_response(message="Admin accounts cannot be deleted here.")
+        label = user.get_full_name() or user.username
+        with transaction.atomic():
+            # Cascades: profile, appointments, reviews, notifications, audit rows.
+            user.delete()
+            record(
+                request.user,
+                "user.deleted",
+                user.username,
+                f"Deleted {user.role} account ({label})",
+            )
+        return success_response(message="User deleted.", data={"id": pk})
+
+
+class AdminDoctorDeleteView(APIView):
+    """DELETE /api/admin/doctors/{id}/ — remove a doctor profile and account (§34)."""
+
+    permission_classes = (IsAuthenticated, IsAdminRole)
+
+    def delete(self, request, pk: int):
+        try:
+            doctor = Doctor.objects.select_related("user").get(pk=pk)
+        except Doctor.DoesNotExist:
+            return error_response(
+                message="Doctor not found.", status_code=http_status.HTTP_404_NOT_FOUND
+            )
+        user = doctor.user
+        label = user.get_full_name() or user.username
+        with transaction.atomic():
+            # Deleting the account cascades to the Doctor profile, appointments,
+            # availability, reviews and notifications.
+            user.delete()
+            record(
+                request.user,
+                "doctor.deleted",
+                str(pk),
+                f"Deleted Dr. {label} and their account",
+            )
+        return success_response(message="Doctor deleted.", data={"id": pk})
 
 
 class AdminAuditView(APIView):

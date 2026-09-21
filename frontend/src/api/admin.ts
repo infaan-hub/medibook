@@ -3,7 +3,7 @@
  * Backend: /api/admin/stats/, /api/admin/users/, /api/admin/doctors/{id}/approve/.
  */
 
-import { apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPost } from "./client";
 import type { AuditEvent, DoctorProfile, Envelope, Paginated, User } from "./types";
 
 /** Admin dashboard statistics. */
@@ -64,6 +64,16 @@ export function createAdminUser(payload: CreateUserPayload): Promise<Envelope<Us
 
 export function createAdminDoctor(payload: CreateDoctorPayload): Promise<Envelope<DoctorProfile>> {
   return apiPost<DoctorProfile>("/admin/doctors/create/", payload);
+}
+
+/** DELETE /api/admin/users/{id}/ — remove a patient or doctor account. */
+export function deleteAdminUser(userId: number): Promise<Envelope<null> | undefined> {
+  return apiDelete<null>(`/admin/users/${userId}/`);
+}
+
+/** DELETE /api/admin/doctors/{id}/ — remove a doctor profile and their account. */
+export function deleteAdminDoctor(doctorId: number): Promise<Envelope<null> | undefined> {
+  return apiDelete<null>(`/admin/doctors/${doctorId}/`);
 }
 
 export function listAuditEvents(): Promise<Envelope<AuditEvent[]>> {

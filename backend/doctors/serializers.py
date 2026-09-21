@@ -70,7 +70,7 @@ class DoctorSerializer(serializers.ModelSerializer):
         fields = (
             "id", "email", "first_name", "last_name", "profile_image", "specialties",
             "hospitals", "qualifications", "experience_years",
-            "consultation_fee", "bio", "is_available",
+            "consultation_fee", "bio", "city", "office_address", "is_available",
             "average_rating", "total_reviews",
         )
         read_only_fields = ("average_rating", "total_reviews")
@@ -95,5 +95,5 @@ class DoctorWriteSerializer(serializers.ModelSerializer):
         model = Doctor
         fields = (
             "specialties", "hospitals", "qualifications",
-            "experience_years", "consultation_fee", "bio", "is_available",
+            "experience_years", "consultation_fee", "bio", "city", "office_address", "is_available",
         )

@@ -39,13 +39,18 @@ class DoctorViewSet(ModelViewSet):
             queryset = queryset.filter(
                 Q(user__first_name__icontains=search)
                 | Q(user__last_name__icontains=search)
+                | Q(office_address__icontains=search)
             )
         specialty = params.get("specialty")
         if specialty:
             queryset = queryset.filter(specialties__id=specialty)
         city = params.get("city")
         if city:
-            queryset = queryset.filter(hospitals__city__icontains=city)
+            # Location filter: matches the doctor's own practice city *or* the
+            # city of any hospital they are linked to.
+            queryset = queryset.filter(
+                Q(city__icontains=city) | Q(hospitals__city__icontains=city)
+            )
         hospital = params.get("hospital")
         if hospital:
             queryset = queryset.filter(hospitals__id=hospital)

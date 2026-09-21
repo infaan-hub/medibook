@@ -24,15 +24,13 @@ import {
 } from "./pages/auth";
 import { SettingsScreen } from "./pages/patient";
 import { ProfileScreen } from "./pages/profile";
-import {
-  HomeScreen,
-  NotFoundPage,
-} from "./pages";
 import { SessionProvider, ToastProvider, useSession } from "./state/app-context";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
 
+const HomeScreen = lazy(() => import("./pages").then((m) => ({ default: m.HomeScreen })));
+const NotFoundPage = lazy(() => import("./pages").then((m) => ({ default: m.NotFoundPage })));
 const DoctorsPage = lazy(() => import("./pages").then((m) => ({ default: m.DoctorsPage })));
 const DoctorProfileScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorProfileScreen })));
 const BookingScreen = lazy(() => import("./pages").then((m) => ({ default: m.BookingScreen })));
