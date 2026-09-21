@@ -68,9 +68,11 @@ a { color: var(--color-primary); }
 }
 .card--fit {
   width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
 }
 @media (max-width: 599px) {
-  .card--fit, .review-card { width: 100%; }
+  .card--fit, .review-card { width: 100%; max-width: 100%; margin: 0; }
 }
 .card__title { font-size: var(--text-lg); }
 .card__text { color: var(--color-text-muted); }

@@ -2024,11 +2024,13 @@ frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
 
 **Issue identified:** `.card--fit` was set to `width: fit-content` on desktop (`global.css` line 70). On phones (≤599px) a media query overrode it to `width: 100%`, but on desktop, 1-in-row feed cards using `.card--fit` rendered at content-snug width — NOT full-width. The affected card was the notifications list (`notifications.tsx` line 186: `<Card className="card--fit notif-list">`), along with booking forms, medical-detail, and doctor-profile pages.
 
-**Changes made (2 edits in `frontend/src/styles/global.css`):**
+**Changes made (3 edits in `frontend/src/styles/global.css`):**
 
-1. **Line 70** — Changed `.card--fit` from `width: fit-content; max-width: 100%;` to `width: 100%;`. Now all 1-in-row feed cards (specialty, hospital, appointments, notifications, reviews, audit, forms, charts, tables) are full-width on desktop, matching the phone layout. The media query at line 72-74 is now redundant but harmless (kept for safety).
+1. **Line 70** — Changed `.card--fit` from `width: fit-content; max-width: 100%;` to `width: 100%; max-width: 640px; margin: 0 auto;`. Now all 1-in-row feed cards (specialty, hospital, appointments, notifications, reviews, audit, forms, charts, tables) are full-width (1-in-row) on desktop but constrained to a standard max-width of 640px — not stretched across the entire browser width. The `margin: 0 auto` centers the card within its `.page` container (which is `max-width: 960px`).
 
-2. **Line 2578** — Added `margin: 0 auto var(--space-4);` and `display: block;` to `.doctor-profile__photo` (was previously `margin-bottom: var(--space-4)`). Since `.card--fit` is now `width: 100%` on desktop, the doctor profile photo (`max-width: 320px`) would left-align within the full-width card without centering. The photo stays at 320px max (not maximized) and `object-fit: cover` keeps it clearly visible.
+2. **Line 75** — Updated phone media query from `.card--fit, .review-card { width: 100%; }` to `.card--fit, .review-card { width: 100%; max-width: 100%; margin: 0; }`. On phones (≤599px), the `max-width: 640px` and `margin: 0 auto` from the base rule are reset so cards are truly full-width with no margins, matching the original phone behavior.
+
+3. **Line 2580** — Added `margin: 0 auto var(--space-4);` and `display: block;` to `.doctor-profile__photo` (was previously `margin-bottom: var(--space-4)`). Since `.card--fit` is now constrained to `max-width: 640px` and centered, the doctor profile photo (`max-width: 320px`) is centered within that card. The photo stays at 320px max (not maximized) and `object-fit: cover` keeps it clearly visible.
 
 **Verification of all 1-in-row feed card types on desktop:**
 
@@ -2063,5 +2065,5 @@ frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
 - `patient.tsx:327` — Medical detail sections ✅
 
 **Validation:**
-- `npm run build` → ✅ clean, 1978 modules transformed, 3.29s
+- `npm run build` → ✅ clean, 1978 modules transformed, 1.67s
 - `npx vitest run` → ✅ 36/36 tests passed across 4 test files
