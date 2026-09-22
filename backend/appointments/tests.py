@@ -12,12 +12,20 @@ from hospitals.models import Hospital
 from notifications.models import Notification
 from specialties.models import Specialty
 
+from appointments.models import Appointment
+
 User = get_user_model()
 PASSWORD = "StrongPass123!"
 
 
 def _user(email: str, role: str, **extra):
     username = email.split("@")[0]
+    if role == "admin":
+        # Role pages are guarded by is_superuser, so admin fixtures must be real
+        # superusers (mirrors reports/tests.py and the live /admin screens).
+        return User.objects.create_superuser(
+            username=username, email=email, password=PASSWORD, **extra
+        )
     user = User.objects.create_user(
         username=username, email=email, password=PASSWORD, role=role, **extra
     )
@@ -221,4 +229,67 @@ class DoctorRescheduleTests(TestCase):
         )
         self.assertEqual(response.status_code, 409)
         self.assertFalse(response.data["success"])
+
+
+class AdminAppointmentVisibilityTests(TestCase):
+    """
+    GET /api/appointments/ is role-scoped. The admin control-center table
+    (frontend `listAllAppointments`) relies on admins receiving the platform-wide
+    booking history rather than only their own rows — admins never book, so a
+    self-scoped queryset would render an always-empty table.
+    """
+
+    def setUp(self):
+        self.admin = _user("admin@example.com", "admin")
+        self.doctor_user = _user(
+            "doctor@example.com", "doctor", first_name="Doc", last_name="Tor"
+        )
+        self.doctor = Doctor.objects.create(user=self.doctor_user)
+        self.patient_one = _user("patient1@example.com", "patient")
+        self.patient_two = _user("patient2@example.com", "patient")
+        self.doctor_two_user = _user("doctor2@example.com", "doctor")
+        self.doctor_two = Doctor.objects.create(user=self.doctor_two_user)
+
+        self.appointment_one = Appointment.objects.create(
+            patient=self.patient_one, doctor=self.doctor,
+            appointment_date=date(2026, 9, 23),
+            start_time=time(9, 0), end_time=time(9, 30), status="pending",
+        )
+        self.appointment_two = Appointment.objects.create(
+            patient=self.patient_two, doctor=self.doctor_two,
+            appointment_date=date(2026, 9, 24),
+            start_time=time(10, 0), end_time=time(10, 30), status="confirmed",
+        )
+
+    def _ids(self, response) -> set:
+        self.assertEqual(response.status_code, 200, response.data)
+        return {row["id"] for row in response.data["data"]["results"]}
+
+    def test_admin_sees_every_appointment_on_the_platform(self):
+        response = _auth(self.admin).get("/api/appointments/?page_size=100")
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["count"], 2)
+        # Both patients' bookings appear — not just the admin's own (there are none).
+        self.assertEqual(
+            self._ids(response), {self.appointment_one.pk, self.appointment_two.pk}
+        )
+
+    def test_admin_list_exposes_patient_email_for_the_control_table(self):
+        response = _auth(self.admin).get("/api/appointments/?page_size=100")
+        emails = {row["patient_email"] for row in response.data["data"]["results"]}
+        self.assertEqual(emails, {"patient1@example.com", "patient2@example.com"})
+
+    def test_admin_status_filter_narrows_the_platform_view(self):
+        response = _auth(self.admin).get("/api/appointments/?status=pending")
+        self.assertEqual(
+            self._ids(response), {self.appointment_one.pk}
+        )
+
+    def test_patient_still_sees_only_their_own_appointments(self):
+        response = _auth(self.patient_one).get("/api/appointments/")
+        self.assertEqual(self._ids(response), {self.appointment_one.pk})
+
+    def test_doctor_still_sees_only_their_own_schedule(self):
+        response = _auth(self.doctor_two_user).get("/api/appointments/")
+        self.assertEqual(self._ids(response), {self.appointment_two.pk})
 

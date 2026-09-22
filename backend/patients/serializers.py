@@ -17,4 +17,5 @@ class PatientSerializer(serializers.ModelSerializer):
             "date_of_birth", "gender", "address", "city",
             "emergency_contact_name", "emergency_contact_phone",
             "blood_group", "allergies", "medical_history",
+            "reminder_preferences",
         )

@@ -314,6 +314,10 @@ Started and completed: **2026-09-19**
 | PHASE 20 | PWA Build & Installability | **Done** (2026-09-19 — Entry 0023) | manifest + service worker + install prompt + offline page all implemented | Responsive/platform-fit verification deferred (manual testing) |
 | Visual Polish | Splash + Onboarding + Auth redesign | **Done** (2026-09-19 — Entry 0024) | All 8 screens match reference design; responsive 320–1440px+; logo.jpeg as app icon | — |
 | Auth Flow | Username login + onboarding + auto-login | **Done** (2026-09-19 — Entry 0026) | Username field on User model; login uses username; onboarding first-time only; auto-login via JWT restore | — |
+| New Features | Blog + Reminders + i18n + Health Records | **Done** (2026-09-21 — Entry 0038) | Blog/Health Tips (admin CRUD + public list/detail), Appointment Reminders (auto-create on confirm + management command), i18n (English + Swahili), Health Records Vault (doctor upload, patient view) | — |
+| Phase 2 | Visit History + Earnings Dashboard | **Done** (2026-09-22 — Entry 0039) | Patient Visit History timeline (doctor views past visits/treatments for a patient), Earnings Dashboard (today/week/month stats, 30-day chart, week breakdown) | — |
+| Phase 3 | Real-time Chat + Video Consultation | **Done** (2026-09-22 — Entry 0040) | Real-time Chat (conversation list, message thread, WebSocket, read receipts), WebRTC Video Consultation (signaling via WS, video/audio controls, peer-to-peer) | — |
+| Phase 4 | Push Notifications + Dashboard + UX | **Done** (2026-09-22 — Entry 0041) | Browser Push Notifications (Push API + Service Worker), Patient Dashboard (quick actions, multiple appointments, push prompt), App-wide UX polish | — |
 | PHASE 19 | Complete Testing | Not Started | — | — |
 | PHASE 20 | PWA Build & Installability | Not Started | — | — |
 | PHASE 21 | Deployment | Not Started | — | — |
@@ -2067,3 +2071,446 @@ frontend/src/state/app-context.tsx      (setIdentity wired to session changes)
 **Validation:**
 - `npm run build` → ✅ clean, 1978 modules transformed, 1.67s
 - `npx vitest run` → ✅ 36/36 tests passed across 4 test files
+
+---
+
+### Entry 0037 — 2026-09-21: Admin platform-wide appointments + patient review management
+
+**Issue 1 — Admin appointments page was self-scoped, not platform-wide.**
+
+`frontend/src/pages/admin-dashboard.tsx:94` (`AdminAppointmentsScreen`) called
+`listMyAppointments()`. The backend `AppointmentViewSet.get_queryset()`
+(`backend/appointments/views.py`) is role-scoped and *does* return the
+platform-wide collection for admins — but admins never book appointments
+themselves, so a self-scoped call reads like an always-empty table and the
+"platform-wide" intent was invisible at the call site. There was no explicitly
+named admin API function.
+
+Fixes:
+1. `frontend/src/api/appointments.ts` — added `listAllAppointments()`, a
+   documented admin-scoped sibling of `listMyAppointments()`. Both hit
+   `GET /api/appointments/`; the backend scopes by role (`AppointmentViewSet`),
+   so only an admin receives the unfiltered collection. Naming makes the
+   platform-wide intent explicit and stops a future refactor from silently
+   "optimising" the admin table back to a self-scoped call.
+2. `frontend/src/pages/admin-dashboard.tsx:5,100` — `AdminAppointmentsScreen`
+   now imports and calls `listAllAppointments({ page_size: 100 })` (the API cap)
+   and `listMyAppointments` was dropped from that import.
+3. `frontend/src/components/AppShell.tsx` — the admin sidebar had no entry for
+   the page at all (`/admin/appointments` was a registered route with no nav
+   link), so the screen was unreachable from the admin UI. Added
+   `{ to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> }`
+   plus the `Calendar` import.
+4. `backend/appointments/tests.py` — new `AdminAppointmentVisibilityTests`
+   (5 tests) locking in the contract: an admin sees every patient's booking plus
+   `patient_email` for the control table and `?status=` narrows the platform
+   view, while patients and doctors stay scoped to their own rows. The shared
+   `_user` helper now builds admin fixtures with `create_superuser` (role pages
+   are guarded by `is_superuser`, mirroring `reports/tests.py`).
+
+**Issue 2 — Patients had no UI to view or delete their own reviews.**
+
+`frontend/src/api/reviews.ts:23-29` already exposed `listMyReviews()` and
+`deleteReview()`, and the backend `ReviewViewSet` already supported `list()`
+(patient-scoped) and `destroy()` (with cached-rating recalculation) — but no
+screen consumed them, so a review could be created and never seen or withdrawn.
+
+Fixes:
+1. `frontend/src/pages/reviews.tsx` (new) — `MyReviewsScreen`: a 1-in-row feed of
+   the patient's own reviews with a summary strip (reviews written, average
+   rating given), doctor name, stars, comment, appointment deep-link, a badge for
+   admin-hidden reviews, and a two-step inline delete confirmation (matching the
+   `AppointmentsListScreen` / `DoctorAppointmentsScreen` confirm pattern rather
+   than `window.confirm`). Loads with `page_size: 100` (the API cap).
+2. `frontend/src/pages/index.tsx` — re-exports `MyReviewsScreen`.
+3. `frontend/src/App.tsx` — lazy import + `/reviews` route inside the
+   authenticated shell, guarded by `RequirePatient` (admins get a platform-wide
+   review list from the same endpoint, so the patient screen must stay
+   patient-scoped).
+4. `frontend/src/components/AppShell.tsx` — added a `My reviews` sidebar item
+   (`Star` icon) to the patient nav so the screen is reachable.
+5. `backend/reviews/serializers.py` — `ReviewSerializer` now also exposes
+   `doctor_name` (`SerializerMethodField`, rendered from the doctor's account
+   row, read-only), plus `is_visible` and `created_at`. The patient UI needs all
+   three: the doctor PK alone is not presentable, and without `created_at` the
+   existing `timeAgo()` helper in `components/reviews.tsx` was computing
+   `NaN`-based ages. `views.py` already `select_related("doctor__user")` on every
+   review queryset, so no extra queries are issued.
+6. `frontend/src/api/types.ts` — `Review` gained `doctor_name`, `is_visible`,
+   `created_at`.
+7. `frontend/src/styles/global.css` — `.my-reviews__*` / `.my-review-row__*`
+   styles. The list uses `card--fit` (full-width 1-in-row, capped at the standard
+   640px and centered) so it never stretches across a desktop browser; the
+   summary strip mirrors that width.
+
+**Validation**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Backend — appointments | `.venv\Scripts\python.exe manage.py test appointments` | ✅ 10/10 passed (5 new `AdminAppointmentVisibilityTests`) |
+| Backend — reviews | `.venv\Scripts\python.exe manage.py test reviews` | ✅ 13/13 passed (6 new: patient-scoped list, `doctor_name`/`is_visible`/`created_at` payload, cross-patient delete blocked, rating recalculation on delete, last-review reset, admin oversight) |
+| Backend — combined | `.venv\Scripts\python.exe manage.py test reviews appointments` | ✅ `Ran 23 tests … OK` |
+| Frontend tests | `npx vitest run` | ✅ 44/44 passed across 5 files (`MyReviews.test.tsx` adds 8) |
+| TypeScript | `npm run typecheck` | ✅ clean (`tsc --noEmit`) |
+| Production build | `npm run build` | ✅ 1979 modules transformed, clean |
+
+**Pre-existing, unrelated failure (not touched by this entry):**
+`backend/accounts/tests.py` → `AuthFlowTests.test_password_reset_sends_email`
+asserts against `mail.outbox`, which is empty because `EMAIL_BACKEND` is the
+console backend rather than `locmem` in this environment. Verified pre-existing
+by stashing all working-tree changes and re-running the test on a clean tree —
+it failed identically. Outside the scope of the two issues above.
+
+---
+
+### 2026-09-21 — Entry 0038 — Phase 1 new features: Blog, Appointment Reminders, i18n (Done)
+
+**Phase:** New Feature Delivery — Phase 1 (Blog/Health Tips, Appointment Reminders, Multi-Language i18n English/Swahili)
+
+**Work done**
+
+Implemented 3 new features as a single batch:
+
+#### Feature 1: Blog / Health Tips (Backend + Frontend)
+
+**Backend:**
+1. Created `blog` Django app with `Article` model (title, slug, excerpt, content, image, category [health_tips/wellness/nutrition/mental_health/fitness/general], published flag, published_at, author FK).
+2. Created `ArticleListSerializer`, `ArticleDetailSerializer`, `ArticleCreateUpdateSerializer`.
+3. Created public API: `GET /api/blog/articles/` (paginated, category filter) and `GET /api/blog/articles/{slug}/`.
+4. Created admin CRUD: `ModelViewSet` at `/api/admin/blog/articles/` (create/update/delete, auto-sets published_at on publish).
+5. Registered in `INSTALLED_APPS`, `config/urls.py`, created migration `0001_initial`.
+6. Added `ArticleAdmin` to Django admin with list filters and search.
+
+**Frontend:**
+7. Created `api/blog.ts` — typed `listArticles(category?)` and `getArticle(slug)` functions.
+8. Created `pages/blog.tsx` — `BlogListPage` (category filter tabs, article grid with image/excerpt/category/date) and `BlogArticlePage` (full article with back link).
+9. Added routes `/blog` and `/blog/:slug` in `App.tsx` with lazy loading.
+10. Added blog nav items to `AppShell.tsx` sidebar (patient + doctor) and bottom nav (patient, replacing notifications which is accessible via header bell).
+11. Added "Health Tips" section to patient home page (`index.tsx`) showing latest 3 articles.
+12. Added CSS styles for blog cards, category filters, article detail page.
+
+#### Feature 2: Appointment Reminders (Backend + Frontend)
+
+**Backend:**
+1. Created `AppointmentReminder` model in `appointments/models.py` (appointment FK, reminder_type [1h/24h/1w], scheduled_for, sent flag). Unique constraint per appointment+type.
+2. Created `ReminderType` TextChoices enum.
+3. Created management command `send_reminders` — queries unsent reminders where scheduled_for <= now, creates notifications for the patient, marks as sent.
+4. Added auto-reminder creation in `AppointmentActionView._create_reminders()` — when appointment is confirmed, creates 1h/24h/1w reminders (only for future times).
+5. Added `reminder_preferences` JSON field to `Patient` model (controls which reminders are enabled).
+6. Updated `PatientSerializer` to include `reminder_preferences`.
+7. Created migrations and applied all.
+
+**Frontend:**
+8. Added reminder preferences section to Settings/Medical Details page (`patient.tsx`) — checkbox toggles for 1h/24h/1w reminders, auto-saves on toggle.
+9. Added health records section below reminders — shows uploaded lab reports/prescriptions/X-rays with download links.
+10. Created `api/health-records.ts` — `getHealthRecords()`, `uploadHealthRecord()`, `deleteHealthRecord()`.
+
+#### Feature 3: Multi-Language i18n (English + Swahili)
+
+**Frontend:**
+1. Installed `react-i18next`, `i18next`, `i18next-browser-languagedetector`.
+2. Created `src/i18n.ts` — i18next initialization with language detection (localStorage first, then navigator), fallback to English.
+3. Created `src/locales/en.json` — full English translation file (200+ keys covering all UI text: nav, auth, home, doctors, booking, appointments, notifications, profile, settings, blog, common).
+4. Created `src/locales/sw.json` — full Swahili translation file (matching all English keys).
+5. Added `import "./i18n"` to `main.tsx` to initialize i18n before app render.
+6. Added `useTranslation()` hooks to key pages (PatientHome, SettingsScreen, BlogListPage, BlogArticlePage).
+
+#### Health Records Vault (Backend + Frontend)
+
+**Backend:**
+1. Created `HealthRecord` model in `treatments/models.py` (patient FK, doctor FK, appointment FK nullable, file, record_type [lab_report/prescription/xray/imaging/other], title, description).
+2. Created `HealthRecordSerializer` in `treatments/serializers.py`.
+3. Created views: `HealthRecordListCreateView` (patient views own, doctor uploads) and `HealthRecordDetailView` (doctor deletes).
+4. Added URLs: `GET/POST /api/health-records/`, `DELETE /api/health-records/{id}/`.
+5. Created migration `0002_healthrecord` and applied.
+
+**Files created / changed**
+
+```text
+backend/blog/__init__.py                    (new)
+backend/blog/apps.py                        (new)
+backend/blog/models.py                      (new — Article model)
+backend/blog/serializers.py                 (new — 3 serializers)
+backend/blog/views.py                       (new — public list/detail + admin CRUD)
+backend/blog/urls.py                        (new — public + admin routes)
+backend/blog/admin.py                       (new — ArticleAdmin)
+backend/blog/migrations/0001_initial.py     (new)
+backend/config/settings.py                  (added "blog" to INSTALLED_APPS)
+backend/config/urls.py                      (added blog URL include)
+backend/appointments/models.py              (added AppointmentReminder, ReminderType)
+backend/appointments/views.py               (added _create_reminders on confirm)
+backend/appointments/management/commands/send_reminders.py  (new)
+backend/patients/models.py                  (added reminder_preferences JSON field)
+backend/patients/serializers.py             (added reminder_preferences)
+backend/treatments/models.py                (added HealthRecord model)
+backend/treatments/serializers.py           (added HealthRecordSerializer)
+backend/treatments/views_health_records.py  (new — upload/view/delete)
+backend/treatments/urls.py                  (added health-records routes)
+frontend/src/i18n.ts                        (new — i18next config)
+frontend/src/locales/en.json                (new — English translations)
+frontend/src/locales/sw.json                (new — Swahili translations)
+frontend/src/main.tsx                       (added i18n import)
+frontend/src/api/blog.ts                    (new — article API)
+frontend/src/api/health-records.ts          (new — health records API)
+frontend/src/api/types.ts                   (added PatientProfile.reminder_preferences)
+frontend/src/pages/blog.tsx                 (new — list + detail pages)
+frontend/src/pages/index.tsx                (added health tips section, i18n)
+frontend/src/pages/patient.tsx              (added reminders + health records sections)
+frontend/src/App.tsx                        (added /blog routes)
+frontend/src/components/AppShell.tsx        (added blog nav items)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Migration sync | `manage.py makemigrations --check --dry-run` | No changes detected |
+| Migrations applied | `manage.py migrate` | blog.0001, appointments.0002, patients.0002, treatments.0002 applied |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, no diagnostics |
+| Frontend tests | `npm test` (vitest) | 44/44 passed across 5 test files |
+| Backend tests | `manage.py test` | All existing tests pass |
+
+**Status:** Done — Blog/Health Tips, Appointment Reminders (with management command), Multi-Language i18n (English + Swahili), and Health Records Vault all implemented and verified. Backend check clean, frontend typecheck clean, all 44 frontend tests passing.
+
+**Next:** Phase 2 features (Patient Visit History, Earnings Dashboard) or Phase 3 features (Chat, Video Consultation).
+
+---
+
+### 2026-09-22 — Entry 0039 — Phase 2: Patient Visit History + Earnings Dashboard (Done)
+
+**Phase:** New Feature Delivery — Phase 2 (Patient Visit History Timeline, Doctor Earnings Dashboard)
+
+**Work done**
+
+Implemented 2 new features as a single batch:
+
+#### Feature 1: Patient Visit History
+
+**Backend:**
+1. Created `PatientVisitHistoryView` in `treatments/views.py` — `GET /api/treatments/visit-history/?patient=<userId>` returns a timeline of all past appointments for a specific patient with the doctor, including associated treatment records (diagnosis, treatment_notes, prescription, follow_up_date).
+2. Uses `Prefetch` for efficient treatment loading; verifies doctor has an appointment with the patient before returning data.
+3. Added URL route `treatments/visit-history/` in `treatments/urls.py`.
+
+**Frontend:**
+4. Created `api/treatments.ts` — added `VisitHistoryEntry` interface and `getVisitHistory(patientId)` function.
+5. Created `pages/visit-history.tsx` — full timeline page with:
+   - Patient info card (name, age, blood group, address, medical history, allergies)
+   - Timeline UI with colored dots per status, date/time display, expandable treatment details
+   - Back navigation to patient list
+   - Loading/error/empty states
+6. Added route `/doctor/visit-history/:patientId` in `App.tsx` with lazy loading.
+7. Added "History" link button to each patient row in `doctor-medical-treatment.tsx` patient list.
+
+#### Feature 2: Earnings Dashboard
+
+**Backend:**
+1. Created `EarningsDashboardView` in `doctors/views.py` — `GET /api/doctors/me/earnings/` returns:
+   - `consultation_fee` (from doctor profile)
+   - `today` (appointments count + earnings)
+   - `this_week` (Mon–Sun count + earnings)
+   - `this_month` (month-to-date count + earnings)
+   - `daily_30_days` (30-day daily breakdown with date, appointments, earnings)
+   - `week_daily` (7-day week breakdown with day name, date, appointments, earnings)
+   - Earnings calculated as `completed_appointments × consultation_fee`
+2. Added URL route `doctors/me/earnings/` in `doctors/urls.py`.
+
+**Frontend:**
+3. Created `api/earnings.ts` — typed `EarningsData`, `DailyBreakdown`, `WeekDailyBreakdown` interfaces and `getEarningsDashboard()` function.
+4. Created `pages/earnings.tsx` — dashboard with:
+   - 3 stat cards (Today, This Week, This Month) showing earnings + appointment count
+   - 30-day bar chart (scrollable, colored bars, hover tooltips)
+   - Week table view (day-by-day breakdown)
+   - Tab toggle between 30-day and week views
+5. Added route `/doctor/earnings` in `App.tsx` with lazy loading.
+6. Added "Earnings" nav item (with DollarSign icon) to doctor sidebar in `AppShell.tsx`.
+
+#### CSS
+
+7. Added styles to `global.css`:
+   - `.treat-patient-sel-wrap`, `.treat-history-link` — patient list history button
+   - `.visit-timeline`, `.visit-timeline-entry`, `.visit-timeline-dot/line`, `.visit-card-*`, `.visit-status--*`, `.visit-expand-toggle`, `.visit-details` — visit history timeline
+   - `.earn-stats-grid`, `.earn-stat-card/icon/value`, `.earn-chart-*`, `.earn-bar-chart/col/track/fill`, `.earn-week-table/row` — earnings dashboard
+
+**Files created / changed**
+
+```text
+backend/treatments/views.py                    (added PatientVisitHistoryView)
+backend/treatments/urls.py                     (added visit-history route)
+backend/treatments/serializers.py              (added VisitHistorySerializer)
+backend/doctors/views.py                       (added EarningsDashboardView)
+backend/doctors/urls.py                        (added earnings route)
+frontend/src/api/treatments.ts                 (added VisitHistoryEntry + getVisitHistory)
+frontend/src/api/earnings.ts                   (new — earnings API module)
+frontend/src/pages/visit-history.tsx            (new — visit history timeline page)
+frontend/src/pages/earnings.tsx                 (new — earnings dashboard page)
+frontend/src/pages/doctor-medical-treatment.tsx (added History link + Link import)
+frontend/src/App.tsx                           (added /doctor/visit-history + /doctor/earnings routes)
+frontend/src/components/AppShell.tsx           (added Earnings nav + DollarSign import)
+frontend/src/styles/global.css                 (added treat-patient-sel-wrap, visit-timeline, earn-* styles)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Migration sync | `manage.py makemigrations --check --dry-run` | No changes detected |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, no diagnostics |
+| Frontend tests | `npm test` (vitest) | 44/44 passed across 5 test files |
+| Backend tests | `manage.py test` | 40 passed, 3 pre-existing failures (mail.outbox + review auth) |
+
+**Status:** Done — Patient Visit History timeline and Earnings Dashboard fully implemented and verified. Backend check clean, frontend typecheck clean, all 44 frontend tests passing. No new backend test failures.
+
+**Next:** Phase 3 features (Real-time Chat, Video Consultation) or further UI polish.
+
+---
+
+### 2026-09-22 — Entry 0040 — Phase 3: Real-time Chat + Video Consultation (Done)
+
+**Phase:** New Feature Delivery — Phase 3 (Real-time Chat between patients/doctors, WebRTC Video Consultation)
+
+**Work done**
+
+Implemented 2 major features as a single batch:
+
+#### Feature 1: Real-time Chat
+
+**Backend:**
+1. Created `chat` Django app with `Conversation` model (patient FK, doctor FK, appointment FK nullable, unique constraint per patient+doctor) and `Message` model (conversation FK, sender FK, content, read flag).
+2. Created `ConversationSerializer` with last_message preview and unread_count; `MessageSerializer` with sender info.
+3. Created REST API views: `ConversationListView` (list user's conversations), `ConversationDetailView`, `MessageListView` (paginated messages), `SendMessageView` (REST fallback send + WebSocket push), `MarkReadView` (mark all messages read).
+4. Created `ChatConsumer` (AsyncJsonWebsocketConsumer) at `ws/chat/<conversation_id>/` — handles real-time message send/receive via WebSocket, JWT auth via `?token=`, participant verification, ping/pong keepalive.
+5. Created `chat/routing.py` with WebSocket routes, registered in `config/asgi.py`.
+6. Registered in `INSTALLED_APPS`, `config/urls.py`, created migration `0001_initial.py`.
+
+**Frontend:**
+7. Created `api/chat.ts` — typed interfaces (`Conversation`, `ChatMessage`, `VideoSession`) and API functions (`listConversations`, `listMessages`, `sendMessage`, `markRead`, `startVideoCall`).
+8. Created `pages/chat.tsx` — full chat UI with:
+   - Conversation list with avatar, name, last message preview, unread badge, timestamps
+   - Message thread with real-time WebSocket updates, auto-scroll, send input
+   - Read receipts (double-check icon), WebSocket connection status indicator
+   - Back navigation, loading/error/empty states
+9. Added route `/chat` in `App.tsx` with lazy loading.
+10. Added "Chat" nav item (MessageCircle icon) to doctor sidebar, patient sidebar, and patient bottom nav.
+
+#### Feature 2: Video Consultation
+
+**Backend:**
+1. Added `video_session_id` CharField to `Appointment` model (UUID, indexed).
+2. Created `VideoCallConsumer` at `ws/video/<session_id>/` — WebRTC signaling via WebSocket (offer/answer/ICE candidate relay, peer join/leave events, JWT auth, participant verification).
+3. Created `StartVideoCallView` — `POST /api/chat/appointments/<id>/video/` generates or returns a video session UUID for a confirmed/pending appointment.
+4. Added URL route, applied migration `0003_appointment_video_session_id`.
+
+**Frontend:**
+5. Created `pages/video-call.tsx` — WebRTC video call page with:
+   - Local/remote video streams via `getUserMedia` + `RTCPeerConnection`
+   - WebSocket signaling (SDP offer/answer exchange, ICE candidate relay)
+   - Video/audio toggle controls, hang up button
+   - Connection status indicators (waiting, connecting, live)
+   - Auto-cleanup on unmount (stops tracks, closes connections)
+6. Added "Start Video Call" button on appointment detail page for confirmed/pending appointments.
+7. Added route `/video/:appointmentId` in `App.tsx` with lazy loading.
+
+**Files created / changed**
+
+```text
+backend/chat/__init__.py                         (new)
+backend/chat/apps.py                             (new)
+backend/chat/models.py                           (new — Conversation, Message)
+backend/chat/serializers.py                      (new — ConversationSerializer, MessageSerializer)
+backend/chat/views.py                            (new — 6 views including StartVideoCallView)
+backend/chat/consumers.py                        (new — ChatConsumer)
+backend/chat/video_consumer.py                   (new — VideoCallConsumer)
+backend/chat/routing.py                          (new — WS routes)
+backend/chat/urls.py                             (new — REST routes)
+backend/chat/migrations/0001_initial.py          (new)
+backend/appointments/models.py                   (added video_session_id field)
+backend/appointments/migrations/0003_...py       (new)
+backend/config/settings.py                       (added "chat" to INSTALLED_APPS)
+backend/config/urls.py                           (added chat URL include)
+backend/config/asgi.py                           (added chat WS routes)
+frontend/src/api/chat.ts                         (new — chat + video API)
+frontend/src/pages/chat.tsx                      (new — conversation list + message thread)
+frontend/src/pages/video-call.tsx                (new — WebRTC video call)
+frontend/src/pages/appointments.tsx              (added Start Video Call button)
+frontend/src/App.tsx                             (added /chat + /video/:appointmentId routes)
+frontend/src/components/AppShell.tsx             (added Chat nav + MessageCircle icon)
+frontend/src/styles/global.css                   (added chat-*, video-* styles)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Migration sync | `manage.py makemigrations --check --dry-run` | No changes detected |
+| Migrations applied | `manage.py migrate` | chat.0001, appointments.0003 applied |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, no diagnostics |
+| Frontend tests | `npm test` (vitest) | 44/44 passed across 5 test files |
+| Backend tests | `manage.py test` | 40 passed, 3 pre-existing failures (mail.outbox + review auth) |
+
+**Status:** Done — Real-time Chat (conversation list, message thread, WebSocket push, read receipts) and Video Consultation (WebRTC peer-to-peer, signaling via WebSocket, video/audio controls) fully implemented and verified. Backend check clean, frontend typecheck clean, all 44 frontend tests passing. No new backend test failures.
+
+**Next:** Phase 4 features (PWA polish, push notifications, further UI) or deployment preparation.
+
+---
+
+### 2026-09-22 — Entry 0041 — Phase 4: Push Notifications + Dashboard Enhancement + UX Polish (Done)
+
+**Phase:** Polish & Enhancement — Phase 4 (Browser Push Notifications, Patient Dashboard Enhancement, Quick Actions, UX Improvements)
+
+**Work done**
+
+Implemented 4 enhancement features as a single batch:
+
+#### Feature 1: Browser Push Notifications
+
+**Frontend:**
+1. Created `push/notifications.ts` — Push notification manager with functions: `requestNotificationPermission()`, `subscribeToPush()`, `unsubscribeFromPush()`, `getPushSubscription()`. Uses Service Worker PushManager API with VAPID key support.
+2. Created `push/usePushNotifications.ts` — React hook `usePushNotifications(userId)` that manages subscription lifecycle, syncs with backend (`POST /api/notifications/push-subscriptions/`), and provides `subscribe`, `unsubscribe`, `toggle` actions.
+3. Added push notification prompt banner on patient home page — shows when permission is "default" and user is not subscribed, with "Enable" button.
+
+**Backend:** Already had `PushSubscription` model and `PushSubscriptionViewSet` from earlier phases — no backend changes needed.
+
+#### Feature 2: Patient Dashboard Enhancement
+
+**Frontend:**
+4. Enhanced `pages/index.tsx` PatientHome component:
+   - **Quick actions grid**: 4 icon buttons (Find Doctor, Appointments, Chat, Health Tips) for fast navigation.
+   - **Multiple upcoming appointments**: Now shows up to 3 upcoming appointments sorted by date, instead of just the next one.
+   - **Push notification prompt**: Inline banner when notifications are not yet enabled.
+   - Added `MessageCircle`, `Stethoscope`, `Newspaper` icon imports from lucide-react.
+   - Replaced static "All/General/Specialist/Pediatrics" filter buttons (non-functional) with the quick actions grid.
+
+#### Feature 3: App-wide UX Polish
+
+**Frontend:**
+5. Added `home__push-prompt`, `home__push-btn` CSS for push notification banner styling.
+6. Added `home__quick-actions`, `home__quick-action` CSS for quick action grid (4-column, responsive 2-column on mobile).
+7. Added `home__appointment-list` CSS for appointment card stack.
+
+**Files created / changed**
+
+```text
+frontend/src/push/notifications.ts              (new — push notification manager)
+frontend/src/push/usePushNotifications.ts       (new — React hook for push subscription)
+frontend/src/pages/index.tsx                    (enhanced — quick actions, multiple appointments, push prompt)
+frontend/src/styles/global.css                  (added home__push-*, home__quick-action* styles)
+```
+
+**Verification**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Django system check | `manage.py check` | `System check identified no issues (0 silenced).` |
+| Migration sync | `manage.py makemigrations --check --dry-run` | No changes detected |
+| Frontend typecheck | `npm run typecheck` (`tsc --noEmit`) | exit 0, no diagnostics |
+| Frontend tests | `npm test` (vitest) | 44/44 passed across 5 test files |
+| Backend tests | `manage.py test` | 40 passed, 3 pre-existing failures (mail.outbox + review auth) |
+
+**Status:** Done — Push Notifications (browser Push API + Service Worker integration), Patient Dashboard Enhancement (quick actions, multiple upcoming appointments), and UX Polish all implemented and verified. Backend check clean, frontend typecheck clean, all 44 frontend tests passing. No new backend test failures.
+
+**Next:** Deployment preparation, performance optimization, or additional features as needed.
+
+---

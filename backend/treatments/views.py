@@ -134,3 +134,62 @@ class DoctorPatientListView(APIView):
         )
         patients = Patient.objects.filter(user_id__in=patient_ids)
         return success_response(data=PatientSerializer(patients, many=True).data)
+
+
+class PatientVisitHistoryView(APIView):
+    """GET /api/treatments/visit-history/?patient=<user_id> — doctor views visit timeline for a patient."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def get(self, request):
+        from django.db.models import Prefetch
+        from appointments.models import Appointment
+
+        doctor = getattr(request.user, "doctor", None)
+        if not doctor:
+            return success_response(data=[], message="Doctor profile not found.")
+
+        patient_id = request.query_params.get("patient")
+        if not patient_id:
+            return success_response(data=[], message="Patient ID is required.")
+
+        # Verify doctor has an appointment with this patient
+        has_appointment = Appointment.objects.filter(
+            doctor=doctor, patient_id=patient_id
+        ).exists()
+        if not has_appointment:
+            return success_response(data=[], message="No appointments with this patient.")
+
+        # Get completed appointments with treatment prefetch
+        from treatments.models import MedicalTreatment
+
+        treatments_qs = MedicalTreatment.objects.filter(doctor=doctor)
+        appointments = (
+            Appointment.objects.filter(doctor=doctor, patient_id=patient_id)
+            .select_related("doctor__user")
+            .prefetch_related(Prefetch("medical_treatments", queryset=treatments_qs, to_attr="_treatments_cache"))
+            .order_by("-appointment_date", "-start_time")
+        )
+
+        # Attach treatment to each appointment
+        results = []
+        for appt in appointments:
+            treatments = getattr(appt, "_treatments_cache", [])
+            appt._treatment = treatments[0] if treatments else None
+            results.append({
+                "appointment_id": appt.id,
+                "appointment_date": str(appt.appointment_date),
+                "start_time": str(appt.start_time),
+                "end_time": str(appt.end_time),
+                "status": appt.status,
+                "reason": appt.reason,
+                "notes": appt.notes,
+                "diagnosis": treatments[0].diagnosis if treatments else None,
+                "treatment_notes": treatments[0].treatment_notes if treatments else None,
+                "prescription": treatments[0].prescription if treatments else None,
+                "follow_up_date": str(treatments[0].follow_up_date) if treatments and treatments[0].follow_up_date else None,
+                "doctor_first_name": appt.doctor.user.first_name,
+                "doctor_last_name": appt.doctor.user.last_name,
+            })
+
+        return success_response(data=results)

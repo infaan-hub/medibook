@@ -21,7 +21,7 @@ import { getPatientProfileById } from "../api/patients";
 import type { Appointment, DoctorAvailability, DoctorProfile, PatientProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { useRealtimeEvent } from "../realtime/socket";
+import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import {
   Activity,
   ArrowLeft,
@@ -439,9 +439,25 @@ export function DoctorDashboardScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Live dashboard: stats + today's schedule react to every booking/status change.
+  const refresh = useCallback(() => {
+    Promise.all([
+      listDoctorAppointments({ page_size: 100 }),
+      apiGet<DoctorProfile>("/doctors/me/"),
+    ])
+      .then(([appointmentsResponse, profileResponse]) => {
+        setAppointments(appointmentsResponse.data);
+        setProfile(profileResponse.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  useRealtimeSync({
+    refresh,
+    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+  });
+
+  // Optimistic delete: remove from local state immediately.
   useRealtimeEvent((event, payload) => {
-    if (event === "appointment.created" || event === "appointment.updated") load();
     if (event === "appointment.deleted" && payload?.id) {
       setAppointments((prev) => prev.filter((a) => a.id !== Number(payload.id)));
     }
@@ -551,9 +567,19 @@ export function DoctorAppointmentsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Live list: patient bookings/cancellations land in the right tab instantly.
+  const refresh = useCallback(() => {
+    listDoctorAppointments()
+      .then((r) => setAppointments(r.data))
+      .catch(() => {});
+  }, []);
+
+  useRealtimeSync({
+    refresh,
+    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+  });
+
+  // Optimistic delete.
   useRealtimeEvent((event, payload) => {
-    if (event === "appointment.created" || event === "appointment.updated") load();
     if (event === "appointment.deleted" && payload?.id) {
       setAppointments((prev) => prev.filter((a) => a.id !== Number(payload.id)));
     }

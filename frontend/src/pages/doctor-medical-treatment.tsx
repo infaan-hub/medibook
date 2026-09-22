@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getPatientProfileById } from "../api/patients";
 import {
   listDoctorPatients,
@@ -11,7 +12,7 @@ import {
 import type { PatientProfile } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { ArrowLeft, User, Calendar, FileText, Edit3, Trash2, X, Pill, Stethoscope } from "lucide-react";
+import { ArrowLeft, User, Calendar, FileText, Edit3, Trash2, X, Pill, Stethoscope, History } from "lucide-react";
 
 function msg(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -328,22 +329,26 @@ export function DoctorMedicalTreatmentScreen() {
         {!patientsLoading && patients.length > 0 && (
           <div className="treat-patient-list">
             {patients.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="treat-patient-sel"
-                onClick={() => setSelectedId(p.id)}
-              >
-                <div className="treat-patient-sel-av">
-                  <User size={18} />
-                </div>
-                <div className="treat-patient-sel-info">
-                  <span className="treat-patient-sel-name">{p.first_name || p.last_name ? `${p.first_name} ${p.last_name}`.trim() : p.email}</span>
-                  <span className="treat-patient-sel-meta">
-                    {fmtGender(p.gender)} &middot; {p.blood_group || "No blood group"} &middot; {fmtDate(p.date_of_birth)}
-                  </span>
-                </div>
-              </button>
+              <div key={p.id} className="treat-patient-sel-wrap">
+                <button
+                  type="button"
+                  className="treat-patient-sel"
+                  onClick={() => setSelectedId(p.id)}
+                >
+                  <div className="treat-patient-sel-av">
+                    <User size={18} />
+                  </div>
+                  <div className="treat-patient-sel-info">
+                    <span className="treat-patient-sel-name">{p.first_name || p.last_name ? `${p.first_name} ${p.last_name}`.trim() : p.email}</span>
+                    <span className="treat-patient-sel-meta">
+                      {fmtGender(p.gender)} &middot; {p.blood_group || "No blood group"} &middot; {fmtDate(p.date_of_birth)}
+                    </span>
+                  </div>
+                </button>
+                <Link to={`/doctor/visit-history/${p.id}`} className="treat-history-link" title="View visit history">
+                  <History size={14} /> History
+                </Link>
+              </div>
             ))}
           </div>
         )}

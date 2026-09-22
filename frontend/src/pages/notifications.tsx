@@ -12,7 +12,7 @@ import {
 import type { Notification, NotificationType } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { useRealtimeEvent } from "../realtime/socket";
+import { useRealtimeSync } from "../realtime/socket";
 import {
   Bell,
   CalendarCheck,
@@ -118,11 +118,18 @@ export function NotificationsScreen() {
       .finally(() => setLoading(false));
   }, [filter]);
 
+  const refresh = useCallback(() => {
+    const params = filter === "unread" ? { unread: 1 } : undefined;
+    listNotifications(params)
+      .then((r) => setNotifications(r.data.results))
+      .catch(() => {});
+  }, [filter]);
+
   useEffect(() => { load(); }, [load]);
 
-  // Live inbox: new notifications appear without a manual refresh.
-  useRealtimeEvent((event) => {
-    if (event === "notification.created") load();
+  useRealtimeSync({
+    refresh,
+    events: ["notification.created"],
   });
 
   async function handleRead(id: number) {

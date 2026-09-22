@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { listMyAppointments } from "../api/appointments";
 import { getPatientProfile } from "../api/patients";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
+import { listArticles, type Article } from "../api/blog";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { formatRating } from "../components/reviews";
 import { useSession } from "../state/app-context";
-import { useRealtimeEvent } from "../realtime/socket";
+import { useRealtimeSync } from "../realtime/socket";
+import { usePushNotifications } from "../push/usePushNotifications";
 import {
   Calendar,
   Bell,
@@ -15,6 +18,7 @@ import {
   MapPin,
   Search,
   Star,
+  Newspaper,
 } from "lucide-react";
 
 /** Photo shown on every doctor card: uploaded picture first, placeholder last. */
@@ -30,7 +34,9 @@ export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 export { NotificationsScreen } from "./notifications";
+export { MyReviewsScreen } from "./reviews";
 export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen, AdminAppointmentsScreen } from "./admin-dashboard";
+export { BlogListPage, BlogArticlePage } from "./blog";
 
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
@@ -47,13 +53,23 @@ function formatDoctorName(doctor: DoctorProfile): string {
 }
 
 function PatientHome({ user }: { user: User }) {
+  const { t } = useTranslation();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
+  const [articles, setArticles] = useState<Article[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { subscribed, toggle: togglePush, loading: pushLoading } = usePushNotifications(user.id);
+
   const loadAppointments = useCallback(() => {
     listMyAppointments()
-      .then((response) => setAppointments(response.data?.results ?? []))
+      .then((response) => { setError(null); setAppointments(response.data?.results ?? []); })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load appointments."));
+  }, []);
+
+  const refreshAppointments = useCallback(() => {
+    listMyAppointments()
+      .then((response) => { setError(null); setAppointments(response.data?.results ?? []); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -61,13 +77,19 @@ function PatientHome({ user }: { user: User }) {
     listDoctors()
       .then((response) => setDoctors((response.data?.results ?? []).slice(0, 3)))
       .catch(() => setDoctors([]));
+    listArticles()
+      .then((response) => setArticles((response.data?.results ?? []).slice(0, 3)))
+      .catch(() => setArticles([]));
   }, [loadAppointments]);
 
-  // Live home: upcoming appointment reacts to bookings/status changes instantly.
-  useRealtimeEvent((event) => {
-    if (event === "appointment.created" || event === "appointment.updated") loadAppointments();
+  useRealtimeSync({
+    refresh: refreshAppointments,
+    events: ["appointment.created", "appointment.updated"],
   });
-  const next = appointments?.filter((item) => item.status === "pending" || item.status === "confirmed").sort((a, b) => formatAppointment(a).localeCompare(formatAppointment(b)))[0];
+
+  const upcoming = appointments
+    ?.filter((item) => item.status === "pending" || item.status === "confirmed")
+    .sort((a, b) => (a.appointment_date + a.start_time).localeCompare(b.appointment_date + b.start_time)) ?? [];
 
   return (
     <div className="page home-page">
@@ -95,6 +117,17 @@ function PatientHome({ user }: { user: User }) {
 
       {error && <ErrorState message={error} />}
 
+      {/* Push notification prompt */}
+      {"Notification" in window && Notification.permission === "default" && !subscribed && (
+        <div className="home__push-prompt">
+          <Bell size={18} />
+          <span>Enable notifications for appointment reminders</span>
+          <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
+            Enable
+          </button>
+        </div>
+      )}
+
       <section className="home__section">
         <div className="home__section-heading">
           <h1>Top Doctors</h1>
@@ -109,7 +142,13 @@ function PatientHome({ user }: { user: User }) {
                 <img src={doctorCardImage(doctor, index)} alt={formatDoctorName(doctor)} />
                 <span className="home__doctor-info">
                   <strong>{formatDoctorName(doctor)}</strong>
-                  <span>{doctor.qualifications || "Medical specialist"}</span>
+                  {doctor.specialties && doctor.specialties.length > 0 ? (
+                    <span className="home__doctor-specialties">
+                      {doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}
+                    </span>
+                  ) : (
+                    <span>{doctor.qualifications || "Medical specialist"}</span>
+                  )}
                   {(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}
                   <span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span>
                 </span>
@@ -125,29 +164,56 @@ function PatientHome({ user }: { user: User }) {
           <h2>Upcoming Appointments</h2>
           <Link to="/appointments">See all <ChevronRight size={15} /></Link>
         </div>
-        <div className="home__filters" aria-label="Appointment filters">
-          <span className="home__filter home__filter--active">All</span>
-          <span className="home__filter">General</span>
-          <span className="home__filter">Specialist</span>
-          <span className="home__filter">Pediatrics</span>
-        </div>
-        {appointments === null ? <Skeleton lines={3} /> : next ? (
-          <Link to={`/appointments/${next.id}`} className="home__appointment-card">
-            <span className="home__appointment-datebox">
-              <strong>{new Date(`${next.appointment_date}T00:00:00`).toLocaleDateString(undefined, { day: "2-digit" })}</strong>
-              <span>{new Date(`${next.appointment_date}T00:00:00`).toLocaleDateString(undefined, { month: "short" })}</span>
-            </span>
-            <span className="home__appointment-info">
-              <strong>Doctor appointment</strong>
-              <span>{formatAppointment(next)}</span>
-              <span className={`badge badge--${next.status}`}>{next.status}</span>
-            </span>
-            <ChevronRight size={17} />
-          </Link>
+        {appointments === null ? <Skeleton lines={3} /> : upcoming.length > 0 ? (
+          <div className="home__appointment-list">
+            {upcoming.slice(0, 3).map((appt) => (
+              <Link key={appt.id} to={`/appointments/${appt.id}`} className="home__appointment-card">
+                <span className="home__appointment-datebox">
+                  <strong>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { day: "2-digit" })}</strong>
+                  <span>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { month: "short" })}</span>
+                </span>
+                <span className="home__appointment-info">
+                  <strong>Doctor appointment</strong>
+                  <span>{formatAppointment(appt)}</span>
+                  <span className={`badge badge--${appt.status}`}>{appt.status}</span>
+                </span>
+                <ChevronRight size={17} />
+              </Link>
+            ))}
+          </div>
         ) : (
           <EmptyState icon={<Calendar size={28} />} title="No upcoming appointments" description="Find a doctor to book your next visit." action={<Link to="/doctors">Find a doctor</Link>} />
         )}
       </section>
+
+      {/* Quick actions */}
+      <div className="home__quick-actions">
+        <Link to="/blog" className="home__quick-action">
+          <Newspaper size={20} />
+          <span>Health Tips</span>
+        </Link>
+      </div>
+
+      {articles.length > 0 && (
+        <section className="home__section">
+          <div className="home__section-heading">
+            <h2>{t("home.healthTips")}</h2>
+            <Link to="/blog">{t("home.seeAll")} <ChevronRight size={15} /></Link>
+          </div>
+          <div className="home__blog-list">
+            {articles.map((article) => (
+              <Link key={article.id} to={`/blog/${article.slug}`} className="home__blog-card">
+                {article.image && <img src={article.image} alt={article.title} loading="lazy" />}
+                <div className="home__blog-info">
+                  <strong>{article.title}</strong>
+                  <span>{article.excerpt}</span>
+                </div>
+                <ChevronRight size={17} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -181,7 +247,7 @@ export function DoctorsPage() {
       .catch(() => { if (!cancelled) load(); });
     return () => { cancelled = true; };
   }, []);
-  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">Location</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by location / area" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or location." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong><span>{doctor.qualifications || "Medical specialist"}</span>{(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}<span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
+  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">Location</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by location / area" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or location." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong>{doctor.specialties && doctor.specialties.length > 0 ? <span className="home__doctor-specialties">{doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}</span> : <span>{doctor.qualifications || "Medical specialist"}</span>}{(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}<span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
 }
 
 export function AppointmentsPage() {

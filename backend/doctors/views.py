@@ -445,3 +445,87 @@ class AdminDoctorApprovalView(APIView):
         return success_response(
             data=DoctorSerializer(doctor).data, message="Doctor updated."
         )
+
+
+class EarningsDashboardView(APIView):
+    """GET /api/doctors/me/earnings/ — doctor earnings dashboard with daily/weekly/monthly breakdown."""
+
+    permission_classes = (IsAuthenticated, IsDoctor)
+
+    def get(self, request):
+        from datetime import timedelta
+        from django.db.models import Count, Sum
+        from django.utils import timezone
+        from appointments.models import Appointment
+
+        doctor = getattr(request.user, "doctor", None)
+        if not doctor:
+            return success_response(data=None, message="Doctor profile not found.")
+
+        fee = float(doctor.consultation_fee or 0)
+        today = timezone.now().date()
+
+        # Completed appointments for earnings calculation
+        completed_qs = Appointment.objects.filter(
+            doctor=doctor, status="completed"
+        )
+
+        # Today
+        today_count = completed_qs.filter(appointment_date=today).count()
+        today_earnings = today_count * fee
+
+        # This week (Mon–Sun)
+        week_start = today - timedelta(days=today.weekday())
+        week_count = completed_qs.filter(
+            appointment_date__gte=week_start, appointment_date__lte=today
+        ).count()
+        week_earnings = week_count * fee
+
+        # This month
+        month_start = today.replace(day=1)
+        month_count = completed_qs.filter(
+            appointment_date__gte=month_start, appointment_date__lte=today
+        ).count()
+        month_earnings = month_count * fee
+
+        # Last 30 days daily breakdown
+        thirty_days_ago = today - timedelta(days=29)
+        daily_data = (
+            completed_qs.filter(appointment_date__gte=thirty_days_ago)
+            .values("appointment_date")
+            .annotate(count=Count("id"))
+            .order_by("appointment_date")
+        )
+        daily_map = {str(d["appointment_date"]): d["count"] for d in daily_data}
+        daily_breakdown = []
+        for i in range(30):
+            d = thirty_days_ago + timedelta(days=i)
+            count = daily_map.get(str(d), 0)
+            daily_breakdown.append({
+                "date": str(d),
+                "appointments": count,
+                "earnings": round(count * fee, 2),
+            })
+
+        # This week day-by-day breakdown
+        week_daily = []
+        for i in range(7):
+            d = week_start + timedelta(days=i)
+            if d > today:
+                break
+            count = completed_qs.filter(appointment_date=d).count()
+            week_daily.append({
+                "date": str(d),
+                "day": d.strftime("%A"),
+                "appointments": count,
+                "earnings": round(count * fee, 2),
+            })
+
+        return success_response(data={
+            "consultation_fee": fee,
+            "today": {"appointments": today_count, "earnings": round(today_earnings, 2)},
+            "this_week": {"appointments": week_count, "earnings": round(week_earnings, 2)},
+            "this_month": {"appointments": month_count, "earnings": round(month_earnings, 2)},
+            "daily_30_days": daily_breakdown,
+            "week_daily": week_daily,
+        })

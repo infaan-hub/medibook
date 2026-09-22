@@ -15,20 +15,17 @@ export default defineConfig({
     proxy: {
       "/api": { target: API_PROXY_TARGET, changeOrigin: true },
       "/media": { target: API_PROXY_TARGET, changeOrigin: true },
-      // Realtime push (PHASE 13): forward the WebSocket handshake to Daphne.
-      "/ws": { target: API_PROXY_TARGET, changeOrigin: true, ws: true },
-    }
+    },
   },
   preview: {
     port: 4180,
     proxy: {
       "/api": { target: API_PROXY_TARGET, changeOrigin: true },
       "/media": { target: API_PROXY_TARGET, changeOrigin: true },
-      "/ws": { target: API_PROXY_TARGET, changeOrigin: true, ws: true },
-    }
+    },
   },
   build: {
     outDir: "dist",
-    sourcemap: false
-  }
+    sourcemap: false,
+  },
 });

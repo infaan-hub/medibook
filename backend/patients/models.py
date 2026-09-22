@@ -26,6 +26,7 @@ class Patient(TimeStampedModel):
     blood_group = models.CharField(max_length=5, blank=True, default="")
     allergies = models.TextField(blank=True, default="")
     medical_history = models.TextField(blank=True, default="")
+    reminder_preferences = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ("-created_at",)

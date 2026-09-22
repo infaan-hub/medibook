@@ -11,6 +11,7 @@ from doctors.views import (
     DoctorAvailableDaysView,
     DoctorScheduleDetailView,
     DoctorScheduleView,
+    EarningsDashboardView,
     MyDoctorProfileView,
     ScheduleExceptionDetailView,
     ScheduleExceptionListView,
@@ -24,6 +25,7 @@ router.register("doctors", DoctorViewSet, basename="doctor")
 
 urlpatterns = [
     path("doctors/me/profile/", MyDoctorProfileView.as_view(), name="my-doctor-profile"),
+    path("doctors/me/earnings/", EarningsDashboardView.as_view(), name="doctor-earnings"),
     path(
         "doctors/<int:pk>/availability/",
         DoctorAvailabilityView.as_view(),

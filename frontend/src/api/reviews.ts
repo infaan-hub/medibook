@@ -20,8 +20,10 @@ export function getDoctorReviews(doctorId: number): Promise<Envelope<Review[]>> 
 }
 
 /** GET /api/reviews/ — the signed-in patient's own reviews (paginated). */
-export function listMyReviews(): Promise<Envelope<Paginated<Review>>> {
-  return apiGet<Paginated<Review>>("/reviews/");
+export function listMyReviews(
+  params?: Record<string, unknown>
+): Promise<Envelope<Paginated<Review>>> {
+  return apiGet<Paginated<Review>>("/reviews/", params);
 }
 
 /** DELETE /api/reviews/:id/ — delete a review. */

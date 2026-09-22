@@ -37,6 +37,8 @@ urlpatterns = [
     path("api/", include("notifications.urls")),
     # Admin dashboard statistics (§34).
     path("api/", include("reports.urls")),
+    # Blog / Health Tips (PHASE 1).
+    path("api/", include("blog.urls")),
 ]
 
 if settings.DEBUG:

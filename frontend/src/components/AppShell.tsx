@@ -14,7 +14,7 @@ import type { BeforeInstallPromptEvent } from "../types/pwa";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
-import { useRealtimeEvent } from "../realtime/socket";
+import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { isStandalone } from "../pwa/installPrompt";
 import {
   Home,
@@ -28,10 +28,12 @@ import {
   ChevronRight,
   Activity,
   FilePlus2,
+  Star,
   Users as UsersIcon,
   UserPlus,
   X,
   LogOut,
+  Newspaper,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
@@ -51,6 +53,7 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/users/new", label: "Add user", icon: <UserPlus size={20} /> },
       { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
+      { to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
@@ -69,6 +72,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { to: "/", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/reviews", label: "My reviews", icon: <Star size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
     { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
@@ -99,8 +103,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
     { to: "/", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-    { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
-    { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    { to: "/blog", label: "Health Tips", icon: <Newspaper size={20} /> },
   ];
 }
 
@@ -136,14 +139,11 @@ function NotificationBell() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    refresh();
-    // Polling stays as a safety net while the realtime socket reconnects.
-    const interval = setInterval(refresh, 30_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
-  // Live updates: badge + toast the moment the server pushes an event.
+  useRealtimeSync({ refresh, events: ["notification.created", "appointment.created", "appointment.updated"] });
+
+  // Toast on new notification (not handled by useRealtimeSync).
   useRealtimeEvent((event, payload) => {
     if (event === "notification.created") {
       setUnreadCount((count) => count + 1);
@@ -151,9 +151,6 @@ function NotificationBell() {
         "info",
         typeof payload.message === "string" ? payload.message : "New notification"
       );
-      refresh();
-    } else if (event === "appointment.created" || event === "appointment.updated") {
-      refresh();
     }
   });
 

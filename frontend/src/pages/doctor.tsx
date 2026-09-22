@@ -67,6 +67,22 @@ export function DoctorProfileScreen() {
         <p>{doctor.qualifications || "Professional profile"}</p>
         <p>{doctor.experience_years} years of experience</p>
         <p>Consultation fee: TSh {doctor.consultation_fee}</p>
+
+        {/* Specialties with patient-friendly names */}
+        {doctor.specialties && doctor.specialties.length > 0 && (
+          <div className="doctor-specialties">
+            <h3>Specialties</h3>
+            <div className="doctor-specialties__list">
+              {doctor.specialties.map((s) => (
+                <Link key={s.id} to={`/specialties/${s.id}`} className="doctor-specialty-tag">
+                  <span className="doctor-specialty-tag__name">{s.patient_friendly_name || s.name}</span>
+                  <span className="doctor-specialty-tag__medical">{s.name}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {ratingNumber(doctor.average_rating) > 0 && (
           <div className="doctor-profile__rating">
             <StarRating value={doctor.average_rating} readonly size="sm" />
@@ -127,6 +143,18 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
       <div className="doc-preview-card__body">
         <h2 className="doc-preview-card__name">Dr. {profile.first_name} {profile.last_name}</h2>
         <p className="doc-preview-card__qual">{profile.qualifications || "Medical specialist"}</p>
+
+        {/* Specialties on doctor card */}
+        {profile.specialties && profile.specialties.length > 0 && (
+          <div className="doc-preview-card__specialties">
+            {profile.specialties.map((s) => (
+              <span key={s.id} className="doctor-specialty-tag doctor-specialty-tag--small">
+                <span className="doctor-specialty-tag__name">{s.patient_friendly_name || s.name}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="doc-preview-card__meta">
           <span className="doc-preview-card__meta-item">
             <Clock size={14} /> {profile.experience_years ?? 0} yrs exp.

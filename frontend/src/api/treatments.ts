@@ -36,6 +36,22 @@ export interface UpdateTreatmentPayload {
   follow_up_notes?: string;
 }
 
+export interface VisitHistoryEntry {
+  appointment_id: number;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  reason: string;
+  notes: string;
+  diagnosis: string | null;
+  treatment_notes: string | null;
+  prescription: string | null;
+  follow_up_date: string | null;
+  doctor_first_name: string;
+  doctor_last_name: string;
+}
+
 /** GET /api/treatments/patients/ — list patients who have appointments with this doctor. */
 export function listDoctorPatients(): Promise<Envelope<import("./types").PatientProfile[]>> {
   return apiGet<import("./types").PatientProfile[]>("/treatments/patients/");
@@ -60,4 +76,9 @@ export function updateTreatment(id: number, payload: UpdateTreatmentPayload): Pr
 /** DELETE /api/treatments/<id>/ — delete a treatment record. */
 export async function deleteTreatment(id: number): Promise<void> {
   await apiDelete(`/treatments/${id}/`);
+}
+
+/** GET /api/treatments/visit-history/?patient=<userId> — doctor views visit timeline for a patient. */
+export function getVisitHistory(patientId: number): Promise<Envelope<VisitHistoryEntry[]>> {
+  return apiGet<VisitHistoryEntry[]>(`/treatments/visit-history/?patient=${patientId}`);
 }

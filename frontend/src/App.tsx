@@ -44,6 +44,7 @@ const DoctorMedicalTreatmentScreen = lazy(() => import("./pages/doctor-medical-t
 const DoctorAvailabilityScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorAvailabilityScreen })));
 const DoctorPersonalScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorPersonalScreen })));
 const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default: m.NotificationsScreen })));
+const MyReviewsScreen = lazy(() => import("./pages").then((m) => ({ default: m.MyReviewsScreen })));
 const AdminDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDoctorsScreen })));
@@ -55,6 +56,9 @@ const SpecialtyListPage = lazy(() => import("./pages").then((m) => ({ default: m
 const SpecialtyDetailPage = lazy(() => import("./pages").then((m) => ({ default: m.SpecialtyDetailPage })));
 const HospitalListPage = lazy(() => import("./pages").then((m) => ({ default: m.HospitalListPage })));
 const HospitalDetailPage = lazy(() => import("./pages").then((m) => ({ default: m.HospitalDetailPage })));
+const BlogListPage = lazy(() => import("./pages").then((m) => ({ default: m.BlogListPage })));
+const BlogArticlePage = lazy(() => import("./pages").then((m) => ({ default: m.BlogArticlePage })));
+const VisitHistoryPage = lazy(() => import("./pages/visit-history").then((m) => ({ default: m.default })));
 
 function PageFallback() {
   return (
@@ -170,8 +174,10 @@ export default function App() {
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
+                <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
+                <Route path="/reviews" element={<RequirePatient><MyReviewsScreen /></RequirePatient>} />
                 <Route path="/profile" element={<ProfileScreen />} />
                 <Route
                   path="/settings"
@@ -192,6 +198,8 @@ export default function App() {
                 <Route path="/specialties/:id" element={<SpecialtyDetailPage />} />
                 <Route path="/hospitals" element={<HospitalListPage />} />
                 <Route path="/hospitals/:id" element={<HospitalDetailPage />} />
+                <Route path="/blog" element={<BlogListPage />} />
+                <Route path="/blog/:slug" element={<BlogArticlePage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Routes>

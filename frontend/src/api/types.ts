@@ -77,11 +77,14 @@ export interface PatientProfile {
   blood_group: string;
   allergies: string;
   medical_history: string;
+  reminder_preferences: Record<string, boolean>;
 }
 
 export type UpdatePatientProfilePayload = Partial<
   Omit<PatientProfile, "id" | "email">
->;
+> & {
+  reminder_preferences?: Record<string, boolean>;
+};
 
 export type AppointmentStatus =
   | "pending"
@@ -130,7 +133,7 @@ export interface DoctorProfile {
   first_name: string;
   last_name: string;
   profile_image: string | null;
-  specialties: number[];
+  specialties: Specialty[];
   hospitals: number[];
   qualifications: string;
   experience_years: number | null;
@@ -204,7 +207,9 @@ export interface DoctorQueryParams {
 export interface Specialty {
   id: number;
   name: string;
+  patient_friendly_name: string;
   description: string;
+  what_to_expect: string;
   icon_url: string;
 }
 
@@ -256,6 +261,8 @@ export interface Review {
   appointment: number;
   patient: number;
   doctor: number;
+  /** Rendered server-side from the doctor's account row (e.g. "Dr. Jane Doe"). */
+  doctor_name: string;
   rating: number;
   comment: string;
   is_visible: boolean;

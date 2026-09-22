@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { Link } from "react-router-dom";
 import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FilePlus2, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
 import { approveDoctor, createAdminDoctor, createAdminUser, deleteAdminDoctor, deleteAdminUser, getAdminStats, listAdminUsers, listAuditEvents, type AdminStats } from "../api/admin";
-import { deleteAppointment, listMyAppointments } from "../api/appointments";
+import { deleteAppointment, listAllAppointments } from "../api/appointments";
 import { listDoctors } from "../api/doctors";
 import type { Appointment, AuditEvent, DoctorProfile, User } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { formatRating } from "../components/reviews";
 import { useToast } from "../state/app-context";
+import { useRealtimeSync } from "../realtime/socket";
 
 function message(error: unknown): string { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 function formatDate(value: string): string { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
@@ -24,7 +25,9 @@ function MetricCard({ label, value, icon, tone, detail }: { label: string; value
 export function AdminDashboardScreen() {
   const [stats, setStats] = useState<AdminStats | null>(null); const [events, setEvents] = useState<AuditEvent[]>([]); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true);
   const load = useCallback(() => { setLoading(true); setError(null); Promise.all([getAdminStats(), listAuditEvents()]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data); }).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, []);
+  const refresh = useCallback(() => { Promise.all([getAdminStats(), listAuditEvents()]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data); }).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
+  useRealtimeSync({ refresh, events: ["appointment.created", "appointment.updated", "user.created", "doctor.updated"] });
   if (loading) return <div className="admin-workspace"><Skeleton lines={8} /></div>;
   if (error || !stats) return <div className="admin-workspace"><ErrorState message={error ?? "Could not load dashboard."} onRetry={load} /></div>;
   const statuses = Object.entries(stats.appointments_by_status); const maxStatus = Math.max(...statuses.map(([, count]) => count), 1);
@@ -40,6 +43,8 @@ export function AdminUsersScreen() {
   const { notify } = useToast();
   const [users, setUsers] = useState<User[]>([]); const [role, setRole] = useState(""); const [query, setQuery] = useState(""); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [deletingId, setDeletingId] = useState<number | null>(null);
   const load = useCallback(() => { setLoading(true); listAdminUsers(role ? { role } : {}).then((response) => setUsers(response.data.results)).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, [role]); useEffect(() => { load(); }, [load]);
+  const refresh = useCallback(() => { listAdminUsers(role ? { role } : {}).then((response) => setUsers(response.data.results)).catch(() => {}); }, [role]);
+  useRealtimeSync({ refresh, events: ["user.created", "user.deleted", "user.updated"] });
   async function handleDelete(user: User) {
     if (!window.confirm(`Delete ${user.first_name || user.username}'s account? Their appointments and reviews will also be removed.`)) return;
     setDeletingId(user.id);
@@ -52,6 +57,8 @@ export function AdminUsersScreen() {
 export function AdminDoctorsScreen() {
   const { notify } = useToast(); const [doctors, setDoctors] = useState<DoctorProfile[]>([]); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [deletingId, setDeletingId] = useState<number | null>(null);
   const load = useCallback(() => { setLoading(true); listDoctors({ page_size: 100 }).then((response) => setDoctors(response.data.results)).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, []); useEffect(() => { load(); }, [load]);
+  const refresh = useCallback(() => { listDoctors({ page_size: 100 }).then((response) => setDoctors(response.data.results)).catch(() => {}); }, []);
+  useRealtimeSync({ refresh, events: ["doctor.created", "doctor.updated", "doctor.deleted"] });
   async function toggle(doctor: DoctorProfile) { try { await approveDoctor(doctor.id, !doctor.is_available); notify("success", doctor.is_available ? "Doctor suspended." : "Doctor approved."); load(); } catch (reason) { notify("error", message(reason)); } }
   async function handleDelete(doctor: DoctorProfile) {
     if (!window.confirm(`Delete Dr. ${doctor.first_name} ${doctor.last_name}? Their profile, account and appointments will be removed.`)) return;
@@ -91,16 +98,27 @@ export function AdminAppointmentsScreen() {
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  // Platform-wide booking history: admins get the unfiltered collection back
+  // from /appointments/ (roles are scoped server-side). page_size is raised to
+  // the API cap so the control table shows more than the first page of 20.
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    listMyAppointments()
+    listAllAppointments({ page_size: 100 })
       .then((r) => setAppointments(r.data.results))
       .catch((e) => setError(message(e)))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const refresh = useCallback(() => {
+    listAllAppointments({ page_size: 100 })
+      .then((r) => setAppointments(r.data.results))
+      .catch(() => {});
+  }, []);
+
+  useRealtimeSync({ refresh, events: ["appointment.created", "appointment.updated", "appointment.deleted"] });
 
   async function handleDelete(id: number) {
     setDeletingId(id);

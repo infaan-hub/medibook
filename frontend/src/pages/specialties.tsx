@@ -73,8 +73,11 @@ export function SpecialtyListPage() {
                   <span className="specialty-card__icon">
                     <Stethoscope size={20} />
                   </span>
-                  <h2 className="specialty-card__name">{specialty.name}</h2>
+                  <h2 className="specialty-card__name">{specialty.patient_friendly_name || specialty.name}</h2>
                 </div>
+                {specialty.patient_friendly_name && specialty.patient_friendly_name !== specialty.name && (
+                  <p className="specialty-card__medical-name">{specialty.name}</p>
+                )}
                 {specialty.description && (
                   <p className="specialty-card__description">{specialty.description}</p>
                 )}
@@ -147,7 +150,12 @@ export function SpecialtyDetailPage() {
               <span className="specialty-detail__icon">
                 <Stethoscope size={24} />
               </span>
-              <h1 className="specialty-detail__name">{specialty.name}</h1>
+              <div>
+                <h1 className="specialty-detail__name">{specialty.patient_friendly_name || specialty.name}</h1>
+                {specialty.patient_friendly_name && specialty.patient_friendly_name !== specialty.name && (
+                  <p className="specialty-detail__medical-name">{specialty.name}</p>
+                )}
+              </div>
             </div>
             {specialty.description && (
               <p className="specialty-detail__description">{specialty.description}</p>
@@ -155,8 +163,10 @@ export function SpecialtyDetailPage() {
           </Card>
 
           <Card className="specialty-detail__info">
-            <h2 className="card__title">About this specialty</h2>
-            {specialty.description ? (
+            <h2 className="card__title">What this doctor treats</h2>
+            {specialty.what_to_expect ? (
+              <p className="specialty-detail__full-description">{specialty.what_to_expect}</p>
+            ) : specialty.description ? (
               <p className="specialty-detail__full-description">{specialty.description}</p>
             ) : (
               <p className="specialty-detail__empty">No description available.</p>
@@ -164,8 +174,8 @@ export function SpecialtyDetailPage() {
           </Card>
 
           <div className="specialty-detail__actions">
-            <Link to="/doctors" className="btn btn--secondary">
-              Find doctors in this specialty
+            <Link to={`/doctors?specialty=${specialty.id}`} className="btn btn--secondary">
+              Find {specialty.patient_friendly_name || specialty.name} doctors
             </Link>
             <Link to="/specialties" className="btn btn--ghost">
               Back to specialties

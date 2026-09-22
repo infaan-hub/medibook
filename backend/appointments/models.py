@@ -67,3 +67,36 @@ class Appointment(TimeStampedModel):
     def __str__(self) -> str:
         return f"appointment:{self.pk}:{self.status}"
 
+
+class ReminderType(models.TextChoices):
+    ONE_HOUR = "1h", "1 hour before"
+    TWENTY_FOUR_HOURS = "24h", "24 hours before"
+    ONE_WEEK = "1w", "1 week before"
+
+
+class AppointmentReminder(TimeStampedModel):
+    """Scheduled reminder for an appointment."""
+
+    appointment = models.ForeignKey(
+        Appointment, on_delete=models.CASCADE, related_name="reminders"
+    )
+    reminder_type = models.CharField(
+        max_length=5,
+        choices=ReminderType.choices,
+        db_index=True,
+    )
+    scheduled_for = models.DateTimeField(db_index=True)
+    sent = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        ordering = ("scheduled_for",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("appointment", "reminder_type"),
+                name="uniq_appointment_reminder_type",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"reminder:{self.appointment_id}:{self.reminder_type}"
+

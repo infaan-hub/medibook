@@ -3,7 +3,7 @@
  * Strategy: app-shell precache + network-first for navigation requests with
  * offline.html fallback; stale-while-revalidate for same-origin static assets.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -45,22 +45,21 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return; // API calls go straight to network
+  if (url.origin !== self.location.origin) return;
 
   // Navigations: network-first, offline.html fallback.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy));
+          }
           return response;
         })
         .catch(() =>
-          caches
-            .match(request)
-            .then((hit) => hit ?? caches.match("/offline.html"))
-            .then((hit) => hit ?? caches.match("/index.html"))
+          caches.match("/index.html").then((hit) => hit || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } }))
         )
     );
     return;
@@ -77,26 +76,13 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached);
-      return cached ?? network;
+        .catch(() => cached || new Response("", { status: 408 }));
+      return cached || network;
     })
   );
 });
 
-// Activate — purge old versioned caches.
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== SHELL_CACHE && key !== RUNTIME_CACHE)
-          .map((key) => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
-  );
-});
-
-// Web Push (§69) — show notification when a push event arrives.
+// Web Push — show notification when a push event arrives.
 self.addEventListener("push", (event) => {
   const payload = event.data ? event.data.json() : {};
   event.waitUntil(

@@ -27,7 +27,7 @@ import type {
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { useRealtimeEvent } from "../realtime/socket";
+import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar } from "lucide-react";
 
 /* ---------- helpers ---------- */
@@ -530,8 +530,19 @@ export function AppointmentsListScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const refresh = useCallback(() => {
+    listMyAppointments()
+      .then((r) => setAppointments(r.data.results))
+      .catch(() => {});
+  }, []);
+
+  useRealtimeSync({
+    refresh,
+    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+  });
+
+  // Optimistic delete.
   useRealtimeEvent((event, payload) => {
-    if (event === "appointment.created" || event === "appointment.updated") load();
     if (event === "appointment.deleted" && payload?.id) {
       setAppointments((prev) => prev.filter((a) => a.id !== Number(payload.id)));
     }
@@ -846,6 +857,13 @@ export function AppointmentDetailScreen() {
                 Cancel appointment
               </Button>
             )}
+          </div>
+        )}
+        {(appointment.status === "confirmed" || appointment.status === "pending") && (
+          <div className="form__row" style={{ marginTop: "0.75rem" }}>
+            <Link to={`/video/${appointment.id}`}>
+              <Button variant="primary">Start Video Call</Button>
+            </Link>
           </div>
         )}
         {!showDeleteConfirm && (

@@ -78,7 +78,7 @@ class DoctorReviewListView(APIView):
                 status_code=http_status.HTTP_404_NOT_FOUND,
             )
         reviews = doctor.reviews.select_related(
-            "patient", "doctor"
+            "patient", "doctor", "doctor__user"
         ).filter(is_visible=True).order_by("-created_at")
         return success_response(
             data=ReviewSerializer(reviews, many=True).data
@@ -97,7 +97,9 @@ class ReviewViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        base = Review.objects.select_related("patient", "doctor")
+        # doctor__user is select_related here because ReviewSerializer renders
+        # doctor_name from the doctor's account row.
+        base = Review.objects.select_related("patient", "doctor", "doctor__user")
         if getattr(user, "role", None) == "admin" or user.is_superuser:
             return base.all().order_by("-created_at")
         return base.filter(patient=user).order_by("-created_at")
@@ -116,6 +118,16 @@ class ReviewViewSet(ModelViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        self.get_object().delete()
+        review = self.get_object()
+        # Snapshot the doctor before the row disappears: removing a review must
+        # leave the cached rating/count consistent with the remaining reviews.
+        doctor = review.doctor
+        review.delete()
+        agg = doctor.reviews.filter(is_visible=True).aggregate(
+            avg=Avg("rating"), total=Count("id")
+        )
+        doctor.average_rating = agg["avg"] or 0
+        doctor.total_reviews = agg["total"] or 0
+        doctor.save(update_fields=["average_rating", "total_reviews", "updated_at"])
         return Response(status=http_status.HTTP_204_NO_CONTENT)
 

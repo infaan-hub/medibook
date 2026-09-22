@@ -5,10 +5,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { getPatientProfile, updatePatientProfile } from "../api/patients";
+import { getHealthRecords, type HealthRecord } from "../api/health-records";
 import type { Gender, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
-import { Button, Card, ErrorState, Skeleton } from "../components/ui";
+import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
   User,
@@ -22,6 +24,9 @@ import {
   Edit3,
   X,
   Save,
+  Bell,
+  Download,
+  File,
 } from "lucide-react";
 
 function formatGender(g: string): string {
@@ -237,6 +242,7 @@ function MedicalEditForm({
 /* ---------- Main Settings Screen ---------- */
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -244,6 +250,8 @@ export function SettingsScreen() {
   const [form, setForm] = useState<MedForm | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -252,6 +260,11 @@ export function SettingsScreen() {
     getPatientProfile()
       .then((envelope) => setProfile(envelope.data))
       .catch(() => setLoadError("Could not load your medical details."));
+    setRecordsLoading(true);
+    getHealthRecords()
+      .then((r) => setHealthRecords(r.data?.results ?? []))
+      .catch(() => setHealthRecords([]))
+      .finally(() => setRecordsLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -351,6 +364,82 @@ export function SettingsScreen() {
           />
         ) : (
           <MedicalDetailCard profile={profile} />
+        )}
+      </Card>
+
+      {/* Reminder Preferences */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><Bell size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">{t("settings.reminders")}</h2>
+              <p className="med-detail__subtitle">Choose when to receive appointment reminders</p>
+            </div>
+          </div>
+        </div>
+        <div className="reminder-settings">
+          {[
+            { key: "1h", label: t("settings.reminder1h") },
+            { key: "24h", label: t("settings.reminder24h") },
+            { key: "1w", label: t("settings.reminder1w") },
+          ].map(({ key, label }) => (
+            <label key={key} className="reminder-settings__item">
+              <input
+                type="checkbox"
+                checked={profile?.reminder_preferences?.[key] !== false}
+                onChange={(e) => {
+                  const prefs = { ...(profile?.reminder_preferences ?? {}), [key]: e.target.checked };
+                  updatePatientProfile({ reminder_preferences: prefs })
+                    .then((r) => setProfile(r.data))
+                    .catch(() => notify("error", "Could not save reminder preferences."));
+                }}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </Card>
+
+      {/* Health Records */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><File size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">{t("settings.healthRecords")}</h2>
+              <p className="med-detail__subtitle">Lab reports, prescriptions, and X-rays uploaded by your doctor</p>
+            </div>
+          </div>
+        </div>
+        {recordsLoading ? (
+          <Skeleton lines={3} />
+        ) : healthRecords.length === 0 ? (
+          <EmptyState
+            icon={<FileText size={28} />}
+            title={t("settings.noRecords")}
+            description={t("settings.noRecordsDesc")}
+          />
+        ) : (
+          <div className="health-records-list">
+            {healthRecords.map((record) => (
+              <div key={record.id} className="health-record-item">
+                <div className="health-record-item__info">
+                  <span className="health-record-item__type">{record.record_type}</span>
+                  <span className="health-record-item__title">{record.title}</span>
+                  {record.description && <span className="health-record-item__desc">{record.description}</span>}
+                  <span className="health-record-item__date">
+                    {new Date(record.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                {record.file && (
+                  <a href={record.file} target="_blank" rel="noopener noreferrer" className="btn btn--ghost btn--sm">
+                    <Download size={14} />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </Card>
     </div>

@@ -13,6 +13,22 @@ export function listMyAppointments(
   return apiGet<Paginated<Appointment>>("/appointments/", params);
 }
 
+/**
+ * GET /api/appointments/ — every appointment on the platform (admin only).
+ *
+ * The backend scopes this collection by role (AppointmentViewSet.get_queryset):
+ * patients receive only their own bookings, doctors only their own schedule,
+ * and admins receive the platform-wide booking history. Admin screens must call
+ * this function instead of listMyAppointments() so the platform-wide intent is
+ * explicit at the call site — the two hit the same route but mean different
+ * things, and only an admin actually gets the unfiltered collection back.
+ */
+export function listAllAppointments(
+  params?: Record<string, unknown>
+): Promise<Envelope<Paginated<Appointment>>> {
+  return apiGet<Paginated<Appointment>>("/appointments/", params);
+}
+
 /** GET /api/appointments/:id/ — a single appointment's detail. */
 export function getAppointment(id: number): Promise<Envelope<Appointment>> {
   return apiGet<Appointment>(`/appointments/${id}/`);

@@ -2,6 +2,7 @@
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status as http_status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -9,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
 from accounts.permissions import IsDoctor, IsPatient
-from appointments.models import Appointment, AppointmentStatus
+from appointments.models import Appointment, AppointmentReminder, AppointmentStatus, ReminderType
 from appointments.serializers import (
     AppointmentSerializer,
     AppointmentStatusSerializer,
@@ -320,6 +321,11 @@ class AppointmentActionView(APIView):
         if serializer.validated_data.get("notes"):
             appointment.notes = serializer.validated_data["notes"]
         appointment.save(update_fields=["status", "cancel_reason", "notes", "updated_at"])
+
+        # Auto-create reminders when appointment is confirmed
+        if target_status == "confirmed":
+            self._create_reminders(appointment)
+
         other = (
             appointment.patient
             if (is_owner_doctor or (is_admin and not is_owner_patient))
@@ -341,6 +347,28 @@ class AppointmentActionView(APIView):
             data=AppointmentSerializer(appointment).data,
             message=f"Appointment {target_status}.",
         )
+
+    @staticmethod
+    def _create_reminders(appointment):
+        """Create reminders 1h, 24h, 1w before the appointment."""
+        from datetime import datetime as dt
+
+        appt_datetime = timezone.make_aware(
+            dt.combine(appointment.appointment_date, appointment.start_time)
+        )
+        configs = [
+            (ReminderType.ONE_HOUR, timedelta(hours=1)),
+            (ReminderType.TWENTY_FOUR_HOURS, timedelta(hours=24)),
+            (ReminderType.ONE_WEEK, timedelta(weeks=1)),
+        ]
+        for rtype, delta in configs:
+            scheduled = appt_datetime - delta
+            if scheduled > timezone.now():
+                AppointmentReminder.objects.get_or_create(
+                    appointment=appointment,
+                    reminder_type=rtype,
+                    defaults={"scheduled_for": scheduled},
+                )
 
 
 class DoctorAppointmentListView(APIView):

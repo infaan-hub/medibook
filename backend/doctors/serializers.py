@@ -62,7 +62,7 @@ class DoctorSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="user.first_name", read_only=True)
     last_name = serializers.CharField(source="user.last_name", read_only=True)
     profile_image = serializers.SerializerMethodField()
-    specialties = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    specialties = serializers.SerializerMethodField()
     hospitals = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
     class Meta:
@@ -88,6 +88,20 @@ class DoctorSerializer(serializers.ModelSerializer):
         if request is not None:
             return request.build_absolute_uri(url)
         return url
+
+    def get_specialties(self, obj):
+        """Return full specialty objects (id, name, patient_friendly_name, description) instead of just IDs."""
+        specialties = obj.specialties.all()
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "patient_friendly_name": s.patient_friendly_name,
+                "description": s.description,
+                "what_to_expect": s.what_to_expect,
+            }
+            for s in specialties
+        ]
 
 
 class DoctorWriteSerializer(serializers.ModelSerializer):
