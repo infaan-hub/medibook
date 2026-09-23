@@ -83,7 +83,6 @@ export function updateMyDoctorProfile(
       DoctorProfile,
       | "first_name"
       | "last_name"
-      | "specialties"
       | "hospitals"
       | "qualifications"
       | "experience_years"
@@ -93,7 +92,10 @@ export function updateMyDoctorProfile(
       | "office_address"
       | "is_available"
     >
-  >
+  > & {
+    /** Specialty ids (backend replaces the M2M set with these ids). */
+    specialties?: number[];
+  }
 ): Promise<Envelope<DoctorProfile>> {
   return apiPatch<DoctorProfile>("/doctors/me/profile/", payload);
 }

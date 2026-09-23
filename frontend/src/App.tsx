@@ -1,7 +1,8 @@
 /**
  * MediBook root (PHASE 5 — React Authentication).
  * Providers → routes. Guest-only screens render without the app shell;
- * every app screen sits behind RequireAuth (+ RequireRole for /admin).
+ * every app screen sits behind RequireSession (+ RequireRole/RequirePatient
+ * for finer role slices). Guests never reach the shell without a login.
  * The Splash hides once the boot probe resolves.
  * PHASE 18: React.lazy + Suspense for code splitting.
  * PHASE 21: Onboarding shown only on first visit; auto-login on return.
@@ -10,7 +11,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { RequireAuth, RequireGuest, RequirePatient, RequireRole, homeForRole } from "./components/guards";
+import { RequireGuest, RequirePatient, RequireRole, RequireSession, homeForRole } from "./components/guards";
 import { SplashScreen } from "./components/Splash";
 import { Spinner } from "./components/ui";
 import { ToastViewport } from "./components/ToastViewport";
@@ -70,7 +71,7 @@ function PageFallback() {
 
 /**
  * The root route is deliberately unguarded.  It resolves the launch destination
- * before a guest can reach RequireAuth (which would otherwise redirect to login).
+ * before a guest can reach RequireSession (which would otherwise redirect to login).
  */
 function LaunchRoute() {
   const { status, user } = useSession();
@@ -152,14 +153,16 @@ export default function App() {
                   </RequireGuest>
                 }
               />
-              {/* Authenticated app screens (inside the shell) */}
+              {/* Authenticated app screens (inside the shell).
+                  RequireSession: must be signed in AND allowed on this path
+                  prefix — roles stay independent on refresh and deep links. */}
               <Route
                 element={
-                  <RequireAuth>
+                  <RequireSession>
                     <AppShell>
                       <Outlet />
                     </AppShell>
-                  </RequireAuth>
+                  </RequireSession>
                 }
               >
                 <Route path="/dashboard" element={<RequirePatient><HomeScreen /></RequirePatient>} />

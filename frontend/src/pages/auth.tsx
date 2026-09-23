@@ -17,6 +17,7 @@ import {
 import { ApiError } from "../api/client";
 import type { RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
+import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 
 /* ---------------- shared helpers ---------------- */
 
@@ -39,12 +40,12 @@ function errorMessage(error: unknown): string {
     : "Something went wrong. Please try again.";
 }
 
-/** Redirects the login screen may honour — same-app role-neutral pages only. */
+/** Redirects the login screen may honour — same-app, role-owned paths only. */
 function isSafeRedirect(target: string): boolean {
   if (!target.startsWith("/") || target.startsWith("//")) return false;
-  if (target.startsWith("/admin") || target.startsWith("/doctor/")) return false;
-  if (target.startsWith("/login") || target.startsWith("/signin")) return false;
+  if (target.startsWith(LOGIN_PATH) || target.startsWith("/signin")) return false;
   if (target.startsWith("/register") || target.startsWith("/onboarding")) return false;
+  if (target.startsWith("/forgot-password") || target.startsWith("/reset-password")) return false;
   return true;
 }
 
@@ -54,13 +55,36 @@ function freshHomeForRole(): string {
     const raw = localStorage.getItem("mb.auth.user");
     if (raw) {
       const stored = JSON.parse(raw) as { role?: string; is_superuser?: boolean };
-      if (stored.role === "doctor") return "/doctor/dashboard";
-      if (stored.role === "admin" && stored.is_superuser) return "/admin";
+      if (stored.role === "doctor" || stored.role === "admin" || stored.role === "patient") {
+        return homeForRole({
+          role: stored.role,
+          is_superuser: Boolean(stored.is_superuser),
+        });
+      }
     }
   } catch {
     /* fall through to patient dashboard */
   }
   return "/dashboard";
+}
+
+/** True when `path` is a safe redirect AND belongs to the fresh session's role. */
+function canReturnTo(path: string): boolean {
+  if (!isSafeRedirect(path)) return false;
+  try {
+    const raw = localStorage.getItem("mb.auth.user");
+    if (!raw) return false;
+    const stored = JSON.parse(raw) as { role?: string; is_superuser?: boolean };
+    if (stored.role !== "doctor" && stored.role !== "admin" && stored.role !== "patient") {
+      return false;
+    }
+    return roleOwnsPath(path, {
+      role: stored.role,
+      is_superuser: Boolean(stored.is_superuser),
+    });
+  } catch {
+    return false;
+  }
 }
 
 /** Single-column centered layout shared by every auth screen. */
@@ -344,7 +368,7 @@ function useGoogleLogin() {
         callback: (response: { credential?: string }) => {
           if (response.credential) {
             socialLogin("google", response.credential)
-              .then(() => { notify("success", "Welcome to MediBook."); navigate("/", { replace: true }); })
+              .then(() => { notify("success", "Welcome to MediBook."); navigate(freshHomeForRole(), { replace: true }); })
               .catch((err: unknown) => { notify("error", err instanceof Error ? err.message : "Google sign-in failed."); });
           }
         },
@@ -378,7 +402,7 @@ function useAppleLogin() {
       const token = result.id_token ?? result.code;
       if (token) {
         socialLogin("apple", token)
-          .then(() => { notify("success", "Welcome to MediBook."); navigate("/", { replace: true }); })
+          .then(() => { notify("success", "Welcome to MediBook."); navigate(freshHomeForRole(), { replace: true }); })
           .catch((err: unknown) => { notify("error", err instanceof Error ? err.message : "Apple sign-in failed."); });
       } else {
         notify("error", "Apple sign-in was cancelled.");
@@ -414,9 +438,9 @@ export function LoginScreen() {
     try {
       await login(username.trim(), password);
       notify("success", "Welcome back to MediBook.");
-      // Fresh login: go to the saved page ONLY if it belongs to this role.
+      // Fresh login: only return to the saved URL if THIS role owns it.
       // Otherwise land on your own dashboard — never another role's page.
-      const target = from && isSafeRedirect(from) ? from : freshHomeForRole();
+      const target = from && canReturnTo(from) ? from : freshHomeForRole();
       navigate(target, { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);
@@ -535,7 +559,7 @@ export function RegisterScreen() {
     try {
       await register(payload);
       notify("success", "Welcome to MediBook.");
-      navigate("/", { replace: true });
+      navigate(freshHomeForRole(), { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);
       setFormErrors(fields);

@@ -1,17 +1,5 @@
 # MediBook — repository-wide ignores
 
-# --- Python / Django ---
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.coverage
-htmlcov/
-db.sqlite3
-db.sqlite3-journal
-
 # --- Node / React ---
 node_modules/
 dist/
@@ -26,8 +14,8 @@ dist/
 *.key
 
 # --- Media / static uploaded by users ---
-backend/media/
-backend/staticfiles/
+next-app/uploads/
+next-app/.next/
 
 # --- Editors / OS ---
 .vscode/*

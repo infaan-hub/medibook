@@ -1,0 +1,503 @@
+// MediBook — Prisma schema (PostgreSQL).
+//
+// Translation rules from the Django models:
+//  * Table/column names keep Django's form (@@map + snake_case fields) so rows
+//    can be diffed 1:1 against the old database.
+//  * Cascade/SetNull referential actions mirror every Django on_delete.
+//  * Indexes mirror Django db_index=True fields and Meta.indexes entries.
+//  * Time-only columns are zero-padded "HH:MM:SS" strings — exactly what
+//    Django's TimeField serializes — keeping API output identical and making
+//    slot arithmetic trivial (services/schedule.service.ts).
+//  * auth_refreshtoken is new (JWT refresh rotation/revoke ledger replacing
+//    rest_framework_simplejwt's token_blacklist); everything else is a 1:1
+//    model translation.
+//
+// NOTE (deployment): prisma/migrations/1_constraints adds CHECK constraints
+// and the partial unique index `uniq_live_doctor_slot` (double-booking guard)
+// that Prisma's schema language cannot express. Apply schema changes only via
+// `npx prisma migrate deploy`; do NOT run `prisma db push` / bare
+// `prisma migrate dev`, which would flag those SQL-only objects as drift.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  patient
+  doctor
+  admin
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  completed
+  cancelled
+  rejected
+}
+
+enum NotificationType {
+  appointment_request
+  appointment_confirmed
+  appointment_cancelled
+  appointment_rejected
+  appointment_reminder
+  review
+  system
+}
+
+/// Django accounts.User (custom user, username login, role-based access).
+model User {
+  id            Int      @id @default(autoincrement())
+  password      String   @db.VarChar(128)
+  is_superuser  Boolean  @default(false)
+  username      String   @unique @db.VarChar(60)
+  email         String   @unique @db.VarChar(254)
+  phone         String   @default("") @db.VarChar(16)
+  first_name    String   @default("") @db.VarChar(150)
+  last_name     String   @default("") @db.VarChar(150)
+  role          Role     @default(patient)
+  profile_image String?  @db.VarChar(100)
+  is_active     Boolean  @default(true)
+  is_staff      Boolean  @default(false)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  patient              Patient?
+  doctor               Doctor?
+  password_tokens      PasswordResetToken[]
+  refresh_tokens       RefreshToken[]
+  notifications        Notification[]
+  push_subscriptions   PushSubscription[]
+  given_reviews        Review[]
+  patient_appointments Appointment[]        @relation("UserPatientAppointments")
+  treatments           MedicalTreatment[]
+  health_records       HealthRecord[]
+  audit_events         AuditEvent[]
+  blog_articles        Article[]
+
+  @@index([role])
+  @@index([created_at])
+  @@map("accounts_user")
+}
+
+/// Single-use password reset token (accounts.PasswordResetToken).
+model PasswordResetToken {
+  id         Int       @id @default(autoincrement())
+  token      String    @unique @db.VarChar(128)
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id    Int       @map("user_id")
+
+  @@index([user_id])
+  @@index([created_at])
+  @@map("accounts_passwordresettoken")
+}
+
+/// Patient profile — one per patient-role user (1:1).
+model Patient {
+  id                      Int       @id @default(autoincrement())
+  date_of_birth           DateTime? @db.Date
+  gender                  String    @default("") @db.VarChar(10)
+  address                 String    @default("")
+  city                    String    @default("") @db.VarChar(100)
+  emergency_contact_name  String    @default("") @db.VarChar(150)
+  emergency_contact_phone String    @default("") @db.VarChar(16)
+  blood_group             String    @default("") @db.VarChar(5)
+  allergies               String    @default("")
+  medical_history         String    @default("")
+  reminder_preferences    Json
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+  user                    User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id                 Int       @unique @map("user_id")
+
+  @@index([created_at])
+  @@map("patients_patient")
+}
+
+/// Doctor professional profile — one per doctor-role user (1:1).
+model Doctor {
+  id               Int      @id @default(autoincrement())
+  qualifications   String   @default("")
+  experience_years Int      @default(0)
+  consultation_fee Decimal  @default(0) @db.Decimal(10, 2)
+  bio              String   @default("")
+  city             String   @default("") @db.VarChar(100)
+  office_address   String   @default("")
+  is_available     Boolean  @default(true)
+  average_rating   Decimal  @default(0) @db.Decimal(3, 2)
+  total_reviews    Int      @default(0)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id          Int      @unique @map("user_id")
+
+  hospitals           DoctorHospital[]
+  specialties         DoctorSpecialty[]
+  availabilities      Availability[]
+  schedule_exceptions ScheduleException[]
+  appointments        Appointment[]
+  reviews             Review[]
+  treatments          MedicalTreatment[]
+  health_records      HealthRecord[]
+
+  @@index([is_available, average_rating], map: "dr_avail_rat_idx")
+  @@index([is_available])
+  @@index([city])
+  @@index([created_at])
+  @@map("doctors_doctor")
+}
+
+/// Weekly recurring availability window (0 = Monday … 6 = Sunday).
+model Availability {
+  id                    Int                 @id @default(autoincrement())
+  weekday               Int
+  start_time            String              @db.VarChar(8)
+  end_time              String              @db.VarChar(8)
+  slot_duration_minutes Int                 @default(30)
+  is_active             Boolean             @default(true)
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+  doctor                Doctor              @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id             Int                 @map("doctor_id")
+  breaks                AvailabilityBreak[]
+
+  @@index([doctor_id, weekday, is_active], map: "avail_dk_wd_act_idx")
+  @@index([doctor_id])
+  @@index([created_at])
+  @@map("doctors_availability")
+}
+
+/// Non-bookable interval inside one availability window.
+model AvailabilityBreak {
+  id              Int          @id @default(autoincrement())
+  start_time      String       @db.VarChar(8)
+  end_time        String       @db.VarChar(8)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  availability    Availability @relation(fields: [availability_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  availability_id Int          @map("availability_id")
+
+  @@index([availability_id])
+  @@index([created_at])
+  @@map("doctors_availabilitybreak")
+}
+
+/// One-off full-day (both times null) or partial-day closure / holiday.
+model ScheduleException {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @db.Date
+  start_time String?  @db.VarChar(8)
+  end_time   String?  @db.VarChar(8)
+  reason     String   @default("") @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  doctor     Doctor   @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id  Int      @map("doctor_id")
+
+  @@index([doctor_id, date], map: "sched_exc_dk_dt_idx")
+  @@index([date])
+  @@index([doctor_id])
+  @@index([created_at])
+  @@map("doctors_scheduleexception")
+}
+
+/// Medical specialty catalog entry.
+model Specialty {
+  id                    Int               @id @default(autoincrement())
+  name                  String            @unique @db.VarChar(100)
+  patient_friendly_name String            @default("") @db.VarChar(150)
+  description           String            @default("")
+  what_to_expect        String            @default("")
+  icon_url              String            @default("") @db.VarChar(200)
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+  doctors               DoctorSpecialty[]
+
+  @@index([created_at])
+  @@map("specialties_specialty")
+}
+
+/// Clinic / hospital where doctors practice.
+model Hospital {
+  id               Int              @id @default(autoincrement())
+  name             String           @db.VarChar(200)
+  city             String           @db.VarChar(100)
+  address          String           @default("")
+  phone            String           @default("") @db.VarChar(16)
+  email            String           @default("") @db.VarChar(254)
+  location_details Json
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+  doctors          DoctorHospital[]
+  appointments     Appointment[]
+
+  @@index([name])
+  @@index([city])
+  @@index([created_at])
+  @@map("hospitals_hospital")
+}
+
+/// Doctor ↔ Hospital M2M join (Django auto table).
+model DoctorHospital {
+  doctor_id   Int      @map("doctor_id")
+  hospital_id Int      @map("hospital_id")
+  doctor      Doctor   @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  hospital    Hospital @relation(fields: [hospital_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([doctor_id, hospital_id])
+  @@index([doctor_id])
+  @@index([hospital_id])
+  @@map("doctors_doctor_hospitals")
+}
+
+/// Doctor ↔ Specialty M2M join (Django auto table).
+model DoctorSpecialty {
+  doctor_id    Int       @map("doctor_id")
+  specialty_id Int       @map("specialty_id")
+  doctor       Doctor    @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  specialty    Specialty @relation(fields: [specialty_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([doctor_id, specialty_id])
+  @@index([doctor_id])
+  @@index([specialty_id])
+  @@map("doctors_doctor_specialties")
+}
+
+/// One booked slot: patient + doctor + date + start/end + lifecycle status.
+/// Double bookings blocked by partial unique index `uniq_live_doctor_slot`
+/// (prisma/migrations/1_constraints).
+model Appointment {
+  id               Int               @id @default(autoincrement())
+  appointment_date DateTime          @db.Date
+  start_time       String            @db.VarChar(8)
+  end_time         String            @db.VarChar(8)
+  status           AppointmentStatus @default(pending)
+  reason           String            @default("")
+  notes            String            @default("")
+  cancel_reason    String            @default("")
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  patient          User              @relation("UserPatientAppointments", fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id       Int               @map("patient_id")
+  doctor           Doctor            @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id        Int               @map("doctor_id")
+  hospital         Hospital?         @relation(fields: [hospital_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  hospital_id      Int?              @map("hospital_id")
+
+  reminders      AppointmentReminder[]
+  notifications  Notification[]
+  treatments     MedicalTreatment[]
+  health_records HealthRecord[]
+  review         Review?
+
+  @@index([doctor_id, appointment_date, status])
+  @@index([patient_id, appointment_date, status])
+  @@index([appointment_date])
+  @@index([status])
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([hospital_id])
+  @@index([created_at])
+  @@map("appointments_appointment")
+}
+
+/// Reminder rows created when an appointment is confirmed (1h / 24h / 1w).
+model AppointmentReminder {
+  id             Int         @id @default(autoincrement())
+  reminder_type  String      @db.VarChar(5)
+  scheduled_for  DateTime
+  sent           Boolean     @default(false)
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+  appointment    Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  appointment_id Int         @map("appointment_id")
+
+  @@unique([appointment_id, reminder_type], map: "uniq_appointment_reminder_type")
+  @@index([scheduled_for])
+  @@index([sent])
+  @@index([appointment_id])
+  @@index([created_at])
+  @@map("appointments_appointmentreminder")
+}
+
+/// In-app notification row per recipient (+ push delivery log).
+model Notification {
+  id                     Int              @id @default(autoincrement())
+  notification_type      NotificationType @default(system)
+  title                  String           @db.VarChar(200)
+  message                String
+  is_read                Boolean          @default(false)
+  push_sent              Boolean          @default(false)
+  push_provider_id       String           @default("") @db.VarChar(200)
+  created_at             DateTime         @default(now())
+  updated_at             DateTime         @updatedAt
+  recipient              User             @relation(fields: [recipient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  recipient_id           Int              @map("recipient_id")
+  related_appointment    Appointment?     @relation(fields: [related_appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  related_appointment_id Int?             @map("related_appointment_id")
+
+  @@index([recipient_id, is_read, created_at])
+  @@index([recipient_id, notification_type])
+  @@index([recipient_id])
+  @@index([notification_type])
+  @@index([is_read])
+  @@index([created_at])
+  @@map("notifications_notification")
+}
+
+/// Web Push / FCM device subscription (endpoint globally unique).
+model PushSubscription {
+  id          Int      @id @default(autoincrement())
+  endpoint    String   @unique @db.VarChar(500)
+  p256dh_key  String   @default("") @db.VarChar(200)
+  auth_key    String   @default("") @db.VarChar(100)
+  fcm_token   String   @default("") @db.VarChar(300)
+  device_info Json
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id     Int      @map("user_id")
+
+  @@index([user_id, is_active])
+  @@index([user_id])
+  @@index([created_at])
+  @@map("notifications_pushsubscription")
+}
+
+/// One review per completed appointment (patient → doctor).
+model Review {
+  id             Int         @id @default(autoincrement())
+  rating         Int
+  comment        String      @default("")
+  is_visible     Boolean     @default(true)
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+  appointment    Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  appointment_id Int         @unique @map("appointment_id")
+  patient        User        @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id     Int         @map("patient_id")
+  doctor         Doctor      @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id      Int         @map("doctor_id")
+
+  @@index([doctor_id, is_visible, created_at])
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([rating])
+  @@index([is_visible])
+  @@index([created_at])
+  @@map("reviews_review")
+}
+
+/// Immutable high-level record of an administrator action.
+model AuditEvent {
+  id         Int      @id @default(autoincrement())
+  action     String   @db.VarChar(80)
+  target     String   @default("") @db.VarChar(160)
+  detail     String   @default("") @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  actor      User?    @relation(fields: [actor_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  actor_id   Int?     @map("actor_id")
+
+  @@index([actor_id])
+  @@index([created_at])
+  @@map("reports_auditevent")
+}
+
+/// Treatment record created by a doctor for a patient.
+model MedicalTreatment {
+  id              Int          @id @default(autoincrement())
+  diagnosis       String       @default("") @db.VarChar(255)
+  treatment_notes String       @default("")
+  prescription    String       @default("")
+  follow_up_date  DateTime?    @db.Date
+  follow_up_notes String       @default("")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  doctor          Doctor       @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id       Int          @map("doctor_id")
+  patient         User         @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id      Int          @map("patient_id")
+  appointment     Appointment? @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  appointment_id  Int?         @map("appointment_id")
+
+  @@index([doctor_id, patient_id], map: "treat_dr_pat_idx")
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([appointment_id])
+  @@index([created_at])
+  @@map("treatments_medicaltreatment")
+}
+
+/// File/document health record uploaded by a doctor.
+model HealthRecord {
+  id             Int          @id @default(autoincrement())
+  file           String?      @db.VarChar(100)
+  record_type    String       @default("other") @db.VarChar(20)
+  title          String       @db.VarChar(200)
+  description    String       @default("")
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+  patient        User         @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id     Int          @map("patient_id")
+  doctor         Doctor       @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id      Int          @map("doctor_id")
+  appointment    Appointment? @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  appointment_id Int?         @map("appointment_id")
+
+  @@index([patient_id, record_type], map: "hr_pat_type_idx")
+  @@index([doctor_id, patient_id], map: "hr_doc_pat_idx")
+  @@index([patient_id])
+  @@index([doctor_id])
+  @@index([record_type])
+  @@index([appointment_id])
+  @@index([created_at])
+  @@map("treatments_healthrecord")
+}
+
+/// Blog / Health Tips article (admin-published).
+model Article {
+  id           Int       @id @default(autoincrement())
+  title        String    @db.VarChar(200)
+  slug         String    @unique @db.VarChar(220)
+  excerpt      String    @default("")
+  content      String
+  image        String?   @db.VarChar(100)
+  category     String    @default("general") @db.VarChar(40)
+  published    Boolean   @default(false)
+  published_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  author       User?     @relation(fields: [author_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  author_id    Int?      @map("author_id")
+
+  @@index([author_id])
+  @@index([published])
+  @@index([category])
+  @@index([created_at])
+  @@map("blog_article")
+}
+
+/// Refresh-token rotation + revocation ledger (replaces SimpleJWT blacklist).
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  jti        String    @unique @db.VarChar(64)
+  revoked_at DateTime?
+  expires_at DateTime
+  created_at DateTime  @default(now())
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id    Int       @map("user_id")
+
+  @@index([user_id])
+  @@map("auth_refreshtoken")
+}

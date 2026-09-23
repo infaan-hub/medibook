@@ -180,7 +180,9 @@ export function BookingScreen() {
         <h1 className="page__title">Book appointment</h1>
         <p className="page__subtitle">
           Dr. {doctor.first_name} {doctor.last_name}
-          {doctor.qualifications ? ` — ${doctor.qualifications}` : ""}
+          {doctor.specialties && doctor.specialties.length > 0
+            ? ` — ${doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}`
+            : ""}
         </p>
       </Card>
 

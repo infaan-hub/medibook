@@ -11,15 +11,21 @@ import {
 } from "../api/doctors";
 import { uploadProfileImage } from "../api/auth";
 import { getDoctorReviews } from "../api/reviews";
+import { listSpecialties } from "../api/specialties";
 import { ApiError } from "../api/client";
-import type { DoctorAvailability, DoctorProfile, Review, ScheduleItem } from "../api/types";
+import type { DoctorAvailability, DoctorProfile, Review, ScheduleItem, Specialty } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
+/** Meaning of a specialty for patients: friendly name, falling back to medical name. */
+function specialtyMeaning(s: Specialty): string {
+  return s.patient_friendly_name || s.name;
 }
 
 export function DoctorProfileScreen() {
@@ -64,11 +70,20 @@ export function DoctorProfileScreen() {
             <MapPin size={14} /> {doctor.office_address || doctor.city}
           </p>
         )}
-        <p>{doctor.qualifications || "Professional profile"}</p>
+        {doctor.specialties && doctor.specialties.length > 0 ? (
+          <p>
+            <strong>{doctor.specialties[0].name}</strong>
+            {doctor.specialties[0].patient_friendly_name
+              ? ` — ${doctor.specialties[0].patient_friendly_name}`
+              : ""}
+          </p>
+        ) : (
+          <p>Professional profile</p>
+        )}
         <p>{doctor.experience_years} years of experience</p>
         <p>Consultation fee: TSh {doctor.consultation_fee}</p>
 
-        {/* Specialties with patient-friendly names */}
+        {/* All selected specialties with their meanings for patients */}
         {doctor.specialties && doctor.specialties.length > 0 && (
           <div className="doctor-specialties">
             <h3>Specialties</h3>
@@ -77,6 +92,7 @@ export function DoctorProfileScreen() {
                 <Link key={s.id} to={`/specialties/${s.id}`} className="doctor-specialty-tag">
                   <span className="doctor-specialty-tag__name">{s.patient_friendly_name || s.name}</span>
                   <span className="doctor-specialty-tag__medical">{s.name}</span>
+                  {s.description && <span className="doctor-specialty-tag__desc">{s.description}</span>}
                 </Link>
               ))}
             </div>
@@ -119,7 +135,7 @@ export function DoctorDashboardScreen() {
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { getMyDoctorProfile().then((response) => setProfile(response.data)).catch((reason: unknown) => setError(message(reason))); }, []);
-  return <div className="page"><h1 className="page__title">Doctor dashboard</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.qualifications || "Complete your professional profile."}</p><p><Link to="/doctor/availability">Manage availability</Link> · <Link to="/doctor/personal">Edit personal card</Link></p></Card>}</div>;
+  return <div className="page"><h1 className="page__title">Doctor dashboard</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.specialties && profile.specialties.length > 0 ? specialtyMeaning(profile.specialties[0]) : "Complete your professional profile."}</p><p><Link to="/doctor/availability">Manage availability</Link> · <Link to="/doctor/personal">Edit personal card</Link></p></Card>}</div>;
 }
 
 /** Doctor's own card preview block (rendered inside DoctorPersonalScreen). */
@@ -142,14 +158,28 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
       </div>
       <div className="doc-preview-card__body">
         <h2 className="doc-preview-card__name">Dr. {profile.first_name} {profile.last_name}</h2>
-        <p className="doc-preview-card__qual">{profile.qualifications || "Medical specialist"}</p>
 
-        {/* Specialties on doctor card */}
+        {/* Front of card: top (first) specialty — never qualifications */}
+        <p className="doc-preview-card__qual">
+          {profile.specialties && profile.specialties.length > 0
+            ? profile.specialties[0].name
+            : "Medical specialist"}
+        </p>
+        {profile.specialties && profile.specialties.length > 0 && (
+          <p className="doc-preview-card__specialty-meaning">
+            {[profile.specialties[0].patient_friendly_name, profile.specialties[0].description]
+              .filter(Boolean)
+              .join(" — ")}
+          </p>
+        )}
+
+        {/* Inside the card: ALL selected specialties with meanings */}
         {profile.specialties && profile.specialties.length > 0 && (
           <div className="doc-preview-card__specialties">
             {profile.specialties.map((s) => (
               <span key={s.id} className="doctor-specialty-tag doctor-specialty-tag--small">
-                <span className="doctor-specialty-tag__name">{s.patient_friendly_name || s.name}</span>
+                <span className="doctor-specialty-tag__name">{s.name}</span>
+                <span className="doctor-specialty-tag__medical">{specialtyMeaning(s)}</span>
               </span>
             ))}
           </div>
@@ -186,6 +216,8 @@ export function DoctorPersonalScreen() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [allSpecialties, setAllSpecialties] = useState<Specialty[]>([]);
+  const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -201,10 +233,24 @@ export function DoctorPersonalScreen() {
           city: response.data.city ?? "",
           office_address: response.data.office_address ?? "",
         });
+        setSelectedSpecialtyIds((response.data.specialties ?? []).map((s) => s.id));
       })
       .catch((reason: unknown) => setError(message(reason)));
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Full specialty catalog with meanings for the picker.
+  useEffect(() => {
+    listSpecialties(1, 100)
+      .then((response) => setAllSpecialties(response.data.results))
+      .catch(() => {});
+  }, []);
+
+  function toggleSpecialty(id: number) {
+    setSelectedSpecialtyIds((current) =>
+      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    );
+  }
 
   function update(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -218,6 +264,7 @@ export function DoctorPersonalScreen() {
       const envelope = await updateMyDoctorProfile({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
+        specialties: selectedSpecialtyIds,
         experience_years: form.experience_years === "" ? 0 : Number(form.experience_years),
         consultation_fee: form.consultation_fee.trim() === "" ? "0" : form.consultation_fee.trim(),
         city: form.city.trim(),
@@ -285,6 +332,41 @@ export function DoctorPersonalScreen() {
             <TextField id="doc-city" label="City / area (nearby search)" value={form.city} error={fieldErrors.city} onChange={(e) => update("city", e.target.value)} />
             <TextField id="doc-address" label="Office address (shown on your card)" value={form.office_address} error={fieldErrors.office_address} onChange={(e) => update("office_address", e.target.value)} />
           </div>
+
+          {/* Specialty picker — list of all specialties with their meanings */}
+          <div className="specialty-picker" role="group" aria-label="Your specialties">
+            <p className="field__label">Your specialties</p>
+            <p className="page__subtitle">
+              Select the specialty(ies) you practice. Patients see the top specialty on your
+              card instead of qualifications — each entry includes what it means.
+            </p>
+            <div className="specialty-picker__grid">
+              {allSpecialties.length === 0 && <Skeleton lines={3} />}
+              {allSpecialties.map((s) => {
+                const active = selectedSpecialtyIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`specialty-picker__item${active ? " specialty-picker__item--active" : ""}`}
+                    aria-pressed={active}
+                    onClick={() => toggleSpecialty(s.id)}
+                  >
+                    <span className="specialty-picker__check" aria-hidden="true">
+                      <Check size={12} />
+                    </span>
+                    <span className="specialty-picker__name">{s.name}</span>
+                    {s.patient_friendly_name && (
+                      <span className="specialty-picker__friendly">{s.patient_friendly_name}</span>
+                    )}
+                    {s.description && <span className="specialty-picker__desc">{s.description}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {fieldErrors.specialties && <p className="field__error">{fieldErrors.specialties}</p>}
+          </div>
+
           <Button type="submit" loading={saving}>Save changes</Button>
         </form>
       </Card>

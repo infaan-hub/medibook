@@ -3,7 +3,7 @@
 // Typed access to the Vite environment variables used by MediBook.
 // Values are defined per environment in frontend/.env (see frontend/.env.example).
 interface ImportMetaEnv {
-  /** Django REST API base URL, including the /api prefix. */
+  /** Backend API base URL, including the /api prefix. */
   readonly VITE_API_BASE_URL?: string;
 }
 

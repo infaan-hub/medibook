@@ -1,0 +1,38 @@
+{
+  "name": "medibook-next",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MediBook backend — Next.js + TypeScript + Prisma + Neon PostgreSQL",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "next build",
+    "start": "node server.js production",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node scripts/seed.mjs",
+    "db:import": "node scripts/import-sqlite.mjs",
+    "reminders": "node scripts/send-reminders.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "jose": "^6.0.0",
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.13",
+    "prisma": "^6.5.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

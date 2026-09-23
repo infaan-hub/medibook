@@ -641,6 +641,103 @@ a { color: var(--color-primary); }
   color: var(--color-text);
 }
 
+.doctor-specialty-tag__desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  max-width: 260px;
+}
+
+/* Front-of-card specialty meaning (under the specialty name) */
+.doc-preview-card__specialty-meaning {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+/* Specialty picker on /doctor/personal — all specialties with meanings */
+.specialty-picker {
+  margin-top: var(--space-2);
+}
+
+.specialty-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.specialty-picker__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: var(--space-3) var(--space-3) var(--space-3) 42px;
+  text-align: left;
+  background: var(--color-surface, #fff);
+  border: 1.5px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.specialty-picker__item:hover {
+  border-color: var(--color-primary, #0a9f94);
+}
+
+.specialty-picker__item:focus-visible {
+  outline: 2px solid var(--color-primary, #0a9f94);
+  outline-offset: 2px;
+}
+
+.specialty-picker__item--active {
+  border-color: var(--color-primary, #0a9f94);
+  background: #f0fbfa;
+  box-shadow: 0 0 0 1px var(--color-primary, #0a9f94);
+}
+
+.specialty-picker__check {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border, #cbd5e1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  background: #fff;
+}
+
+.specialty-picker__item--active .specialty-picker__check {
+  background: var(--color-primary, #0a9f94);
+  border-color: var(--color-primary, #0a9f94);
+  color: #fff;
+}
+
+.specialty-picker__name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--color-text, #0f172a);
+}
+
+.specialty-picker__friendly {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium, 500);
+  color: var(--color-primary, #0a9f94);
+}
+
+.specialty-picker__desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted, #64748b);
+  line-height: 1.45;
+}
+
 .home__doctor-specialties {
   font-size: var(--text-xs);
   color: var(--color-primary);

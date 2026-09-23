@@ -69,7 +69,7 @@ function navItemsFor(user: User | null): NavItem[] {
     ];
   }
   return [
-    { to: "/", label: "Home", icon: <Home size={20} /> },
+    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
     { to: "/reviews", label: "My reviews", icon: <Star size={20} /> },
@@ -100,7 +100,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
     ];
   }
   return [
-    { to: "/", label: "Home", icon: <Home size={20} /> },
+    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
     { to: "/blog", label: "Health Tips", icon: <Newspaper size={20} /> },
@@ -454,8 +454,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => {
               closeSidebar();
               logout().then(() => {
-                // Every role lands on the guest-only sign-in screen.
-                navigate("/signin", { replace: true });
+                // Every role lands on the guest-only sign-in screen only —
+                // never another role's dashboard.
+                navigate("/login", { replace: true });
               });
             }}
           >

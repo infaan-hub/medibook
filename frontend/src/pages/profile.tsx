@@ -61,7 +61,7 @@ export function ProfileScreen() {
       .catch(() => {});
   }, [user?.role]);
 
-  if (!user) return null; // guarded by RequireAuth
+  if (!user) return null; // guarded by RequireSession
 
   async function onSaveName(event: FormEvent) {
     event.preventDefault();
@@ -132,9 +132,9 @@ export function ProfileScreen() {
   const onLogout = useCallback(async () => {
     await logout();
     notify("info", "Signed out.");
-    // Every role lands on the guest-only sign-in screen. RequireGuest +
-    // cleared tokens make cross-role revisits bounce back to /signin.
-    navigate("/signin", { replace: true });
+    // Sign-out always → login (guest-only). Tokens are cleared so a refresh
+    // cannot restore another role's session.
+    navigate("/login", { replace: true });
   }, [logout, notify, navigate]);
 
   function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {

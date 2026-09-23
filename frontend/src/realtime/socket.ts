@@ -2,7 +2,7 @@
  * Realtime socket — single authenticated WebSocket per signed-in session.
  *
  * Architecture:
- * - ONE WebSocket to /ws/notifications/ (Vite proxies to Daphne).
+ * - ONE WebSocket to /ws/notifications/ (Vite proxies to the Next.js backend).
  * - Server pushes {"event", "payload"} into the user's personal group.
  * - Tracks connection state so pages can choose: WS events = primary, polling = fallback.
  * - Handles browser online/offline and tab visibility for automatic reconciliation.
