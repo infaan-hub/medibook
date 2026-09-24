@@ -63,6 +63,32 @@ export const findPushSubscriptionOwned = (id: number, userId: number) =>
 export const pushEndpointExists = async (endpoint: string) =>
   (await prisma.pushSubscription.findUnique({ where: { endpoint } })) !== null;
 
+export const findPushByEndpoint = (endpoint: string) =>
+  prisma.pushSubscription.findUnique({ where: { endpoint } });
+
+export const updatePushSubscription = (
+  id: number,
+  data: {
+    p256dh_key?: string;
+    auth_key?: string;
+    fcm_token?: string;
+    device_info?: Record<string, unknown>;
+    is_active?: boolean;
+  }
+) =>
+  prisma.pushSubscription.update({
+    where: { id },
+    data: {
+      ...(data.p256dh_key !== undefined ? { p256dh_key: data.p256dh_key } : {}),
+      ...(data.auth_key !== undefined ? { auth_key: data.auth_key } : {}),
+      ...(data.fcm_token !== undefined ? { fcm_token: data.fcm_token } : {}),
+      ...(data.device_info !== undefined
+        ? { device_info: data.device_info as Prisma.InputJsonValue }
+        : {}),
+      ...(data.is_active !== undefined ? { is_active: data.is_active } : {}),
+    },
+  });
+
 export const createPushSubscription = (
   userId: number,
   data: {

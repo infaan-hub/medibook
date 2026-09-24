@@ -1,9 +1,47 @@
 /**
  * Push Notification Manager — request permission, subscribe/unsubscribe
  * to browser push via the Service Worker Push API.
+ *
+ * VAPID public key is loaded from the backend (`GET /api/push/vapid-public-key/`)
+ * with optional `VITE_VAPID_PUBLIC_KEY` override for offline/dev setups.
  */
+import { API_BASE_URL } from "../api/client";
+import { tokenStore } from "../api/tokens";
 
-const VAPID_PUBLIC_KEY = ""; // Set via environment or config if using a push service
+let cachedKey: string | null = null;
+let keyPromise: Promise<string | null> | null = null;
+
+export async function getVapidPublicKey(): Promise<string | null> {
+  const fromEnv = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  if (fromEnv) return fromEnv;
+  if (cachedKey) return cachedKey;
+  if (keyPromise) return keyPromise;
+
+  keyPromise = (async () => {
+    try {
+      const headers: Record<string, string> = {};
+      const token = tokenStore.getAccess();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE_URL}/push/vapid-public-key/`, {
+        headers,
+        credentials: "include",
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { success?: boolean; data?: { publicKey?: string } };
+      if (!body?.success || !body.data?.publicKey) return null;
+      cachedKey = body.data.publicKey;
+      return cachedKey;
+    } catch {
+      return null;
+    }
+  })();
+
+  try {
+    return await keyPromise;
+  } finally {
+    keyPromise = null;
+  }
+}
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!("Notification" in window)) return "denied";
@@ -20,17 +58,15 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
     const existing = await reg.pushManager.getSubscription();
     if (existing) return existing;
 
-    if (!VAPID_PUBLIC_KEY) {
-      // No VAPID key configured — return null gracefully
-      return null;
-    }
+    const key = await getVapidPublicKey();
+    if (!key) return null;
 
     const permission = await requestNotificationPermission();
     if (permission !== "granted") return null;
 
     const subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
+      applicationServerKey: urlBase64ToUint8Array(key).buffer as ArrayBuffer,
     });
     return subscription;
   } catch {

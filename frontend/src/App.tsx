@@ -26,6 +26,7 @@ import {
 import { SettingsScreen } from "./pages/patient";
 import { ProfileScreen } from "./pages/profile";
 import { SessionProvider, ToastProvider, useSession } from "./state/app-context";
+import { RealtimeProvider } from "./realtime/RealtimeProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
@@ -60,6 +61,7 @@ const HospitalDetailPage = lazy(() => import("./pages").then((m) => ({ default: 
 const BlogListPage = lazy(() => import("./pages").then((m) => ({ default: m.BlogListPage })));
 const BlogArticlePage = lazy(() => import("./pages").then((m) => ({ default: m.BlogArticlePage })));
 const VisitHistoryPage = lazy(() => import("./pages/visit-history").then((m) => ({ default: m.default })));
+const EarningsPage = lazy(() => import("./pages/earnings").then((m) => ({ default: m.default })));
 
 function PageFallback() {
   return (
@@ -105,6 +107,7 @@ export default function App() {
     <BrowserRouter>
       <SessionProvider>
         <ToastProvider>
+          <RealtimeProvider>
           <LaunchSplash timerComplete={booted} />
           <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -179,6 +182,7 @@ export default function App() {
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
+                <Route path="/doctor/earnings" element={<RequireRole role="doctor"><EarningsPage /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
                 <Route path="/reviews" element={<RequirePatient><MyReviewsScreen /></RequirePatient>} />
                 <Route path="/profile" element={<ProfileScreen />} />
@@ -208,6 +212,7 @@ export default function App() {
             </Routes>
           </Suspense>
           <ToastViewport />
+          </RealtimeProvider>
         </ToastProvider>
       </SessionProvider>
     </BrowserRouter>

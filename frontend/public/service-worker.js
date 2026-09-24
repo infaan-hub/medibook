@@ -83,20 +83,50 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Web Push — show notification when a push event arrives.
+// Payload: {title, body, url, tag, appointment_id?, notification_id?}
 self.addEventListener("push", (event) => {
-  const payload = event.data ? event.data.json() : {};
-  event.waitUntil(
-    self.registration.showNotification(payload.title || "MediBook", {
-      body: payload.body || "You have a new appointment update.",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      data: { url: payload.url || "/" },
-    })
-  );
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+  const title = payload.title || "MediBook";
+  const options = {
+    body: payload.body || "You have a new appointment update.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    data: { url: payload.url || "/notifications" },
+    // Browser-level dedup (reminders share a tag per appointment).
+    tag: payload.tag || undefined,
+    renotify: false,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Notification click — open the relevant URL.
+// Notification click — focus an open client on the target URL, else open it.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(event.notification.data.url));
+  const targetUrl = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if ("focus" in client) {
+            void client.focus();
+            if ("navigate" in client && client.url) {
+              try {
+                void client.navigate(targetUrl);
+                return;
+              } catch {
+                /* fall through to openWindow */
+              }
+            }
+            return;
+          }
+        }
+        return self.clients.openWindow(targetUrl);
+      })
+  );
 });

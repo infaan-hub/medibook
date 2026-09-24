@@ -82,16 +82,49 @@ async function userIdForToken(token) {
 }
 
 
+/** Serialize an event into a versioned envelope frame (id/type/timestamp/version/entity_id/payload). */
+function toFrame(event, payload) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    payload.id !== undefined &&
+    payload.type &&
+    payload.timestamp &&
+    payload.payload !== undefined
+  ) {
+    // Already an envelope from lib/realtime.ts — keep as-is with event alias.
+    return JSON.stringify({ ...payload, event: payload.type });
+  }
+  return JSON.stringify({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    type: event,
+    event,
+    timestamp: new Date().toISOString(),
+    version: Date.now(),
+    entity_id: String((payload && payload.id) || ""),
+    payload: payload ?? {},
+  });
+}
+
 globalThis.__medibook_realtime = {
-  /** Send {"event", payload} to every open socket of the given user ids. */
+  /** Send a realtime frame to every open socket of the given user ids. */
   send(userIds, event, payload) {
     const targets = new Set(
       [...userIds].map(Number).filter((id) => Number.isInteger(id))
     );
     if (targets.size === 0) return;
-    const frame = JSON.stringify({ event, payload });
+    const frame = toFrame(event, payload);
     for (const socket of sockets) {
       if (socket.readyState === 1 && targets.has(socket.__userId)) {
+        socket.send(frame);
+      }
+    }
+  },
+  /** Fan-out to every authenticated socket (availability etc.). */
+  broadcastAll(event, payload) {
+    const frame = toFrame(event, payload);
+    for (const socket of sockets) {
+      if (socket.readyState === 1 && socket.__userId != null) {
         socket.send(frame);
       }
     }

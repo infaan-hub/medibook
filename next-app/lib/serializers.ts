@@ -58,6 +58,7 @@ export function patientDto(patient: Patient & { user: User }): Record<string, un
     allergies: patient.allergies,
     medical_history: patient.medical_history,
     reminder_preferences: patient.reminder_preferences,
+    timezone: patient.timezone ?? "UTC",
   };
 }
 

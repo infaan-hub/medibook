@@ -114,6 +114,8 @@ model Patient {
   allergies               String    @default("")
   medical_history         String    @default("")
   reminder_preferences    Json
+  /// IANA timezone for reminder formatting (e.g. Africa/Dar_es_Salaam). UTC default.
+  timezone                String    @default("UTC") @db.VarChar(64)
   created_at              DateTime  @default(now())
   updated_at              DateTime  @updatedAt
   user                    User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)

@@ -6,6 +6,14 @@ import { dirname, join } from "node:path";
 
 const dir = dirname(dirname(fileURLToPath(import.meta.url)));
 const secret = randomBytes(48).toString("hex");
+const cronSecret = randomBytes(16).toString("hex");
+let vapid = { publicKey: "", privateKey: "" };
+try {
+  const webpush = await import("web-push");
+  vapid = webpush.default.generateVAPIDKeys();
+} catch {
+  // web-push not installed — leave empty and generate later.
+}
 const env = [
   'DATABASE_URL="postgresql://user:password@ep-xxx.aws.neon.tech/neondb?sslmode=require"',
   `AUTH_SECRET="${secret}"`,
@@ -17,6 +25,10 @@ const env = [
   "THROTTLE_DISABLED=false",
   "PORT=8000",
   "REMINDERS_INTERVAL_MINUTES=15",
+  `CRON_SECRET="${cronSecret}"`,
+  `VAPID_PUBLIC_KEY="${vapid.publicKey}"`,
+  `VAPID_PRIVATE_KEY="${vapid.privateKey}"`,
+  `VAPID_SUBJECT="mailto:ops@medibook.local"`,
   "MEDIA_ROOT=uploads",
   "EMAIL_TRANSPORT=console",
   'DEFAULT_FROM_EMAIL="MediBook <no-reply@medibook.local>"',

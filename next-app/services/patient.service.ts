@@ -28,7 +28,7 @@ export async function updateProfile(user: AuthUser, body: unknown) {
   const keys = [
     "date_of_birth", "gender", "address", "city", "emergency_contact_name",
     "emergency_contact_phone", "blood_group", "allergies", "medical_history",
-    "reminder_preferences",
+    "reminder_preferences", "timezone",
   ] as const;
   for (const key of keys) {
     if (input[key] !== undefined) {

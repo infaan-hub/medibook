@@ -11,7 +11,7 @@ import { Prisma } from "@prisma/client";
 import { conflict, forbidden, notFound, badRequest, ValidationError } from "@/lib/errors";
 import { combineDateTime, normalizeTime, todayIso } from "@/lib/dates";
 import { appointmentDto } from "@/lib/serializers";
-import { broadcastAppointmentEvent, notify, pushRaw } from "@/lib/notify";
+import { broadcastAppointmentEvent, broadcastAvailabilityUpdated, notify, pushRaw } from "@/lib/notify";
 import { availableSlots } from "./schedule.service";
 import { appointmentCreateSchema, appointmentPatchSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
@@ -100,6 +100,8 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     appointment.patient_id,
     doctor.user_id,
   ]);
+  // Slot is now occupied — tell connected clients to refresh availability.
+  broadcastAvailabilityUpdated(doctor.id, date);
   return appointment;
 }
 
@@ -240,6 +242,8 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
       `Appointment rescheduled to ${after.date} at ${after.start.slice(0, 5)}–${after.end.slice(0, 5)} by ${doctorName}.`,
       updated.id
     );
+    broadcastAvailabilityUpdated(updated.doctor_id, before.date);
+    broadcastAvailabilityUpdated(updated.doctor_id, after.date);
   }
   const doctorRow = await doctors.findDoctorById(updated.doctor_id);
   broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, doctorRow?.user_id]);
@@ -256,6 +260,10 @@ export async function destroyAppointment(id: number): Promise<void> {
   const doctor = await doctors.findDoctorById(appointment.doctor_id);
   await appointments.deleteAppointment(id);
   pushRaw("appointment.deleted", { id }, [appointment.patient_id, doctor?.user_id]);
+  broadcastAvailabilityUpdated(
+    appointment.doctor_id,
+    appointment.appointment_date.toISOString().slice(0, 10)
+  );
 }
 
 const ACTION_MAP: Record<string, { status: string; roles: string[] }> = {
@@ -264,6 +272,25 @@ const ACTION_MAP: Record<string, { status: string; roles: string[] }> = {
   cancel: { status: "cancelled", roles: ["patient", "doctor", "admin"] },
   reject: { status: "rejected", roles: ["doctor", "admin"] },
 };
+
+/** Allowed next statuses from each current status (terminal states have none). */
+const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  pending: ["confirmed", "cancelled", "rejected"],
+  confirmed: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+  rejected: [],
+};
+
+function assertTransition(from: string, to: string): void {
+  const allowed = STATUS_TRANSITIONS[from];
+  if (!allowed || !allowed.includes(to)) {
+    throw conflict(
+      `Cannot change appointment status from "${from}" to "${to}".`,
+      { status: [`Invalid transition ${from} → ${to}.`] }
+    );
+  }
+}
 
 const NOTIFY_TYPE: Record<string, string> = {
   confirmed: "appointment_confirmed",
@@ -306,6 +333,9 @@ export async function runAction(user: AuthUser, id: number, action: string, body
       : ((role === "doctor" || role === "admin") && (isOwnerDoctor || isAdmin)) ||
         (isAdmin && config.roles.includes("admin"));
   if (!allowed) throw forbidden("You do not have permission to perform this action.");
+
+  // State machine: reject illegal transitions (e.g. confirm a cancelled appointment).
+  assertTransition(appointment.status, config.status);
 
   const { appointmentActionSchema } = await import("@/validators/misc");
   const rawBody = (body ?? {}) as Record<string, unknown>;

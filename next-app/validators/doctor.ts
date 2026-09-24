@@ -17,6 +17,7 @@ export const patientProfileSchema = z
     allergies: z.string().optional(),
     medical_history: z.string().optional(),
     reminder_preferences: z.record(z.unknown()).optional(),
+    timezone: z.string().max(64).optional(),
   })
   .passthrough();
 

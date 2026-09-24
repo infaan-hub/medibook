@@ -42,5 +42,20 @@ export const POST = handler(async (ctx) => {
     title: body.title,
     message: body.message,
   });
+  // Emit realtime after the DB write so recipients see it without refresh.
+  const { pushEvent } = await import("@/lib/realtime");
+  const { notificationPayload } = await import("@/lib/notify");
+  const { sendWebPushSafe } = await import("@/lib/push");
+  pushEvent([Number(recipient)], "notification.created", notificationPayload(row), {
+    version: row.updated_at.getTime(),
+    entityId: row.id,
+  });
+  sendWebPushSafe(Number(recipient), {
+    title: row.title,
+    body: row.message,
+    url: "/notifications",
+    notification_id: row.id,
+    tag: `notification-${row.id}`,
+  });
   return created(notificationDto(row), "Notification created.");
 });

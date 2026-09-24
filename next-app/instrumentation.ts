@@ -1,7 +1,12 @@
 /**
  * Next.js instrumentation (runs once per server boot, dev + prod).
- * Starts the in-process appointment reminder scheduler — the equivalent of
- * Django's cron-driven `manage.py send_reminders`.
+ *
+ * In-process reminder scheduler for long-running Node hosts (`node server.js`).
+ * On serverless platforms this interval is NOT reliable — use the HTTP cron
+ * endpoint instead: POST /api/cron/reminders/ with header x-cron-secret: CRON_SECRET
+ * (or `npm run reminders`, which prefers the HTTP endpoint when the server is up).
+ *
+ * Set REMINDERS_INTERVAL_MINUTES=0 to disable the in-process interval entirely.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -15,8 +20,12 @@ export async function register(): Promise<void> {
   const { sendDueReminders } = await import("./lib/reminders");
   const tick = async () => {
     try {
-      const sent = await sendDueReminders();
-      if (sent > 0) console.log(`[reminders] dispatched ${sent} reminder(s)`);
+      const result = await sendDueReminders();
+      if (result.sent > 0 || result.failed > 0) {
+        console.log(
+          `[reminders] sent=${result.sent} skipped=${result.skipped} failed=${result.failed}`
+        );
+      }
     } catch (error) {
       console.error("[reminders] failed:", error);
     }

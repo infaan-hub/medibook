@@ -7,6 +7,7 @@ import { notificationDto, pushSubscriptionDto } from "@/lib/serializers";
 import { notificationPatchSchema, pushSubscriptionSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as notifications from "@/repositories/notifications.repo";
+import { broadcastNotificationUpdated } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
 
 const isUnreadOnly = (req: Request): boolean => {
@@ -35,6 +36,7 @@ export async function patchOwn(user: AuthUser, id: number, body: unknown) {
   const updated = input.is_read !== undefined
     ? await notifications.updateNotification(id, { is_read: input.is_read })
     : row;
+  if (input.is_read !== undefined) broadcastNotificationUpdated(updated);
   return notificationDto(updated);
 }
 
@@ -53,9 +55,22 @@ export const listPush = (user: AuthUser) => ({
 
 export async function createPush(user: AuthUser, body: unknown) {
   const input = parse(pushSubscriptionSchema, body);
-  if (await notifications.pushEndpointExists(input.endpoint)) {
-    const { ValidationError } = await import("@/lib/errors");
-    throw new ValidationError({ endpoint: ["This field must be unique."] });
+  // Idempotent: same endpoint re-register (renewal / multi-tab) updates keys
+  // and reactivates instead of failing with a unique-constraint error.
+  const existing = await notifications.findPushByEndpoint(input.endpoint);
+  if (existing) {
+    if (existing.user_id !== user.id) {
+      const { forbidden } = await import("@/lib/errors");
+      throw forbidden("This push endpoint belongs to another account.");
+    }
+    const updated = await notifications.updatePushSubscription(existing.id, {
+      p256dh_key: input.p256dh_key,
+      auth_key: input.auth_key,
+      fcm_token: input.fcm_token,
+      device_info: input.device_info,
+      is_active: input.is_active ?? true,
+    });
+    return pushSubscriptionDto(updated);
   }
   const row = await notifications.createPushSubscription(user.id, {
     endpoint: input.endpoint,
@@ -65,6 +80,7 @@ export async function createPush(user: AuthUser, body: unknown) {
     device_info: input.device_info,
     is_active: input.is_active,
   });
+  console.log(`[push] subscription created user=${user.id} id=${row.id}`);
   return pushSubscriptionDto(row);
 }
 
@@ -78,4 +94,5 @@ export async function destroyPush(user: AuthUser, id: number): Promise<void> {
   const row = await notifications.findPushSubscriptionOwned(id, user.id);
   if (!row) throw notFound();
   await notifications.deletePushSubscription(id);
+  console.log(`[push] subscription removed user=${user.id} id=${id}`);
 }
