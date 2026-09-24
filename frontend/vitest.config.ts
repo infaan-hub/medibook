@@ -1,8 +1,13 @@
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 
+// Next.js keeps tsconfig `jsx: "preserve"`, so tell Vite 8's oxc transform
+// to compile JSX for tests (@vitejs/plugin-react is intentionally not used).
 export default defineConfig({
-  plugins: [react()],
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",

@@ -13,11 +13,11 @@ timeout /t 2 /nobreak >nul
 REM Start Next.js backend (API + WebSocket) in new CMD
 start "MediBook Backend" cmd /k "cd /d E:\Medibook\next-app && npm run dev"
 
-REM Start Frontend in new CMD
+REM Start Frontend (Next.js) in new CMD
 start "MediBook Frontend" cmd /k "cd /d E:\Medibook\frontend && npm run dev"
 
-REM Wait a moment then open Chrome
-timeout /t 3 /nobreak >nul
-start chrome "http://localhost:5173"
+REM Wait a moment then open Chrome (Next.js dev server)
+timeout /t 5 /nobreak >nul
+start chrome "http://localhost:3000"
 
-echo Done! Two CMD windows opened.
+echo Done! Two CMD windows opened. Frontend is Next.js on http://localhost:3000

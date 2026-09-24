@@ -11,7 +11,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { MyReviewsScreen } from "../pages/reviews";
+import { MyReviewsScreen } from "../screens/reviews";
 import { ToastProvider } from "../state/app-context";
 import type { Review } from "../api/types";
 

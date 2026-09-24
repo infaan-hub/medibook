@@ -1,7 +1,7 @@
 /**
  * Axios API client (§28 envelope contract).
  *
- * - Base URL comes from VITE_API_BASE_URL (frontend/.env).
+ * - Base URL comes from NEXT_PUBLIC_API_BASE_URL (.env).
  * - Attaches the JWT access token to every request.
  * - On a 401 it transparently refreshes the token once (single-flight: parallel
  *   401s share one refresh call), then replays the original request.
@@ -17,7 +17,7 @@ import axios, {
 import type { Envelope } from "./types";
 import { tokenStore } from "./tokens";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean;

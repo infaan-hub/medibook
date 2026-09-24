@@ -1,0 +1,38 @@
+{
+  "app\\[[...slug]]\\page.tsx -> ../../src/App": {
+    "id": "app\\[[...slug]]\\page.tsx -> ../../src/App",
+    "files": [
+      "static/chunks/_app-pages-browser_src_App_tsx.js"
+    ]
+  },
+  "node_modules\\next\\dist\\client\\dev\\hot-reloader\\app\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts": {
+    "id": "node_modules\\next\\dist\\client\\dev\\hot-reloader\\app\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts",
+    "files": [
+      "static/chunks/_app-pages-browser_node_modules_next_dist_client_dev_noop-turbopack-hmr_js.js"
+    ]
+  },
+  "src\\App.tsx -> ./screens": {
+    "id": "src\\App.tsx -> ./screens",
+    "files": [
+      "static/chunks/_app-pages-browser_src_screens_index_tsx.js"
+    ]
+  },
+  "src\\App.tsx -> ./screens/doctor-medical-treatment": {
+    "id": "src\\App.tsx -> ./screens/doctor-medical-treatment",
+    "files": [
+      "static/chunks/_app-pages-browser_src_screens_doctor-medical-treatment_tsx.js"
+    ]
+  },
+  "src\\App.tsx -> ./screens/earnings": {
+    "id": "src\\App.tsx -> ./screens/earnings",
+    "files": [
+      "static/chunks/_app-pages-browser_src_screens_earnings_tsx.js"
+    ]
+  },
+  "src\\App.tsx -> ./screens/visit-history": {
+    "id": "src\\App.tsx -> ./screens/visit-history",
+    "files": [
+      "static/chunks/_app-pages-browser_src_screens_visit-history_tsx.js"
+    ]
+  }
+}

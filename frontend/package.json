@@ -2,12 +2,11 @@
   "name": "medibook-frontend",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "description": "MediBook frontend — React (Vite) installable PWA",
+  "description": "MediBook frontend - Next.js installable PWA",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -17,6 +16,7 @@
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.47.0",
+    "next": "^15.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-i18next": "^17.0.14",
@@ -26,12 +26,11 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^22.10.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^29.1.1",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0",
+    "typescript": "^5.7.0",
     "vitest": "^5.0.1"
   }
 }

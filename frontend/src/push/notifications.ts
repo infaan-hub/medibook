@@ -3,7 +3,7 @@
  * to browser push via the Service Worker Push API.
  *
  * VAPID public key is loaded from the backend (`GET /api/push/vapid-public-key/`)
- * with optional `VITE_VAPID_PUBLIC_KEY` override for offline/dev setups.
+ * with optional `NEXT_PUBLIC_VAPID_PUBLIC_KEY` override for offline/dev setups.
  */
 import { API_BASE_URL } from "../api/client";
 import { tokenStore } from "../api/tokens";
@@ -12,7 +12,7 @@ let cachedKey: string | null = null;
 let keyPromise: Promise<string | null> | null = null;
 
 export async function getVapidPublicKey(): Promise<string | null> {
-  const fromEnv = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  const fromEnv = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY as string | undefined;
   if (fromEnv) return fromEnv;
   if (cachedKey) return cachedKey;
   if (keyPromise) return keyPromise;

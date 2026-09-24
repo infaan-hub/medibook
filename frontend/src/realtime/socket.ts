@@ -251,9 +251,9 @@ class RealtimeClient {
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     // Production may host the persistent WS on another origin (Vercel HTTP API
-    // cannot host long-lived sockets). Prefer VITE_WS_URL when set; otherwise
-    // same-origin /ws/notifications/ (Vite proxy in dev).
-    const configured = import.meta.env.VITE_WS_URL as string | undefined;
+    // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set; otherwise
+    // same-origin /ws/notifications/.
+    const configured = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
     let base = configured?.replace(/\/+$/, "");
     if (!base) {
       base = `${protocol}://${window.location.host}`;

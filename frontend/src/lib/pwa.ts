@@ -8,7 +8,7 @@ export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
   if (location.protocol !== "https:" && location.hostname !== "localhost") return;
 
-  window.addEventListener("load", () => {
+  const register = () => {
     void navigator.serviceWorker
       .register("/service-worker.js", { scope: "/" })
       .then((registration) => {
@@ -29,5 +29,11 @@ export function registerServiceWorker(): void {
       .catch(() => {
         /* Service worker registration is best-effort. */
       });
-  });
+  };
+
+  if (document.readyState === "complete") {
+    register();
+  } else {
+    window.addEventListener("load", register, { once: true });
+  }
 }

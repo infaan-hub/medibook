@@ -10,14 +10,19 @@
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
-    "types": ["vite/client", "vitest/globals"]
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "types": ["vitest/globals"]
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts"]
+  "include": ["next-env.d.ts", "app", "src", "next.config.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "src/__tests__", "src/test", "vitest.config.ts"]
 }

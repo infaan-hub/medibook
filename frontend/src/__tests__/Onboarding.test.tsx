@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { OnboardingScreen } from "../pages/auth";
+import { OnboardingScreen } from "../screens/auth";
 
 describe("OnboardingScreen", () => {
   const renderWithRouter = () =>

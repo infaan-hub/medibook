@@ -9,7 +9,6 @@ const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
 const SHELL_ASSETS = [
   "/",
-  "/index.html",
   "/offline.html",
   "/offline.css",
   "/manifest.json",
@@ -54,12 +53,12 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy));
+            caches.open(SHELL_CACHE).then((cache) => cache.put("/", copy));
           }
           return response;
         })
         .catch(() =>
-          caches.match("/index.html").then((hit) => hit || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } }))
+          caches.match("/").then((hit) => hit || caches.match("/offline.html").then((offline) => offline || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } })))
         )
     );
     return;
