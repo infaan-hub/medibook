@@ -42,5 +42,10 @@ export function originOf(req: Request): string {
   return `${proto}://${host}`;
 }
 
-export const mediaUrl = (req: Request, relative?: string | null): string | null =>
-  relative ? `${originOf(req)}/media/${relative.replace(/^\/+/, "")}` : null;
+/**
+ * Media URL for a stored MediaFile id: `/media/{id}` (Phase 11). The id is
+ * immutable — a replaced image gets a NEW id — so the URL is stable across
+ * localhost / preview / production domains and safe to cache forever.
+ */
+export const mediaUrl = (mediaId?: number | null): string | null =>
+  mediaId === null || mediaId === undefined ? null : `/media/${mediaId}`;

@@ -169,16 +169,21 @@ export async function createHealthRecord(user: AuthUser, body: unknown, file?: F
     throw new ValidationError({ patient: [`Invalid pk "${input.patient}" - object does not exist.`] });
   }
 
-  let filePath: string | null = null;
+  let fileId: number | null = null;
   if (file && file.size > 0) {
-    const { saveUpload } = await import("@/lib/upload");
-    filePath = await saveUpload(file, "health_records");
+    const { uploadImage } = await import("@/lib/media/uploadImage");
+    const media = await uploadImage(file, {
+      subdir: "health_records",
+      ownerId: user.id,
+      kind: "file", // documents as well as images (bytes still sniffed)
+    });
+    fileId = media.id;
   }
   return clinical.createHealthRecord({
     patient_id: input.patient,
     doctor_id: doctor.id,
     appointment_id: input.appointment ?? null,
-    file: filePath,
+    file_id: fileId,
     record_type: input.record_type ?? "other",
     title: input.title,
     description: input.description ?? "",
@@ -191,7 +196,14 @@ export async function destroyHealthRecord(user: AuthUser, id: number): Promise<v
   if (!doctor) throw notFound("Record not found.");
   const row = await clinical.findHealthRecord(id, doctor.id);
   if (!row) throw notFound("Record not found.");
-  await clinical.deleteHealthRecord(id);
+  // Record + its uploaded file go away together (one transaction): the file
+  // row is only removed once nothing references it anymore.
+  const { deleteMediaIfUnreferenced } = await import("@/lib/media/uploadImage");
+  const { prisma } = await import("@/lib/db");
+  await prisma.$transaction(async (tx) => {
+    await clinical.deleteHealthRecord(id, tx);
+    await deleteMediaIfUnreferenced(row.file_id, tx);
+  });
 }
 
 export { healthRecordDto };

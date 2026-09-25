@@ -5,8 +5,9 @@
   "description": "MediBook — Next.js full-stack (API + PWA UI) + Prisma + PostgreSQL",
   "scripts": {
     "dev": "node server.js",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "node server.js production",
+    "media:migrate": "node scripts/migrate-media-to-db.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

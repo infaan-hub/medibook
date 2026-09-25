@@ -739,13 +739,101 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-3);
 }
+/* ---- Prompt stack (§18/§69 PWA UI) ----
+   The install and "new version" banners share one fixed column so they can
+   never overlap; only the banners themselves intercept taps. */
+.prompt-stack {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-3));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.prompt-stack > .prompt {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  z-index: auto;
+  pointer-events: auto;
+}
+/* Guest screens (welcome / onboarding / login) have no bottom navigation, so
+   the stack sits just above the home indicator there. */
+body:not(:has(.shell__nav--bottom)) .prompt-stack {
+  bottom: calc(var(--safe-bottom) + var(--space-4));
+}
+
 @media (min-width: 1200px) {
+  .prompt-stack {
+    left: auto;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    width: 380px;
+  }
   .prompt {
     bottom: var(--space-4);
     left: auto;
     right: var(--space-4);
     width: 380px;
   }
+}
+
+/* ---- "Download app" (A2HS) button (§22.1, §69) ----
+   Shown while MediBook is not installed yet: in the patient header (replacing
+   the bell) and at the top of the first-run guest screens. */
+.install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #09A99E;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(9, 169, 158, 0.3);
+}
+.install-btn:hover { background: #087F79; }
+.install-btn:active { opacity: 0.88; }
+
+/* Header variant: icon-only on phones (like the bell), labelled from 600px. */
+.install-btn--header .install-btn__label { display: none; }
+@media (min-width: 600px) {
+  .install-btn--header .install-btn__label { display: inline; }
+}
+
+/* Inline variant: flows inside a screen's own header row (label always shown). */
+.install-btn--inline {
+  align-self: flex-start;
+}
+
+/* Floating variant: top-left corner of the guest screens (onboarding /
+   welcome). Absolute — not fixed — so it stays inside the centred
+   phone-width card on tablet/desktop instead of hugging the window edge. */
+.install-btn--floating {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--space-3));
+  left: max(var(--space-4), var(--safe-left));
+  z-index: 45;
+}
+
+/* Block variant: full-width call to action. */
+.install-btn--block {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  font-size: 13px;
 }
 
 /* ---- Splash screen ---- */

@@ -40,6 +40,21 @@ export function ProfileScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Local blob preview: tracked in a ref as well so the object URL is always
+  // released (new selection, success, failure, removal, unmount) — a leaked
+  // blob URL keeps the file bytes alive for the lifetime of the document.
+  const previewUrlRef = useRef<string | null>(null);
+  const setPreview = (url: string | null) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = url;
+    setPreviewUrl(url);
+  };
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    },
+    []
+  );
 
   const [passwords, setPasswords] = useState({
     old_password: "",
@@ -148,7 +163,7 @@ export function ProfileScreen() {
       notify("error", "Image must be under 5 MB.");
       return;
     }
-    setPreviewUrl(URL.createObjectURL(file));
+    setPreview(URL.createObjectURL(file));
     uploadImage(file);
   }
 
@@ -156,10 +171,12 @@ export function ProfileScreen() {
     setUploading(true);
     try {
       const envelope = await uploadProfileImage(file);
+      // Success → drop the local blob and render the canonical /media/{id}.
+      setPreview(null);
       setUser(envelope.data);
       notify("success", "Profile picture updated.");
     } catch {
-      setPreviewUrl(null);
+      setPreview(null);
       notify("error", "Could not upload profile picture.");
     } finally {
       setUploading(false);
@@ -167,7 +184,7 @@ export function ProfileScreen() {
   }
 
   function onRemoveImage() {
-    setPreviewUrl(null);
+    setPreview(null);
     setUploading(true);
     removeProfileImage()
       .then((envelope) => {

@@ -13,8 +13,8 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom
 import "./i18n";
 import { registerServiceWorker } from "./lib/pwa";
 import { AppShell } from "./components/AppShell";
-import { RequireGuest, RequirePatient, RequireRole, RequireSession, homeForRole } from "./components/guards";
-import { SplashScreen } from "./components/Splash";
+import { RequireGuest, RequirePatient, RequireRole, RequireSession, launchPath } from "./components/guards";
+import { SplashScreen, UpdatePrompt } from "./components/Splash";
 import { Spinner } from "./components/ui";
 import { ToastViewport } from "./components/ToastViewport";
 import {
@@ -74,20 +74,35 @@ function PageFallback() {
 }
 
 /**
+ * First-run flag (§21 onboarding). Written by `OnboardingScreen` when the
+ * carousel is finished or skipped, and deliberately kept across logout so a
+ * returning visitor lands on /login instead of the carousel again.
+ */
+const ONBOARDED_KEY = "medibook_onboarding_completed";
+
+function hasOnboarded(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDED_KEY) === "1";
+  } catch {
+    // Storage unavailable (private mode) — never block the sign-in screen.
+    return true;
+  }
+}
+
+/**
  * The root route is deliberately unguarded.  It resolves the launch destination
  * before a guest can reach RequireSession (which would otherwise redirect to login).
+ *
+ *   already signed in       → that role's home (no onboarding, no welcome)
+ *   first ever visit        → /onboarding → /welcome (sign up / sign in)
+ *   signed out, seen before → /login
  */
 function LaunchRoute() {
   const { status, user } = useSession();
-
-  if (status === "booting") return null;
-
-  if (status === "guest") {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!user) return null;
-  return <Navigate to={homeForRole(user)} replace />;
+  const destination = launchPath(status, user, hasOnboarded());
+  // `null` → the boot probe is still running and the splash is still up.
+  if (!destination) return null;
+  return <Navigate to={destination} replace />;
 }
 
 /** Keep the splash visible until both its minimum duration and session restore finish. */
@@ -115,9 +130,24 @@ export default function App() {
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<LaunchRoute />} />
-              {/* Guest-only screens (no app shell) */}
-              <Route path="/onboarding" element={<OnboardingScreen />} />
-              <Route path="/welcome" element={<WelcomeScreen />} />
+              {/* Guest-only screens (no app shell). Signed-in users bounce to
+                  their own home, so /onboarding and /welcome stay first-run only. */}
+              <Route
+                path="/onboarding"
+                element={
+                  <RequireGuest>
+                    <OnboardingScreen />
+                  </RequireGuest>
+                }
+              />
+              <Route
+                path="/welcome"
+                element={
+                  <RequireGuest>
+                    <WelcomeScreen />
+                  </RequireGuest>
+                }
+              />
               <Route
                 path="/login"
                 element={
@@ -214,6 +244,11 @@ export default function App() {
               </Route>
             </Routes>
           </Suspense>
+          {/* PWA banners (§18) live at app level; the stack keeps them clear of
+              each other and of the guest screens (which have no bottom nav). */}
+          <div className="prompt-stack">
+            <UpdatePrompt />
+          </div>
           <ToastViewport />
           </RealtimeProvider>
         </ToastProvider>

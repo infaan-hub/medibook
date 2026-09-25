@@ -11,7 +11,7 @@
 import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Spinner } from "./ui";
-import { useSession } from "../state/app-context";
+import { useSession, type SessionStatus } from "../state/app-context";
 
 export const LOGIN_PATH = "/login";
 
@@ -40,6 +40,25 @@ export function homeForRole(user: RoleUser): string {
   // and never loops through RequirePatient.
   if (user.role === "admin") return "/profile";
   return "/dashboard";
+}
+
+/**
+ * Destination for the unguarded root route (§21 onboarding, §54 auth).
+ *
+ *   signed in             → that role's home (onboarding/welcome never again)
+ *   first ever visit      → /onboarding → /welcome (sign up / sign in)
+ *   signed out, seen before → /login
+ *
+ * `null` means "keep the splash" — the session boot probe has not finished yet.
+ */
+export function launchPath(
+  status: SessionStatus,
+  user: RoleUser | null,
+  onboarded: boolean
+): string | null {
+  if (status === "booting") return null;
+  if (status === "authed" && user) return homeForRole(user);
+  return onboarded ? LOGIN_PATH : "/onboarding";
 }
 
 /**

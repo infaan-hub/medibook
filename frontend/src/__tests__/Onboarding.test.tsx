@@ -2,12 +2,17 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { OnboardingScreen } from "../screens/auth";
+import { ToastProvider } from "../state/app-context";
 
 describe("OnboardingScreen", () => {
+  // ToastProvider is required because the screen renders the "Download app"
+  // (A2HS) button, which reports iOS install guidance through a toast.
   const renderWithRouter = () =>
     render(
       <MemoryRouter>
-        <OnboardingScreen />
+        <ToastProvider>
+          <OnboardingScreen />
+        </ToastProvider>
       </MemoryRouter>
     );
 

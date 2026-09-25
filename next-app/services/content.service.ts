@@ -49,17 +49,63 @@ export async function publicArticleDetail(req: Request, slug: string) {
   return articleDetailDto(article, req);
 }
 
-/** Admin create (POST /api/admin/blog/articles/). */
-export async function adminCreateArticle(req: Request, user: AuthUser, body: unknown) {
+/**
+ * Resolves an incoming article `image` value to a MediaFile id: accepts
+ * "/media/{id}" (or a bare id) and verifies the row exists, so the API can
+ * never persist a reference that 404s. Uploads themselves go through the
+ * centralized uploadImage() service (multipart file field "image").
+ */
+async function resolveArticleImageId(value: string | null | undefined): Promise<number | null> {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const match = /^\/?media\/(\d+)\/?$/.exec(trimmed) ?? /^(\d+)$/.exec(trimmed);
+  if (!match) {
+    throw new ValidationError({
+      image: ["Expected a media URL like '/media/125' — or upload the image file."],
+    });
+  }
+  const id = Number(match[1]);
+  const { prisma } = await import("@/lib/db");
+  const exists = await prisma.mediaFile.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) {
+    throw new ValidationError({ image: ["Unknown media id — upload the image file first."] });
+  }
+  return id;
+}
+
+async function storeArticleImage(
+  user: AuthUser,
+  file: File | null | undefined
+): Promise<number> {
+  const { uploadImage } = await import("@/lib/media/uploadImage");
+  const media = await uploadImage(file as File, {
+    subdir: "articles",
+    ownerId: user.id,
+    kind: "image",
+  });
+  return media.id;
+}
+
+/** Admin create (POST /api/admin/blog/articles/) — JSON or multipart with `image`. */
+export async function adminCreateArticle(
+  req: Request,
+  user: AuthUser,
+  body: unknown,
+  file?: File | null
+) {
   const input = parse(articleSchema, body);
   const slug = await uniqueSlug(input.slug ?? input.title);
   const published = input.published ?? false;
+  let imageId: number | null = null;
+  if (file && file.size > 0) imageId = await storeArticleImage(user, file);
+  else if (input.image !== undefined) imageId = await resolveArticleImageId(input.image);
   const article = await content.createArticle({
     title: input.title,
     slug,
     excerpt: input.excerpt ?? "",
     content: input.content,
-    image: input.image ?? null,
+    image_id: imageId,
     category: input.category ?? "general",
     published,
     author_id: user.id,
@@ -69,13 +115,24 @@ export async function adminCreateArticle(req: Request, user: AuthUser, body: unk
 }
 
 /** Admin partial update (PATCH /api/admin/blog/articles/{id}/). */
-export async function adminPatchArticle(req: Request, id: number, body: unknown) {
+export async function adminPatchArticle(
+  req: Request,
+  user: AuthUser,
+  id: number,
+  body: unknown,
+  file?: File | null
+) {
   const existing = await content.findArticle(id);
   if (!existing) throw notFound();
   const input = parse(articleSchema.partial(), body);
   const data: Record<string, unknown> = {};
-  for (const key of ["title", "excerpt", "content", "image", "category"] as const) {
+  for (const key of ["title", "excerpt", "content", "category"] as const) {
     if (input[key] !== undefined) data[key] = input[key];
+  }
+  if (file && file.size > 0) {
+    data.image_id = await storeArticleImage(user, file);
+  } else if (input.image !== undefined) {
+    data.image_id = await resolveArticleImageId(input.image);
   }
   if (input.slug !== undefined && input.slug !== existing.slug) {
     data.slug = await uniqueSlug(input.slug, id);
@@ -84,7 +141,13 @@ export async function adminPatchArticle(req: Request, id: number, body: unknown)
     data.published = input.published;
     if (input.published && !existing.published_at) data.published_at = new Date();
   }
+  const previousImageId = existing.image_id;
   const updated = await content.updateArticle(id, data);
+  // Image swapped or cleared → drop the old binary unless still referenced.
+  if ("image_id" in data && previousImageId && previousImageId !== data.image_id) {
+    const { deleteMediaIfUnreferenced } = await import("@/lib/media/uploadImage");
+    await deleteMediaIfUnreferenced(previousImageId);
+  }
   return articleDetailDto(updated, req);
 }
 
@@ -95,8 +158,16 @@ export const adminListArticles = (skip: number, take: number) => content.listAll
 export const adminArticleCount = () => content.countAllArticles();
 
 export async function adminDestroyArticle(id: number): Promise<void> {
-  if (!(await content.findArticle(id))) throw notFound();
-  await content.deleteArticle(id);
+  const existing = await content.findArticle(id);
+  if (!existing) throw notFound();
+  // Article + its image go away together; the binary is only dropped when
+  // nothing else references it.
+  const { deleteMediaIfUnreferenced } = await import("@/lib/media/uploadImage");
+  const { prisma } = await import("@/lib/db");
+  await prisma.$transaction(async (tx) => {
+    await content.deleteArticle(id, tx);
+    await deleteMediaIfUnreferenced(existing.image_id, tx);
+  });
 }
 
 export { articleListDto };

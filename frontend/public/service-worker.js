@@ -2,8 +2,12 @@
  * MediBook service worker (§18 PWA, hand-written — no Workbox).
  * Strategy: app-shell precache + network-first for navigation requests with
  * offline.html fallback; stale-while-revalidate for same-origin static assets.
+ *
+ * /api/* and /media/* are NEVER intercepted: API responses must stay fresh,
+ * database-backed images are served directly by the backend (with its own
+ * cache headers), and aborted asset fetches must not surface as 408s.
  */
-const VERSION = "v3";
+const VERSION = "v5";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -45,6 +49,8 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // API calls and database-backed media bypass the SW entirely.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) return;
 
   // Navigations: network-first, offline.html fallback.
   if (request.mode === "navigate") {
@@ -75,7 +81,11 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached || new Response("", { status: 408 }));
+        .catch((err) => {
+          // Aborted (page navigation / src swap) is not a timeout — never 408 it.
+          if (err && err.name === "AbortError") return cached || Response.error();
+          return cached || new Response("", { status: 408 });
+        });
       return cached || network;
     })
   );

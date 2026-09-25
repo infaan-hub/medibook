@@ -18,6 +18,7 @@ import { ApiError } from "../api/client";
 import type { RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
+import { InstallAppButton } from "../components/InstallAppButton";
 
 /* ---------------- shared helpers ---------------- */
 
@@ -217,13 +218,17 @@ export function OnboardingScreen() {
       onTouchEnd={handleTouchEnd}
       style={{ touchAction: "pan-y" }}
     >
-      <button
-        className="ab-onboarding__skip"
-        type="button"
-        onClick={completeAndGoWelcome}
-      >
-        Skip
-      </button>
+      {/* First-run CTA: install MediBook before the visitor even signs up (§69). */}
+      <div className="ab-onboarding__top">
+        <InstallAppButton variant="inline" />
+        <button
+          className="ab-onboarding__skip"
+          type="button"
+          onClick={completeAndGoWelcome}
+        >
+          Skip
+        </button>
+      </div>
       <div
         ref={trackRef}
         style={{
@@ -295,6 +300,9 @@ export function WelcomeScreen() {
   const appleLogin = useAppleLogin();
   return (
     <main className="ab-welcome">
+      {/* First-run CTA (§69) — sits above the brand, opposite the Skip button
+          of the onboarding carousel. */}
+      <InstallAppButton variant="floating" />
       <div className="ab-welcome__content">
         <AbLogo large />
         <h1 className="ab-welcome__title">Medibook Hospital</h1>

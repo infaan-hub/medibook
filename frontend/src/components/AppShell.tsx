@@ -1,6 +1,8 @@
 /**
  * App shell (§22.6 responsive layout): sticky header, phone bottom nav,
- * tablet+ sidebar rail, install/update prompts, offline banner.
+ * tablet+ sidebar rail, update prompt, offline banner. The A2HS install CTA
+ * lives in `components/InstallAppButton.tsx` (§69) — patient header plus the
+ * first-run guest screens.
  * PHASE 5: navigation and the header user chip are role-aware.
  * PHASE 13: notification bell with unread count badge.
  * Responsive: CSS Grid layout, hamburger toggle at all sizes,
@@ -10,12 +12,12 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import type { BeforeInstallPromptEvent } from "../types/pwa";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { isStandalone } from "../pwa/installPrompt";
+import { useInstallAvailability } from "../pwa/installPrompt";
+import { InstallAppButton } from "./InstallAppButton";
 import {
   Home,
   Stethoscope,
@@ -166,6 +168,20 @@ function NotificationBell() {
   );
 }
 
+/**
+ * Header actions.
+ *
+ * Patients who have not installed MediBook yet get the A2HS "Download app"
+ * button instead of the bell (§22.1); notifications stay reachable from the
+ * drawer. Once the app runs standalone — or when the browser offers no install
+ * path — the notification bell is shown as before.
+ */
+function HeaderActions({ user }: { user: User | null }) {
+  const { available } = useInstallAvailability();
+  if (user?.role === "patient" && available) return <InstallAppButton />;
+  return <NotificationBell />;
+}
+
 /** Avatar that shows profile image or initials fallback. */
 function ProfileAvatar({
   user,
@@ -253,75 +269,6 @@ function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[];
   );
 }
 
-function InstallPrompt() {
-  const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS, setIsIOS] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (isStandalone()) return;
-    const ua = navigator.userAgent;
-    setIsIOS(/iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in window));
-    const onPrompt = (e: BeforeInstallPromptEvent) => {
-      e.preventDefault();
-      setEvent(e);
-    };
-    const onInstalled = () => setEvent(null);
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
-
-  if (dismissed || isStandalone()) return null;
-
-  if (event) {
-    return (
-      <div className="prompt" role="dialog" aria-label="Install MediBook">
-        <span>Install MediBook for a faster, offline-capable experience.</span>
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={() => {
-            void event.prompt();
-            setEvent(null);
-          }}
-        >
-          Install
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss install prompt"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  if (isIOS) {
-    return (
-      <div className="prompt" role="dialog" aria-label="Install MediBook">
-        <span>Tap <strong>Share</strong> then <strong>Add to Home Screen</strong> to install MediBook.</span>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  }
-
-  return null;
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { user, logout } = useSession();
@@ -403,7 +350,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="shell__brand-text">MediBook</span>
         </span>
         <div className="shell__header-actions">
-          <NotificationBell />
+          <HeaderActions user={user} />
         </div>
       </header>
 
@@ -480,8 +427,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="shell__nav--bottom" aria-label="Primary">
         <NavLinks items={bottomItems} user={user} />
       </nav>
-
-      <InstallPrompt />
     </div>
   );
 }

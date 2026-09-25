@@ -4,6 +4,7 @@
  */
 import { ValidationError, notFound, badRequest } from "@/lib/errors";
 import { userPayload } from "@/lib/serializers";
+import { mediaUrl } from "@/lib/serialize";
 import { hashPassword, validateNewPassword } from "@/lib/password";
 import { adminDoctorCreateSchema, adminUserCreateSchema } from "@/validators/more";
 import { parse } from "@/validators/base";
@@ -122,7 +123,7 @@ export const listUsers = async (role?: string, skip = 0, take = 20) => {
     last_name: u.last_name ?? "",
     phone: u.phone ?? "",
     is_superuser: u.is_superuser,
-    profile_image: u.profile_image,
+    profile_image: mediaUrl(u.profile_image_id),
     date_joined: u.created_at.toISOString(),
   }));
 };
@@ -140,7 +141,7 @@ export const userDto = (u: {
   last_name?: string | null;
   phone?: string | null;
   is_superuser?: boolean;
-  profile_image?: string | null;
+  profile_image_id?: number | null;
   created_at?: Date;
 }) => ({
   id: u.id,
@@ -152,7 +153,7 @@ export const userDto = (u: {
   last_name: u.last_name ?? "",
   phone: u.phone ?? "",
   is_superuser: u.is_superuser ?? false,
-  profile_image: u.profile_image ?? null,
+  profile_image: mediaUrl(u.profile_image_id ?? null),
   date_joined: u.created_at ? u.created_at.toISOString() : null,
 });
 

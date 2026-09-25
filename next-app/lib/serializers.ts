@@ -1,9 +1,9 @@
-/**
- * DTO serializers — the TypeScript port of the Django REST Framework
+﻿/**
+ * DTO serializers â€” the TypeScript port of the Django REST Framework
  * serializers. Field names, shapes and value formats match exactly:
  *
- *   datetime → ISO-8601 string, date → "YYYY-MM-DD", time → "HH:MM:SS",
- *   Decimal  → fixed 2-decimal string, media files → URL, FKs → integer ids.
+ *   datetime â†’ ISO-8601 string, date â†’ "YYYY-MM-DD", time â†’ "HH:MM:SS",
+ *   Decimal  â†’ fixed 2-decimal string, media files â†’ URL, FKs â†’ integer ids.
  */
 import type {
   Appointment,
@@ -35,7 +35,7 @@ export function userPayload(user: User, req: Request): Record<string, unknown> {
     first_name: user.first_name,
     last_name: user.last_name,
     role: user.role,
-    profile_image: mediaUrl(req, user.profile_image),
+    profile_image: mediaUrl(user.profile_image_id),
     is_superuser: user.is_superuser,
     date_joined: iso(user.created_at),
   };
@@ -84,7 +84,7 @@ export function doctorDto(
     email: doctor.user.email,
     first_name: doctor.user.first_name,
     last_name: doctor.user.last_name,
-    profile_image: mediaUrl(req, doctor.user.profile_image),
+    profile_image: mediaUrl(doctor.user.profile_image_id),
     specialties: doctor.specialties.map(({ specialty }) => ({
       id: specialty.id,
       name: specialty.name,
@@ -183,7 +183,7 @@ export function articleListDto(article: Article, req: Request): Record<string, u
     title: article.title,
     slug: article.slug,
     excerpt: article.excerpt,
-    image: mediaUrl(req, article.image),
+    image: mediaUrl(article.image_id),
     category: article.category,
     published_at: iso(article.published_at),
     created_at: iso(article.created_at),
@@ -214,7 +214,7 @@ export function healthRecordDto(record: HealthRecord, req: Request): Record<stri
     patient: record.patient_id,
     doctor: record.doctor_id,
     appointment: record.appointment_id,
-    file: mediaUrl(req, record.file),
+    file: mediaUrl(record.file_id),
     record_type: record.record_type,
     title: record.title,
     description: record.description,

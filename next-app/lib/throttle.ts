@@ -19,6 +19,9 @@ const RATES: Record<string, number> = {
   user: 120,
   auth: 10,
   password_reset: 5,
+  // Dedicated asset bucket for /media/* — generous so avatar/document-heavy
+  // pages never 429, but still bounded against hammering the BYTEA store.
+  media: 600,
 };
 
 const WINDOW_MS = 60_000;
@@ -51,8 +54,8 @@ export function throttleIdentity(req: Request, userId: number | null): void {
   else hit(`anon:${clientKey(req)}`, RATES.anon);
 }
 
-/** ScopedRateThrottle for the "auth" and "password_reset" views. */
-export function throttleScope(req: Request, scope: "auth" | "password_reset"): void {
+/** ScopedRateThrottle for the "auth", "password_reset" and "media" views. */
+export function throttleScope(req: Request, scope: "auth" | "password_reset" | "media"): void {
   if (throttleDisabled()) return;
   hit(`${scope}:${clientKey(req)}`, RATES[scope]);
 }

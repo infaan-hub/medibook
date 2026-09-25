@@ -179,13 +179,45 @@ export async function updateMe(
   if (patch.phone !== undefined) data.phone = patch.phone;
   if (patch.first_name !== undefined) data.first_name = String(patch.first_name).trim();
   if (patch.last_name !== undefined) data.last_name = String(patch.last_name).trim();
-  if (file) {
-    const { saveUpload } = await import("@/lib/upload");
-    data.profile_image = await saveUpload(file, "profile_images", { imagesOnly: true });
-  } else if (patch.profile_image === null) {
-    data.profile_image = null; // Django ImageField(allow_null) — row cleared
+
+  const wantsImage = Boolean(file && file.size > 0);
+  const wantsClear = !wantsImage && patch.profile_image === null;
+
+  if (!wantsImage && !wantsClear) {
+    if (Object.keys(data).length === 0) return user;
+    return (await users.updateUser(user.id, data)) as AuthUser;
   }
-  if (Object.keys(data).length === 0) return user;
-  return (await users.updateUser(user.id, data)) as AuthUser;
+
+  // Phase 8 (transactional replace): validate + CREATE the new MediaFile →
+  // UPDATE the profile reference → DELETE the old row, as ONE transaction.
+  // Any failure rolls everything back: the OLD image always remains, and a
+  // failed profile update never strands a newly created row.
+  const previousId = user.profile_image_id;
+  const { uploadImage, deleteMediaIfUnreferenced } = await import("@/lib/media/uploadImage");
+  const { prisma } = await import("@/lib/db");
+
+  return prisma.$transaction(
+    async (tx) => {
+      if (wantsImage) {
+        const media = await uploadImage(file as File, {
+          subdir: "profile_images",
+          ownerId: user.id,
+          kind: "image",
+          tx,
+        });
+        data.profile_image_id = media.id;
+      } else {
+        data.profile_image_id = null;
+      }
+      const updated = (await tx.user.update({ where: { id: user.id }, data })) as AuthUser;
+      // Phase 9: replace/remove must drop the old binary — unless another
+      // record still references the same row (checked inside).
+      if (previousId && previousId !== data.profile_image_id) {
+        await deleteMediaIfUnreferenced(previousId, tx);
+      }
+      return updated;
+    },
+    { timeout: 15_000 }
+  );
 }
 

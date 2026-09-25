@@ -19,7 +19,11 @@ export interface RouteCtx {
 }
 
 type HandlerFn = (ctx: RouteCtx) => Promise<Response> | Response;
-type ThrottleScope = "auth" | "password_reset" | undefined;
+/** Throttle scopes. "media" is the dedicated, generous asset bucket for
+ *  /media/* delivery (image <img> requests never carry auth headers — they
+ *  must not drain the shared 60/min anon API bucket and 429 into broken
+ *  images). */
+type ThrottleScope = "auth" | "password_reset" | "media" | undefined;
 
 type NextRouteContext = {
   // Next 15 types require a Promise; catch-all segments may be string[].

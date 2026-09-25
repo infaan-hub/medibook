@@ -1,10 +1,10 @@
 {
   "app\\[[...slug]]\\page.tsx -> ../../src/App": {
-    "id": 9880,
+    "id": 3534,
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
       "static/chunks/504.244409b43ca2f3d3.js",
-      "static/chunks/880.7f23fbb35ddcb076.js"
+      "static/chunks/534.f2c35927a605638b.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {

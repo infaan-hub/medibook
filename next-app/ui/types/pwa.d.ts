@@ -22,6 +22,16 @@ declare global {
     beforeinstallprompt: BeforeInstallPromptEvent;
     /** Fired after the user installs the app. */
     appinstalled: Event;
+    /** Our own re-broadcast of a captured install prompt (§69 A2HS). */
+    "medibook:install-available": Event;
+  }
+
+  interface Window {
+    /**
+     * Set by the inline capture script in `app/layout.tsx` — the SPA is
+     * client-only, so `beforeinstallprompt` can fire before React evaluates.
+     */
+    __mbDeferredInstallPrompt?: BeforeInstallPromptEvent | undefined;
   }
 
   interface Navigator {

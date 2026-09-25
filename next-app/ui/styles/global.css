@@ -2104,6 +2104,14 @@ a { color: var(--color-primary); }
   transition: background 0.15s;
 }
 .ab-onboarding__skip:active { background: rgba(9,169,158,0.08); }
+/* Top row: "Download app" (A2HS, §69) on the left, Skip on the right. */
+.ab-onboarding__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
 .ab-onboarding__track {
   flex: 1;
   display: flex;
@@ -2186,6 +2194,7 @@ a { color: var(--color-primary); }
 
 /* ---- Welcome screen ---- */
 .ab-welcome {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;

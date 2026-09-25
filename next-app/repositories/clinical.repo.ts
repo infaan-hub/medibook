@@ -69,28 +69,32 @@ export const findHealthRecord = (id: number, doctorId?: number) =>
     where: doctorId === undefined ? { id } : { id, doctor_id: doctorId },
   });
 
-export const createHealthRecord = (data: {
-  patient_id: number;
-  doctor_id: number;
-  appointment_id?: number | null;
-  file?: string | null;
-  record_type?: string;
-  title: string;
-  description?: string;
-}) =>
-  prisma.healthRecord.create({
+export const createHealthRecord = (
+  data: {
+    patient_id: number;
+    doctor_id: number;
+    appointment_id?: number | null;
+    file_id?: number | null;
+    record_type?: string;
+    title: string;
+    description?: string;
+  },
+  tx?: Prisma.TransactionClient
+) =>
+  (tx ?? prisma).healthRecord.create({
     data: {
       patient_id: data.patient_id,
       doctor_id: data.doctor_id,
       appointment_id: data.appointment_id ?? null,
-      file: data.file ?? null,
+      file_id: data.file_id ?? null,
       record_type: data.record_type ?? "other",
       title: data.title,
       description: data.description ?? "",
     },
   });
 
-export const deleteHealthRecord = (id: number) => prisma.healthRecord.delete({ where: { id } });
+export const deleteHealthRecord = (id: number, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).healthRecord.delete({ where: { id } });
 
 /* -------------------------- Doctor's patient lists -------------------------- */
 

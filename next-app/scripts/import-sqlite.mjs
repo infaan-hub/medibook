@@ -48,6 +48,15 @@ const time = (v) => (isSet(v) ? String(v).slice(0, 8) : "00:00:00");
 async function main() {
   console.log("Importing from", sqlitePath);
 
+  // Legacy image paths → MediaFile ids (run `npm run media:migrate` first so
+  // the old files exist in the DB; the actual bytes live in media_file.data).
+  const mediaIdByPath = new Map();
+  for (const m of await prisma.mediaFile.findMany({ select: { id: true, path: true } })) {
+    mediaIdByPath.set(m.path, m.id);
+  }
+  const resolveMediaId = (p) =>
+    isSet(p) && mediaIdByPath.has(String(p)) ? mediaIdByPath.get(String(p)) : null;
+
   // Order respects FKs.
   const users = rows("SELECT * FROM accounts_user");
   for (const u of users) {
@@ -63,7 +72,7 @@ async function main() {
         first_name: str(u.first_name),
         last_name: str(u.last_name),
         role: str(u.role) || "patient",
-        profile_image: isSet(u.profile_image) ? str(u.profile_image) : null,
+        profile_image_id: resolveMediaId(u.profile_image),
         is_active: bool(u.is_active),
         is_staff: bool(u.is_staff),
         is_superuser: bool(u.is_superuser),
@@ -273,7 +282,7 @@ async function main() {
         slug: str(art.slug),
         excerpt: str(art.excerpt),
         content: str(art.content),
-        image: isSet(art.image) ? str(art.image) : null,
+        image_id: resolveMediaId(art.image),
         category: str(art.category) || "general",
         published: bool(art.published),
         published_at: date(art.published_at),

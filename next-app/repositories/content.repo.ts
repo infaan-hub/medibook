@@ -38,7 +38,7 @@ export const createArticle = (data: {
   slug: string;
   excerpt?: string;
   content: string;
-  image?: string | null;
+  image_id?: number | null;
   category?: string;
   published?: boolean;
   author_id?: number | null;
@@ -49,10 +49,14 @@ export const createArticle = (data: {
     include: { author: true },
   });
 
-export const updateArticle = (id: number, data: Prisma.ArticleUncheckedUpdateInput) =>
-  prisma.article.update({ where: { id }, data, include: { author: true } });
+export const updateArticle = (
+  id: number,
+  data: Prisma.ArticleUncheckedUpdateInput,
+  tx?: Prisma.TransactionClient
+) => (tx ?? prisma).article.update({ where: { id }, data, include: { author: true } });
 
-export const deleteArticle = (id: number) => prisma.article.delete({ where: { id } });
+export const deleteArticle = (id: number, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).article.delete({ where: { id } });
 
 /* --------------------------- Specialties / hospitals ----------------------- */
 

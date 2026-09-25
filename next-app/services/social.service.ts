@@ -74,9 +74,22 @@ async function saveProfileImage(userId: number, url: string): Promise<void> {
     const contentType = response.headers.get("content-type") ?? "";
     const ext = contentType.includes("png") ? ".png" : contentType.includes("webp") ? ".webp" : ".jpg";
     const bytes = Buffer.from(await response.arrayBuffer());
-    const { saveUploadBytes } = await import("@/lib/upload-bytes");
-    const relative = await saveUploadBytes(bytes, "profile_images", `profile_${userId}${ext}`);
-    await users.updateUser(userId, { profile_image: relative });
+    const { uploadImageBytes, deleteMediaIfUnreferenced } = await import(
+      "@/lib/media/uploadImage"
+    );
+    const { prisma } = await import("@/lib/db");
+    const previousId = (await users.findUserById(userId))?.profile_image_id ?? null;
+    // Same transactional replace as updateMe: create → swap → delete old.
+    await prisma.$transaction(async (tx) => {
+      const media = await uploadImageBytes(bytes, {
+        subdir: "profile_images",
+        ownerId: userId,
+        name: `profile_${userId}${ext}`,
+        tx,
+      });
+      await tx.user.update({ where: { id: userId }, data: { profile_image_id: media.id } });
+      if (previousId && previousId !== media.id) await deleteMediaIfUnreferenced(previousId, tx);
+    });
   } catch {
     // Django logged and continued — a missing avatar must not break login.
   }
@@ -134,7 +147,7 @@ export async function socialLogin(
     }
   }
 
-  if (identity.picture && !user.profile_image) {
+  if (identity.picture && !user.profile_image_id) {
     await saveProfileImage(user.id, identity.picture);
     user = (await users.findUserById(user.id)) ?? user;
   }

@@ -62,7 +62,10 @@ model User {
   first_name    String   @default("") @db.VarChar(150)
   last_name     String   @default("") @db.VarChar(150)
   role          Role     @default(patient)
-  profile_image String?  @db.VarChar(100)
+  /// Centralized profile image: the row's binary lives in MediaFile.data;
+  /// only the id is stored here and the public URL is /media/{id}.
+  profile_image_id Int?    @unique
+  profile_image    MediaFile? @relation("UserAvatar", fields: [profile_image_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   is_active     Boolean  @default(true)
   is_staff      Boolean  @default(false)
   created_at    DateTime @default(now())
@@ -80,6 +83,7 @@ model User {
   health_records       HealthRecord[]
   audit_events         AuditEvent[]
   blog_articles        Article[]
+  media_files          MediaFile[]
 
   @@index([role])
   @@index([created_at])
@@ -444,7 +448,10 @@ model MedicalTreatment {
 /// File/document health record uploaded by a doctor.
 model HealthRecord {
   id             Int          @id @default(autoincrement())
-  file           String?      @db.VarChar(100)
+  /// Uploaded file reference — bytes live in MediaFile.data (public URL
+  /// /media/{id}); access is authorized on read (medical document).
+  file_id        Int?
+  file           MediaFile?   @relation("HealthRecordFile", fields: [file_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   record_type    String       @default("other") @db.VarChar(20)
   title          String       @db.VarChar(200)
   description    String       @default("")
@@ -462,6 +469,7 @@ model HealthRecord {
   @@index([patient_id])
   @@index([doctor_id])
   @@index([record_type])
+  @@index([file_id])
   @@index([appointment_id])
   @@index([created_at])
   @@map("treatments_healthrecord")
@@ -474,7 +482,9 @@ model Article {
   slug         String    @unique @db.VarChar(220)
   excerpt      String    @default("")
   content      String
-  image        String?   @db.VarChar(100)
+  /// Uploaded article image reference (bytes in MediaFile.data → /media/{id}).
+  image_id     Int?
+  image        MediaFile? @relation("ArticleImage", fields: [image_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   category     String    @default("general") @db.VarChar(40)
   published    Boolean   @default(false)
   published_at DateTime?
@@ -484,6 +494,7 @@ model Article {
   author_id    Int?      @map("author_id")
 
   @@index([author_id])
+  @@index([image_id])
   @@index([published])
   @@index([category])
   @@index([created_at])
@@ -502,4 +513,31 @@ model RefreshToken {
 
   @@index([user_id])
   @@map("auth_refreshtoken")
+}
+
+/// Centralized image/file storage — the ACTUAL binary lives here (`data` is
+/// PostgreSQL BYTEA) so Neon is the single source of truth (no cloud storage,
+/// no permanent local-disk files, no base64). Rows are referenced by id from
+/// User.profile_image_id / HealthRecord.file_id / Article.image_id and served
+/// as GET /media/{id} (and GET /api/images/{id}).
+model MediaFile {
+  id          Int      @id @default(autoincrement())
+  /// Internal generated name (never the user's original filename), e.g.
+  /// "profile_images/123-a82f91c4e5f60718.jpg" — unique storage identity.
+  path        String   @unique
+  filename    String   @default("") @db.VarChar(255)
+  contentType String   @db.VarChar(100)
+  data        Bytes
+  size        Int
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  owner       User?    @relation(fields: [owner_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  owner_id    Int?     @map("owner_id")
+
+  avatarUsers        User[]         @relation("UserAvatar")
+  healthRecordFiles  HealthRecord[] @relation("HealthRecordFile")
+  articleImages      Article[]      @relation("ArticleImage")
+
+  @@index([owner_id])
+  @@map("media_file")
 }

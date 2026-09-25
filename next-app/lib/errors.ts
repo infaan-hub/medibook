@@ -18,6 +18,7 @@ export const DEFAULT_MESSAGES: Record<number, string> = {
   404: "The requested resource was not found.",
   405: "This method is not allowed for this endpoint.",
   409: "The request conflicts with the current state of the resource.",
+  413: "The uploaded file is too large.",
   415: "The submitted data type is not supported.",
   422: "The submitted data failed validation.",
   429: "Too many requests. Please try again later.",
