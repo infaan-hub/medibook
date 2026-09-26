@@ -1,8 +1,8 @@
-/* MediBook app shell, prompts and splash (§21, §22.6, §18 PWA UI).
+/* MediBook app shell, prompts and splash (Â§21, Â§22.6, Â§18 PWA UI).
    Tokens: ../design/tokens.css. Component primitives: global.css.
    Premium medical sidebar with shadcn-inspired styling. */
 
-/* ---- App shell / responsive navigation (§22.6) ---- */
+/* ---- App shell / responsive navigation (Â§22.6) ---- */
 .shell {
   width: 100%;
   min-height: 100vh;
@@ -120,7 +120,7 @@
 }
 
 /* ================================================================
-   SIDEBAR — shared base styles (shadcn-inspired)
+   SIDEBAR â€” shared base styles (shadcn-inspired)
    ================================================================ */
 .shell__nav--side {
   display: none;
@@ -269,7 +269,7 @@
 }
 
 /* ================================================================
-   SIDEBAR — mobile drawer (< 600px)
+   SIDEBAR â€” mobile drawer (< 600px)
    Modern slide-out panel: 82vw wide, left accent bar on active,
    generous touch targets, close button, polished user section.
    ================================================================ */
@@ -335,7 +335,7 @@
     margin: var(--space-1) var(--space-5);
   }
 
-  /* Nav items — modern mobile drawer style */
+  /* Nav items â€” modern mobile drawer style */
   .shell__nav--side .nav-item--side {
     color: rgba(255, 255, 255, 0.8);
     min-height: 52px;
@@ -388,7 +388,7 @@
     display: none;
   }
 
-  /* User section — polished bottom card */
+  /* User section â€” polished bottom card */
   .shell__nav--side .sidebar__user {
     gap: var(--space-3);
     margin: 0 var(--space-3) var(--space-2);
@@ -421,7 +421,7 @@
     color: rgba(255, 255, 255, 0.3);
   }
 
-  /* Sign out — generous touch target */
+  /* Sign out â€” generous touch target */
   .shell__nav--side .sidebar__signout {
     min-height: 48px;
     margin: var(--space-1) var(--space-3) var(--space-3);
@@ -442,7 +442,7 @@
 }
 
 /* ================================================================
-   SIDEBAR — tablet drawer (600–1199px)
+   SIDEBAR â€” tablet drawer (600â€“1199px)
    Same modern style as mobile, slightly narrower max-width.
    ================================================================ */
 @media (min-width: 600px) and (max-width: 1199px) {
@@ -499,7 +499,7 @@
 }
 
 /* ================================================================
-   SIDEBAR — desktop persistent (1200px+)
+   SIDEBAR â€” desktop persistent (1200px+)
    ================================================================ */
 @media (min-width: 1200px) {
   .shell__nav--side {
@@ -707,7 +707,7 @@
   }
 }
 
-/* ---- Tablet (600–1199px) header adjustments ---- */
+/* ---- Tablet (600â€“1199px) header adjustments ---- */
 @media (min-width: 600px) and (max-width: 1199px) {
   .shell__content {
     padding: var(--space-6) var(--space-6)
@@ -722,7 +722,7 @@
   }
 }
 
-/* ---- Install / update / offline prompts (§18 PWA UI) ---- */
+/* ---- Install / update / offline prompts (Â§18 PWA UI) ---- */
 .prompt {
   position: fixed;
   left: var(--space-4);
@@ -739,7 +739,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-3);
 }
-/* ---- Prompt stack (§18/§69 PWA UI) ----
+/* ---- Prompt stack (Â§18/Â§69 PWA UI) ----
    The install and "new version" banners share one fixed column so they can
    never overlap; only the banners themselves intercept taps. */
 .prompt-stack {
@@ -783,7 +783,7 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   }
 }
 
-/* ---- "Download app" (A2HS) button (§22.1, §69) ----
+/* ---- "Download app" (A2HS) button (Â§22.1, Â§69) ----
    Shown while MediBook is not installed yet: in the patient header (replacing
    the bell) and at the top of the first-run guest screens. */
 .install-btn {
@@ -819,7 +819,7 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
 }
 
 /* Floating variant: top-left corner of the guest screens (onboarding /
-   welcome). Absolute — not fixed — so it stays inside the centred
+   welcome). Absolute â€” not fixed â€” so it stays inside the centred
    phone-width card on tablet/desktop instead of hugging the window edge. */
 .install-btn--floating {
   position: absolute;
@@ -834,103 +834,6 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   min-height: 44px;
   justify-content: center;
   font-size: 13px;
-}
-
-/* ---- "Download app" help sheet ----
-   Opened by the Download app button when the native install prompt is not the
-   path: iOS (Share → Add to Home Screen), desktop browsers (PWA steps + the
-   desktop app installer), and Android browsers without beforeinstallprompt. */
-.install-help {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: var(--space-4);
-  background: rgba(9, 24, 32, 0.5);
-}
-@media (min-width: 600px) {
-  .install-help { align-items: center; }
-}
-.install-help__panel {
-  width: 100%;
-  max-width: 420px;
-  max-height: min(80vh, 560px);
-  overflow: auto;
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-2);
-  animation: install-help-in 0.18s ease;
-}
-@keyframes install-help-in {
-  from { transform: translateY(12px); opacity: 0; }
-  to { transform: none; opacity: 1; }
-}
-.install-help__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: var(--space-3);
-  color: var(--color-primary);
-}
-.install-help__head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-.install-help__close {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.install-help__close:hover { background: rgba(0, 0, 0, 0.06); }
-.install-help__option {
-  display: flex;
-  gap: 12px;
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border);
-}
-.install-help__option:first-of-type { border-top: 0; padding-top: 0; }
-.install-help__icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(9, 169, 158, 0.12);
-  color: var(--color-primary);
-}
-.install-help__option strong,
-.install-help__subtitle {
-  display: block;
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-.install-help__option p {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-.install-help__action {
-  min-height: 36px;
-  margin-top: 8px;
-  padding: 0 14px;
-  font-size: 12.5px;
-  text-decoration: none;
 }
 
 /* ---- Splash screen ---- */
@@ -987,13 +890,13 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   .splash__footer { padding: 0 6vw calc(4vh + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }
   .splash__progress-track { max-width: 180px; }
 }
-/* Phone (360–430px — most Android + iOS) */
+/* Phone (360â€“430px â€” most Android + iOS) */
 @media (min-width: 360px) and (max-width: 599px) {
   .splash__image-wrap { padding: 5vh 5vw 0; }
   .splash__footer { padding: 0 8vw calc(5vh + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }
   .splash__progress-track { max-width: 220px; }
 }
-/* Tablet (600–1023px) */
+/* Tablet (600â€“1023px) */
 @media (min-width: 600px) and (max-width: 1023px) {
   .splash__image-wrap { padding: 6vh 8vw 0; }
   .splash__footer { padding: 0 12vw calc(8vh + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }

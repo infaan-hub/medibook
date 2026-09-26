@@ -172,13 +172,12 @@ function NotificationBell() {
  * Shared by patients, doctors, and admins (the shell header is the same for
  * all three roles):
  *
- *   Not installed yet          → the platform-aware "Download app" button
- *                                (§22.1, `InstallAppButton`) replaces the bell:
- *                                Android installs the app directly, iOS and
- *                                desktop browsers get the download sheet
- *                                (PWA steps + desktop app installer).
- *   Installed (standalone PWA
- *   or the desktop app)        → the notification bell; notifications also
+ *   Not installed yet          → the "Download app" button (§22.1) replaces
+ *                                the bell; one tap runs the browser install,
+ *                                which puts a MediBook shortcut on the desktop
+ *                                (Windows) / home screen (Android) connected
+ *                                to the web app.
+ *   Installed (standalone PWA) → the notification bell; notifications also
  *                                stay reachable from the drawer / sidebar.
  */
 function HeaderActions() {

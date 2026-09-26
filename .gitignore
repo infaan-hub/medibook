@@ -17,13 +17,6 @@ dist/
 next-app/uploads/
 next-app/.next/
 
-# --- Desktop app installers staged for the in-app download link ---
-# Build with `npm run dist` in desktop/, then copy the setup .exe here.
-frontend/public/downloads/*.exe
-next-app/public/downloads/*.exe
-frontend/public/downloads/*.msi
-next-app/public/downloads/*.msi
-
 # --- Editors / OS ---
 .vscode/*
 !.vscode/extensions.json

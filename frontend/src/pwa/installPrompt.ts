@@ -88,22 +88,9 @@ export async function promptInstall(): Promise<boolean> {
   return outcome === "accepted";
 }
 
-/**
- * True when running inside the MediBook desktop app (Electron). The desktop
- * shell's preload script sets `window.__MB_DESKTOP__`, and the main process
- * appends a `MediBookDesktop` token to the user agent as a belt-and-braces
- * fallback (the flag is skipped when context isolation rewrites the world).
- */
-export function isDesktopApp(): boolean {
-  if (typeof window === "undefined") return false;
-  if (window.__MB_DESKTOP__ === true) return true;
-  return window.navigator.userAgent.includes("MediBookDesktop");
-}
-
 /** True when the app is running in standalone / installed mode. */
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
-  if (isDesktopApp()) return true;
   if (typeof window.matchMedia !== "function") {
     return window.navigator.standalone === true;
   }
@@ -123,18 +110,6 @@ export function isIOSDevice(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in window);
 }
 
-/** Where the visitor is browsing from — drives the Download app dialog. */
-export type AppPlatform = "ios" | "android" | "desktop";
-
-/** UA sniff for the three install stories (Android / iOS / desktop). */
-export function detectPlatform(): AppPlatform {
-  if (typeof window === "undefined") return "desktop";
-  const ua = window.navigator.userAgent;
-  if (/Android/i.test(ua)) return "android";
-  if (isIOSDevice()) return "ios";
-  return "desktop";
-}
-
 export interface InstallAvailability {
   /** Not installed yet AND this browser can install the app. */
   available: boolean;
@@ -145,9 +120,9 @@ export interface InstallAvailability {
    */
   installable: boolean;
   /**
-   * Running as an installed app (standalone display mode, or the Electron
-   * desktop app). The shell header swaps the Download app button back to the
-   * notification bell in this state.
+   * Running as an installed app (standalone display mode — the installed PWA
+   * that has a desktop/home-screen shortcut). The shell header swaps the
+   * Download app button back to the notification bell in this state.
    */
   installed: boolean;
   /** iOS/iPadOS: install is Share → Add to Home Screen, not a prompt. */

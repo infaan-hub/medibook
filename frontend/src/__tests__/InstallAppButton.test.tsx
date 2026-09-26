@@ -11,7 +11,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InstallAppButton } from "../components/InstallAppButton";
 import { ToastViewport } from "../components/ToastViewport";
-import { detectPlatform, isDesktopApp, isIOSDevice, isStandalone, promptInstall } from "../pwa/installPrompt";
+import { isIOSDevice, isStandalone, promptInstall } from "../pwa/installPrompt";
 import { ToastProvider } from "../state/app-context";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
 
@@ -72,7 +72,6 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   delete window.__mbDeferredInstallPrompt;
-  delete window.__MB_DESKTOP__;
   setUserAgent(DEFAULT_UA);
   stubMatchMedia(false);
 });
@@ -84,16 +83,15 @@ afterEach(() => {
 });
 
 describe("InstallAppButton", () => {
-  it("shows the button even without an install path — opens the download sheet", async () => {
+  it("shows the button without an install path and points at Chrome/Edge", async () => {
     renderButton("floating");
     const button = await screen.findByRole("button", { name: "Download app" });
     fireEvent.click(button);
 
-    const sheet = await screen.findByRole("dialog", { name: /download medibook/i });
-    expect(sheet).toBeInTheDocument();
-    // Desktop sheet offers the Electron installer + web-app install steps.
-    expect(screen.getByText(/download desktop app/i)).toBeInTheDocument();
-    expect(screen.getByText(/install medibook/i)).toBeInTheDocument();
+    // No native prompt (e.g. desktop Firefox) → one-line guidance toast,
+    // never a download sheet.
+    expect(await screen.findByText(/chrome or edge/i)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("appears when beforeinstallprompt fires and installs on click", async () => {
@@ -107,9 +105,9 @@ describe("InstallAppButton", () => {
     const button = await screen.findByRole("button", { name: "Download app" });
     expect(screen.queryByText("Install MediBook for a faster")).toBeNull();
 
-    // Desktop browsers go through the download sheet → "Install now".
+    // One tap → the native install (desktop: a MediBook shortcut on the
+    // desktop; Android: the app on the home screen).
     fireEvent.click(button);
-    fireEvent.click(await screen.findByRole("button", { name: /install now/i }));
     await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
     // Accepted install → confirmation toast and the CTA retires itself.
     expect(await screen.findByText(/installing medibook/i)).toBeInTheDocument();
@@ -151,12 +149,6 @@ describe("InstallAppButton", () => {
     await waitFor(() => expect(downloadButton()).toBeNull());
   });
 
-  it("stays hidden inside the desktop app", () => {
-    window.__MB_DESKTOP__ = true;
-    renderButton("header");
-    expect(downloadButton()).toBeNull();
-  });
-
   it("guides iOS users to Share → Add to Home Screen", async () => {
     // Consume whatever prompt this file captured earlier (module scope = page load).
     await promptInstall();
@@ -166,9 +158,7 @@ describe("InstallAppButton", () => {
     const button = await screen.findByRole("button", { name: "Download app" });
     fireEvent.click(button);
 
-    expect(
-      await screen.findByRole("heading", { name: /add to home screen/i })
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/add to home screen/i)).toBeInTheDocument();
   });
 });
 
@@ -183,23 +173,5 @@ describe("installPrompt helpers", () => {
     expect(isIOSDevice()).toBe(false);
     setUserAgent(IOS_UA);
     expect(isIOSDevice()).toBe(true);
-  });
-
-  it("isDesktopApp() detects the Electron shell (preload flag)", () => {
-    expect(isDesktopApp()).toBe(false);
-    window.__MB_DESKTOP__ = true;
-    expect(isDesktopApp()).toBe(true);
-    // The desktop shell counts as installed → standalone too.
-    expect(isStandalone()).toBe(true);
-  });
-
-  it("detectPlatform() sniffs ios / android / desktop from the UA", () => {
-    expect(detectPlatform()).toBe("desktop");
-    setUserAgent(IOS_UA);
-    expect(detectPlatform()).toBe("ios");
-    setUserAgent(
-      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    );
-    expect(detectPlatform()).toBe("android");
   });
 });
