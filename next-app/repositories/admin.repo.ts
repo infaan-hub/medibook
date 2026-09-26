@@ -30,28 +30,3 @@ export async function platformStats() {
     appointments_by_status: appointmentsByStatus,
   };
 }
-
-/** Earnings dashboard helpers (EarningsDashboardView). */
-export const earningsCounts = (doctorId: number, ranges: { from?: Date; to?: Date }) =>
-  prisma.appointment.count({
-    where: {
-      doctor_id: doctorId,
-      status: "completed",
-      ...(ranges.from || ranges.to
-        ? {
-            appointment_date: {
-              ...(ranges.from ? { gte: ranges.from } : {}),
-              ...(ranges.to ? { lte: ranges.to } : {}),
-            },
-          }
-        : {}),
-    },
-  });
-
-export const earningsDaily = (doctorId: number, from: Date, to: Date) =>
-  prisma.appointment.groupBy({
-    by: ["appointment_date"],
-    where: { doctor_id: doctorId, status: "completed", appointment_date: { gte: from, lte: to } },
-    _count: { _all: true },
-    orderBy: { appointment_date: "asc" },
-  });

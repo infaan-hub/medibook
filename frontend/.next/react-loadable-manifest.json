@@ -3,8 +3,8 @@
     "id": 3534,
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
-      "static/chunks/504.244409b43ca2f3d3.js",
-      "static/chunks/534.f2c35927a605638b.js"
+      "static/chunks/268.fd5801c5f2aa10b1.js",
+      "static/chunks/534.baf377568dd1f6b4.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -22,7 +22,7 @@
   "src\\App.tsx -> ./screens": {
     "id": 5807,
     "files": [
-      "static/chunks/448.3e831189e797627f.js",
+      "static/chunks/760.03bd18699c8f8211.js",
       "static/chunks/840.7c1217197cbf3bb5.js",
       "static/chunks/807.f89685a3aa1abe00.js"
     ]
@@ -32,12 +32,6 @@
     "files": [
       "static/chunks/840.7c1217197cbf3bb5.js",
       "static/chunks/587.9e4ab0bf666a93da.js"
-    ]
-  },
-  "src\\App.tsx -> ./screens/earnings": {
-    "id": 3397,
-    "files": [
-      "static/chunks/397.c902fd51353f65a9.js"
     ]
   },
   "src\\App.tsx -> ./screens/visit-history": {

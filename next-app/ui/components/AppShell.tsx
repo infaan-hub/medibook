@@ -36,7 +36,6 @@ import {
   X,
   LogOut,
   Newspaper,
-  CircleDollarSign,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
@@ -67,7 +66,6 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
-      { to: "/doctor/earnings", label: "Earnings", icon: <CircleDollarSign size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
@@ -99,7 +97,6 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/doctor/earnings", label: "Earnings", icon: <CircleDollarSign size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
   }
@@ -171,14 +168,15 @@ function NotificationBell() {
 /**
  * Header actions.
  *
- * Patients who have not installed MediBook yet get the A2HS "Download app"
- * button instead of the bell (§22.1); notifications stay reachable from the
- * drawer. Once the app runs standalone — or when the browser offers no install
- * path — the notification bell is shown as before.
+ * Users (patients, doctors, and admins) who have not installed MediBook yet
+ * get the A2HS "Download app" button instead of the bell (§22.1); notifications
+ * stay reachable from the drawer. Once the app runs standalone (installed on
+ * desktop or mobile) — or when the browser offers no install path — the
+ * notification bell is shown as before.
  */
-function HeaderActions({ user }: { user: User | null }) {
+function HeaderActions({ user: _user }: { user: User | null }) {
   const { available } = useInstallAvailability();
-  if (user?.role === "patient" && available) return <InstallAppButton />;
+  if (available) return <InstallAppButton />;
   return <NotificationBell />;
 }
 

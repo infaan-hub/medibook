@@ -1,7 +1,7 @@
 /**
  * Doctor service — public directory (list/retrieve with Django filters),
  * owner/admin writes, my-profile PATCH and admin approval
- * (port of doctors/views.py). Earnings live in earnings below.
+ * (port of doctors/views.py).
  */
 import { ValidationError, notFound, forbidden } from "@/lib/errors";
 import { doctorDto } from "@/lib/serializers";
@@ -133,64 +133,6 @@ export async function updateMyProfile(req: Request, user: AuthUser, body: unknow
   await applyDoctorWrite(doctor.id, parseDoctorWrite(rest));
   doctor = await doctors.findDoctorById(doctor.id);
   return doctorDto(doctor!, req);
-}
-
-/** GET /api/doctors/me/earnings/ — EarningsDashboardView (exact shapes). */
-export async function earningsDashboard(user: AuthUser) {
-  const doctor = await doctors.findDoctorByUserId(user.id);
-  if (!doctor) return null; // Django: data=None + "Doctor profile not found."
-
-  const fee = Number(doctor.consultation_fee ?? 0);
-  const money = (value: number) => Math.round(value * 100) / 100;
-  const { todayIso, addDaysIso, EN_WEEKDAYS } = await import("@/lib/dates");
-  const today = todayIso();
-  const jsDay = new Date(`${today}T00:00:00Z`).getUTCDay(); // 0=Sun
-  const weekStart = addDaysIso(today, -((jsDay + 6) % 7)); // Monday
-  const monthStart = `${today.slice(0, 7)}-01`;
-  const thirtyStart = addDaysIso(today, -29);
-
-  const toDate = (d: string) => new Date(`${d}T00:00:00Z`);
-  const countOn = (date: string) =>
-    admin.earningsCounts(doctor.id, { from: toDate(date), to: toDate(date) });
-  const [todayCount, weekCount, monthCount, daily] = await Promise.all([
-    countOn(today),
-    admin.earningsCounts(doctor.id, { from: toDate(weekStart), to: toDate(today) }),
-    admin.earningsCounts(doctor.id, { from: toDate(monthStart), to: toDate(today) }),
-    admin.earningsDaily(doctor.id, toDate(thirtyStart), toDate(today)),
-  ]);
-
-  const dailyMap = new Map<string, number>(
-    daily.map((row) => [row.appointment_date.toISOString().slice(0, 10), row._count._all])
-  );
-  const dailyBreakdown: Array<Record<string, unknown>> = [];
-  for (let i = 0; i < 30; i += 1) {
-    const date = addDaysIso(thirtyStart, i);
-    const count = dailyMap.get(date) ?? 0;
-    dailyBreakdown.push({ date, appointments: count, earnings: money(count * fee) });
-  }
-
-  const weekDaily: Array<Record<string, unknown>> = [];
-  for (let i = 0; i < 7; i += 1) {
-    const date = addDaysIso(weekStart, i);
-    if (date > today) break;
-    const count = await countOn(date);
-    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
-    weekDaily.push({
-      date,
-      day: EN_WEEKDAYS[(weekday + 6) % 7],
-      appointments: count,
-      earnings: money(count * fee),
-    });
-  }
-
-  return {
-    consultation_fee: fee,
-    today: { appointments: todayCount, earnings: money(todayCount * fee) },
-    this_week: { appointments: weekCount, earnings: money(weekCount * fee) },
-    this_month: { appointments: monthCount, earnings: money(monthCount * fee) },
-    daily_30_days: dailyBreakdown,
-    week_daily: weekDaily,
-  };
 }
 
 /** POST /api/admin/doctors/{id}/approve/ — availability toggle + recalc. */
