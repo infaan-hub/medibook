@@ -30,9 +30,9 @@ import type {
   Specialty,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
-import { DoctorReviewList, formatRating, ratingNumber } from "../components/reviews";
+import { DoctorReviewList } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -164,9 +164,9 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
           loading="lazy"
         />
         <div className="doc-preview-card__photo-overlay" />
-        {ratingNumber(profile.average_rating) > 0 && (
+        {profile.phone && (
           <span className="doc-preview-card__badge">
-            <Star size={12} fill="currentColor" /> {formatRating(profile.average_rating)}
+            <Phone size={12} fill="currentColor" /> <a href={`tel:${profile.phone}`} style={{color: "inherit", textDecoration: "none"}}>{profile.phone}</a>
           </span>
         )}
       </div>

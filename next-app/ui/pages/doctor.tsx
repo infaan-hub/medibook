@@ -32,7 +32,7 @@ import type {
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -114,12 +114,6 @@ export function DoctorProfileScreen() {
           </div>
         )}
 
-        {ratingNumber(doctor.average_rating) > 0 && (
-          <div className="doctor-profile__rating">
-            <StarRating value={doctor.average_rating} readonly size="sm" />
-            <span>{formatRating(doctor.average_rating)} ({doctor.total_reviews} review{doctor.total_reviews !== 1 ? "s" : ""})</span>
-          </div>
-        )}
         {doctor.bio && <p>{doctor.bio}</p>}
         <div style={{ marginTop: "var(--space-4)" }}>
           <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
@@ -165,9 +159,9 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
           loading="lazy"
         />
         <div className="doc-preview-card__photo-overlay" />
-        {ratingNumber(profile.average_rating) > 0 && (
+        {profile.phone && (
           <span className="doc-preview-card__badge">
-            <Star size={12} fill="currentColor" /> {formatRating(profile.average_rating)}
+            <Phone size={12} fill="currentColor" /> <a href={`tel:${profile.phone}`} style={{color: "inherit", textDecoration: "none"}}>{profile.phone}</a>
           </span>
         )}
       </div>

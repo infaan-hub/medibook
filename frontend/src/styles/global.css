@@ -118,6 +118,34 @@ a { color: var(--color-primary); }
 /* ---- TextField ---- */
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field__label { font-size: 12px; font-weight: 500; color: #163C3C; }
+.field__input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.field__input-wrapper .field__input {
+  padding-right: 44px;
+}
+.field__password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #9cb8b7;
+  padding: 0;
+}
+.field__password-toggle:hover { color: #09A99E; }
+.field__password-toggle:focus { outline: none; color: #09A99E; }
+.field__password-toggle svg { width: 18px; height: 18px; }
 .field__input {
   min-height: 42px;
   padding: 0 14px;
@@ -132,11 +160,6 @@ a { color: var(--color-primary); }
   box-sizing: border-box;
   width: 100%;
 }
-.field__input::placeholder { color: #9cb8b7; }
-.field__input:focus { border-color: #09A99E; box-shadow: 0 0 0 3px rgba(9,169,158,0.12); }
-.field__input--error { border-color: #da1e28; }
-.field__hint { font-size: 11px; color: #9cb8b7; margin: 0; }
-.field__error { font-size: 11px; color: #da1e28; margin: 0; }
 
 /* ---- Badge (§9 status colours) ---- */
 .badge {

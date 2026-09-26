@@ -18,6 +18,7 @@ import {
   MapPin,
   Search,
   Star,
+  Phone,
   Newspaper,
 } from "lucide-react";
 
@@ -150,7 +151,7 @@ function PatientHome({ user }: { user: User }) {
                     <span>Medical specialist</span>
                   )}
                   {(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}
-                  <span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span>
+{doctor.phone && <span className="home__doctor-phone"><Phone size={13} fill="currentColor" /> <a href={`tel:${doctor.phone}`} style={{color: "inherit", textDecoration: "none"}}>{doctor.phone}</a></span>}
                 </span>
                 <ChevronRight size={17} />
               </Link>
