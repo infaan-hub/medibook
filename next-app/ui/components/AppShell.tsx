@@ -56,6 +56,7 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
       { to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
@@ -168,16 +169,22 @@ function NotificationBell() {
 /**
  * Header actions.
  *
- * Users (patients, doctors, and admins) who have not installed MediBook yet
- * get the A2HS "Download app" button instead of the bell (§22.1); notifications
- * stay reachable from the drawer. Once the app runs standalone (installed on
- * desktop or mobile) — or when the browser offers no install path — the
- * notification bell is shown as before.
+ * Shared by patients, doctors, and admins (the shell header is the same for
+ * all three roles):
+ *
+ *   Not installed yet          → the platform-aware "Download app" button
+ *                                (§22.1, `InstallAppButton`) replaces the bell:
+ *                                Android installs the app directly, iOS and
+ *                                desktop browsers get the download sheet
+ *                                (PWA steps + desktop app installer).
+ *   Installed (standalone PWA
+ *   or the desktop app)        → the notification bell; notifications also
+ *                                stay reachable from the drawer / sidebar.
  */
-function HeaderActions({ user: _user }: { user: User | null }) {
-  const { available } = useInstallAvailability();
-  if (available) return <InstallAppButton />;
-  return <NotificationBell />;
+function HeaderActions() {
+  const { installed } = useInstallAvailability();
+  if (installed) return <NotificationBell />;
+  return <InstallAppButton />;
 }
 
 /** Avatar that shows profile image or initials fallback. */
@@ -348,7 +355,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="shell__brand-text">MediBook</span>
         </span>
         <div className="shell__header-actions">
-          <HeaderActions user={user} />
+          <HeaderActions />
         </div>
       </header>
 

@@ -93,7 +93,7 @@ function hasOnboarded(): boolean {
  * before a guest can reach RequireSession (which would otherwise redirect to login).
  *
  *   already signed in       → that role's home (no onboarding, no welcome)
- *   first ever visit        → /onboarding → /welcome (sign up / sign in)
+ *   first ever visit        → /onboarding → /onboarding/welcome (sign up / sign in)
  *   signed out, seen before → /login
  */
 function LaunchRoute() {
@@ -130,7 +130,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<LaunchRoute />} />
               {/* Guest-only screens (no app shell). Signed-in users bounce to
-                  their own home, so /onboarding and /welcome stay first-run only. */}
+                  their own home, so /onboarding and /onboarding/welcome stay
+                  first-run only. */}
               <Route
                 path="/onboarding"
                 element={
@@ -139,13 +140,19 @@ export default function App() {
                   </RequireGuest>
                 }
               />
+              {/* Welcome (sign up / sign in) lives inside the onboarding flow. */}
               <Route
-                path="/welcome"
+                path="/onboarding/welcome"
                 element={
                   <RequireGuest>
                     <WelcomeScreen />
                   </RequireGuest>
                 }
+              />
+              {/* Legacy /welcome bookmark → the onboarding flow. */}
+              <Route
+                path="/welcome"
+                element={<Navigate to="/onboarding/welcome" replace />}
               />
               <Route
                 path="/login"

@@ -46,7 +46,7 @@ export function homeForRole(user: RoleUser): string {
  * Destination for the unguarded root route (§21 onboarding, §54 auth).
  *
  *   signed in             → that role's home (onboarding/welcome never again)
- *   first ever visit      → /onboarding → /welcome (sign up / sign in)
+ *   first ever visit      → /onboarding → /onboarding/welcome (sign up / sign in)
  *   signed out, seen before → /login
  *
  * `null` means "keep the splash" — the session boot probe has not finished yet.

@@ -175,7 +175,7 @@ export function OnboardingScreen() {
 
   const completeAndGoWelcome = useCallback(() => {
     localStorage.setItem("medibook_onboarding_completed", "1");
-    navigate("/welcome");
+    navigate("/onboarding/welcome");
   }, [navigate]);
 
   const goSignIn = useCallback(() => {

@@ -32,6 +32,12 @@ declare global {
      * client-only, so `beforeinstallprompt` can fire before React evaluates.
      */
     __mbDeferredInstallPrompt?: BeforeInstallPromptEvent | undefined;
+    /**
+     * Set by the Electron desktop app's preload script (`desktop/preload.js`)
+     * — lets the web app treat a desktop-app session as "installed" so the
+     * header keeps the notification bell instead of the Download app button.
+     */
+    __MB_DESKTOP__?: boolean;
   }
 
   interface Navigator {

@@ -836,6 +836,103 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   font-size: 13px;
 }
 
+/* ---- "Download app" help sheet ----
+   Opened by the Download app button when the native install prompt is not the
+   path: iOS (Share → Add to Home Screen), desktop browsers (PWA steps + the
+   desktop app installer), and Android browsers without beforeinstallprompt. */
+.install-help {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(9, 24, 32, 0.5);
+}
+@media (min-width: 600px) {
+  .install-help { align-items: center; }
+}
+.install-help__panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: min(80vh, 560px);
+  overflow: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-2);
+  animation: install-help-in 0.18s ease;
+}
+@keyframes install-help-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.install-help__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+  color: var(--color-primary);
+}
+.install-help__head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.install-help__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.install-help__close:hover { background: rgba(0, 0, 0, 0.06); }
+.install-help__option {
+  display: flex;
+  gap: 12px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+.install-help__option:first-of-type { border-top: 0; padding-top: 0; }
+.install-help__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(9, 169, 158, 0.12);
+  color: var(--color-primary);
+}
+.install-help__option strong,
+.install-help__subtitle {
+  display: block;
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.install-help__option p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.install-help__action {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
 /* ---- Splash screen ---- */
 .splash {
   position: fixed;
