@@ -43,7 +43,7 @@ async function createWithSlotGuard<T>(fn: () => Promise<T>): Promise<T> {
         non_field_errors: ["A record with these details already exists."],
       });
     }
-    throw error;
+    throw badRequest("An unexpected error occurred.", { _unknown: [String(error)] });
   }
 }
 

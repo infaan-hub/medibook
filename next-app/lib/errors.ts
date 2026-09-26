@@ -22,7 +22,9 @@ export const DEFAULT_MESSAGES: Record<number, string> = {
   415: "The submitted data type is not supported.",
   422: "The submitted data failed validation.",
   429: "Too many requests. Please try again later.",
-  500: "The request failed.",
+  500: "Internal server error.",
+  502: "Bad gateway.",
+  503: "Service unavailable.",
 };
 
 export class ApiError extends Error {
@@ -30,7 +32,7 @@ export class ApiError extends Error {
   readonly errors: FieldErrors;
 
   constructor(status: number, message?: string, errors: FieldErrors = {}) {
-    super(message ?? DEFAULT_MESSAGES[status] ?? "The request failed.");
+    super(message ?? DEFAULT_MESSAGES[status] ?? `Request failed with status ${status}.`);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;

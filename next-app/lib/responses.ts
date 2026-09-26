@@ -27,7 +27,7 @@ export function errorResponse(
   status = 400
 ): Response {
   return Response.json(
-    { success: false, message: message ?? DEFAULT_MESSAGES[status] ?? "The request failed.", errors: errors ?? {} },
+    { success: false, message: message ?? DEFAULT_MESSAGES[status] ?? `Request failed with status ${status}.`, errors: errors ?? {} },
     { status }
   );
 }
