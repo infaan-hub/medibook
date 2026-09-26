@@ -961,7 +961,7 @@ export function AppointmentDetailScreen() {
           <div className="appt-delete-confirm">
             <p>Are you sure you want to permanently delete this appointment?</p>
             {error && <p className="form-note--error">{error}</p>}
-            <div className="form__row">
+            <div className="form__row form__row--actions">
               <Button variant="danger" loading={deleting} onClick={handleDelete}>
                 Yes, delete
               </Button>

@@ -259,6 +259,10 @@ a { color: var(--color-primary); }
   grid-template-columns: 1fr;
   gap: var(--space-4);
 }
+.form__row--actions {
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
 @media (min-width: 640px) {
   .form__row { grid-template-columns: 1fr 1fr; }
 }

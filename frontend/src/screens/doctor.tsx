@@ -30,7 +30,7 @@ import type {
   Specialty,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
-import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
+import { DoctorReviewList, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
 
@@ -119,12 +119,6 @@ export function DoctorProfileScreen() {
           </div>
         )}
 
-        {ratingNumber(doctor.average_rating) > 0 && (
-          <div className="doctor-profile__rating">
-            <StarRating value={doctor.average_rating} readonly size="sm" />
-            <span>{formatRating(doctor.average_rating)} ({doctor.total_reviews} review{doctor.total_reviews !== 1 ? "s" : ""})</span>
-          </div>
-        )}
         {doctor.bio && <p>{doctor.bio}</p>}
         <div style={{ marginTop: "var(--space-4)" }}>
           <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>

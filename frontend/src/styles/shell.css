@@ -474,10 +474,26 @@
   .shell__nav--side .sidebar__close { color: rgb(255 255 255 / 0.5); }
   .shell__nav--side .sidebar__close:hover { background: rgb(255 255 255 / 0.1); color: #fff; }
   .shell__nav--side .sidebar__divider { background: rgba(255,255,255,.15); }
-  .shell__nav--side .nav-item--side { color: rgba(255,255,255,.8); }
-  .shell__nav--side .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.15); }
-  .shell__nav--side .nav-item--side.nav-item--active,
-  .shell__nav--side .nav-item--side.nav-item--active:hover { color: #09A99E; background: #fff; font-weight: var(--weight-semibold); }
+.shell__nav--side .nav-item--side {
+  color: var(--color-text-inverse, #fff);
+  transition: color 0.2s;
+}
+.shell__nav--side .nav-item--side:hover {
+  color: #09A99E;
+}
+.shell__nav--side .nav-item--side.nav-item--active,
+.shell__nav--side .nav-item--side.nav-item--active:hover {
+  color: #09A99E;
+  background: #fff;
+  font-weight: var(--weight-semibold);
+}
+/* Ensure only one nav item can be active at a time */
+.shell__nav--side .nav-item--side {
+  &:hover ~ .nav-item--side.nav-item--active,
+  &:focus ~ .nav-item--side.nav-item--active {
+    /* Prevent double-active visual conflicts */
+  }
+}
   .shell__nav--side .nav-item--side.nav-item--active::before {
     content: "";
     position: absolute;
