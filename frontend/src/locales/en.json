@@ -154,7 +154,7 @@
     "reminder1w": "1 week before",
     "healthRecords": "Health Records",
     "noRecords": "No health records yet",
-    "noRecordsDesc": "Your doctor will upload lab reports, prescriptions, and X-rays here."
+    "noRecordsDesc": "Upload lab reports, prescriptions, and X-rays here, or ask your doctor to add one."
   },
   "blog": {
     "title": "Health Tips",

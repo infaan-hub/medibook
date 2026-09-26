@@ -41,10 +41,19 @@ export function userPayload(user: User, req: Request): Record<string, unknown> {
   };
 }
 
-/** patients.serializers.PatientSerializer (id = profile id, names from user). */
+/**
+ * patients.serializers.PatientSerializer.
+ *
+ * `id` is the patient's **user** id, not the `Patient` profile row id: every
+ * clinical foreign key (Appointment.patient, MedicalTreatment.patient,
+ * HealthRecord.patient) points at User.id, and `/api/patients/{id}/` takes a
+ * user id too. Emitting the profile id here made the doctor's patient list
+ * hand out ids that matched no appointment, so the whole medical-treatment
+ * screen looked empty.
+ */
 export function patientDto(patient: Patient & { user: User }): Record<string, unknown> {
   return {
-    id: patient.id,
+    id: patient.user_id,
     email: patient.user.email,
     first_name: patient.user.first_name,
     last_name: patient.user.last_name,
@@ -84,6 +93,8 @@ export function doctorDto(
     email: doctor.user.email,
     first_name: doctor.user.first_name,
     last_name: doctor.user.last_name,
+    /** Contact number on the account — shown on the doctor card + to patients. */
+    phone: doctor.user.phone ?? "",
     profile_image: mediaUrl(doctor.user.profile_image_id),
     specialties: doctor.specialties.map(({ specialty }) => ({
       id: specialty.id,
@@ -208,11 +219,19 @@ export function articleDetailDto(
 }
 
 /** treatments.serializers.HealthRecordSerializer. */
-export function healthRecordDto(record: HealthRecord, req: Request): Record<string, unknown> {
+export function healthRecordDto(
+  record: HealthRecord & { doctor?: { user: User } },
+  req: Request
+): Record<string, unknown> {
+  const doctorUser = record.doctor?.user;
+  const doctorName = doctorUser
+    ? `${doctorUser.first_name} ${doctorUser.last_name}`.trim() || doctorUser.email
+    : "";
   return {
     id: record.id,
     patient: record.patient_id,
     doctor: record.doctor_id,
+    doctor_name: doctorName,
     appointment: record.appointment_id,
     file: mediaUrl(record.file_id),
     record_type: record.record_type,

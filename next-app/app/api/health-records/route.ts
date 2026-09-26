@@ -40,7 +40,9 @@ export const GET = handler(async (ctx) => {
 });
 
 export const POST = handler(async (ctx) => {
-  const user = await requireDoctor(ctx.req);
+  // Both roles may upload: doctors FOR a patient, patients WITH a doctor
+  // (role-specific targeting is enforced inside createHealthRecord).
+  const user = await requireAuth(ctx.req);
   const contentType = ctx.req.headers.get("content-type") ?? "";
   let body: unknown = {};
   let file: File | null = null;

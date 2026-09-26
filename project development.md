@@ -2514,3 +2514,144 @@ frontend/src/styles/global.css                  (added home__push-*, home__quick
 **Next:** Deployment preparation, performance optimization, or additional features as needed.
 
 ---
+
+### 2026-09-26 — Entry 0042 — PWA installability: root cause found and fixed, production verified (Done)
+
+**Phase:** PHASE 20 — PWA Build & Installability (production hardening)
+
+**Work done**
+
+1. Diagnosed why the existing `[ Download app ]` button never produced Chrome's install prompt. Chrome's installability report said `no-manifest`.
+2. **Root cause:** Next.js resolves the `metadata` export asynchronously and, on the streamed dynamic route (`/onboarding/welcome`), emits `<link rel="manifest">` **after** `</head>`. Next's `REINSERT_ICON_SCRIPT` only relocates `link[rel=icon]` back into `<head>` — it does not move `rel=manifest`. Chrome reads the manifest only from `<head>`, so the link was invisible to the installability check.
+3. **Fix** (both `frontend/app/layout.tsx` and `next-app/app/layout.tsx`): removed `manifest: "/manifest.json"` from the `metadata` export and added a plain `<link rel="manifest" href="/manifest.json"/>` as a **direct child of `<html>`**, which React 19 hoists into `<head>` at render time.
+4. **Service worker `v5 → v6`** in both apps:
+   - never intercept `/_next/static/*` → fixes `ChunkLoadError: Loading chunk 807`
+   - `/manifest.json` network-first and never cached
+   - every `cache.put` routed through a `put()` helper that `.catch(() => undefined)` → fixes `Cache.put() network error` / `ERR_CACHE_READ_FAILURE`
+   - precache uses per-URL `cache.add().catch()` instead of `addAll`
+   - `activate` purges obsolete caches; `/manifest.json` dropped from `SHELL_ASSETS`
+5. Day's commit chain (all 2026-09-26): `bf51ee4` nextjs-06 → `10452cb` nextj-07 → `6a717f6` nextjs-08 → `fb3f169` nextjs-09 → `858ce74` nextjs-10 → `e0d378a` nextjs-11 → `0f753c7` nextjs-12 → `944c7e9` nextjs-13 → `b063650` nextjs-14. The manifest / service-worker fix landed in **nextjs-12** (`0f753c7`), with earlier PWA groundwork in nextjs-06.
+
+**Files touched:** `frontend/app/layout.tsx`, `frontend/public/service-worker.js`, `next-app/app/layout.tsx`, `next-app/public/service-worker.js` (earlier in the day: `frontend/public/manifest.json`, `frontend/src/pwa/installPrompt.ts`, `frontend/src/components/InstallAppButton.tsx`, `frontend/public/icons/*`).
+
+**Verification** — against production `https://zan-medibook.vercel.app`
+
+| Check | Result |
+| --- | --- |
+| `<link rel="manifest">` count / located in `<head>` | `1` / `True` on `/onboarding/welcome` and `/onboarding/find-a-doctor` |
+| Service worker version | `const VERSION = "v6"` (both apps) |
+| `getInstallabilityErrors()` | `[]` |
+| `beforeinstallprompt` capture | `bipLog = ["fired"]`, deferred prompt is an object |
+| Trusted click on `[ Download app ]` | consumes the deferred prompt, zero page exceptions |
+| `/manifest.json` | 200, `application/json`, 1225 bytes |
+| Icons | real PNG bytes verified — 192×192, 512×512, 512×512 maskable, 180×180 |
+| Forbidden artifacts (Electron / Vite / `.exe` / `.msi` / `.lnk`) | none found |
+| Acceptance list | **22 / 22 PASS** |
+| `npm run typecheck` / `npm test` / `npm run build` | exit 0 / **74 passed** / exit 0 |
+
+**Status:** Done
+
+**Next:** Entry 0043 — payload reduction (dead code, unused assets, dead CSS).
+
+---
+
+### 2026-09-26 — Entry 0043 — Dead code, unused assets and dead CSS removed (Done)
+
+**Phase:** PHASE 18 — Performance Optimization (payload reduction)
+
+**Work done**
+
+1. Deleted 2 dead source files: `frontend/src/screens/admin.tsx` (`AdminScreen`) and `frontend/src/design/tokens.ts`.
+2. Removed 11 exports with zero references anywhere in source: `RequireAuth`, `AppointmentsPage`, `setLanguage`, `getLanguage`, `getMyScheduleItem`, `updateAvailabilityBreak`, `updateScheduleException`, `getNotification`, `clearNamespace`, `DoctorCard`, `DoctorQueryParams`.
+3. Deleted 5 unreferenced public assets — **200,171 bytes (195.5 KB)**: `icons/logo.jpeg` (46,997), `images/medibook-splash.jpeg` (46,997), `images/medicare-1.png` (34,006), `images/medicare-2.png` (33,699), `images/medicare-3.png` (38,472). `images/logo.jpeg` was kept because it is referenced (the other three were byte-identical copies of it).
+4. Stripped dead CSS: **121 rules / 95 unique class names** — 120 rules from `frontend/src/styles/global.css` and 1 rule (`.nav-item__chevron`) from `shell.css`; `design/tokens.css` had none.
+   - The first apply produced a 3,090-line whole-file reformat. That was reverted and the script rewritten to be byte-preserving; final diff is **605 lines** (567 deleted in `global.css`, 6 in `shell.css`, 1 insertion).
+   - Native CSS nesting (19 blocks in `global.css`, 106 in `shell.css`) was deliberately kept whole so no nested rule could be over-deleted.
+5. Dependency audit before concluding: `react-router-dom` (20 files — the app is a Next-wrapped SPA), `axios`, `jsdom` and `react-dom` are all live. **Zero genuinely unused dependencies** — nothing was removed.
+
+**Files touched:** `frontend/src/screens/admin.tsx` (deleted), `frontend/src/design/tokens.ts` (deleted), `frontend/src/styles/global.css`, `frontend/src/styles/shell.css`, `frontend/src/api/doctors.ts`, `frontend/src/api/notifications.ts`, `frontend/src/api/types.ts`, `frontend/src/components/guards.tsx`, `frontend/src/i18n.ts`, `frontend/src/lib/storage.ts`, `frontend/src/screens/index.tsx`, `frontend/public/{icons,images}/*` (5 files deleted).
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| Independent re-check of the 95 dropped classes (separate script, Git `grep -P` with lookaround boundaries) | **95 / 95 absent** from source |
+| Substring collisions caught by that independent pass | 8 detected and resolved (`patient-appt-tabs` ⊃ `appt-tab`, `home__appointment-datebox` ⊃ `home__appointment-date`, …) |
+| Over-deletion check (git HEAD class set vs working tree + full source corpus) | removed 95 — **0 of them still used**, 0 added |
+| Built CSS | `global` **89.5 → 78.3 KB**; all render-blocking CSS **109.6 → 98.3 KB** raw, **19.0 → 17.1 KB gzip** |
+| Browser render check on `/login` | 3 stylesheets, 869 rules, body `rgb(240,251,251)`, Inter font, `--color-primary: #09a99e`, inputs/buttons correctly styled |
+| `npm run typecheck` / `npm test` / `npm run build` | exit 0 / **74 passed** / exit 0 |
+
+**Status:** Done
+
+**Next:** Entry 0044 — "Continue with Google" sign-in.
+
+---
+
+### 2026-09-26 — Entry 0044 — "Continue with Google" enabled (Done — code; production activation pending)
+
+**Phase:** Authentication — social sign-in
+
+**Work done**
+
+1. **Root cause** of the *"Google sign-in is not configured"* toast: `frontend/src/screens/auth.tsx:342` reads `process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID`, which was empty, so the guard at line 364 short-circuited before GIS was ever initialised.
+2. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID=953319135012-….apps.googleusercontent.com` in `frontend/.env` (gitignored) and documented the variable in `frontend/.env.example` and `next-app/.env.example`.
+3. **Security fix** — `next-app/services/social.service.ts::verifyGoogle` previously accepted *any* Google-issued token (no `iss`/`aud` check), so a token minted for an attacker's own Google app would authenticate. Now:
+   - `data.iss !== "https://accounts.google.com"` → 401 (always checked)
+   - `expectedAudience = process.env.GOOGLE_CLIENT_ID`; when set, `data.aud !== expectedAudience` → 401
+   - mirrors the audience check the Apple path already performed.
+4. **No client secret is used or stored anywhere.** The flow is GIS `id_token` → `POST /api/auth/social/` → server-side verification through the public `oauth2.googleapis.com/tokeninfo` endpoint, which requires no secret. `.env.example` deliberately omits it.
+
+**Files touched:** `frontend/.env` (gitignored, real value), `frontend/.env.example`, `next-app/.env.example`, `next-app/services/social.service.ts`.
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| CDP trusted click on `Continue with Google` | GIS loaded `200 accounts.google.com/gsi/client`; `initialize()` received exactly `953319135012-…apps.googleusercontent.com`; `prompt()` called once; no "not configured" toast |
+| Client secret in tracked files or `.next` output (searched `GOCSPX`) | **absent** |
+| `frontend` typecheck + tests | exit 0 / **74 passed** |
+| `next-app` typecheck + tests | exit 0 / **20 passed** |
+
+**Status:** Done (code). Production activation is **Blocked** on external configuration — see Next.
+
+**Next:** three manual steps before it works in production: (1) set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in Vercel for the **frontend** project — `NEXT_PUBLIC_*` is inlined at **build time** and `.env` is gitignored, so the deployed bundle currently carries no client ID; (2) set `GOOGLE_CLIENT_ID` in Vercel for the **backend** project to enable the audience check; (3) add `https://zan-medibook.vercel.app` to **Authorized JavaScript origins** on the Google Cloud OAuth client, then redeploy. Also **rotate the client secret** `GOCSPX-…`, which was pasted into chat history.
+
+---
+
+### 2026-09-26 — Entry 0045 — Production API verified; proxy `Expect` header bug found and fixed (Done)
+
+**Phase:** PHASE 21 — Deployment (production verification of the API path)
+
+**Work done**
+
+1. Verified the deployed backend `https://medibook-backend-jade.vercel.app`:
+   - `GET /api/doctors/` → 200 (paginated envelope, 31 specialties / 1 doctor in the catalogue)
+   - `POST /api/auth/login/` → 400 `"The username or password is incorrect."`
+   - `POST /api/auth/social/` with `{provider:"google", token:…}` → **401 `"Invalid or expired Google token."`** — i.e. the real Google request path reaches and is processed by the backend.
+   - Missing token → 400 `Token is required.`; unknown provider → 400 `Invalid provider. Must be one of: google, apple.`; Apple bogus token → 401.
+2. Verified the frontend→backend proxy `frontend/app/api/[...slug]/route.ts` forwards **POST bodies correctly** in production: login → 400, social → 401, `specialties/` → 401, unknown path → backend HTML 200.
+3. **Corrected a false alarm raised during testing.** An initial probe reported *every* production POST as `502 API proxy cannot reach the backend`. That was a test-client artifact, not an outage:
+   - Cause: PowerShell `Invoke-WebRequest` sends `expect: 100-continue` on POST-with-body (confirmed by a local header-capture probe: `expect: 100-continue` present on POST, absent when no body). The proxy forwarded it; `fetch` rejects that header → `TypeError: fetch failed` → the catch-all 502.
+   - Proof: Node `fetch` **with** `expect: 100-continue` → `THREW fetch failed`; the same request **without** it → 400. PowerShell POST **without** a body → 400.
+   - Browsers never send `Expect: 100-continue`, so real application traffic was never affected — but it was a genuine latent bug for any API tooling.
+4. Fixed `frontend/app/api/[...slug]/route.ts`: hop-by-hop / forbidden request headers are now skipped — `host`, `connection`, `content-length`, `accept-encoding`, **`expect`**, `transfer-encoding`, `keep-alive`, `te`, `trailer`, `upgrade`, `proxy-authorization`, `proxy-connection`.
+
+**Files touched:** `frontend/app/api/[...slug]/route.ts`.
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| Local proxy regression using PowerShell (the client that sends `Expect`) — `POST /api/auth/login/` | 400 with body |
+| `POST /api/auth/social/` | 401 `Invalid or expired Google token.` |
+| `GET /api/doctors/` | 200 |
+| `npm run typecheck` | exit 0 |
+| `npm test` | **74 passed** (10 files) |
+| `npm run build` | exit 0 |
+
+**Status:** Done
+
+**Next:** complete the three production activation steps from Entry 0044, redeploy, then re-run the Google sign-in acceptance test against `https://zan-medibook.vercel.app`.
+
+---

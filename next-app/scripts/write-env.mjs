@@ -32,7 +32,6 @@ const env = [
   "MEDIA_ROOT=uploads",
   "EMAIL_TRANSPORT=console",
   'DEFAULT_FROM_EMAIL="MediBook <no-reply@medibook.local>"',
-  "APPLE_CLIENT_ID=",
   "",
 ].join("\n");
 writeFileSync(join(dir, ".env"), env, "utf8");

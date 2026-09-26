@@ -121,10 +121,17 @@ export const treatmentPatchSchema = z
   })
   .passthrough();
 
-/** treatments.healthrecord create payload (multipart or JSON). */
+/**
+ * treatments.healthrecord create payload (multipart or JSON).
+ *
+ * `patient` is required for doctor uploads and `doctor` for patient uploads —
+ * which one applies is resolved by resolveHealthRecordTarget() (role-dependent),
+ * so both stay optional at the schema level.
+ */
 export const healthRecordCreateSchema = z
   .object({
-    patient: drfInteger(),
+    patient: drfInteger().optional(),
+    doctor: drfInteger().optional(),
     appointment: drfInteger().nullable().optional(),
     record_type: z.enum(["lab_report", "prescription", "xray", "imaging", "other"]).optional(),
     title: z.string().min(1, REQUIRED).max(200, "Ensure this string has at most 200 characters."),

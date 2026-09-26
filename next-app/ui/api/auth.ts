@@ -24,9 +24,9 @@ export function login(username: string, password: string): Promise<Envelope<Auth
   return apiPost<AuthPayload>("/auth/login/", { username, password });
 }
 
-/** POST /api/auth/social/ — Google or Apple OAuth login. */
+/** POST /api/auth/social/ — Google OAuth login. */
 export function socialLogin(
-  provider: "google" | "apple",
+  provider: "google",
   token: string
 ): Promise<Envelope<AuthPayload>> {
   return apiPost<AuthPayload>("/auth/social/", { provider, token });

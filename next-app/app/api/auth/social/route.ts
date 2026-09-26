@@ -2,7 +2,7 @@ import { handler, ok, readJson } from "@/lib/route";
 import { userPayload } from "@/lib/serializers";
 import { socialLogin } from "@/services/social.service";
 
-/** POST /api/auth/social/ — Google / Apple sign-in. */
+/** POST /api/auth/social/ — Google sign-in. */
 export const POST = handler(
   async ({ req }) => {
     const body = await readJson(req);

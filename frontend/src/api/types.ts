@@ -89,6 +89,15 @@ export type UpdatePatientProfilePayload = Partial<
   timezone?: string;
 };
 
+/** GET /api/patients/linked-doctors/ — doctors a patient may share records with. */
+export interface LinkedDoctor {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  specialties: string[];
+}
+
 export type AppointmentStatus =
   | "pending"
   | "confirmed"
@@ -135,6 +144,8 @@ export interface DoctorProfile {
   email: string;
   first_name: string;
   last_name: string;
+  /** Contact number on the account — shown on the doctor card and to patients. */
+  phone: string;
   profile_image: string | null;
   specialties: Specialty[];
   hospitals: number[];

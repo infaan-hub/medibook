@@ -87,6 +87,18 @@ export const listDoctors = (where: Prisma.DoctorWhereInput, skip: number, take: 
     take,
   });
 
+/**
+ * Doctors a patient can share health records with — every doctor the patient
+ * has (or had) an appointment with. Sharing outside this set is rejected
+ * server-side by treatment.service.createHealthRecord().
+ */
+export const listDoctorsForPatient = (patientUserId: number) =>
+  prisma.doctor.findMany({
+    where: { appointments: { some: { patient_id: patientUserId } } },
+    include: DOCTOR_INCLUDE,
+    orderBy: { id: "asc" },
+  });
+
 /* --------------------------- Availability windows -------------------------- */
 
 export const listWindows = (doctorId: number) =>

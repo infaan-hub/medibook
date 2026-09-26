@@ -94,7 +94,7 @@ interface SessionContextValue {
   user: User | null;
   login: (username: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
-  socialLogin: (provider: "google" | "apple", token: string) => Promise<void>;
+  socialLogin: (provider: "google", token: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Replace the cached user (profile edits, …). */
   setUser: (user: User) => void;
@@ -158,7 +158,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const socialLogin = useCallback(
-    async (provider: "google" | "apple", token: string) => {
+    async (provider: "google", token: string) => {
       const envelope = await socialLoginRequest(provider, token);
       applyAuth(envelope.data);
     },

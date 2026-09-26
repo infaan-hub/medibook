@@ -1,5 +1,5 @@
 /**
- * Social login (Google / Apple) — port of accounts/views.py SocialLoginView.
+ * Social login (Google) — port of accounts/views.py SocialLoginView.
  * Tokens are verified server-side against the provider; the account is looked
  * up case-insensitively by email and created on first sign-in.
  */
@@ -17,7 +17,7 @@ interface ProviderIdentity {
   picture?: string | null;
 }
 
-const PROVIDERS = ["google", "apple"] as const;
+const PROVIDERS = ["google"] as const;
 
 async function verifyGoogle(token: string): Promise<ProviderIdentity> {
   const response = await fetch(
@@ -49,35 +49,6 @@ async function verifyGoogle(token: string): Promise<ProviderIdentity> {
     last_name: data.family_name ?? "",
     picture: data.picture ?? null,
   };
-}
-
-async function verifyApple(token: string): Promise<ProviderIdentity> {
-  const { importJWK, jwtVerify, decodeProtectedHeader } = await import("jose");
-  const header = decodeProtectedHeader(token);
-  if (!header.kid) throw new ApiError(401, "Apple token missing kid header.");
-  const keysResponse = await fetch("https://appleid.apple.com/auth/keys", {
-    headers: { Accept: "application/json" },
-  });
-  if (!keysResponse.ok) throw new ApiError(401, "Could not fetch Apple signing keys.");
-  const { keys } = (await keysResponse.json()) as {
-    keys: Array<{ kty: string; kid: string; n: string; e: string }>;
-  };
-  const jwk = keys.find((key) => key.kid === header.kid);
-  if (!jwk) throw new ApiError(401, "No matching Apple signing key found.");
-  const publicKey = await importJWK(jwk, "RS256");
-  try {
-    const { payload } = await jwtVerify(token, publicKey, {
-      algorithms: ["RS256"],
-      issuer: "https://appleid.apple.com",
-      ...(process.env.APPLE_CLIENT_ID ? { audience: process.env.APPLE_CLIENT_ID } : {}),
-    });
-    const email = payload.email as string | undefined;
-    if (!email) throw new ApiError(401, "Apple token does not contain an email.");
-    return { email, first_name: (payload as { given_name?: string }).given_name ?? "", last_name: "", picture: null };
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(401, "Invalid Apple token.");
-  }
 }
 
 async function saveProfileImage(userId: number, url: string): Promise<void> {
@@ -128,7 +99,7 @@ export async function socialLogin(
 
   let identity: ProviderIdentity;
   try {
-    identity = provider === "google" ? await verifyGoogle(token) : await verifyApple(token);
+    identity = await verifyGoogle(token);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw unauthorized(String((error as Error).message || "Could not verify token."));

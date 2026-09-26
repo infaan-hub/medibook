@@ -78,6 +78,7 @@ export function updateMyDoctorProfile(
       DoctorProfile,
       | "first_name"
       | "last_name"
+      | "phone"
       | "hospitals"
       | "qualifications"
       | "experience_years"

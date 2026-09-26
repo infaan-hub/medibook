@@ -107,6 +107,7 @@ function AppointmentRow({
   const [reschedError, setReschedError] = useState<string | null>(null);
   const [showMedical, setShowMedical] = useState(false);
   const [patientMedical, setPatientMedical] = useState<PatientProfile | null>(null);
+  const [medicalNote, setMedicalNote] = useState<string | null>(null);
   const [medicalLoading, setMedicalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -138,8 +139,15 @@ function AppointmentRow({
     if (patientMedical) return;
     setMedicalLoading(true);
     getPatientProfileById(appointment.patient)
-      .then((r) => setPatientMedical(r.data))
-      .catch(() => setPatientMedical(null))
+      .then((r) => {
+        const profile = r.data && Object.keys(r.data).length ? r.data : null;
+        setPatientMedical(profile);
+        setMedicalNote(profile ? null : r.message || null);
+      })
+      .catch((e) => {
+        setPatientMedical(null);
+        setMedicalNote(message(e));
+      })
       .finally(() => setMedicalLoading(false));
   }
 
@@ -235,7 +243,7 @@ function AppointmentRow({
               {medicalLoading ? (
                 <span className="appt-card__medical-loading">Loading medical info…</span>
               ) : !patientMedical ? (
-                <span className="appt-card__medical-loading">No medical information available.</span>
+                <span className="appt-card__medical-loading">{medicalNote ?? "No medical information available."}</span>
               ) : (
                 <>
                   {patientMedical.blood_group && (

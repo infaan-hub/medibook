@@ -5,6 +5,8 @@ export interface HealthRecord {
   id: number;
   patient: number;
   doctor: number;
+  /** Display name of the doctor the record belongs to / was shared with. */
+  doctor_name?: string;
   appointment?: number;
   file?: string;
   record_type: string;

@@ -727,6 +727,7 @@ export function AppointmentDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [patientMedical, setPatientMedical] = useState<PatientProfile | null>(null);
+  const [medicalNote, setMedicalNote] = useState<string | null>(null);
   const [medicalLoading, setMedicalLoading] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
 
@@ -763,8 +764,15 @@ export function AppointmentDetailScreen() {
     if (!appointment?.patient) return;
     setMedicalLoading(true);
     getPatientProfileById(appointment.patient)
-      .then((r) => setPatientMedical(r.data))
-      .catch(() => setPatientMedical(null))
+      .then((r) => {
+        const profile = r.data && Object.keys(r.data).length ? r.data : null;
+        setPatientMedical(profile);
+        setMedicalNote(profile ? null : r.message || null);
+      })
+      .catch((e) => {
+        setPatientMedical(null);
+        setMedicalNote(message(e));
+      })
       .finally(() => setMedicalLoading(false));
   }
 
@@ -863,7 +871,7 @@ export function AppointmentDetailScreen() {
               {medicalLoading ? (
                 <Skeleton lines={3} />
               ) : !patientMedical ? (
-                <p className="form-note">No medical information available.</p>
+                <p className="form-note">{medicalNote ?? "No medical information available."}</p>
               ) : (
                 <>
                   {patientMedical.blood_group && (

@@ -10,9 +10,22 @@ import {
   type MedicalTreatment,
 } from "../api/treatments";
 import type { PatientProfile } from "../api/types";
+import { getHealthRecords, type HealthRecord } from "../api/health-records";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { ArrowLeft, User, Calendar, FileText, Edit3, Trash2, X, Pill, Stethoscope, History } from "lucide-react";
+import {
+  ArrowLeft,
+  User,
+  Calendar,
+  FileText,
+  Edit3,
+  Trash2,
+  X,
+  Pill,
+  Stethoscope,
+  History,
+  Download,
+} from "lucide-react";
 
 function msg(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -20,7 +33,11 @@ function msg(error: unknown): string {
 
 function fmtDate(d: string | null): string {
   if (!d) return "—";
-  return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
+  // Date-only values ("YYYY-MM-DD") need a time part to parse as local;
+  // ISO datetimes (created_at/updated_at) already carry one.
+  const dt = new Date(d.length <= 10 ? `${d}T00:00:00` : d);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -188,6 +205,42 @@ function TxRecord({
 }
 
 /* ======================================
+   HEALTH RECORD (patient + doctor uploads)
+   ====================================== */
+
+function HcRecord({ record }: { record: HealthRecord }) {
+  const typeLabel = record.record_type.replace(/_/g, " ");
+  return (
+    <Card className="treat-record">
+      <div className="treat-rec-hdr">
+        <div className="treat-rec-title">
+          <FileText size={16} />
+          <h4>{record.title}</h4>
+        </div>
+        <span className="health-record-item__type">{typeLabel}</span>
+      </div>
+
+      {record.description && (
+        <div className="treat-rec-sec">
+          <span className="treat-rec-lbl"><FileText size={12} /> Description</span>
+          <p className="treat-rec-val">{record.description}</p>
+        </div>
+      )}
+
+      <div className="treat-rec-footer">
+        <span>Added {fmtDate(record.created_at)}</span>
+        {record.doctor_name && <span>Dr. {record.doctor_name}</span>}
+        {record.file && (
+          <a href={record.file} target="_blank" rel="noopener noreferrer" className="treat-rec-link">
+            <Download size={12} /> Open file
+          </a>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/* ======================================
    DOCTOR MEDICAL TREATMENT (main screen)
    ====================================== */
 
@@ -201,6 +254,7 @@ export function DoctorMedicalTreatmentScreen() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [treatments, setTreatments] = useState<MedicalTreatment[]>([]);
+  const [records, setRecords] = useState<HealthRecord[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -222,10 +276,15 @@ export function DoctorMedicalTreatmentScreen() {
     (id: number) => {
       setDetailError(null);
       setDetailLoading(true);
-      Promise.all([getPatientProfileById(id), listTreatments(id)])
-        .then(([profileRes, txRes]) => {
+      Promise.all([
+        getPatientProfileById(id),
+        listTreatments(id),
+        getHealthRecords(id),
+      ])
+        .then(([profileRes, txRes, recordRes]) => {
           setProfile(profileRes.data);
           setTreatments(txRes.data);
+          setRecords(recordRes.data?.results ?? []);
         })
         .catch((e) => setDetailError(msg(e)))
         .finally(() => setDetailLoading(false));
@@ -389,6 +448,32 @@ export function DoctorMedicalTreatmentScreen() {
       {!detailLoading && profile && (
         <>
           <PatientInfo profile={profile} />
+
+          {/* Health records — documents/images the patient shared with this
+              doctor plus anything this doctor uploaded for them. */}
+          <Card className="visit-records-card">
+            <div className="visit-card-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: 15 }}>Health records</h3>
+                <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+                  Documents and images shared with you by this patient
+                </p>
+              </div>
+            </div>
+            {records.length === 0 ? (
+              <EmptyState
+                icon={<FileText size={24} />}
+                title="No health records"
+                description="Lab reports, prescriptions, and scans shared for this patient will appear here."
+              />
+            ) : (
+              <div className="treat-patient-list">
+                {records.map((record) => (
+                  <HcRecord key={record.id} record={record} />
+                ))}
+              </div>
+            )}
+          </Card>
 
           {showForm && (
             <Card className="treat-form-hdr">

@@ -3,12 +3,16 @@
  * /settings — patient can view and edit their medical information.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { getPatientProfile, updatePatientProfile } from "../api/patients";
-import { getHealthRecords, type HealthRecord } from "../api/health-records";
-import type { Gender, PatientProfile } from "../api/types";
+import { getLinkedDoctors, getPatientProfile, updatePatientProfile } from "../api/patients";
+import {
+  getHealthRecords,
+  uploadHealthRecord,
+  type HealthRecord,
+} from "../api/health-records";
+import type { Gender, LinkedDoctor, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -27,7 +31,23 @@ import {
   Bell,
   Download,
   File,
+  Upload,
 } from "lucide-react";
+
+const RECORD_TYPE_OPTIONS = [
+  { value: "lab_report", label: "Lab report" },
+  { value: "prescription", label: "Prescription" },
+  { value: "xray", label: "X-ray" },
+  { value: "imaging", label: "Imaging" },
+  { value: "other", label: "Other" },
+] as const;
+
+const EMPTY_RECORD_FORM = {
+  title: "",
+  description: "",
+  record_type: "other",
+  doctor: "",
+};
 
 function formatGender(g: string): string {
   if (!g) return "Not specified";
@@ -252,6 +272,20 @@ export function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
+  const [linkedDoctors, setLinkedDoctors] = useState<LinkedDoctor[]>([]);
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [recordForm, setRecordForm] = useState(EMPTY_RECORD_FORM);
+  const [recordFile, setRecordFile] = useState<File | null>(null);
+  const [recordSaving, setRecordSaving] = useState(false);
+  const [recordError, setRecordError] = useState<string | null>(null);
+
+  const loadRecords = useCallback(() => {
+    setRecordsLoading(true);
+    getHealthRecords()
+      .then((r) => setHealthRecords(r.data?.results ?? []))
+      .catch(() => setHealthRecords([]))
+      .finally(() => setRecordsLoading(false));
+  }, []);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -260,14 +294,46 @@ export function SettingsScreen() {
     getPatientProfile()
       .then((envelope) => setProfile(envelope.data))
       .catch(() => setLoadError("Could not load your medical details."));
-    setRecordsLoading(true);
-    getHealthRecords()
-      .then((r) => setHealthRecords(r.data?.results ?? []))
-      .catch(() => setHealthRecords([]))
-      .finally(() => setRecordsLoading(false));
-  }, []);
+    loadRecords();
+    // Doctors this patient can share a record with (appointment-linked only).
+    getLinkedDoctors()
+      .then((r) => setLinkedDoctors(r.data ?? []))
+      .catch(() => setLinkedDoctors([]));
+  }, [loadRecords]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleUploadRecord(e: FormEvent) {
+    e.preventDefault();
+    setRecordError(null);
+    if (!recordForm.doctor) {
+      setRecordError("Choose the doctor to share this record with.");
+      return;
+    }
+    if (!recordForm.title.trim()) {
+      setRecordError("Title is required.");
+      return;
+    }
+    setRecordSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("doctor", recordForm.doctor);
+      fd.append("title", recordForm.title.trim());
+      fd.append("description", recordForm.description.trim());
+      fd.append("record_type", recordForm.record_type);
+      if (recordFile) fd.append("file", recordFile);
+      await uploadHealthRecord(fd);
+      notify("success", "Health record uploaded and shared with your doctor.");
+      setRecordForm(EMPTY_RECORD_FORM);
+      setRecordFile(null);
+      setShowRecordForm(false);
+      loadRecords();
+    } catch (error) {
+      setRecordError(error instanceof Error ? error.message : "Could not upload the record.");
+    } finally {
+      setRecordSaving(false);
+    }
+  }
 
   function handleEdit() {
     if (!profile) return;
@@ -456,10 +522,115 @@ export function SettingsScreen() {
             <div className="med-detail__avatar"><File size={24} /></div>
             <div>
               <h2 className="med-detail__title">{t("settings.healthRecords")}</h2>
-              <p className="med-detail__subtitle">Lab reports, prescriptions, and X-rays uploaded by your doctor</p>
+              <p className="med-detail__subtitle">
+                Lab reports, prescriptions, and X-rays — upload your own and share them with your doctor
+              </p>
             </div>
           </div>
+          {!showRecordForm && (
+            <Button variant="secondary" onClick={() => { setRecordError(null); setShowRecordForm(true); }}>
+              <Upload size={14} /> Upload record
+            </Button>
+          )}
         </div>
+
+        {recordError && <p className="form-note form-note--error">{recordError}</p>}
+
+        {showRecordForm && (
+          <form className="visit-record-form" onSubmit={handleUploadRecord}>
+            <div className="field">
+              <label className="field__label" htmlFor="hr-doctor">Share with doctor *</label>
+              <select
+                id="hr-doctor"
+                className="field__input"
+                value={recordForm.doctor}
+                onChange={(e) => setRecordForm({ ...recordForm, doctor: e.target.value })}
+                required
+              >
+                <option value="">Select a doctor…</option>
+                {linkedDoctors.map((doctor) => (
+                  <option key={doctor.id} value={String(doctor.id)}>
+                    {doctor.first_name || doctor.last_name
+                      ? `${doctor.first_name} ${doctor.last_name}`.trim()
+                      : doctor.email}
+                    {doctor.specialties.length > 0 ? ` — ${doctor.specialties.join(", ")}` : ""}
+                  </option>
+                ))}
+              </select>
+              {linkedDoctors.length === 0 && (
+                <p className="form-note">
+                  You can share records with a doctor once you have an appointment with them.
+                </p>
+              )}
+            </div>
+            <div className="form__row">
+              <div className="field">
+                <label className="field__label" htmlFor="hr-title">Title *</label>
+                <input
+                  id="hr-title"
+                  className="field__input"
+                  type="text"
+                  value={recordForm.title}
+                  onChange={(e) => setRecordForm({ ...recordForm, title: e.target.value })}
+                  placeholder="e.g. CBC panel — March 2026"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor="hr-type">Type</label>
+                <select
+                  id="hr-type"
+                  className="field__input"
+                  value={recordForm.record_type}
+                  onChange={(e) => setRecordForm({ ...recordForm, record_type: e.target.value })}
+                >
+                  {RECORD_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="hr-desc">Description</label>
+              <textarea
+                id="hr-desc"
+                className="field__input"
+                rows={2}
+                value={recordForm.description}
+                onChange={(e) => setRecordForm({ ...recordForm, description: e.target.value })}
+                placeholder="Optional notes…"
+              />
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="hr-file">Document or image (PDF, JPG, PNG — max 15 MB)</label>
+              <input
+                id="hr-file"
+                className="field__input"
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={(e) => setRecordFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="med-edit-actions">
+              <Button type="submit" loading={recordSaving}>
+                <Upload size={14} /> Share record
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowRecordForm(false);
+                  setRecordForm(EMPTY_RECORD_FORM);
+                  setRecordFile(null);
+                  setRecordError(null);
+                }}
+              >
+                <X size={14} /> Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+
         {recordsLoading ? (
           <Skeleton lines={3} />
         ) : healthRecords.length === 0 ? (
@@ -476,12 +647,14 @@ export function SettingsScreen() {
                   <span className="health-record-item__type">{record.record_type}</span>
                   <span className="health-record-item__title">{record.title}</span>
                   {record.description && <span className="health-record-item__desc">{record.description}</span>}
-                  <span className="health-record-item__date">
+                  <span className="health-record-item__meta">
+                    {record.doctor_name ? `Dr. ${record.doctor_name}` : "Not shared yet"}
+                    {" · "}
                     {new Date(record.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 {record.file && (
-                  <a href={record.file} target="_blank" rel="noopener noreferrer" className="btn btn--ghost btn--sm">
+                  <a href={record.file} target="_blank" rel="noopener noreferrer" className="btn btn--ghost btn--sm" title="Open file">
                     <Download size={14} />
                   </a>
                 )}

@@ -11,7 +11,7 @@ import {
   treatmentCreateSchema,
   treatmentPatchSchema,
 } from "@/validators/misc";
-import { parse } from "@/validators/base";
+import { MISSING, parse } from "@/validators/base";
 import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import * as appointments from "@/repositories/appointments.repo";
@@ -108,6 +108,22 @@ export async function listDoctorPatients(user: AuthUser) {
   return { data: patients.map(patientDto), message: "" };
 }
 
+/**
+ * GET /api/patients/linked-doctors/ — the doctors a patient can share health
+ * records with (every doctor they have an appointment with). The same set is
+ * re-checked server-side on upload, so the picker is never the only gate.
+ */
+export async function listLinkedDoctors(user: AuthUser) {
+  const rows = await doctors.listDoctorsForPatient(user.id);
+  return rows.map((doctor) => ({
+    id: doctor.id,
+    first_name: doctor.user.first_name,
+    last_name: doctor.user.last_name,
+    email: doctor.user.email,
+    specialties: doctor.specialties.map((row) => row.specialty.name),
+  }));
+}
+
 /** GET /api/treatments/visit-history/?patient= — timeline with treatments. */
 export async function visitHistory(user: AuthUser, patientId?: string) {
   const doctor = await ownDoctor(user);
@@ -157,16 +173,102 @@ export async function healthRecordScope(user: AuthUser, patientFilter?: string) 
   return clinical.healthRecordWhere(user.role, user.id, doctor?.id ?? null, patientFilter);
 }
 
-/** POST /api/health-records/ — doctors only; optional file upload. */
-export async function createHealthRecord(user: AuthUser, body: unknown, file?: File | null) {
-  if (user.role !== "doctor") throw forbidden("Only doctors can upload health records.");
-  const doctor = await ownDoctor(user);
-  if (!doctor) throw notFound("Doctor profile not found.");
+/**
+ * Who a health record belongs to / who it is shared with (pure — no I/O, so
+ * tests/health-records.test.ts can cover the role rules directly):
+ *
+ *   doctor  → uploads FOR a patient (`patient` is required)
+ *   patient → shares WITH a doctor (`doctor` is required); the subject is
+ *             always the signed-in patient, so a client can never post
+ *             clinical documents into someone else's chart.
+ */
+export type HealthRecordTarget =
+  | { ok: true; role: "doctor"; patientId: number }
+  | { ok: true; role: "patient"; doctorId: number }
+  | { ok: false; field: string; message: string };
 
+export function resolveHealthRecordTarget(
+  role: string,
+  userId: number,
+  input: { patient?: number | null; doctor?: number | null }
+): HealthRecordTarget {
+  if (role === "doctor") {
+    if (input.patient === undefined || input.patient === null) {
+      return { ok: false, field: "patient", message: MISSING };
+    }
+    return { ok: true, role: "doctor", patientId: Number(input.patient) };
+  }
+  if (role === "patient") {
+    if (input.doctor === undefined || input.doctor === null) {
+      return {
+        ok: false,
+        field: "doctor",
+        message: "Select the doctor you want to share this record with.",
+      };
+    }
+    return { ok: true, role: "patient", doctorId: Number(input.doctor) };
+  }
+  return {
+    ok: false,
+    field: "non_field_errors",
+    message: "Only doctors and patients can upload health records.",
+  };
+}
+
+/**
+ * POST /api/health-records/ — doctors upload FOR a patient, patients upload
+ * and share WITH a specific doctor they already have an appointment with.
+ * Optional file upload (documents and images) for both roles.
+ */
+export async function createHealthRecord(user: AuthUser, body: unknown, file?: File | null) {
   const input = parse(healthRecordCreateSchema, body);
-  const patient = await getPatientProfile(input.patient).catch(() => null);
-  if (!patient) {
-    throw new ValidationError({ patient: [`Invalid pk "${input.patient}" - object does not exist.`] });
+  const target = resolveHealthRecordTarget(user.role, user.id, input);
+  if (!target.ok) {
+    if (target.field === "non_field_errors") throw forbidden(target.message);
+    throw new ValidationError({ [target.field]: [target.message] });
+  }
+
+  let patientId: number;
+  let doctorId: number;
+
+  if (target.role === "doctor") {
+    const doctor = await ownDoctor(user);
+    if (!doctor) throw notFound("Doctor profile not found.");
+    const patient = await getPatientProfile(target.patientId).catch(() => null);
+    if (!patient) {
+      throw new ValidationError({
+        patient: [`Invalid pk "${target.patientId}" - object does not exist.`],
+      });
+    }
+    patientId = target.patientId;
+    doctorId = doctor.id;
+  } else {
+    const doctor = await doctors.findDoctorById(target.doctorId);
+    if (!doctor) {
+      throw new ValidationError({
+        doctor: [`Invalid pk "${target.doctorId}" - object does not exist.`],
+      });
+    }
+    // The record only ever reaches a doctor this patient has a booking with.
+    const linked = await appointments.hasAppointmentsWithPatient(doctor.id, user.id);
+    if (!linked) {
+      throw forbidden("You can only share health records with a doctor you have an appointment with.");
+    }
+    patientId = user.id;
+    doctorId = doctor.id;
+  }
+
+  if (input.appointment !== undefined && input.appointment !== null) {
+    const appointment = await appointments.findAppointmentById(input.appointment);
+    if (
+      !appointment ||
+      appointment.patient_id !== patientId ||
+      appointment.doctor_id !== doctorId
+    ) {
+      throw new ValidationError({
+        appointment: [`Invalid pk "${input.appointment}" - object does not exist.`],
+      });
+    }
   }
 
   let fileId: number | null = null;
@@ -180,8 +282,8 @@ export async function createHealthRecord(user: AuthUser, body: unknown, file?: F
     fileId = media.id;
   }
   return clinical.createHealthRecord({
-    patient_id: input.patient,
-    doctor_id: doctor.id,
+    patient_id: patientId,
+    doctor_id: doctorId,
     appointment_id: input.appointment ?? null,
     file_id: fileId,
     record_type: input.record_type ?? "other",

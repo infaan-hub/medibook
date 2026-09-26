@@ -28,7 +28,7 @@ import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui
 import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -64,6 +64,22 @@ function DoctorName({ doctorId }: { doctorId: number | null }) {
     getDoctor(doctorId).then((r) => setName(`${r.data.first_name} ${r.data.last_name}`)).catch(() => {});
   }, [doctorId]);
   return <>{name}</>;
+}
+
+/* Doctor phone field for appointment detail and booking screen */
+function DoctorPhone({ doctorId }: { doctorId: number | null }) {
+  const [phone, setPhone] = useState<string | null>(null);
+  useEffect(() => {
+    if (!doctorId) return;
+    getDoctor(doctorId).then((r) => setPhone(r.data.phone ?? null)).catch(() => {});
+  }, [doctorId]);
+  if (!phone) return null;
+  return (
+    <div className="appt-detail__field">
+      <span className="appt-detail__label">Doctor phone</span>
+      <a href={`tel:${phone}`}>{phone}</a>
+    </div>
+  );
 }
 
 /* ======================================
@@ -212,6 +228,11 @@ export function BookingScreen() {
           {doctor.specialties && doctor.specialties.length > 0
             ? ` — ${doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}`
             : ""}
+          {doctor.phone && (
+            <span>
+              <Phone size={13} /> <a href={`tel:${doctor.phone}`}>{doctor.phone}</a>
+            </span>
+          )}
         </p>
       </Card>
 
@@ -727,6 +748,7 @@ export function AppointmentDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [patientMedical, setPatientMedical] = useState<PatientProfile | null>(null);
+  const [medicalNote, setMedicalNote] = useState<string | null>(null);
   const [medicalLoading, setMedicalLoading] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
 
@@ -763,8 +785,15 @@ export function AppointmentDetailScreen() {
     if (!appointment?.patient) return;
     setMedicalLoading(true);
     getPatientProfileById(appointment.patient)
-      .then((r) => setPatientMedical(r.data))
-      .catch(() => setPatientMedical(null))
+      .then((r) => {
+        const profile = r.data && Object.keys(r.data).length ? r.data : null;
+        setPatientMedical(profile);
+        setMedicalNote(profile ? null : r.message || null);
+      })
+      .catch((e) => {
+        setPatientMedical(null);
+        setMedicalNote(message(e));
+      })
       .finally(() => setMedicalLoading(false));
   }
 
@@ -822,6 +851,7 @@ export function AppointmentDetailScreen() {
           <div className="appt-detail__field">
             <span className="appt-detail__label">Doctor</span>
             <DoctorName doctorId={appointment.doctor} />
+            <DoctorPhone doctorId={appointment.doctor} />
           </div>
           <div className="appt-detail__field">
             <span className="appt-detail__label">Date</span>
@@ -863,7 +893,7 @@ export function AppointmentDetailScreen() {
               {medicalLoading ? (
                 <Skeleton lines={3} />
               ) : !patientMedical ? (
-                <p className="form-note">No medical information available.</p>
+                <p className="form-note">{medicalNote ?? "No medical information available."}</p>
               ) : (
                 <>
                   {patientMedical.blood_group && (

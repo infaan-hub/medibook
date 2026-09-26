@@ -2622,6 +2622,9 @@ a { color: var(--color-primary); }
 .health-record-item__desc { font-size: 12px; color: #64748b; }
 .health-record-item__date { font-size: 11px; color: #94a3b8; }
 .health-record-item__actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.health-record-item__meta { font-size: 11px; color: #94a3b8; }
+.treat-rec-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #09A99E; text-decoration: none; }
+.treat-rec-link:hover { text-decoration: underline; }
 .visit-records-card { margin-top: var(--space-3); }
 .visit-record-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
 

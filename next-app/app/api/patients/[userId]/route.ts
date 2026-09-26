@@ -6,5 +6,6 @@ export const GET = handler(async (ctx) => {
   const user = await requireAuth(ctx.req);
   const id = intParam(ctx.params.userId);
   if (id === null) throw notFound();
-  return ok(await getPatientDetail(user, id));
+  const result = await getPatientDetail(user, id);
+  return ok(result.data, result.message);
 });

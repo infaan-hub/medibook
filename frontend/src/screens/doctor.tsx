@@ -32,7 +32,7 @@ import type {
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -83,6 +83,11 @@ export function DoctorProfileScreen() {
         {(doctor.office_address || doctor.city) && (
           <p className="doctor-profile__location">
             <MapPin size={14} /> {doctor.office_address || doctor.city}
+          </p>
+        )}
+        {doctor.phone && (
+          <p className="doctor-profile__phone">
+            <Phone size={14} /> <a href={`tel:${doctor.phone}`}>{doctor.phone}</a>
           </p>
         )}
         {doctor.specialties && doctor.specialties.length > 0 ? (
@@ -207,6 +212,11 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
           <span className="doc-preview-card__meta-item">
             <BadgeIndianRupee size={14} /> TSh {profile.consultation_fee}
           </span>
+          {profile.phone && (
+            <span className="doc-preview-card__meta-item">
+              <Phone size={13} /> <a href={`tel:${profile.phone}`}>{profile.phone}</a>
+            </span>
+          )}
         </div>
         {(profile.office_address || profile.city) && (
           <p className="doc-preview-card__location">
@@ -227,7 +237,7 @@ export function DoctorPersonalScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "", phone: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -247,6 +257,7 @@ export function DoctorPersonalScreen() {
           consultation_fee: response.data.consultation_fee?.toString() ?? "",
           city: response.data.city ?? "",
           office_address: response.data.office_address ?? "",
+          phone: response.data.phone ?? "",
         });
         setSelectedSpecialtyIds((response.data.specialties ?? []).map((s) => s.id));
       })
@@ -346,6 +357,9 @@ export function DoctorPersonalScreen() {
           <div className="form__row">
             <TextField id="doc-city" label="City / area (nearby search)" value={form.city} error={fieldErrors.city} onChange={(e) => update("city", e.target.value)} />
             <TextField id="doc-address" label="Office address (shown on your card)" value={form.office_address} error={fieldErrors.office_address} onChange={(e) => update("office_address", e.target.value)} />
+          </div>
+          <div className="form__row">
+            <TextField id="doc-phone" label="Phone number (shown on your card)" value={form.phone} error={fieldErrors.phone} onChange={(e) => update("phone", e.target.value)} />
           </div>
 
           {/* Specialty picker — list of all specialties with their meanings */}

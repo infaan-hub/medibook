@@ -42,27 +42,49 @@ export const deleteTreatment = (id: number) => prisma.medicalTreatment.delete({ 
 
 /* ------------------------------ Health records ----------------------------- */
 
+/**
+ * Role scoping for GET /api/health-records/.
+ *
+ * - patient → their own chart ONLY. The `?patient=` query param is ignored on
+ *   purpose: applying it here would let any signed-in patient swap in another
+ *   patient's id and read that person's records.
+ * - doctor  → records that doctor owns (uploads + shares), optionally narrowed
+ *   to one patient they are looking at.
+ * - admin   → empty set (Django: queryset.none()).
+ */
 export const healthRecordWhere = (
   role: string,
   userId: number,
   doctorId: number | null,
   patientFilter?: string
 ): Prisma.HealthRecordWhereInput => {
-  const where: Prisma.HealthRecordWhereInput =
-    role === "patient"
-      ? { patient_id: userId }
-      : role === "doctor"
-        ? { doctor_id: doctorId ?? -1 }
-        : { id: -1 }; // admins see an empty set (Django: queryset.none())
-  if (patientFilter) where.patient_id = Number(patientFilter);
+  if (role === "patient") return { patient_id: userId };
+  if (role !== "doctor") return { id: -1 };
+
+  const where: Prisma.HealthRecordWhereInput = { doctor_id: doctorId ?? -1 };
+  if (patientFilter !== undefined && patientFilter !== "") {
+    const parsed = Number(patientFilter);
+    // Non-numeric filter matches nothing instead of quietly dropping the filter.
+    where.patient_id = Number.isInteger(parsed) ? parsed : -1;
+  }
   return where;
 };
 
 export const countHealthRecords = (where: Prisma.HealthRecordWhereInput) =>
   prisma.healthRecord.count({ where });
 
+/**
+ * Record list. Includes the doctor's user so the serializer can name the
+ * doctor a record was shared with (patients see "Shared with Dr. …").
+ */
 export const listHealthRecords = (where: Prisma.HealthRecordWhereInput, skip: number, take: number) =>
-  prisma.healthRecord.findMany({ where, orderBy: { created_at: "desc" }, skip, take });
+  prisma.healthRecord.findMany({
+    where,
+    include: { doctor: { include: { user: true } } },
+    orderBy: { created_at: "desc" },
+    skip,
+    take,
+  });
 
 export const findHealthRecord = (id: number, doctorId?: number) =>
   prisma.healthRecord.findFirst({

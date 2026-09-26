@@ -118,14 +118,22 @@ export async function createOwnDoctorProfile(user: AuthUser, body: unknown) {
  */
 export async function updateMyProfile(req: Request, user: AuthUser, body: unknown) {
   const raw = (body ?? {}) as Record<string, unknown>;
-  const { first_name, last_name, ...rest } = raw;
+  const { first_name, last_name, phone, ...rest } = raw;
 
-  if (first_name !== undefined || last_name !== undefined) {
+  // Display name AND contact number live on User (card fields doctors edit).
+  const account: { first_name?: string; last_name?: string; phone?: string } = {};
+  if (first_name !== undefined) account.first_name = String(first_name).trim();
+  if (last_name !== undefined) account.last_name = String(last_name).trim();
+  if (phone !== undefined) {
+    const value = String(phone).trim();
+    if (value.length > 16) {
+      throw new ValidationError({ phone: ["Ensure this string has at most 16 characters."] });
+    }
+    account.phone = value;
+  }
+  if (Object.keys(account).length > 0) {
     const { updateUser } = await import("@/repositories/users.repo");
-    await updateUser(user.id, {
-      ...(first_name !== undefined ? { first_name: String(first_name).trim() } : {}),
-      ...(last_name !== undefined ? { last_name: String(last_name).trim() } : {}),
-    });
+    await updateUser(user.id, account);
   }
 
   let doctor = await doctors.findDoctorByUserId(user.id);
