@@ -1,7 +1,11 @@
 import type { NextRequest } from "next/server";
 
 /** Same-origin proxy for /media/* → backend uploads (next-app :8000). */
-const API_PROXY_TARGET = process.env.INTERNAL_API_TARGET ?? "http://127.0.0.1:8000";
+const API_PROXY_TARGET =
+  process.env.INTERNAL_API_TARGET ??
+  (process.env.NODE_ENV === "production"
+    ? "https://medibook-backend-jade.vercel.app"
+    : "http://127.0.0.1:8000");
 
 async function proxy(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
