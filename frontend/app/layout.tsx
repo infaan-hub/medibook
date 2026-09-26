@@ -8,7 +8,11 @@ export const metadata: Metadata = {
   title: "MediBook",
   description:
     "MediBook — find doctors, check availability, and book healthcare appointments.",
-  manifest: "/manifest.json",
+  // NOTE: `/manifest.json` is linked explicitly in RootLayout below, not here.
+  // Next resolves this metadata export asynchronously and — on the streamed
+  // dynamic route — emits it after `</head>`. Chrome only reads
+  // `<link rel="manifest">` from `<head>`, so a late link yields
+  // `no-manifest` and `beforeinstallprompt` never fires.
   icons: {
     // PNG only: Chrome ignores JPEG icons when checking installability (§22.1).
     icon: "/icons/icon-192.png",
@@ -37,6 +41,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
+      {/*
+        React hoists this <link> into <head> at render time, unlike the
+        `manifest` field of the async `metadata` export (see below).
+      */}
+      <link rel="manifest" href="/manifest.json" />
       <body>
         {/*
           Earliest possible A2HS capture (§22.1, §69): the SPA is client-only

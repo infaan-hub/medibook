@@ -6,8 +6,17 @@
  * /api/* and /media/* are NEVER intercepted: API responses must stay fresh,
  * database-backed images are served directly by the backend (with its own
  * cache headers), and aborted asset fetches must not surface as 408s.
+ *
+ * /_next/static/* is also never intercepted: those URLs are content-hashed and
+ * immutable, so Vercel already serves them with far-future expiry. Caching them
+ * broke real navigations — a stale chunk entry produced
+ * `ChunkLoadError: Loading chunk 807 failed`, and a rejected `cache.put` on an
+ * opaque/aborted body produced `ERR_CACHE_READ_FAILURE`.
+ *
+ * /manifest.json is network-first and never written to a cache: Chrome reads it
+ * to decide installability, so it must always reflect the live file.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -15,18 +24,29 @@ const SHELL_ASSETS = [
   "/",
   "/offline.html",
   "/offline.css",
-  "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
   "/icons/apple-touch-icon-180.png",
 ];
 
+// `cache.put` rejects when the body stream errors (navigation aborted, server
+// reset). That must never take down the fetch handler or the install step.
+function put(cacheName, key, response) {
+  return caches
+    .open(cacheName)
+    .then((cache) => cache.put(key, response))
+    .catch(() => undefined);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
-      .then((cache) => cache.addAll(SHELL_ASSETS))
+      .then((cache) =>
+        // One missing asset must not abort the whole precache.
+        Promise.all(SHELL_ASSETS.map((url) => cache.add(url).catch(() => undefined)))
+      )
       .then(() => self.skipWaiting())
   );
 });
@@ -51,6 +71,28 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   // API calls and database-backed media bypass the SW entirely.
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) return;
+  // Hashed, immutable build assets — let the CDN answer, never cache them.
+  if (url.pathname.startsWith("/_next/static/")) return;
+
+  // Manifest: network-first, never cached. Chrome re-reads it to decide
+  // installability; serving a cached copy hides manifest updates from it.
+  if (url.pathname === "/manifest.json") {
+    event.respondWith(
+      fetch(request).catch(() =>
+        caches
+          .match(request)
+          .then(
+            (hit) =>
+              hit ||
+              new Response("{}", {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+              })
+          )
+      )
+    );
+    return;
+  }
 
   // Navigations: network-first, offline.html fallback.
   if (request.mode === "navigate") {
@@ -58,8 +100,7 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((response) => {
           if (response.ok) {
-            const copy = response.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put("/", copy));
+            put(SHELL_CACHE, "/", response.clone());
           }
           return response;
         })
@@ -76,8 +117,7 @@ self.addEventListener("fetch", (event) => {
       const network = fetch(request)
         .then((response) => {
           if (response.ok) {
-            const copy = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+            put(RUNTIME_CACHE, request, response.clone());
           }
           return response;
         })
