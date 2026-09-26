@@ -273,6 +273,7 @@ export function DoctorPersonalScreen() {
       const envelope = await updateMyDoctorProfile({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
+        phone: form.phone.trim(),
         specialties: selectedSpecialtyIds,
         experience_years: form.experience_years === "" ? 0 : Number(form.experience_years),
         consultation_fee: form.consultation_fee.trim() === "" ? "0" : form.consultation_fee.trim(),

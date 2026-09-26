@@ -19,6 +19,7 @@ import type { RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
+import { TextField } from "../components/ui";
 
 /* ---------------- shared helpers ---------------- */
 
@@ -440,17 +441,16 @@ export function LoginScreen() {
           {formErrors.username && <span className="ab-field__error">{formErrors.username}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="login-password">Password</label>
-          <input
+          <TextField
             id="login-password"
-            className="ab-field__input"
+            label="Password"
             type="password"
             autoComplete="current-password"
             required
             value={password}
+            error={formErrors.password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {formErrors.password && <span className="ab-field__error">{formErrors.password}</span>}
         </div>
         <Link className="ab-forgot" to="/forgot-password">Forgot Password?</Link>
         <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
@@ -608,30 +608,28 @@ export function RegisterScreen() {
           {formErrors.phone && <span className="ab-field__error">{formErrors.phone}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-password">Password</label>
-          <input
+          <TextField
             id="reg-password"
-            className="ab-field__input"
+            label="Password"
             type="password"
             autoComplete="new-password"
             required
             value={values.password}
+            error={formErrors.password}
             onChange={set("password")}
           />
-          {formErrors.password && <span className="ab-field__error">{formErrors.password}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-confirm">Confirm Password</label>
-          <input
+          <TextField
             id="reg-confirm"
-            className="ab-field__input"
+            label="Confirm Password"
             type="password"
             autoComplete="new-password"
             required
             value={values.password_confirm}
+            error={formErrors.password_confirm}
             onChange={set("password_confirm")}
           />
-          {formErrors.password_confirm && <span className="ab-field__error">{formErrors.password_confirm}</span>}
         </div>
         <label className="ab-terms">
           <input type="checkbox" required />
@@ -768,30 +766,28 @@ export function ResetPasswordScreen() {
           {formErrors.token && <span className="ab-field__error">{formErrors.token}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reset-password">New password</label>
-          <input
+          <TextField
             id="reset-password"
-            className="ab-field__input"
+            label="New password"
             type="password"
             autoComplete="new-password"
             required
             value={newPassword}
+            error={formErrors.new_password}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
           />
-          {formErrors.new_password && <span className="ab-field__error">{formErrors.new_password}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reset-confirm">Confirm new password</label>
-          <input
+          <TextField
             id="reset-confirm"
-            className="ab-field__input"
+            label="Confirm new password"
             type="password"
             autoComplete="new-password"
             required
             value={confirm}
+            error={formErrors.new_password_confirm}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirm(e.target.value)}
           />
-          {formErrors.new_password_confirm && <span className="ab-field__error">{formErrors.new_password_confirm}</span>}
         </div>
         <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
           {submitting ? "Updating…" : "Update password"}
