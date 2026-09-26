@@ -11,10 +11,27 @@ async function proxy(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
   const target = `${API_PROXY_TARGET}${url.pathname}${url.search}`;
 
+  // Hop-by-hop / forbidden request headers must not be forwarded: `fetch`
+  // rejects `expect` outright ("fetch failed" → our 502), and the rest break
+  // framing (content-length/transfer-encoding) or point at the wrong hop.
+  const SKIP_REQUEST_HEADERS = new Set([
+    "host",
+    "connection",
+    "content-length",
+    "accept-encoding",
+    "expect",
+    "transfer-encoding",
+    "keep-alive",
+    "te",
+    "trailer",
+    "upgrade",
+    "proxy-authorization",
+    "proxy-connection",
+  ]);
+
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    const k = key.toLowerCase();
-    if (k === "host" || k === "connection" || k === "content-length" || k === "accept-encoding") {
+    if (SKIP_REQUEST_HEADERS.has(key.toLowerCase())) {
       return;
     }
     headers.append(key, value);
