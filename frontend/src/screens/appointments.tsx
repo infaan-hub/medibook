@@ -939,7 +939,7 @@ export function AppointmentDetailScreen() {
       <Card>
         <h2>Manage appointment</h2>
         {(canCancel || canReschedule) && (
-          <div className="form__row">
+          <div className="form__row form__row--actions">
             {canReschedule && (
               <Link to={`/appointments/${id}/reschedule`}>
                 <Button variant="secondary">Reschedule</Button>
@@ -984,7 +984,7 @@ export function AppointmentDetailScreen() {
               />
             </div>
             {error && <p className="form-note--error">{error}</p>}
-            <div className="form__row">
+            <div className="form__row form__row--actions">
               <Button variant="danger" loading={cancelling}>Confirm cancellation</Button>
               <Button variant="secondary" onClick={() => setShowCancelForm(false)} type="button">Keep appointment</Button>
             </div>
