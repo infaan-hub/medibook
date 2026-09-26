@@ -98,10 +98,15 @@ export function broadcastNotificationUpdated(notification: Notification): void {
   });
 }
 
-/** Push appointment.created / appointment.updated to both parties. */
+/** Push appointment events to both parties. */
 export function broadcastAppointmentEvent(
   appointment: Appointment,
-  event: "appointment.created" | "appointment.updated",
+  event:
+    | "appointment.created"
+    | "appointment.updated"
+    | "appointment.emergency_created"
+    | "appointment.emergency_accepted"
+    | "appointment.emergency_rejected",
   recipientIds: Array<number | null | undefined>
 ): void {
   const targets = recipientIds.filter((id): id is number => typeof id === "number");

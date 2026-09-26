@@ -266,6 +266,3 @@ async function ownDoctorId(user: AuthUser): Promise<number> {
   const doctor = await doctors.findDoctorByUserId(user.id);
   return doctor ? doctor.id : -1;
 }
-
-const EMERGENCY_RADIUS_KM = 25;
-const MAX_EMERGENCY_RADIUS_KM = 50;

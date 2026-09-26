@@ -19,8 +19,10 @@ export const GET = handler(async (ctx) => {
 
   const doctors = await findNearbyDoctors(latitude, longitude, radiusKm);
   
-  return ok(doctors.map(d => ({
-    doctor: doctorDto(d.doctor),
+  const result = doctors.map(d => ({
+    doctor: doctorDto(d.doctor as any, ctx.req),
     distance: d.distance,
   }));
+
+  return ok(result);
 });

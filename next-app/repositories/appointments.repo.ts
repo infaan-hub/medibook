@@ -6,6 +6,7 @@ import type { AppointmentStatus, Prisma } from "@prisma/client";
 
 export const APPOINTMENT_INCLUDE = {
   patient: true,
+  doctor: { include: { user: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export const findAppointmentById = (id: number) =>

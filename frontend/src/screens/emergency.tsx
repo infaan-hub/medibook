@@ -4,30 +4,27 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { getLinkedDoctors } from "../api/patients";
-import { createEmergencyAppointment, getNearbyDoctors } from "../api/emergency";
-import type { DoctorProfile, EmergencyReason, LinkedDoctor } from "../api/types";
-import { ApiError } from "../api/client";
-import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
+import type { DoctorProfile, EmergencyReason } from "../api/types";
+import { Button, Card, EmptyState, TextField } from "../components/ui";
 import { useToast } from "../state/app-context";
 import { useRealtimeEvent } from "../realtime/socket";
 import {
   ArrowLeft,
+  ArrowRight,
   MapPin,
-  Clock,
   AlertCircle,
   User,
   Shield,
-  Navigation,
-  Search,
   X,
   Loader2,
   CheckCircle,
   AlertTriangle,
   MapPin as MapPinIcon,
   Heart,
+  Calendar,
+  Plus,
 } from "lucide-react";
 
 const EMERGENCY_REASONS: { value: EmergencyReason; label: string; icon: React.ReactNode }[] = [
@@ -51,7 +48,6 @@ interface NearbyDoctor {
 export function EmergencyScreen() {
   const { t } = useTranslation();
   const { notify } = useToast();
-  const navigate = useNavigate();
 
   const [step, setStep] = useState<EmergencyStep>("location");
   const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
@@ -75,13 +71,14 @@ export function EmergencyScreen() {
 
   // Listen for realtime appointment updates
   useRealtimeEvent((event, payload) => {
-    if (event === "appointment.emergency_accepted" && payload.appointment?.id === confirmedAppointment?.id) {
-      setConfirmedAppointment(payload.appointment);
+    const appointment = payload.appointment as { id?: number } | undefined;
+    if (event === "appointment.emergency_accepted" && appointment?.id === confirmedAppointment?.id) {
+      setConfirmedAppointment(appointment);
       setStep("confirmed");
       notify("success", "Your emergency appointment has been accepted!");
     }
-    if (event === "appointment.emergency_rejected" && payload.appointment?.id === confirmedAppointment?.id) {
-      setConfirmedAppointment(payload.appointment);
+    if (event === "appointment.emergency_rejected" && appointment?.id === confirmedAppointment?.id) {
+      setConfirmedAppointment(appointment);
       notify("error", "Your emergency appointment was rejected.");
       setStep("doctors");
       setSelectedDoctor(null);
@@ -138,7 +135,7 @@ export function EmergencyScreen() {
     setNearbyDoctorsError(null);
     try {
       const response = await fetch(
-        `/api/emergency/nearby-doctors/?latitude=${latitude}&longitude=${longitude}&radius=${searchRadius}`,
+        `/api/emergency/nearby-doctors/?latitude=${lat}&longitude=${lng}&radius=${searchRadius}`,
         { credentials: "include" }
       );
       if (!response.ok) throw new Error("Failed to fetch nearby doctors");
@@ -194,7 +191,7 @@ export function EmergencyScreen() {
 
     try {
       // Parse preferred date and time into appointment slots
-      const [startTime, endTime] = preferredTime.split("-");
+      const [startTime] = preferredTime.split("-");
       const response = await fetch("/api/emergency/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -263,15 +260,6 @@ export function EmergencyScreen() {
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
   };
-
-  if (loadError) {
-    return (
-      <div className="page emergency-page">
-        <h1 className="page__title">{t("emergency.title")}</h1>
-        <ErrorState message={loadError} onRetry={getCurrentLocation} />
-      </div>
-    );
-  }
 
   if (step === "location" && !location && !locating) {
     getCurrentLocation();
@@ -655,7 +643,7 @@ export function EmergencyScreen() {
         <div className="emergency-error-banner">
           <AlertCircle size={18} />
           <span>{error}</span>
-          <Button variant="ghost" size="sm" onClick={() => setError(null)}>
+          <Button variant="ghost" className="btn--sm" onClick={() => setError(null)}>
             <X size={14} />
           </Button>
         </div>

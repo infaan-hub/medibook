@@ -3,8 +3,8 @@
     "id": 3534,
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
-      "static/chunks/268.fd5801c5f2aa10b1.js",
-      "static/chunks/534.be546efc87164a8d.js"
+      "static/chunks/640.4a6aff6c687dabaa.js",
+      "static/chunks/534.40c755e82ecbe8ca.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -23,21 +23,21 @@
     "id": 5807,
     "files": [
       "static/chunks/760.03bd18699c8f8211.js",
-      "static/chunks/840.7c1217197cbf3bb5.js",
-      "static/chunks/807.6db488e3e244b202.js"
+      "static/chunks/840.a7995d7cb676d13d.js",
+      "static/chunks/807.c11fdcc2e66668a7.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-medical-treatment": {
     "id": 5840,
     "files": [
-      "static/chunks/840.7c1217197cbf3bb5.js",
+      "static/chunks/840.a7995d7cb676d13d.js",
       "static/chunks/587.9e4ab0bf666a93da.js"
     ]
   },
   "src\\App.tsx -> ./screens/visit-history": {
-    "id": 8943,
+    "id": 146,
     "files": [
-      "static/chunks/943.d65ab3c1c441de5f.js"
+      "static/chunks/146.de981fb8d07e15b3.js"
     ]
   }
 }
