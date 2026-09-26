@@ -185,8 +185,82 @@
     "search": "Tafuta",
     "noResults": "Hakuna matokeo"
   },
-  "language": {
-    "en": "Kiingereza",
-    "sw": "Kiswahili"
+  "emergency": {
+    "title": "Dharura",
+    "subtitle": "Panga miadi ya dharura na daktari wa karibu",
+    "location": {
+      "title": "Mahali Pako",
+      "subtitle": "Tunahitaji mahali pako kutafuta madaktari wa karibu wa dharura",
+      "found": "Mahali umesikika",
+      "subtitle": "Tumepata mahali pako",
+      "getLocation": "Pata Mahali Pangu",
+      "locating": "Tunatafuta mahali pako...",
+      "ready": "Mahali tayari"
+    },
+    "doctors": {
+      "title": "Madaktari wa Karibu",
+      "subtitle": "Chagua daktari anayepatikana kwa dharura yako",
+      "searching": "Tunatafuta madaktari wa karibu...",
+      "noneFound": "Hakuna madaktari wa karibu waliopatikana",
+      "noneFoundDesc": "Jaribu kuongeza mwelekeo wa utafutaji au jaribu tena baadaye.",
+      "selectDoctor": "Chagua Daktari Huyu"
+    },
+    "confirm": {
+      "title": "Thibitisha Miadi ya Dharura",
+      "subtitle": "Angalia maelezo ya miadi yako ya dharura",
+      "doctor": "Daktari",
+      "reason": "Sababu ya Dharura",
+      "date": "Tarehe Inayopendekezwa",
+      "time": "Muda Uliopendekeza",
+      "description": "Maelezo",
+      "descriptionPlaceholder": "Chaguo: Maelezo ya ziada kuhusu dharura yako",
+      "reasonOptions": {
+        "severe_pain": "Maumivu Makali",
+        "breathing_difficulty": "Ugumu wa Pumzi",
+        "injury": "Jeraha / Msulubisho",
+        "accident": "Ajali",
+        "sudden_illness": "Ugonjwa Ghafla",
+        "high_fever": "Homa Ya Juu",
+        "allergic_reaction": "Matokeo ya Kusambaa",
+        "other": "Dharura Nyingine"
+      },
+      "preferredTime": "Muda Uliopendekeza",
+      "reason": "Sababu ya Dharura",
+      "description": "Maelezo",
+      "back": "Rudi",
+      "request": "Omba Miadi ya Dharura",
+      "submitting": "Inatumwa...",
+      "back": "Rudi"
+    },
+    "pending": {
+      "title": "Inasubiri Jibu la Daktari",
+      "subtitle": "Daktari atachambua ombi lako la dharura hivi karibuni",
+      "doctor": "Daktari",
+      "requestedAt": "Iliombwa Tarehe",
+      "status": "Hali",
+      "cancel": "Ghairi Ombi",
+      "note": "Daktari atachambua ombi lako hivi karibuni. Utaarishiwa anaporudia."
+    },
+    "confirmed": {
+      "title": "Miadi ya Dharura Imethibitishwa",
+      "subtitle": "Miadi yako ya dharura imethibitishwa",
+      "doctor": "Daktari",
+      "date": "Tarehe",
+      "time": "Muda",
+      "status": "Hali",
+      "reason": "Sababu",
+      "viewAppointment": "Tazama Miadi",
+      "newEmergency": "Dharura Mpya"
+    },
+    "reasonOptions": {
+      "severe_pain": "Maumivu Makali",
+      "breathing_difficulty": "Ugumu wa Pumzi",
+      "injury": "Jeraha / Msulubisho",
+      "accident": "Ajali",
+      "sudden_illness": "Ugonjwa Ghafla",
+      "high_fever": "Homa Ya Juu",
+      "allergic_reaction": "Matokeo ya Kusambaa",
+      "other": "Dharura Nyingine"
+    }
   }
 }

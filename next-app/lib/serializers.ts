@@ -316,3 +316,20 @@ export function appointmentDto(
     cancel_reason: appointment.cancel_reason,
   };
 }
+
+/** Emergency appointment serializer with additional emergency fields. */
+export function emergencyAppointmentDto(
+  appointment: Appointment & { patient: User; doctor: { user: User } }
+): Record<string, unknown> {
+  const base = appointmentDto(appointment);
+  return {
+    ...base,
+    appointment_type: appointment.appointment_type,
+    emergency_reason: appointment.emergency_reason,
+    emergency_description: appointment.emergency_description,
+    emergency_latitude: appointment.emergency_latitude,
+    emergency_longitude: appointment.emergency_longitude,
+    emergency_location_accuracy: appointment.emergency_location_accuracy,
+    emergency_requested_at: appointment.emergency_requested_at ? iso(appointment.emergency_requested_at) : null,
+  };
+}

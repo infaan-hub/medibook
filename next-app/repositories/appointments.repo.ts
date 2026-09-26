@@ -140,3 +140,53 @@ export const listDueReminders = (now: Date) =>
 
 export const markReminderSent = (id: number) =>
   prisma.appointmentReminder.update({ where: { id }, data: { sent: true } });
+
+/* ---------------------------- Emergency Appointments -------------------------- */
+
+export const findPatientEmergencyAppointment = (patientId: number) =>
+  prisma.appointment.findFirst({
+    where: {
+      patient_id: patientId,
+      appointment_type: "EMERGENCY",
+      status: { in: ["pending", "confirmed"] },
+    },
+    include: APPOINTMENT_INCLUDE,
+  });
+
+export const createEmergencyAppointment = (data: {
+  patient_id: number;
+  doctor_id: number;
+  hospital_id: number | null;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  reason?: string;
+  notes?: string;
+  appointment_type: "EMERGENCY";
+  emergency_reason: string;
+  emergency_description?: string;
+  emergency_latitude: number;
+  emergency_longitude: number;
+  emergency_location_accuracy?: number | null;
+  emergency_requested_at: Date;
+}) =>
+  prisma.appointment.create({
+    data: {
+      patient_id: data.patient_id,
+      doctor_id: data.doctor_id,
+      hospital_id: data.hospital_id,
+      appointment_date: new Date(`${data.appointment_date}T00:00:00Z`),
+      start_time: data.start_time,
+      end_time: data.end_time,
+      reason: data.reason ?? "",
+      notes: data.notes ?? "",
+      appointment_type: "EMERGENCY",
+      emergency_reason: data.emergency_reason,
+      emergency_description: data.emergency_description ?? "",
+      emergency_latitude: data.emergency_latitude,
+      emergency_longitude: data.emergency_longitude,
+      emergency_location_accuracy: data.emergency_location_accuracy ?? null,
+      emergency_requested_at: data.emergency_requested_at,
+    },
+    include: APPOINTMENT_INCLUDE,
+  });

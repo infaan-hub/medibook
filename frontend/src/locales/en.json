@@ -185,6 +185,84 @@
     "search": "Search",
     "noResults": "No results found"
   },
+  "emergency": {
+    "title": "Emergency",
+    "subtitle": "Book an emergency appointment with a nearby doctor",
+    "location": {
+      "title": "Your Location",
+      "subtitle": "We need your location to find nearby emergency doctors",
+      "found": "Location found",
+      "subtitle": "We found your location",
+      "getLocation": "Get My Location",
+      "locating": "Finding your location...",
+      "ready": "Location ready"
+    },
+    "doctors": {
+      "title": "Nearby Doctors",
+      "subtitle": "Select an available doctor for your emergency",
+      "searching": "Searching for nearby doctors...",
+      "noneFound": "No nearby doctors found",
+      "noneFoundDesc": "Try increasing the search radius or try again later.",
+      "selectDoctor": "Select This Doctor"
+    },
+    "confirm": {
+      "title": "Confirm Emergency Appointment",
+      "subtitle": "Review your emergency appointment details",
+      "doctor": "Doctor",
+      "reason": "Emergency Reason",
+      "date": "Preferred Date",
+      "time": "Preferred Time",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional: Additional details about your emergency",
+      "reasonOptions": {
+        "severe_pain": "Severe Pain",
+        "breathing_difficulty": "Breathing Difficulty",
+        "injury": "Injury / Trauma",
+        "accident": "Accident",
+        "sudden_illness": "Sudden Illness",
+        "high_fever": "High Fever",
+        "allergic_reaction": "Allergic Reaction",
+        "other": "Other Emergency"
+      },
+      "preferredTime": "Preferred Time",
+      "reason": "Emergency Reason",
+      "description": "Description",
+      "back": "Back",
+      "request": "Request Emergency Appointment",
+      "submitting": "Submitting...",
+      "back": "Back"
+    },
+    "pending": {
+      "title": "Waiting for Doctor Response",
+      "subtitle": "A doctor will review your emergency request shortly",
+      "doctor": "Doctor",
+      "requestedAt": "Requested At",
+      "status": "Status",
+      "cancel": "Cancel Request",
+      "note": "A doctor will review your request shortly. You'll be notified when they respond."
+    },
+    "confirmed": {
+      "title": "Emergency Appointment Confirmed",
+      "subtitle": "Your emergency appointment has been confirmed",
+      "doctor": "Doctor",
+      "date": "Date",
+      "time": "Time",
+      "status": "Status",
+      "reason": "Reason",
+      "viewAppointment": "View Appointment",
+      "newEmergency": "New Emergency"
+    },
+    "reasonOptions": {
+      "severe_pain": "Severe Pain",
+      "breathing_difficulty": "Breathing Difficulty",
+      "injury": "Injury / Trauma",
+      "accident": "Accident",
+      "sudden_illness": "Sudden Illness",
+      "high_fever": "High Fever",
+      "allergic_reaction": "Allergic Reaction",
+      "other": "Other Emergency"
+    }
+  },
   "language": {
     "en": "English",
     "sw": "Swahili"

@@ -105,6 +105,18 @@ export type AppointmentStatus =
   | "cancelled"
   | "rejected";
 
+export type AppointmentType = "NORMAL" | "EMERGENCY";
+
+export type EmergencyReason =
+  | "severe_pain"
+  | "breathing_difficulty"
+  | "injury"
+  | "accident"
+  | "sudden_illness"
+  | "high_fever"
+  | "allergic_reaction"
+  | "other";
+
 /** Appointment list/detail fields (backend appointments/serializers.py). */
 export interface Appointment {
   id: number;
@@ -116,9 +128,16 @@ export interface Appointment {
   start_time: string;
   end_time: string;
   status: AppointmentStatus;
+  appointment_type: AppointmentType;
   reason: string;
   notes: string;
   cancel_reason: string;
+  emergency_reason?: EmergencyReason;
+  emergency_description?: string;
+  emergency_latitude?: number;
+  emergency_longitude?: number;
+  emergency_location_accuracy?: number;
+  emergency_requested_at?: string | null;
 }
 
 /** §28 response envelope: success/message/data on success, errors on failure. */

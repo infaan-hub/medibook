@@ -140,6 +140,42 @@ export const healthRecordCreateSchema = z
   })
   .passthrough();
 
+/** Emergency appointment create payload. */
+export const emergencyAppointmentCreateSchema = z
+  .object({
+    doctor: drfInteger(),
+    hospital: drfInteger().nullable().optional(),
+    appointment_date: drfDate(),
+    start_time: drfTime(),
+    end_time: drfTime(),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+    emergency_reason: z.enum([
+      "severe_pain",
+      "breathing_difficulty",
+      "injury",
+      "accident",
+      "sudden_illness",
+      "high_fever",
+      "allergic_reaction",
+      "other"
+    ]),
+    emergency_description: z.string().max(1000, "Ensure this string has at most 1000 characters.").optional(),
+    emergency_latitude: z.number().min(-90).max(90),
+    emergency_longitude: z.number().min(-180).max(180),
+    emergency_location_accuracy: z.number().positive().optional(),
+  })
+  .passthrough()
+  .superRefine((data, ctx) => {
+    const norm = (t: string) => {
+      const trimmed = t.trim();
+      return (/^\d:\d/.test(trimmed) ? `0${trimmed}` : trimmed);
+    };
+    if (norm(data.end_time) <= norm(data.start_time)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["end_time"], message: "End time must be after start time." });
+    }
+  });
+
 /** blog ArticleListSerializer / ArticleDetailSerializer read shape */
 export const articleReadSchema = z
   .object({
