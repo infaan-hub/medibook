@@ -233,6 +233,20 @@ class RealtimeClient {
   private open(): void {
     if (this.userId === null || this.socket) return;
 
+    // Vercel serves this UI as serverless functions; server.js is not running
+    // there, so its WebSocket upgrade cannot answer. Stop retrying and let
+    // useRealtimeSync's authenticated API polling work.
+    const configuredWs = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
+    const realtimeHost = configuredWs
+      ? configuredWs.replace(/^wss?:\/\//, "").split("/")[0]
+      : window.location.host;
+    if (realtimeHost.endsWith(".vercel.app")) {
+      this.gaveUp = true;
+      this.setConnected(false);
+      this.setStatus("disconnected");
+      return;
+    }
+
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       this.setStatus("offline");
       return;
@@ -253,7 +267,7 @@ class RealtimeClient {
     // Production may host the persistent WS on another origin (Vercel HTTP API
     // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set; otherwise
     // same-origin /ws/notifications/.
-    const configured = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
+    const configured = configuredWs;
     let base = configured?.replace(/\/+$/, "");
     if (!base) {
       base = `${protocol}://${window.location.host}`;
