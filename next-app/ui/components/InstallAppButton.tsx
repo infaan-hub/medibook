@@ -12,11 +12,12 @@
  *  - `block`    — full-width variant for settings-style usage.
  *
  * One tap runs the browser's install flow — on desktop Windows that puts a
- * MediBook shortcut on the desktop (and in the Start menu) which opens the
- * web app in its own window; on Android it installs the app to the home
- * screen. iOS has no install prompt, so it gets the Share → Add to Home
- * Screen hint instead, and browsers with no install path get pointed at
- * Chrome/Edge.
+ * MediBook shortcut on the desktop (and in the Start menu) showing the
+ * MediBook app icon, opening the web app in its own window; on Android it
+ * installs the app to the home screen. Nothing extra to read or click: if the
+ * browser reports installability a moment after the tap, the button waits for
+ * that event and installs anyway. iOS has no install prompt, so it gets the
+ * Share → Add to Home Screen hint (the only manual step WebKit allows).
  *
  * Once installed, the button retires itself (the shell header then shows the
  * notification bell again).
@@ -34,30 +35,21 @@ export function InstallAppButton({
 }: {
   variant?: InstallAppButtonVariant;
 }) {
-  const { installed, installable, isIOS, install } = useInstallAvailability();
+  const { installed, isIOS, install } = useInstallAvailability();
   const { notify } = useToast();
 
   const handleClick = useCallback(() => {
-    // WebKit never fires `beforeinstallprompt` — guide the user instead.
+    // WebKit never fires `beforeinstallprompt` — the only iOS path is manual.
     if (isIOS) {
       notify("info", "Tap Share, then Add to Home Screen, to install MediBook.");
       return;
     }
-    // No native install path (e.g. desktop Firefox) → point at a browser that
-    // can place the desktop shortcut.
-    if (!installable) {
-      notify(
-        "info",
-        "Open this site in Chrome or Edge and choose Install MediBook to add a desktop shortcut."
-      );
-      return;
-    }
-    // Native install: desktop → a MediBook shortcut on the desktop that opens
-    // the web app; Android → the app on the home screen.
+    // One tap → the browser installs MediBook and drops its shortcut
+    // (desktop icon / home screen). Browsers with no install path do nothing.
     void install().then((accepted) => {
       if (accepted) notify("success", "Installing MediBook…");
     });
-  }, [install, installable, isIOS, notify]);
+  }, [install, isIOS, notify]);
 
   if (installed) return null;
 

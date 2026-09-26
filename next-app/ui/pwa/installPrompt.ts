@@ -88,6 +88,32 @@ export async function promptInstall(): Promise<boolean> {
   return outcome === "accepted";
 }
 
+/**
+ * Resolve with the deferred prompt once it exists, or `null` after
+ * `timeoutMs`. Chrome/Edge often fire `beforeinstallprompt` a moment after
+ * load (manifest + service-worker checks), so the Download app button waits
+ * for it instead of failing the tap — one tap then installs the app and drops
+ * its shortcut (desktop icon / home screen) automatically.
+ */
+export function whenInstallPromptAvailable(
+  timeoutMs = 6000
+): Promise<BeforeInstallPromptEvent | null> {
+  const existing = adoptEarlyPrompt();
+  if (existing) return Promise.resolve(existing);
+  if (typeof window === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let timer = 0;
+    const finish = (event: BeforeInstallPromptEvent | null) => {
+      window.clearTimeout(timer);
+      listeners.delete(onChange);
+      resolve(event);
+    };
+    const onChange = () => finish(adoptEarlyPrompt());
+    timer = window.setTimeout(() => finish(null), timeoutMs);
+    listeners.add(onChange);
+  });
+}
+
 /** True when the app is running in standalone / installed mode. */
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
@@ -173,6 +199,15 @@ export function useInstallAvailability(): InstallAvailability {
 
   const install = useCallback(async () => {
     if (typeof window === "undefined") return false;
+    // Chromium usually has the deferred prompt ready. If installability is
+    // still being evaluated (the event often lands just after load), catch it
+    // when it fires instead of failing the tap — the accepted install then
+    // places the MediBook shortcut automatically. Browsers with no install
+    // path (and iOS's WebKit) simply time out to `false`, no messages.
+    if (!canInstall()) {
+      const event = await whenInstallPromptAvailable();
+      if (!event) return false;
+    }
     const accepted = await promptInstall();
     // Accepted → the OS install is underway; retire the CTA immediately so the
     // header can swap back to the notification bell without waiting for the

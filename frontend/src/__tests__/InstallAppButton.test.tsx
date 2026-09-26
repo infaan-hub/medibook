@@ -83,15 +83,26 @@ afterEach(() => {
 });
 
 describe("InstallAppButton", () => {
-  it("shows the button without an install path and points at Chrome/Edge", async () => {
+  it("never shows messages and installs when the prompt fires after the tap", async () => {
     renderButton("floating");
     const button = await screen.findByRole("button", { name: "Download app" });
     fireEvent.click(button);
 
-    // No native prompt (e.g. desktop Firefox) → one-line guidance toast,
-    // never a download sheet.
-    expect(await screen.findByText(/chrome or edge/i)).toBeInTheDocument();
+    // Tap with no prompt yet → no sheet, no guidance toast, nothing pushed
+    // onto the user; the button just waits for the browser.
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText(/chrome or edge/i)).toBeNull();
+    expect(screen.queryByText(/installing medibook/i)).toBeNull();
+
+    // Late `beforeinstallprompt` → the deferred tap still runs the install
+    // (desktop: MediBook shortcut on the desktop; Android: home screen).
+    const { event, prompt } = fakeInstallEvent();
+    await act(async () => {
+      window.dispatchEvent(event);
+    });
+    await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/installing medibook/i)).toBeInTheDocument();
+    await waitFor(() => expect(downloadButton()).toBeNull());
   });
 
   it("appears when beforeinstallprompt fires and installs on click", async () => {
