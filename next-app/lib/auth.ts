@@ -64,9 +64,9 @@ export const doctorProfile = (userId: number) =>
 
 /** get_or_create semantics used by several Django views. */
 export async function doctorProfileOrCreate(userId: number) {
-  const existing = await prisma.doctor.findUnique({ where: { user_id: userId } });
+  const existing = await prisma.doctor.findUnique({ where: { user_id: userId }, include: { user: true } });
   if (existing) return existing;
-  return prisma.doctor.create({ data: { user_id: userId } });
+  return prisma.doctor.create({ data: { user_id: userId }, include: { user: true } });
 }
 
 export type { Role };

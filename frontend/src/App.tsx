@@ -31,38 +31,71 @@ import { SessionProvider, ToastProvider, useSession } from "./state/app-context"
 import { RealtimeProvider } from "./realtime/RealtimeProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+/**
+ * Lazy load with retry on ChunkLoadError.
+ * Retries up to 3 times with exponential backoff.
+ */
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  maxRetries = 3
+) {
+  return lazy(async () => {
+    let lastError: Error;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await importFn();
+      } catch (error) {
+        lastError = error as Error;
+        // Check if it's a chunk load error
+        const isChunkError = error instanceof Error && 
+          (error.name === 'ChunkLoadError' || 
+           error.message.includes('ChunkLoadError') ||
+           error.message.includes('Loading chunk') ||
+           error.message.includes('chunk') && error.message.includes('failed'));
+        
+        if (!isChunkError || attempt === maxRetries) {
+          throw error;
+        }
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      }
+    }
+    throw lastError!;
+  });
+}
+
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
 
-const HomeScreen = lazy(() => import("./screens").then((m) => ({ default: m.HomeScreen })));
-const NotFoundPage = lazy(() => import("./screens").then((m) => ({ default: m.NotFoundPage })));
-const DoctorsPage = lazy(() => import("./screens").then((m) => ({ default: m.DoctorsPage })));
-const DoctorProfileScreen = lazy(() => import("./screens").then((m) => ({ default: m.DoctorProfileScreen })));
-const BookingScreen = lazy(() => import("./screens").then((m) => ({ default: m.BookingScreen })));
-const BookingSuccessScreen = lazy(() => import("./screens").then((m) => ({ default: m.BookingSuccessScreen })));
-const RescheduleScreen = lazy(() => import("./screens").then((m) => ({ default: m.RescheduleScreen })));
-const AppointmentsListScreen = lazy(() => import("./screens").then((m) => ({ default: m.AppointmentsListScreen })));
-const AppointmentDetailScreen = lazy(() => import("./screens").then((m) => ({ default: m.AppointmentDetailScreen })));
-const DoctorDashboardScreen = lazy(() => import("./screens").then((m) => ({ default: m.DoctorDashboardScreen })));
-const DoctorAppointmentsScreen = lazy(() => import("./screens").then((m) => ({ default: m.DoctorAppointmentsScreen })));
-const DoctorMedicalTreatmentScreen = lazy(() => import("./screens/doctor-medical-treatment").then((m) => ({ default: m.DoctorMedicalTreatmentScreen })));
-const DoctorAvailabilityScreen = lazy(() => import("./screens").then((m) => ({ default: m.DoctorAvailabilityScreen })));
-const DoctorPersonalScreen = lazy(() => import("./screens").then((m) => ({ default: m.DoctorPersonalScreen })));
-const NotificationsScreen = lazy(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
-const MyReviewsScreen = lazy(() => import("./screens").then((m) => ({ default: m.MyReviewsScreen })));
-const AdminDashboardScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
-const AdminUsersScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
-const AdminDoctorsScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
-const AdminCreateUserScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminCreateUserScreen })));
-const AdminCreateDoctorScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminCreateDoctorScreen })));
-const AdminAuditScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminAuditScreen })));
-const AdminAppointmentsScreen = lazy(() => import("./screens").then((m) => ({ default: m.AdminAppointmentsScreen })));
-const SpecialtyListPage = lazy(() => import("./screens").then((m) => ({ default: m.SpecialtyListPage })));
-const SpecialtyDetailPage = lazy(() => import("./screens").then((m) => ({ default: m.SpecialtyDetailPage })));
-const HospitalListPage = lazy(() => import("./screens").then((m) => ({ default: m.HospitalListPage })));
-const HospitalDetailPage = lazy(() => import("./screens").then((m) => ({ default: m.HospitalDetailPage })));
-const BlogListPage = lazy(() => import("./screens").then((m) => ({ default: m.BlogListPage })));
-const BlogArticlePage = lazy(() => import("./screens").then((m) => ({ default: m.BlogArticlePage })));
-const VisitHistoryPage = lazy(() => import("./screens/visit-history").then((m) => ({ default: m.default })));
+const HomeScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.HomeScreen })));
+const NotFoundPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotFoundPage })));
+const DoctorsPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorsPage })));
+const DoctorProfileScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorProfileScreen })));
+const BookingScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BookingScreen })));
+const BookingSuccessScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BookingSuccessScreen })));
+const RescheduleScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.RescheduleScreen })));
+const AppointmentsListScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AppointmentsListScreen })));
+const AppointmentDetailScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AppointmentDetailScreen })));
+const DoctorDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorDashboardScreen })));
+const DoctorAppointmentsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorAppointmentsScreen })));
+const DoctorMedicalTreatmentScreen = lazyWithRetry(() => import("./screens/doctor-medical-treatment").then((m) => ({ default: m.DoctorMedicalTreatmentScreen })));
+const DoctorAvailabilityScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorAvailabilityScreen })));
+const DoctorPersonalScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorPersonalScreen })));
+const NotificationsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
+const MyReviewsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.MyReviewsScreen })));
+const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
+const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
+const AdminDoctorsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
+const AdminCreateUserScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminCreateUserScreen })));
+const AdminCreateDoctorScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminCreateDoctorScreen })));
+const AdminAuditScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminAuditScreen })));
+const AdminAppointmentsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminAppointmentsScreen })));
+const SpecialtyListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.SpecialtyListPage })));
+const SpecialtyDetailPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.SpecialtyDetailPage })));
+const HospitalListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.HospitalListPage })));
+const HospitalDetailPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.HospitalDetailPage })));
+const BlogListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BlogListPage })));
+const BlogArticlePage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BlogArticlePage })));
+const VisitHistoryPage = lazyWithRetry(() => import("./screens/visit-history").then((m) => ({ default: m.default })));
 
 function PageFallback() {
   return (

@@ -221,7 +221,7 @@ export function DoctorPersonalScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "", phone: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -241,6 +241,7 @@ export function DoctorPersonalScreen() {
           consultation_fee: response.data.consultation_fee?.toString() ?? "",
           city: response.data.city ?? "",
           office_address: response.data.office_address ?? "",
+          phone: response.data.phone ?? "",
         });
         setSelectedSpecialtyIds((response.data.specialties ?? []).map((s) => s.id));
       })

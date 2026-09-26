@@ -141,7 +141,59 @@ async function main() {
   await app.prepare();
   const upgradeHandler = app.getUpgradeHandler();
 
-  const server = createServer((req, res) => handle(req, res));
+  const server = createServer(async (req, res) => {
+    const { pathname } = parse(req.url || "");
+    
+    // SSE endpoint for realtime fallback (Vercel-compatible)
+    if (pathname === "/ws/notifications/sse/" || pathname === "/ws/notifications/sse") {
+      const { query } = parse(req.url || "", true);
+      const userId = await userIdForToken(query.token);
+      if (userId === null) {
+        res.writeHead(401, { "Content-Type": "text/plain" });
+        res.end("unauthorized");
+        return;
+      }
+      
+      // Set SSE headers
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.flushHeaders();
+      
+      // Send initial connected event
+      res.write(`data: ${JSON.stringify({ event: "connected", payload: { user_id: userId } })}\n\n`);
+      
+      // Add to SSE connections
+      const sseSocket = { 
+        __userId: userId, 
+        readyState: 1, 
+        send: (data) => { if (res.writableEnded === false) res.write(`data: ${data}\n\n`); },
+        close: () => res.end()
+      };
+      sockets.add(sseSocket);
+      
+      // Heartbeat
+      const heartbeat = setInterval(() => {
+        if (res.writableEnded) {
+          clearInterval(heartbeat);
+          return;
+        }
+        res.write(`data: ${JSON.stringify({ event: "pong", payload: {} })}\n\n`);
+      }, 25000);
+      
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        sockets.delete(sseSocket);
+      });
+      return;
+    }
+    
+    // Regular HTTP requests
+    return handle(req, res);
+  });
   const wss = new WebSocketServer({ noServer: true });
 
   // Protocol mirrors backend/notifications/consumers.py (Django Channels).

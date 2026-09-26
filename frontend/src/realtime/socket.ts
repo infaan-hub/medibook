@@ -81,6 +81,7 @@ function entityKey(event: string, entityId: string | number | null | undefined):
 class RealtimeClient {
   private userId: number | null = null;
   private socket: WebSocket | null = null;
+  private eventSource: EventSource | null = null;
   private handlers = new Set<RealtimeHandler>();
   private connectionListeners = new Set<ConnectionListener>();
   private statusListeners = new Set<StatusListener>();
@@ -230,6 +231,67 @@ class RealtimeClient {
     }
   }
 
+  /** Open SSE (EventSource) fallback when WebSocket is unavailable (e.g. Vercel). */
+  private openSSE(): void {
+    if (this.userId === null || this.eventSource) return;
+
+    this.setStatus(this.attempts > 0 ? "reconnecting" : "connecting");
+    const token = tokenStore.getAccess();
+    if (!token) {
+      void refreshAccessToken().then((access) => {
+        if (access && this.userId !== null) this.openSSE();
+        else this.gaveUp = true;
+      });
+      return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    const base = process.env.NEXT_PUBLIC_WS_URL 
+      ? process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, "").replace(/^wss?:/, protocol)
+      : `${protocol}://${window.location.host}`;
+    const url = `${base}/ws/notifications/sse/?token=${encodeURIComponent(token)}`;
+
+    try {
+      this.eventSource = new EventSource(url);
+    } catch {
+      this.scheduleReconnect();
+      return;
+    }
+
+    this.eventSource.onopen = () => {
+      this.attempts = 0;
+      this.setConnected(true);
+      this.setStatus("connected");
+    };
+
+    this.eventSource.onmessage = (message) => {
+      let frame: RealtimeEnvelope;
+      try {
+        frame = JSON.parse(message.data) as RealtimeEnvelope;
+      } catch {
+        return;
+      }
+      this.deliver(frame);
+    };
+
+    this.eventSource.onerror = (_event) => {
+      if (this.eventSource?.readyState === EventSource.CLOSED) {
+        this.cleanupSSE();
+        if (!this.closing && this.userId !== null) {
+          this.scheduleReconnect();
+        }
+      }
+    };
+  }
+
+  private cleanupSSE(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.setConnected(false);
+  }
+
   private open(): void {
     if (this.userId === null || this.socket) return;
 
@@ -267,7 +329,7 @@ class RealtimeClient {
     try {
       this.socket = new WebSocket(url);
     } catch {
-      this.scheduleReconnect();
+      this.openSSE();
       return;
     }
 
@@ -318,11 +380,14 @@ class RealtimeClient {
         });
         return;
       }
-      this.scheduleReconnect();
+      // Fallback to SSE on unexpected close
+      this.openSSE();
     };
 
     this.socket.onerror = () => {
       this.socket?.close();
+      // Fallback to SSE on error
+      this.openSSE();
     };
   }
 
@@ -368,6 +433,7 @@ class RealtimeClient {
       this.socket.close();
       this.socket = null;
     }
+    this.cleanupSSE();
     this.setConnected(false);
     this.setStatus("disconnected");
     this.closing = false;
