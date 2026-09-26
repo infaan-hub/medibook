@@ -97,18 +97,6 @@ function loginWithFrom(pathname: string, search: string) {
   );
 }
 
-/** Authed users only; guests → /login remembering the intended URL. */
-export function RequireAuth({ children }: { children?: ReactNode }) {
-  const { status } = useSession();
-  const location = useLocation();
-
-  if (status === "booting") return <BootScreen />;
-  if (status !== "authed") {
-    return loginWithFrom(location.pathname, location.search);
-  }
-  return children ? <>{children}</> : <Outlet />;
-}
-
 /** Signed-out users only (login/register/reset). Authed → own role home. */
 export function RequireGuest({ children }: { children?: ReactNode }) {
   const { status, user } = useSession();

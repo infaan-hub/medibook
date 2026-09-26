@@ -654,12 +654,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .nav-item__chevron {
-    color: currentColor;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    flex-shrink: 0;
-  }
   .nav-item--side:hover .nav-item__chevron {
     opacity: 1;
   }

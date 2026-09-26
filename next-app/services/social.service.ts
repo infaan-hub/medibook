@@ -29,6 +29,19 @@ async function verifyGoogle(token: string): Promise<ProviderIdentity> {
   }
   if (!response.ok) throw new ApiError(401, "Could not verify Google token.");
   const data = (await response.json()) as Record<string, string>;
+
+  // `tokeninfo` signature-checks the JWT but hands back whatever token it was
+  // given — including one minted for a *different* Google OAuth client. Pin the
+  // issuer always, and the audience once our client id is configured, so a token
+  // issued to an attacker's own Google app is rejected. (No client secret is
+  // involved: this public endpoint needs none.)
+  if (data.iss !== "https://accounts.google.com") {
+    throw new ApiError(401, "Google token has an unexpected issuer.");
+  }
+  const expectedAudience = process.env.GOOGLE_CLIENT_ID;
+  if (expectedAudience && data.aud !== expectedAudience) {
+    throw new ApiError(401, "Google token was not issued for this application.");
+  }
   if (!data.email) throw new ApiError(401, "Google token does not contain an email.");
   return {
     email: data.email,

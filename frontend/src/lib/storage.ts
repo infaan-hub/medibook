@@ -60,18 +60,3 @@ export function removeItem(key: string, store: "local" | "session" = "local"): v
     memoryFallback.delete(NAMESPACE + key);
   }
 }
-
-/** Wipe every `mb.*` key — used on logout. */
-export function clearNamespace(store: "local" | "session" = "local"): void {
-  const storage = store === "local" ? localBackend : sessionBackend;
-  if (storage) {
-    [...Array(storage.length).keys()]
-      .map((index) => storage.key(index))
-      .filter((key): key is string => key !== null && key.startsWith(NAMESPACE))
-      .forEach((key) => storage.removeItem(key));
-  } else {
-    [...memoryFallback.keys()]
-      .filter((key) => key.startsWith(NAMESPACE))
-      .forEach((key) => memoryFallback.delete(key));
-  }
-}

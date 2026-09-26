@@ -18,11 +18,6 @@ export function listUnreadNotifications(): Promise<Envelope<Paginated<Notificati
   return apiGet<Paginated<Notification>>("/notifications/", { unread: 1 });
 }
 
-/** GET /api/notifications/:id/ — single notification detail. */
-export function getNotification(id: number): Promise<Envelope<Notification>> {
-  return apiGet<Notification>(`/notifications/${id}/`);
-}
-
 /** PATCH /api/notifications/:id/ — mark as read. */
 export function markNotificationRead(id: number): Promise<Envelope<Notification>> {
   return apiPatch<Notification>(`/notifications/${id}/`, { is_read: true });

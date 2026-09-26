@@ -150,8 +150,6 @@ export interface DoctorProfile {
   total_reviews: number;
 }
 
-export interface DoctorCard extends DoctorProfile {}
-
 export interface AvailabilitySlot {
   start_time: string;
   end_time: string;
@@ -193,16 +191,6 @@ export interface ScheduleException {
   start_time: string | null;
   end_time: string | null;
   reason: string;
-}
-
-export interface DoctorQueryParams {
-  search?: string;
-  specialty?: number;
-  city?: string;
-  hospital?: number;
-  min_rating?: number;
-  page?: number;
-  page_size?: number;
 }
 
 /* ---- PHASE 8 — Specialty & Hospital module ---- */

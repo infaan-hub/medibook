@@ -68,11 +68,6 @@ export function getMySchedule(): Promise<Envelope<ScheduleItem[]>> {
   return apiGet<ScheduleItem[]>("/doctors/me/schedule/");
 }
 
-/** GET /api/doctors/me/schedule/:id/ — a single schedule window. */
-export function getMyScheduleItem(id: number): Promise<Envelope<ScheduleItem>> {
-  return apiGet<ScheduleItem>(`/doctors/me/schedule/${id}/`);
-}
-
 export function getMyDoctorProfile(): Promise<Envelope<DoctorProfile>> {
   return apiGet<DoctorProfile>("/doctors/me/profile/");
 }
@@ -127,10 +122,6 @@ export function createAvailabilityBreak(scheduleId: number, payload: Omit<Availa
   return apiPost<AvailabilityBreak>(`/doctors/me/schedule/${scheduleId}/breaks/`, payload);
 }
 
-export function updateAvailabilityBreak(id: number, payload: Partial<Omit<AvailabilityBreak, "id">>): Promise<Envelope<AvailabilityBreak>> {
-  return apiPatch<AvailabilityBreak>(`/doctors/me/schedule/breaks/${id}/`, payload);
-}
-
 export function deleteAvailabilityBreak(id: number): Promise<void> {
   return apiDelete(`/doctors/me/schedule/breaks/${id}/`).then(() => undefined);
 }
@@ -141,10 +132,6 @@ export function listScheduleExceptions(): Promise<Envelope<ScheduleException[]>>
 
 export function createScheduleException(payload: Omit<ScheduleException, "id">): Promise<Envelope<ScheduleException>> {
   return apiPost<ScheduleException>("/doctors/me/schedule/exceptions/", payload);
-}
-
-export function updateScheduleException(id: number, payload: Partial<Omit<ScheduleException, "id">>): Promise<Envelope<ScheduleException>> {
-  return apiPatch<ScheduleException>(`/doctors/me/schedule/exceptions/${id}/`, payload);
 }
 
 export function deleteScheduleException(id: number): Promise<void> {

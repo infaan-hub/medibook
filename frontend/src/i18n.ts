@@ -25,13 +25,4 @@ i18n
     },
   });
 
-export function setLanguage(lang: string) {
-  i18n.changeLanguage(lang);
-  localStorage.setItem(STORAGE_KEY, lang);
-}
-
-export function getLanguage(): string {
-  return i18n.language || "en";
-}
-
 export default i18n;

@@ -4,7 +4,7 @@
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
       "static/chunks/268.fd5801c5f2aa10b1.js",
-      "static/chunks/534.4c681b2bbbee09ed.js"
+      "static/chunks/534.900eb8b5cf2923a7.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -24,7 +24,7 @@
     "files": [
       "static/chunks/760.03bd18699c8f8211.js",
       "static/chunks/840.7c1217197cbf3bb5.js",
-      "static/chunks/807.f89685a3aa1abe00.js"
+      "static/chunks/807.6db488e3e244b202.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-medical-treatment": {
