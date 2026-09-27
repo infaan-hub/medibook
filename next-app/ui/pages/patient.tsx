@@ -656,18 +656,18 @@ export function SettingsScreen() {
                   </span>
                 </div>
                 {record.file && (
-                  <>
+                  <div className="health-record-item__actions">
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm"
-                      title="Open file"
+                      title="View"
                       onClick={() =>
                         void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
                           notify("error", m)
                         )
                       }
                     >
-                      <ExternalLink size={14} />
+                      <ExternalLink size={14} /> View
                     </button>
                     <button
                       type="button"
@@ -679,9 +679,9 @@ export function SettingsScreen() {
                         )
                       }
                     >
-                      <Download size={14} />
+                      <Download size={14} /> Download
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             ))}

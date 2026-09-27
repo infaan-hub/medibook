@@ -140,6 +140,15 @@ export interface Appointment {
   emergency_requested_at?: string | null;
 }
 
+/** POST/GET /api/emergency/ rows (emergencyAppointmentDto). */
+export interface EmergencyAppointment extends Appointment {
+  /** Shown on the doctor's emergency queue and the patient's live status card. */
+  patient_name?: string;
+  patient_phone?: string;
+  doctor_phone?: string;
+  doctor_phone_secondary?: string;
+}
+
 /** §28 response envelope: success/message/data on success, errors on failure. */
 export interface Envelope<T = unknown> {
   success: boolean;

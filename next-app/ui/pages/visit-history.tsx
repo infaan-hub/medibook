@@ -356,14 +356,14 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm"
-                      title="Open file"
+                      title="View"
                       onClick={() =>
                         void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
                           notify("error", m)
                         )
                       }
                     >
-                      <ExternalLink size={14} />
+                      <ExternalLink size={14} /> View
                     </button>
                     <button
                       type="button"
@@ -375,7 +375,7 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
                         )
                       }
                     >
-                      <Download size={14} />
+                      <Download size={14} /> Download
                     </button>
                   </>
                 )}

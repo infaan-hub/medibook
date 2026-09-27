@@ -238,14 +238,14 @@ function HcRecord({ record }: { record: HealthRecord }) {
             <button
               type="button"
               className="treat-rec-link"
-              title="Open file"
+              title="View"
               onClick={() =>
                 void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
                   notify("error", m)
                 )
               }
             >
-              <ExternalLink size={12} /> Open file
+              <ExternalLink size={12} /> View
             </button>
             <button
               type="button"

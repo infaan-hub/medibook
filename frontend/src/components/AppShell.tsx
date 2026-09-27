@@ -41,18 +41,19 @@ import {
   X,
   LogOut,
   Newspaper,
+  Siren,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
 const STORAGE_KEY = "medibook_sidebar_collapsed";
 
-interface NavItem {
+export interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
 }
 
-function navItemsFor(user: User | null): NavItem[] {
+export function navItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
       { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -71,6 +72,7 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
@@ -80,6 +82,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/reviews", label: "My reviews", icon: <Star size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
@@ -88,7 +91,7 @@ function navItemsFor(user: User | null): NavItem[] {
 }
 
 /** Bottom nav: exactly 5 items per role (mobile only). */
-function bottomNavItemsFor(user: User | null): NavItem[] {
+export function bottomNavItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
       { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -103,6 +106,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
   }
@@ -110,6 +114,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
     { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/blog", label: "Health Tips", icon: <Newspaper size={20} /> },
   ];
 }

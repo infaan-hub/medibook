@@ -160,8 +160,8 @@ describe("patient Medical Details — health records", () => {
     expect(await screen.findByText("CBC panel — March 2026")).toBeInTheDocument();
     expect(screen.getByText(/dr\. ada lovelace/i)).toBeInTheDocument();
     expect(screen.getByText("Fasting sample")).toBeInTheDocument();
-    const open = screen.getByTitle("Open file");
-    // Authenticated open/download button — a plain <a href> would 401 on /media.
+    const open = screen.getByTitle("View");
+    // Authenticated view/download buttons - a plain <a href> would 401 on /media.
     expect(open.tagName).toBe("BUTTON");
     expect(open).toHaveAttribute("type", "button");
     expect(screen.getByTitle("Download")).toHaveAttribute("type", "button");
@@ -262,9 +262,9 @@ describe("doctor /doctor/medical-treatment — health records", () => {
     expect(screen.getByText("xray")).toBeInTheDocument();
     expect(screen.getByText("After the fall")).toBeInTheDocument();
     expect(screen.getByText(/dr\. ada lovelace/i)).toBeInTheDocument();
-    const open = screen.getByRole("button", { name: /open file/i });
+    const open = screen.getByRole("button", { name: "View" });
     expect(open).toHaveAttribute("type", "button");
-    expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
     expect(screen.getByText(/added/i).parentElement).toHaveTextContent(/added .*sep 1, 2026/i);
     // The record is fetched with the user id from the patient list.
     expect(getHealthRecords).toHaveBeenCalledWith(7);

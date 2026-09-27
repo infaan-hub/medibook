@@ -96,6 +96,8 @@ const HospitalDetailPage = lazyWithRetry(() => import("./screens").then((m) => (
 const BlogListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BlogListPage })));
 const BlogArticlePage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BlogArticlePage })));
 const VisitHistoryPage = lazyWithRetry(() => import("./screens/visit-history").then((m) => ({ default: m.default })));
+const PatientEmergencyScreen = lazyWithRetry(() => import("./screens/emergency").then((m) => ({ default: m.PatientEmergencyScreen })));
+const DoctorEmergencyScreen = lazyWithRetry(() => import("./screens/emergency").then((m) => ({ default: m.DoctorEmergencyScreen })));
 
 function PageFallback() {
   return (
@@ -254,8 +256,10 @@ export default function App() {
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
+          <Route path="/doctor/emergency" element={<RequireRole role="doctor"><DoctorEmergencyScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
                 <Route path="/reviews" element={<RequirePatient><MyReviewsScreen /></RequirePatient>} />
+          <Route path="/emergency" element={<RequirePatient><PatientEmergencyScreen /></RequirePatient>} />
                 <Route path="/profile" element={<ProfileScreen />} />
                 <Route
                   path="/settings"
