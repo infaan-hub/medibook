@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from "./client";
+import { apiGet, apiDelete, http } from "./client";
 import type { Envelope, Paginated } from "./types";
 
 export interface HealthRecord {
@@ -24,8 +24,22 @@ export function getHealthRecords(patientId?: number): Promise<Envelope<Paginated
   return apiGet<Paginated<HealthRecord>>(`/health-records/${params}`);
 }
 
+/**
+ * POST /api/health-records/ — multipart upload.
+ *
+ * The shared axios client defaults to `Content-Type: application/json`, and
+ * axios 1.x reacts to that by JSON-stringifying any FormData payload (a File
+ * serialises to `{}`). The document was therefore silently dropped: the API
+ * stored every record with `file_id = null`, so no record ever had a file and
+ * the View/Download buttons could never appear. Multipart must be requested
+ * explicitly — exactly like `uploadProfileImage()` in api/auth.ts.
+ */
 export function uploadHealthRecord(data: FormData): Promise<Envelope<HealthRecord>> {
-  return apiPost<HealthRecord>("/health-records/", data);
+  return http
+    .post<Envelope<HealthRecord>>("/health-records/", data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
 }
 
 export function deleteHealthRecord(id: number) {

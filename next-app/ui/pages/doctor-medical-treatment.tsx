@@ -233,34 +233,33 @@ function HcRecord({ record }: { record: HealthRecord }) {
       <div className="treat-rec-footer">
         <span>Added {fmtDate(record.created_at)}</span>
         {record.doctor_name && <span>Dr. {record.doctor_name}</span>}
-        {record.file && (
-          <>
-            <button
-              type="button"
-              className="treat-rec-link"
-              title="View"
-              onClick={() =>
-                void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
-                  notify("error", m)
-                )
-              }
-            >
-              <ExternalLink size={12} /> View
-            </button>
-            <button
-              type="button"
-              className="treat-rec-link"
-              title="Download"
-              onClick={() =>
-                void downloadMediaFile(record.file!, mediaDownloadName(record), (m) =>
-                  notify("error", m)
-                )
-              }
-            >
-              <Download size={12} /> Download
-            </button>
-          </>
-        )}
+        {!record.file && <span>No file attached</span>}
+        <button
+          type="button"
+          className="treat-rec-link"
+          title="View"
+          disabled={!record.file}
+          onClick={() => {
+            if (record.file) {
+              void openMediaFile(record.file, mediaDownloadName(record), (m) => notify("error", m));
+            }
+          }}
+        >
+          <ExternalLink size={12} /> View
+        </button>
+        <button
+          type="button"
+          className="treat-rec-link"
+          title="Download"
+          disabled={!record.file}
+          onClick={() => {
+            if (record.file) {
+              void downloadMediaFile(record.file, mediaDownloadName(record), (m) => notify("error", m));
+            }
+          }}
+        >
+          <Download size={12} /> Download
+        </button>
       </div>
     </Card>
   );

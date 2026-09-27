@@ -655,34 +655,41 @@ export function SettingsScreen() {
                     {new Date(record.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                {record.file && (
-                  <div className="health-record-item__actions">
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      title="View"
-                      onClick={() =>
-                        void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                <div className="health-record-item__actions">
+                  {!record.file && (
+                    <span className="health-record-item__date">No file attached</span>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    title="View"
+                    disabled={!record.file}
+                    onClick={() => {
+                      if (record.file) {
+                        void openMediaFile(record.file, mediaDownloadName(record), (m) =>
                           notify("error", m)
-                        )
+                        );
                       }
-                    >
-                      <ExternalLink size={14} /> View
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      title="Download"
-                      onClick={() =>
-                        void downloadMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                    }}
+                  >
+                    <ExternalLink size={14} /> View
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    title="Download"
+                    disabled={!record.file}
+                    onClick={() => {
+                      if (record.file) {
+                        void downloadMediaFile(record.file, mediaDownloadName(record), (m) =>
                           notify("error", m)
-                        )
+                        );
                       }
-                    >
-                      <Download size={14} /> Download
-                    </button>
-                  </div>
-                )}
+                    }}
+                  >
+                    <Download size={14} /> Download
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -1,21 +1,29 @@
 /**
- * Health records — the two ends of the sharing flow:
+ * Health records — every place a document is listed:
  *
  *  1. Patient: "Medical Details → Health Records" can upload a document/image
- *     and pick the specific doctor it is shared with.
+ *     and pick the specific doctor it is shared with, then View/Download it.
  *  2. Doctor: "/doctor/medical-treatment" shows that patient's records with
  *     full details (type, title, description, date, file, doctor) and renders
- *     real dates instead of "Invalid Date".
+ *     real dates instead of "Invalid Date" — View/Download included.
+ *  3. Doctor: "/doctor/visit-history/:patientId" lists the same records with
+ *     View/Download/Delete.
+ *
+ * View/Download can only go through lib/files (blob fetch + JWT) because
+ * /media/{id} answers 401 to a plain <a href>; the helpers are mocked so the
+ * assertions cover the buttons' wiring (media path + save name).
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { SettingsScreen } from "../screens/patient";
 import { DoctorMedicalTreatmentScreen } from "../screens/doctor-medical-treatment";
+import VisitHistoryPage from "../screens/visit-history";
 import { ToastProvider } from "../state/app-context";
 import type { HealthRecord } from "../api/health-records";
+import type { VisitHistoryEntry } from "../api/treatments";
 import type { PatientProfile } from "../api/types";
 
 const {
@@ -30,6 +38,10 @@ const {
   createTreatment,
   updateTreatment,
   deleteTreatment,
+  getVisitHistory,
+  deleteHealthRecord,
+  openMediaFile,
+  downloadMediaFile,
 } = vi.hoisted(() => ({
   getPatientProfile: vi.fn(),
   updatePatientProfile: vi.fn(),
@@ -42,6 +54,10 @@ const {
   createTreatment: vi.fn(),
   updateTreatment: vi.fn(),
   deleteTreatment: vi.fn(),
+  getVisitHistory: vi.fn(),
+  deleteHealthRecord: vi.fn(),
+  openMediaFile: vi.fn(),
+  downloadMediaFile: vi.fn(),
 }));
 
 vi.mock("../api/patients", () => ({
@@ -54,7 +70,16 @@ vi.mock("../api/patients", () => ({
 vi.mock("../api/health-records", () => ({
   getHealthRecords,
   uploadHealthRecord,
-  deleteHealthRecord: vi.fn(),
+  deleteHealthRecord,
+}));
+
+// The authenticated blob helpers (blob fetch + JWT) are the only way /media/{id}
+// can be read; mocked here so assertions stay on the button wiring.
+vi.mock("../lib/files", () => ({
+  openMediaFile,
+  downloadMediaFile,
+  mediaDownloadName: (record: { file_name?: string | null; title?: string }) =>
+    record.file_name || record.title || "record",
 }));
 
 vi.mock("../api/treatments", () => ({
@@ -63,6 +88,7 @@ vi.mock("../api/treatments", () => ({
   createTreatment,
   updateTreatment,
   deleteTreatment,
+  getVisitHistory,
 }));
 
 // patient.tsx reads translated strings; keep them stable for assertions.
@@ -168,6 +194,23 @@ describe("patient Medical Details — health records", () => {
     expect(getHealthRecords).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps View/Download visible but disabled when a record has no file", async () => {
+    getPatientProfile.mockResolvedValue(envelope(patientProfile()));
+    getLinkedDoctors.mockResolvedValue(envelope([]));
+    getHealthRecords.mockResolvedValue(paginated([healthRecord({ id: 13, file: null })]));
+
+    renderPatient();
+
+    expect(await screen.findByText("CBC panel — March 2026")).toBeInTheDocument();
+    // The actions stay on screen (discoverable) and switch on as soon as the
+    // record has a document attached.
+    expect(screen.getByTitle("View")).toBeDisabled();
+    expect(screen.getByTitle("Download")).toBeDisabled();
+    expect(screen.getByText("No file attached")).toBeInTheDocument();
+    expect(openMediaFile).not.toHaveBeenCalled();
+    expect(downloadMediaFile).not.toHaveBeenCalled();
+  });
+
   it("shows an upload form that shares a document with a specific doctor", async () => {
     const user = userEvent.setup();
     getPatientProfile.mockResolvedValue(envelope(patientProfile()));
@@ -200,7 +243,9 @@ describe("patient Medical Details — health records", () => {
     expect(fd.get("file")).toBeInstanceOf(File);
     // The list reloads so the new record shows up immediately.
     await waitFor(() => expect(getHealthRecords).toHaveBeenCalledTimes(2));
-  });
+    // Typing-driven interactions are slow while the whole suite runs in
+    // parallel — this test needs more than vitest's default 5s budget.
+  }, 15_000);
 
   it("refuses to upload until a doctor is chosen", async () => {
     const user = userEvent.setup();
@@ -317,5 +362,98 @@ describe("doctor /doctor/medical-treatment — health records", () => {
     await user.click(await screen.findByRole("button", { name: /pat moyo/i }));
 
     expect(await screen.findByText("No health records")).toBeInTheDocument();
+  });
+});
+
+describe("doctor /doctor/visit-history/:patientId — health records", () => {
+  const visit: VisitHistoryEntry = {
+    appointment_id: 9,
+    appointment_date: "2026-08-12",
+    start_time: "09:30",
+    end_time: "10:00",
+    status: "completed",
+    reason: "Persistent cough",
+    notes: "",
+    diagnosis: "Bronchitis",
+    treatment_notes: "Rest and fluids",
+    prescription: "Amoxicillin 500mg",
+    follow_up_date: "2026-08-26",
+    doctor_first_name: "Ada",
+    doctor_last_name: "Lovelace",
+  };
+
+  function renderHistory() {
+    return render(
+      <MemoryRouter initialEntries={["/doctor/visit-history/7"]}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/doctor/visit-history/:patientId" element={<VisitHistoryPage />} />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>
+    );
+  }
+
+  /** The page loads the timeline + the patient's shared documents. */
+  function mockPage(records: HealthRecord[]) {
+    getVisitHistory.mockResolvedValue(envelope([visit]));
+    getPatientProfileById.mockResolvedValue(envelope(patientProfile()));
+    getHealthRecords.mockResolvedValue(paginated(records));
+  }
+
+  it("offers View and Download per record, wired to the authenticated helpers", async () => {
+    const user = userEvent.setup();
+    openMediaFile.mockResolvedValue(true);
+    downloadMediaFile.mockResolvedValue(true);
+    mockPage([
+      healthRecord({ file_name: "cbc-march.pdf", file_content_type: "application/pdf" }),
+    ]);
+
+    renderHistory();
+
+    expect(await screen.findByText("CBC panel — March 2026")).toBeInTheDocument();
+    expect(screen.getByText("Health records")).toBeInTheDocument();
+    expect(screen.getByText("Persistent cough")).toBeInTheDocument();
+    expect(getHealthRecords).toHaveBeenCalledWith(7);
+
+    const view = screen.getByTitle("View");
+    const download = screen.getByTitle("Download");
+    // Buttons, not <a href>: /media/{id} needs the Authorization header.
+    expect(view.tagName).toBe("BUTTON");
+    expect(view).toHaveTextContent("View");
+    expect(download).toHaveTextContent("Download");
+    // Enabled because this record has a document attached.
+    expect(view).toBeEnabled();
+    expect(download).toBeEnabled();
+    expect(screen.queryByText("No file attached")).not.toBeInTheDocument();
+
+    await user.click(view);
+    expect(openMediaFile).toHaveBeenCalledWith("/media/42", "cbc-march.pdf", expect.any(Function));
+
+    await user.click(download);
+    expect(downloadMediaFile).toHaveBeenCalledWith("/media/42", "cbc-march.pdf", expect.any(Function));
+  });
+
+  it("keeps View/Download visible but disabled (with a hint) when a record has no file", async () => {
+    const user = userEvent.setup();
+    deleteHealthRecord.mockResolvedValue(envelope(null));
+    mockPage([
+      healthRecord({ id: 12, title: "Blood pressure log", file: null, description: "Home readings" }),
+    ]);
+
+    renderHistory();
+
+    expect(await screen.findByText("Blood pressure log")).toBeInTheDocument();
+    // Still shown, so the affordance is discoverable — disabled until the
+    // record actually has a document.
+    expect(screen.getByTitle("View")).toBeDisabled();
+    expect(screen.getByTitle("Download")).toBeDisabled();
+    expect(screen.getByText("No file attached")).toBeInTheDocument();
+    expect(openMediaFile).not.toHaveBeenCalled();
+    expect(downloadMediaFile).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTitle("Delete record"));
+    expect(deleteHealthRecord).toHaveBeenCalledWith(12);
+    await waitFor(() => expect(screen.queryByText("Blood pressure log")).not.toBeInTheDocument());
   });
 });
