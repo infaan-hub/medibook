@@ -14,6 +14,7 @@ import {
 } from "../api/health-records";
 import type { Gender, LinkedDoctor, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
+import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -30,6 +31,7 @@ import {
   Save,
   Bell,
   Download,
+  ExternalLink,
   File,
   Upload,
 } from "lucide-react";
@@ -654,9 +656,32 @@ export function SettingsScreen() {
                   </span>
                 </div>
                 {record.file && (
-                  <a href={record.file} target="_blank" rel="noopener noreferrer" className="btn btn--ghost btn--sm" title="Open file">
-                    <Download size={14} />
-                  </a>
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      title="Open file"
+                      onClick={() =>
+                        void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                          notify("error", m)
+                        )
+                      }
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      title="Download"
+                      onClick={() =>
+                        void downloadMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                          notify("error", m)
+                        )
+                      }
+                    >
+                      <Download size={14} />
+                    </button>
+                  </>
                 )}
               </div>
             ))}

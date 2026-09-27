@@ -9,6 +9,7 @@ import {
   type HealthRecord,
 } from "../api/health-records";
 import type { PatientProfile } from "../api/types";
+import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -24,6 +25,7 @@ import {
   Upload,
   Trash2,
   Download,
+  ExternalLink,
 } from "lucide-react";
 
 function msg(error: unknown): string {
@@ -350,15 +352,32 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
               </div>
               <div className="health-record-item__actions">
                 {record.file && (
-                  <a
-                    href={record.file}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn--ghost btn--sm"
-                    title="Download"
-                  >
-                    <Download size={14} />
-                  </a>
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      title="Open file"
+                      onClick={() =>
+                        void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                          notify("error", m)
+                        )
+                      }
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      title="Download"
+                      onClick={() =>
+                        void downloadMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                          notify("error", m)
+                        )
+                      }
+                    >
+                      <Download size={14} />
+                    </button>
+                  </>
                 )}
                 <Button
                   variant="ghost"

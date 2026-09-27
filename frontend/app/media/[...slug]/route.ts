@@ -11,8 +11,31 @@ async function proxy(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
   const target = `${API_PROXY_TARGET}${url.pathname}${url.search}`;
 
+  // Forward request headers (minus hop-by-hop) so the backend sees the
+  // Authorization Bearer token — /media/{id} is protected and would 401
+  // without it (this proxy used to drop every request header).
+  const SKIP_REQUEST_HEADERS = new Set([
+    "host",
+    "connection",
+    "content-length",
+    "accept-encoding",
+    "expect",
+    "transfer-encoding",
+    "keep-alive",
+    "te",
+    "trailer",
+    "upgrade",
+    "proxy-authorization",
+    "proxy-connection",
+  ]);
+  const headers = new Headers();
+  request.headers.forEach((value, key) => {
+    if (SKIP_REQUEST_HEADERS.has(key.toLowerCase())) return;
+    headers.append(key, value);
+  });
+
   try {
-    const upstream = await fetch(target, { redirect: "manual", cache: "no-store" });
+    const upstream = await fetch(target, { headers, redirect: "manual", cache: "no-store" });
     const resHeaders = new Headers();
     upstream.headers.forEach((value, key) => {
       const k = key.toLowerCase();

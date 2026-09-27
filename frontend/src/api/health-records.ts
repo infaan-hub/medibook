@@ -8,7 +8,11 @@ export interface HealthRecord {
   /** Display name of the doctor the record belongs to / was shared with. */
   doctor_name?: string;
   appointment?: number;
-  file?: string;
+  file?: string | null;
+  /** Original uploaded filename (used to name Open/Download saves). */
+  file_name?: string | null;
+  /** MIME type of the stored file (extension fallback when saving). */
+  file_content_type?: string | null;
   record_type: string;
   title: string;
   description: string;
@@ -16,7 +20,7 @@ export interface HealthRecord {
 }
 
 export function getHealthRecords(patientId?: number): Promise<Envelope<Paginated<HealthRecord>>> {
-  const params = patientId ? `?patient=${patientId}` : "";
+  const params = patientId ? `?patient=${patientId}&page_size=100` : "?page_size=100";
   return apiGet<Paginated<HealthRecord>>(`/health-records/${params}`);
 }
 

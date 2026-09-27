@@ -8,7 +8,12 @@ export interface HealthRecord {
   /** Display name of the doctor the record belongs to / was shared with. */
   doctor_name?: string;
   appointment?: number;
-  file?: string;
+  /** Same-origin media URL (`/media/{id}`) — requires the JWT to fetch. */
+  file?: string | null;
+  /** Original uploaded filename (for Open/Download). */
+  file_name?: string | null;
+  /** MIME type of the uploaded file (for icons / extension guessing). */
+  file_content_type?: string | null;
   record_type: string;
   title: string;
   description: string;
@@ -16,8 +21,11 @@ export interface HealthRecord {
 }
 
 export function getHealthRecords(patientId?: number): Promise<Envelope<Paginated<HealthRecord>>> {
-  const params = patientId ? `?patient=${patientId}` : "";
-  return apiGet<Paginated<HealthRecord>>(`/health-records/${params}`);
+  // page_size=100 (API cap): the old default of 20 hid older records with no
+  // pager in any of the three UIs.
+  const params = new URLSearchParams({ page_size: "100" });
+  if (patientId) params.set("patient", String(patientId));
+  return apiGet<Paginated<HealthRecord>>(`/health-records/?${params.toString()}`);
 }
 
 export function uploadHealthRecord(data: FormData): Promise<Envelope<HealthRecord>> {

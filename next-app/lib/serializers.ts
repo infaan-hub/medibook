@@ -222,7 +222,10 @@ export function articleDetailDto(
 
 /** treatments.serializers.HealthRecordSerializer. */
 export function healthRecordDto(
-  record: HealthRecord & { doctor?: { user: User } },
+  record: HealthRecord & {
+    doctor?: { user: User };
+    file?: { filename: string; contentType: string | null } | null;
+  },
   req: Request
 ): Record<string, unknown> {
   const doctorUser = record.doctor?.user;
@@ -236,6 +239,11 @@ export function healthRecordDto(
     doctor_name: doctorName,
     appointment: record.appointment_id,
     file: mediaUrl(record.file_id),
+    // Original filename + content type so clients can offer a real
+    // "Open"/"Download" action (the file bytes live behind /media/{id},
+    // which requires an Authorization header).
+    file_name: record.file?.filename ?? null,
+    file_content_type: record.file?.contentType ?? null,
     record_type: record.record_type,
     title: record.title,
     description: record.description,

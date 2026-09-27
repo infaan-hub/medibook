@@ -11,6 +11,7 @@ import {
 } from "../api/treatments";
 import type { PatientProfile } from "../api/types";
 import { getHealthRecords, type HealthRecord } from "../api/health-records";
+import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -25,6 +26,7 @@ import {
   Stethoscope,
   History,
   Download,
+  ExternalLink,
 } from "lucide-react";
 
 function msg(error: unknown): string {
@@ -209,6 +211,7 @@ function TxRecord({
    ====================================== */
 
 function HcRecord({ record }: { record: HealthRecord }) {
+  const { notify } = useToast();
   const typeLabel = record.record_type.replace(/_/g, " ");
   return (
     <Card className="treat-record">
@@ -231,9 +234,32 @@ function HcRecord({ record }: { record: HealthRecord }) {
         <span>Added {fmtDate(record.created_at)}</span>
         {record.doctor_name && <span>Dr. {record.doctor_name}</span>}
         {record.file && (
-          <a href={record.file} target="_blank" rel="noopener noreferrer" className="treat-rec-link">
-            <Download size={12} /> Open file
-          </a>
+          <>
+            <button
+              type="button"
+              className="treat-rec-link"
+              title="Open file"
+              onClick={() =>
+                void openMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                  notify("error", m)
+                )
+              }
+            >
+              <ExternalLink size={12} /> Open file
+            </button>
+            <button
+              type="button"
+              className="treat-rec-link"
+              title="Download"
+              onClick={() =>
+                void downloadMediaFile(record.file!, mediaDownloadName(record), (m) =>
+                  notify("error", m)
+                )
+              }
+            >
+              <Download size={12} /> Download
+            </button>
+          </>
         )}
       </div>
     </Card>

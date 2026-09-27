@@ -80,7 +80,7 @@ export const countHealthRecords = (where: Prisma.HealthRecordWhereInput) =>
 export const listHealthRecords = (where: Prisma.HealthRecordWhereInput, skip: number, take: number) =>
   prisma.healthRecord.findMany({
     where,
-    include: { doctor: { include: { user: true } } },
+    include: { doctor: { include: { user: true } }, file: true },
     orderBy: { created_at: "desc" },
     skip,
     take,
@@ -113,6 +113,8 @@ export const createHealthRecord = (
       title: data.title,
       description: data.description ?? "",
     },
+    // File metadata is needed by healthRecordDto for Open/Download actions.
+    include: { file: true },
   });
 
 export const deleteHealthRecord = (id: number, tx?: Prisma.TransactionClient) =>
