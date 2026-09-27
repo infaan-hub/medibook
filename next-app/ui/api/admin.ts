@@ -56,6 +56,10 @@ export interface CreateDoctorPayload {
   experience_years?: number;
   consultation_fee?: string;
   bio?: string;
+  /** Primary contact number (account row — what patients see on the card). */
+  phone?: string;
+  /** Optional second contact number (doctor profile row). */
+  phone_secondary?: string;
 }
 
 export function createAdminUser(payload: CreateUserPayload): Promise<Envelope<User>> {

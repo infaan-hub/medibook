@@ -146,6 +146,8 @@ model Doctor {
   is_available     Boolean  @default(true)
   average_rating   Decimal  @default(0) @db.Decimal(3, 2)
   total_reviews    Int      @default(0)
+  phone            String   @default("") @db.VarChar(16)
+  phone_secondary  String   @default("") @db.VarChar(16)
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
   user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)

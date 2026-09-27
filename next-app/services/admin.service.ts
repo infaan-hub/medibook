@@ -63,6 +63,7 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
     username: input.username,
     email: input.email,
     password: hashPassword(input.password),
+    phone: input.phone ?? "",
     first_name: input.first_name ?? "",
     last_name: input.last_name ?? "",
     role: "doctor",
@@ -75,6 +76,7 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
     bio: input.bio,
     city: input.city,
     office_address: input.office_address,
+    phone_secondary: input.phone_secondary ?? "",
   });
   const fullName = `${input.first_name ?? ""} ${input.last_name ?? ""}`.trim();
   await admin.recordAudit(actor.id, "doctor.created", String(profile.id), `Created Dr. ${fullName}`);

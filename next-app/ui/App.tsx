@@ -48,6 +48,8 @@ const DoctorMedicalTreatmentScreen = lazy(() => import("./pages/doctor-medical-t
 const DoctorAvailabilityScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorAvailabilityScreen })));
 const DoctorPersonalScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorPersonalScreen })));
 const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default: m.NotificationsScreen })));
+const PatientEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.PatientEmergencyScreen })));
+const DoctorEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorEmergencyScreen })));
 const MyReviewsScreen = lazy(() => import("./pages").then((m) => ({ default: m.MyReviewsScreen })));
 const AdminDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminUsersScreen })));
@@ -213,11 +215,13 @@ export default function App() {
                 <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
                 <Route path="/booking/success" element={<RequirePatient><BookingSuccessScreen /></RequirePatient>} />
                 <Route path="/appointments" element={<RequirePatient><AppointmentsListScreen /></RequirePatient>} />
+                <Route path="/emergency" element={<RequirePatient><PatientEmergencyScreen /></RequirePatient>} />
                 <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
                 <Route path="/appointments/:id/reschedule" element={<RequirePatient><RescheduleScreen /></RequirePatient>} />
                 <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
+                <Route path="/doctor/emergency" element={<RequireRole role="doctor"><DoctorEmergencyScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />

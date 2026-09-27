@@ -45,6 +45,12 @@ const nextConfig: NextConfig = {
   
   // Ensure proper output for standalone deployment
   output: 'standalone',
+
+  // web-push pulls in https-proxy-agent → agent-base, whose `require('http')`
+  // makes the DEV webpack compile of instrumentation.ts fail with
+  // "Module not found: Can't resolve 'http'", which 500'd every dev request.
+  // Keeping it external means it is loaded from node_modules at runtime.
+  serverExternalPackages: ['web-push'],
 };
 
 export default nextConfig;

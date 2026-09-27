@@ -20,7 +20,7 @@ import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, User } from "@prisma/client";
 
-type AppointmentWithPatient = Appointment & { patient: User };
+type AppointmentWithPatient = Appointment & { patient: User; doctor: { user: User } };
 
 const SLOT_TAKEN = () =>
   conflict("This appointment slot is no longer available. Please select another time.", {

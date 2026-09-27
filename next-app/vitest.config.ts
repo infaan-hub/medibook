@@ -9,6 +9,10 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname) },
   },
+  // Match Next.js: TSX compiles with the automatic JSX runtime (tsconfig keeps
+  // jsx: "preserve" for Next's own transform, which would otherwise make
+  // esbuild fall back to the classic React.createElement runtime in tests).
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],

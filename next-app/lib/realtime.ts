@@ -6,7 +6,21 @@
  * Every frame is an envelope with id / type / timestamp / version / entity_id
  * so clients can deduplicate and reject stale (out-of-order) events.
  */
-import { randomUUID } from "node:crypto";
+
+/**
+ * Web Crypto (globalThis.crypto.randomUUID) — available in Node ≥19 and every
+ * edge runtime. A static `node:crypto` import breaks the instrumentation
+ * webpack compile (UnhandledSchemeError), so avoid node builtins in this chain.
+ */
+const randomUuid = (): string => {
+  const webCrypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (webCrypto && typeof webCrypto.randomUUID === "function") return webCrypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
 
 export interface RealtimeHub {
   send(userIds: Iterable<number>, event: string, payload: Record<string, unknown>): void;
@@ -32,7 +46,7 @@ export function buildEnvelope(
 ): RealtimeEnvelope {
   const entityId = opts?.entityId ?? payload.id ?? "";
   return {
-    id: randomUUID(),
+    id: randomUuid(),
     type,
     event: type,
     timestamp: new Date().toISOString(),

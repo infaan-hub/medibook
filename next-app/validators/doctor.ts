@@ -131,6 +131,8 @@ export const doctorWriteSchema = z
       .transform((v) => (v === undefined ? v : v === true || v === "true" || v === "True")),
     first_name: z.string().optional(),
     last_name: z.string().optional(),
+    phone: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
+    phone_secondary: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
   })
   .passthrough();
 

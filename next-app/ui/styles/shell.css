@@ -366,7 +366,7 @@
     bottom: 8px;
     width: 3px;
     border-radius: 0 3px 3px 0;
-    background: #fff;
+    background: #09A99E;
   }
   .shell__nav--side .nav-item--side .nav-item__icon {
     width: 24px;
@@ -480,13 +480,14 @@
   .shell__nav--side .nav-item--side.nav-item--active:hover { color: #09A99E; background: #fff; font-weight: var(--weight-semibold); }
   .shell__nav--side .nav-item--side.nav-item--active::before {
     content: "";
+    display: block;
     position: absolute;
     left: 0;
     top: 8px;
     bottom: 8px;
     width: 3px;
     border-radius: 0 3px 3px 0;
-    background: #fff;
+    background: #09A99E;
   }
   .shell__nav--side .sidebar__user { color: #fff; background: rgba(255,255,255,.12); }
   .shell__nav--side .sidebar__user:hover { background: rgba(255,255,255,.2); }
@@ -629,9 +630,10 @@
     background: rgb(255 255 255 / 0.1);
     color: var(--color-text-inverse);
   }
-  .nav-item--side--active {
-    background: rgb(255 255 255 / 0.18);
-    color: var(--color-text-inverse);
+  .nav-item--side--active,
+  .nav-item--side--active:hover {
+    background: #fff;
+    color: #09A99E;
     font-weight: var(--weight-semibold);
   }
   .nav-item--side--active::before {
@@ -663,6 +665,14 @@
   .nav-item--side:hover .nav-item__chevron {
     opacity: 1;
   }
+}
+
+/* Active icons inherit the active item's color — never white-on-white.
+   Must win over `.nav-item--side .nav-item__icon { color: var(--color-text-inverse) }`
+   (white) or the icon disappears against the white active pill. */
+.nav-item--side.nav-item--active .nav-item__icon,
+.nav-item--active .nav-item__icon {
+  color: inherit;
 }
 
 /* ---- Desktop (1200px+): hide bottom nav, expand content ---- */

@@ -56,6 +56,8 @@ export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput
   ] as const) {
     if (input[key] !== undefined) data[key] = input[key];
   }
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.phone_secondary !== undefined) data.phone_secondary = input.phone_secondary;
   // Explicit join models (compound PK) — replace the set: clear then recreate.
   if (input.specialties !== undefined) {
     data.specialties = {

@@ -4,8 +4,6 @@
  */
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
 
 /* ---------------- Spinner (§21 loading state) ---------------- */
 
@@ -55,34 +53,18 @@ interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function TextField({ label, error, hint, id, className = "", ...rest }: TextFieldProps) {
-  const type = rest.type === "password" ? "password" : (rest.type ?? "text");
-  const [showPassword, setShowPassword] = useState(false);
-
   return (
     <div className={`field ${className}`}>
       <label className="field__label" htmlFor={id}>
         {label}
       </label>
-      <div className="field__input-wrapper">
-        <input
-          id={id}
-          className={`field__input${error ? " field__input--error" : ""}`}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-          type={type === "password" ? (showPassword ? "text" : "password") : type}
-          {...rest}
-        />
-        {type === "password" && (
-          <button
-            type="button"
-            className="field__password-toggle"
-            onClick={() => setShowPassword(!showPassword)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        )}
-      </div>
+      <input
+        id={id}
+        className={`field__input${error ? " field__input--error" : ""}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+        {...rest}
+      />
       {hint && !error && (
         <p className="field__hint" id={`${id}-hint`}>
           {hint}

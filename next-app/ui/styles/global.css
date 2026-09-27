@@ -7,6 +7,12 @@
 *::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
 
+/* Remove browser-native eye icon for password fields everywhere */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 html, body, #root {
   width: 100%;
   min-height: 100%;
@@ -149,6 +155,10 @@ a { color: var(--color-primary); }
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
   width: 100%;
+}
+.field__input::-ms-reveal,
+.field__input::-ms-clear {
+  display: none;
 }
 .field__input::placeholder { color: #9cb8b7; }
 .field__input:focus { border-color: #09A99E; box-shadow: 0 0 0 3px rgba(9,169,158,0.12); }
@@ -3243,3 +3253,36 @@ a { color: var(--color-primary); }
 .home__quick-action svg { color: #09A99E; }
 
 .home__appointment-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---- Emergency section (SOS) ---- */
+.emergency-page { display: flex; flex-direction: column; gap: var(--space-3, 16px); }
+.emergency__hero { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: linear-gradient(135deg, #fef2f2, #fff1f2); border: 1px solid #fecaca; border-radius: 14px; }
+.emergency__hero .page__title { margin: 0; font-size: 22px; }
+.emergency__hero .page__subtitle { margin: 2px 0 0; font-size: 13px; color: #7f1d1d; }
+.emergency__hero-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #dc2626; color: #fff; flex-shrink: 0; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35); }
+.emergency__form-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 17px; }
+.emergency__form-title svg { color: #dc2626; }
+
+.emergency__status { border-left: 4px solid #dc2626; }
+.emergency__status-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.emergency__status-reason { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #b91c1c; font-size: 14px; }
+.emergency__status-when { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.emergency__contact-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #475569; margin: 6px 0; }
+.emergency__contact-line a { display: inline-flex; align-items: center; gap: 4px; color: #09A99E; font-weight: 600; text-decoration: none; }
+.emergency__contact-line a:hover { text-decoration: underline; }
+
+.emergency__list { display: flex; flex-direction: column; gap: 14px; }
+.emergency__request { border-left: 4px solid #dc2626; }
+.emergency__request-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.emergency__request-patient { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; color: #16191e; }
+.emergency__request-patient svg { color: #dc2626; }
+.emergency__request-reason { margin: 6px 0; font-size: 14px; color: #334155; }
+
+.emergency__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+.admin-table-contact { white-space: nowrap; font-size: 13px; }
+.admin-table-phone { display: inline-flex; align-items: center; gap: 4px; color: #09A99E; font-weight: 600; text-decoration: none; }
+.admin-table-phone:hover { text-decoration: underline; }
+.admin-table-contact small { display: block; color: #94a3b8; font-size: 11px; }
+.admin-table-contact small a { color: inherit; text-decoration: none; }
+.admin-table-contact small a:hover { text-decoration: underline; }

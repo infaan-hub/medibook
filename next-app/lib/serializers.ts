@@ -95,6 +95,8 @@ export function doctorDto(
     last_name: doctor.user.last_name,
     /** Contact number on the account — shown on the doctor card + to patients. */
     phone: doctor.user.phone ?? "",
+    /** Doctor's personal phone numbers — shown on doctor card. */
+    phone_secondary: doctor.phone_secondary ?? "",
     profile_image: mediaUrl(doctor.user.profile_image_id),
     specialties: doctor.specialties.map(({ specialty }) => ({
       id: specialty.id,
@@ -299,9 +301,9 @@ export function hospitalDto(hospital: Hospital): Record<string, unknown> {
 
 /** appointments.serializers.AppointmentSerializer. */
 export function appointmentDto(
-  appointment: Appointment & { patient: User }
+  appointment: Appointment & { patient: User; doctor: { user: User } }
 ): Record<string, unknown> {
-  return {
+  const base = {
     id: appointment.id,
     patient: appointment.patient_id,
     patient_email: appointment.patient.email,
@@ -314,16 +316,27 @@ export function appointmentDto(
     reason: appointment.reason,
     notes: appointment.notes,
     cancel_reason: appointment.cancel_reason,
+    /** Doctor's phone numbers shown in appointment booking. */
+    doctor_phone: appointment.doctor.user.phone ?? "",
+    doctor_phone_secondary: (appointment.doctor as { phone_secondary?: string }).phone_secondary ?? "",
   };
+  return base;
 }
 
-/** Emergency appointment serializer with additional emergency fields. */
+/**
+ * Emergency appointment serializer — adds the emergency_* fields plus the
+ * requester's contact details (the doctor decides whether to accept, so the
+ * patient's name/phone travel with the request; `base` already carries
+ * doctor_phone / doctor_phone_secondary).
+ */
 export function emergencyAppointmentDto(
   appointment: Appointment & { patient: User; doctor: { user: User } }
 ): Record<string, unknown> {
   const base = appointmentDto(appointment);
   return {
     ...base,
+    patient_name: `${appointment.patient.first_name} ${appointment.patient.last_name}`.trim(),
+    patient_phone: appointment.patient.phone ?? "",
     appointment_type: appointment.appointment_type,
     emergency_reason: appointment.emergency_reason,
     emergency_description: appointment.emergency_description,

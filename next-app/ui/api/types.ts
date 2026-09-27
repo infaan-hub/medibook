@@ -119,7 +119,35 @@ export interface Appointment {
   reason: string;
   notes: string;
   cancel_reason: string;
+  /** Present on emergency appointments (emergencyAppointmentDto). */
+  appointment_type?: "NORMAL" | "EMERGENCY";
+  doctor_phone?: string;
+  doctor_phone_secondary?: string;
 }
+
+/** POST/GET /api/emergency/ rows (emergencyAppointmentDto). */
+export interface EmergencyAppointment extends Appointment {
+  emergency_reason?: string | null;
+  emergency_description?: string | null;
+  emergency_latitude?: number | null;
+  emergency_longitude?: number | null;
+  emergency_location_accuracy?: number | null;
+  emergency_requested_at?: string | null;
+  /** Who is asking — shown on the doctor's emergency queue. */
+  patient_name?: string;
+  patient_phone?: string;
+}
+
+/** Emergency reasons accepted by emergencyAppointmentCreateSchema. */
+export type EmergencyReason =
+  | "severe_pain"
+  | "breathing_difficulty"
+  | "injury"
+  | "accident"
+  | "sudden_illness"
+  | "high_fever"
+  | "allergic_reaction"
+  | "other";
 
 /** §28 response envelope: success/message/data on success, errors on failure. */
 export interface Envelope<T = unknown> {
@@ -146,6 +174,8 @@ export interface DoctorProfile {
   last_name: string;
   /** Contact number on the account — shown on the doctor card and to patients. */
   phone: string;
+  /** Optional second contact number stored on the doctor profile row. */
+  phone_secondary?: string;
   profile_image: string | null;
   specialties: Specialty[];
   hospitals: number[];

@@ -11,8 +11,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSession, useToast } from "../state/app-context";
+import { findActiveNavItem } from "../lib/nav-active";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
@@ -36,18 +37,19 @@ import {
   X,
   LogOut,
   Newspaper,
+  Siren,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
 const STORAGE_KEY = "medibook_sidebar_collapsed";
 
-interface NavItem {
+export interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
 }
 
-function navItemsFor(user: User | null): NavItem[] {
+export function navItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
       { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -66,6 +68,7 @@ function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
@@ -75,6 +78,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/reviews", label: "My reviews", icon: <Star size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
@@ -83,7 +87,7 @@ function navItemsFor(user: User | null): NavItem[] {
 }
 
 /** Bottom nav: exactly 5 items per role (mobile only). */
-function bottomNavItemsFor(user: User | null): NavItem[] {
+export function bottomNavItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
       { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
@@ -98,6 +102,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
     ];
   }
@@ -105,6 +110,7 @@ function bottomNavItemsFor(user: User | null): NavItem[] {
     { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/blog", label: "Health Tips", icon: <Newspaper size={20} /> },
   ];
 }
@@ -237,38 +243,56 @@ function useOnline(): boolean {
   return online;
 }
 
-function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
+/**
+ * Renders a navigation list (sidebar rail or mobile bottom bar) with exactly
+ * ONE active item: the current pathname is resolved through
+ * `findActiveNavItem()` (longest/most-specific match wins), so prefix routes
+ * like `/admin` can never stay active inside `/admin/appointments`. The class
+ * list and `aria-current` are both derived from that single result — no
+ * per-item state, no click history.
+ */
+export function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
+  const { pathname } = useLocation();
+  const activeTo = findActiveNavItem(pathname, items);
+
   return (
     <>
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.to === "/"}
-          className={({ isActive }) =>
-            ["nav-item", side ? "nav-item--side" : "", isActive ? "nav-item--active" : "", side && isActive ? "nav-item--side--active" : ""]
-              .filter(Boolean)
-              .join(" ")
-          }
-          onClick={onNavigate}
-        >
-          <span className="nav-item__icon" aria-hidden="true">
-            {item.to === "/profile" && user?.profile_image && !side ? (
-              <img
-                src={user.profile_image}
-                alt=""
-                className="nav-item__profile-img"
-                width={22}
-                height={22}
-              />
-            ) : (
-              item.icon
-            )}
-          </span>
-          <span className="nav-item__label">{item.label}</span>
-          {!side && <span className="nav-item__bar" aria-hidden="true" />}
-        </NavLink>
-      ))}
+      {items.map((item) => {
+        const active = item.to === activeTo;
+        const className = [
+          "nav-item",
+          side ? "nav-item--side" : "",
+          active ? "nav-item--active" : "",
+          side && active ? "nav-item--side--active" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={className}
+            aria-current={active ? "page" : undefined}
+            onClick={onNavigate}
+          >
+            <span className="nav-item__icon" aria-hidden="true">
+              {item.to === "/profile" && user?.profile_image && !side ? (
+                <img
+                  src={user.profile_image}
+                  alt=""
+                  className="nav-item__profile-img"
+                  width={22}
+                  height={22}
+                />
+              ) : (
+                item.icon
+              )}
+            </span>
+            <span className="nav-item__label">{item.label}</span>
+            {!side && <span className="nav-item__bar" aria-hidden="true" />}
+          </Link>
+        );
+      })}
     </>
   );
 }

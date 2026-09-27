@@ -17,7 +17,18 @@ let configured: boolean | null = null;
 async function loadWebPush(): Promise<typeof import("web-push") | null> {
   if (webPushModule !== null) return webPushModule;
   try {
-    webPushModule = await import("web-push");
+    // Deliberately opaque to the bundler: web-push → https-proxy-agent →
+    // agent-base → require('http') cannot be resolved while webpack compiles
+    // instrumentation.ts in dev, and a failed instrumentation compile made
+    // EVERY dev request 500. `eval("require")` keeps the module out of the
+    // static graph so web-push is loaded from node_modules at runtime.
+    const nodeRequire = eval("require") as
+      | ((id: string) => typeof import("web-push"))
+      | undefined;
+    webPushModule =
+      typeof nodeRequire === "function"
+        ? nodeRequire("web-push")
+        : await import(/* webpackIgnore: true */ "web-push");
   } catch {
     webPushModule = null;
   }

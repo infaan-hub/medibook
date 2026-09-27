@@ -238,6 +238,8 @@ export const applyDoctorFields = (
     bio?: string;
     city?: string;
     office_address?: string;
+    phone?: string;
+    phone_secondary?: string;
   }
 ) =>
   prisma.doctor.update({

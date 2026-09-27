@@ -4,6 +4,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { conflict, notFound, badRequest, forbidden, ValidationError } from "@/lib/errors";
+import { normalizeTime } from "@/lib/dates";
 import { appointmentDto, emergencyAppointmentDto } from "@/lib/serializers";
 import { emergencyAppointmentCreateSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
@@ -11,12 +12,31 @@ import * as appointments from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import { broadcastAppointmentEvent, notify } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
-import type { Appointment, User, Doctor } from "@prisma/client";
+import type { Appointment, NotificationType, User, Doctor } from "@prisma/client";
 
 type AppointmentWithPatient = Appointment & { patient: User };
 
 const EMERGENCY_RADIUS_KM = 25; // Maximum search radius in km
 const MAX_EMERGENCY_RADIUS_KM = 50;
+
+/**
+ * The `NotificationType` DB enum has no emergency_* members — writing one
+ * makes Prisma throw a validation error, so the notify() call inside create /
+ * accept / reject 500'd the whole emergency flow. Emergency traffic reuses the
+ * closest valid member instead; the message body still says "Emergency".
+ */
+const EMERGENCY_NOTIFICATION_TYPES = {
+  requested: "appointment_request",
+  accepted: "appointment_confirmed",
+  rejected: "appointment_rejected",
+} as const;
+
+export type EmergencyNotificationKind = keyof typeof EMERGENCY_NOTIFICATION_TYPES;
+
+export const emergencyNotificationType = (
+  kind: EmergencyNotificationKind
+): NotificationType => EMERGENCY_NOTIFICATION_TYPES[kind];
+
 
 /** Calculate distance between two points using Haversine formula. */
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -56,8 +76,20 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
   }
 
   const date = input.appointment_date;
-  const start = input.start_time;
-  const end = input.end_time;
+  // Normalize to HH:MM:SS — availableSlots() emits secondsToTime() format while
+  // clients send the HH:MM slice from the availability API (see appointment.service).
+  const start = normalizeTime(input.start_time);
+  const end = normalizeTime(input.end_time);
+
+  // Patient-level guard first: if they already hold a pending/confirmed
+  // emergency, say so (409) instead of "slot not available" — the slot is
+  // often taken by their own active emergency.
+  const existingEmergency = await appointments.findPatientEmergencyAppointment(user.id);
+  if (existingEmergency) {
+    throw conflict("You already have a pending emergency appointment.", {
+      non_field_errors: ["You can only have one pending emergency appointment at a time."],
+    });
+  }
 
   // Verify the slot is available for the doctor
   const { availableSlots } = await import("./schedule.service");
@@ -65,14 +97,6 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
   if (!slots.some((slot) => slot.start_time === start && slot.end_time === end)) {
     throw badRequest("The selected emergency time slot is not available.", {
       start_time: ["This emergency time slot is not available."],
-    });
-  }
-
-  // Check if patient already has a pending emergency appointment
-  const existingEmergency = await appointments.findPatientEmergencyAppointment(user.id);
-  if (existingEmergency) {
-    throw conflict("You already have a pending emergency appointment.", {
-      non_field_errors: ["You can only have one pending emergency appointment at a time."],
     });
   }
 
@@ -97,7 +121,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
   // Notify the doctor immediately
   await notify(
     doctor.user_id,
-    "emergency_appointment_request",
+    emergencyNotificationType("requested"),
     `Emergency appointment request from ${user.email}: ${input.emergency_reason.replace("_", " ")}.`,
     appointment.id
   );
@@ -179,14 +203,15 @@ export async function acceptEmergencyAppointment(req: Request, user: AuthUser, i
 
   await notify(
     appointment.patient_id,
-    "emergency_appointment_accepted",
+    emergencyNotificationType("accepted"),
     `Your emergency appointment has been accepted by Dr. ${updated.doctor?.user?.first_name} ${updated.doctor?.user?.last_name}.`,
     updated.id
   );
 
+  // Realtime recipients are USER ids — updated.doctor_id is the profile row id.
   broadcastAppointmentEvent(updated, "appointment.emergency_accepted", [
     updated.patient_id,
-    updated.doctor_id,
+    updated.doctor.user_id,
   ]);
 
   return { appointment: updated, message: "Emergency appointment accepted." };
@@ -223,14 +248,15 @@ export async function rejectEmergencyAppointment(req: Request, user: AuthUser, i
 
   await notify(
     appointment.patient_id,
-    "emergency_appointment_rejected",
+    emergencyNotificationType("rejected"),
     `Your emergency appointment was rejected. Reason: ${payload.cancel_reason ?? "No reason provided"}`,
     updated.id
   );
 
+  // Realtime recipients are USER ids — updated.doctor_id is the profile row id.
   broadcastAppointmentEvent(updated, "appointment.emergency_rejected", [
     updated.patient_id,
-    updated.doctor_id,
+    updated.doctor.user_id,
   ]);
 
   return { appointment: updated, message: "Emergency appointment rejected." };
@@ -259,6 +285,33 @@ export async function getDoctorEmergencyAppointments(user: AuthUser) {
       hospital: true,
     },
     orderBy: { emergency_requested_at: "asc" },
+  });
+}
+
+/**
+ * GET /api/emergency/ — role-scoped emergency queue (the UI's sidebar screen
+ * loads exactly this):
+ *   patient → their own emergency appointments, newest first (0..1 active)
+ *   doctor  → pending requests assigned to them, oldest request first
+ *   admin   → every pending emergency on the platform
+ */
+export async function listEmergencies(user: AuthUser) {
+  const { prisma } = await import("@/lib/db");
+  const include = { patient: true, doctor: { include: { user: true } } } as const;
+
+  if (user.role === "admin" || user.is_superuser) {
+    return prisma.appointment.findMany({
+      where: { appointment_type: "EMERGENCY", status: "pending" },
+      include,
+      orderBy: { emergency_requested_at: "asc" },
+    });
+  }
+  if (user.role === "doctor") return getDoctorEmergencyAppointments(user);
+  return prisma.appointment.findMany({
+    where: { patient_id: user.id, appointment_type: "EMERGENCY" },
+    include,
+    orderBy: { created_at: "desc" },
+    take: 20,
   });
 }
 

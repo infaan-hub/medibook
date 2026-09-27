@@ -55,6 +55,10 @@ export const adminDoctorCreateSchema = z
     bio: z.string().optional(),
     city: z.string().max(100, "Ensure this string has at most 100 characters.").optional(),
     office_address: z.string().optional(),
+    /** Doctor contact numbers — primary lands on the account row (user.phone,
+     *  what every doctor card renders), the optional second on the profile. */
+    phone: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
+    phone_secondary: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
   })
   .passthrough();
 
