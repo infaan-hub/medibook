@@ -11,6 +11,7 @@ import { formatRating } from "../components/reviews";
 import { useSession } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
+import { pushPromptMode, pushPromptMessage } from "../push/prompt";
 import {
   Calendar,
   Bell,
@@ -59,7 +60,9 @@ function PatientHome({ user }: { user: User }) {
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const { subscribed, toggle: togglePush, loading: pushLoading } = usePushNotifications(user.id);
+  const { permission, subscribed, toggle: togglePush, loading: pushLoading, error: pushError } =
+    usePushNotifications(user.id);
+  const pushMode = pushPromptMode(permission, subscribed);
 
   const loadAppointments = useCallback(() => {
     listMyAppointments()
@@ -118,16 +121,20 @@ function PatientHome({ user }: { user: User }) {
 
       {error && <ErrorState message={error} />}
 
-      {/* Push notification prompt */}
-      {"Notification" in window && Notification.permission === "default" && !subscribed && (
+      {/* Push notification prompt — enable (first ask), resubscribe (permission
+          granted but no subscription stored), or blocked (denied) hint. */}
+      {pushMode !== "hidden" && (
         <div className="home__push-prompt">
           <Bell size={18} />
-          <span>Enable notifications for appointment reminders</span>
-          <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
-            Enable
-          </button>
+          <span>{pushPromptMessage(pushMode)}</span>
+          {pushMode !== "blocked" && (
+            <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
+              {pushLoading ? "Enabling…" : "Enable"}
+            </button>
+          )}
         </div>
       )}
+      {pushError && <div className="home__push-error">{pushError}</div>}
 
       <section className="home__section">
         <div className="home__section-heading">

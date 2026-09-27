@@ -13,6 +13,15 @@ type PushResult = {
 
 let webPushModule: typeof import("web-push") | null = null;
 let configured: boolean | null = null;
+let skipWarned = false;
+const zeroSubsWarned = new Set<number>();
+
+/** Log skip reasons once per process — these used to be completely silent. */
+function warnSkipped(reason: string): void {
+  if (skipWarned) return;
+  skipWarned = true;
+  console.warn(`[push] web push SKIPPED: ${reason}`);
+}
 
 async function loadWebPush(): Promise<typeof import("web-push") | null> {
   if (webPushModule !== null) return webPushModule;
@@ -50,9 +59,17 @@ export function vapidPublicKey(): string {
 }
 
 async function ensureConfigured(): Promise<boolean> {
-  if (!vapidConfigured()) return false;
+  if (!vapidConfigured()) {
+    warnSkipped(
+      "VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT missing or empty in the server environment"
+    );
+    return false;
+  }
   const wp = await loadWebPush();
-  if (!wp) return false;
+  if (!wp) {
+    warnSkipped("web-push package failed to load (is it installed in node_modules?)");
+    return false;
+  }
   wp.setVapidDetails(
     process.env.VAPID_SUBJECT!,
     process.env.VAPID_PUBLIC_KEY!,
@@ -81,7 +98,17 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
   const subs = await prisma.pushSubscription.findMany({
     where: { user_id: userId, is_active: true },
   });
-  if (subs.length === 0) return result;
+  if (subs.length === 0) {
+    // Root cause of "no OS notification ever appears": nothing to send to.
+    // Log once per user so the diagnosis is visible in server output.
+    if (!zeroSubsWarned.has(userId)) {
+      zeroSubsWarned.add(userId);
+      console.warn(
+        `[push] user ${userId} has no active push subscription — OS push skipped (in-app inbox/realtime unaffected)`
+      );
+    }
+    return result;
+  }
 
   const body = JSON.stringify(payload);
   for (const sub of subs) {

@@ -1,10 +1,10 @@
 {
   "app\\[[...slug]]\\page.tsx -> ../../src/App": {
-    "id": 3534,
+    "id": 1943,
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
       "static/chunks/588.2a1d6e3e19574f68.js",
-      "static/chunks/534.cb171ec03a7e5b7d.js"
+      "static/chunks/943.61b61e99b2fb7dc3.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -20,11 +20,11 @@
     ]
   },
   "src\\App.tsx -> ./screens": {
-    "id": 5807,
+    "id": 6636,
     "files": [
       "static/chunks/760.03bd18699c8f8211.js",
       "static/chunks/840.a7995d7cb676d13d.js",
-      "static/chunks/807.c11fdcc2e66668a7.js"
+      "static/chunks/874.307ffcbc19dc42cc.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-medical-treatment": {

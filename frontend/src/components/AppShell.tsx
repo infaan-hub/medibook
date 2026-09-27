@@ -14,7 +14,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
-import { listUnreadNotifications } from "../api/notifications";
+import {
+  listPushSubscriptions,
+  listUnreadNotifications,
+  registerPushSubscription,
+} from "../api/notifications";
+import { getPushSubscription, subscribeToPush } from "../push/notifications";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { useInstallAvailability } from "../pwa/installPrompt";
 import { InstallAppButton } from "./InstallAppButton";
@@ -237,6 +242,54 @@ function useOnline(): boolean {
   return online;
 }
 
+/**
+ * Self-heal the Web Push subscription once per login session, for every role.
+ * Push only reaches the OS notification bar when the server holds a row in
+ * `PushSubscription` — but rows were only created by the patient-home Enable
+ * button, and registration failures used to be swallowed, leaving the database
+ * empty (send path exits at `subs.length === 0`). This effect repairs every
+ * broken state in the background when permission is already granted:
+ * - browser subscription missing → re-subscribe;
+ * - browser subscription present but no active server row → re-register
+ *   (POST /push-subscriptions/ is idempotent per endpoint).
+ * Best-effort: any failure is ignored (the manual prompt still reports errors).
+ */
+function usePushResync(userId: number | null): void {
+  const ranFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!userId || ranFor.current === userId) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    ranFor.current = userId;
+    void (async () => {
+      try {
+        let sub = await getPushSubscription();
+        if (!sub) {
+          const result = await subscribeToPush();
+          if (!result.ok) return;
+          sub = result.subscription;
+        }
+        const p = sub.toJSON();
+        const keys = (p.keys ?? {}) as { p256dh?: string; auth?: string };
+        if (!p.endpoint || !keys.p256dh || !keys.auth) return;
+        const list = await listPushSubscriptions();
+        const synced = list.data.results.some(
+          (row) => row.endpoint === p.endpoint && row.is_active
+        );
+        if (synced) return;
+        await registerPushSubscription({
+          endpoint: p.endpoint,
+          p256dh_key: keys.p256dh,
+          auth_key: keys.auth,
+          device_info: { userAgent: navigator.userAgent },
+        });
+      } catch {
+        /* background self-heal — never surface into the shell */
+      }
+    })();
+  }, [userId]);
+}
+
 function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
   return (
     <>
@@ -276,6 +329,7 @@ function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[];
 export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { user, logout } = useSession();
+  usePushResync(user?.id ?? null);
   const items = navItemsFor(user);
   const bottomItems = bottomNavItemsFor(user);
   const isDesktop = useIsDesktop();

@@ -3245,6 +3245,7 @@ a { color: var(--color-primary); }
 .home__push-btn { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; border: none; background: #09A99E; color: #fff; cursor: pointer; transition: background 0.15s; }
 .home__push-btn:hover { background: #07796f; }
 .home__push-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.home__push-error { padding: 8px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: var(--space-3); font-size: 12px; color: #b91c1c; }
 
 .home__quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: var(--space-3); }
 @media (max-width: 400px) { .home__quick-actions { grid-template-columns: repeat(2, 1fr); } }

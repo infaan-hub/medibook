@@ -4,9 +4,33 @@
  * UpdatePrompt component.
  */
 
+/** Browsers only allow service workers on HTTPS or loopback hosts. */
+export function isSecureContextForSw(): boolean {
+  if (location.protocol === "https:") return true;
+  return location.hostname === "localhost" || location.hostname === "127.0.0.1";
+}
+
+/**
+ * Register the service worker NOW and return its registration (or null when
+ * unsupported / insecure context / registration failed). Used by the push
+ * subscription flow, which cannot wait for the `load` event — an unresolved
+ * `navigator.serviceWorker.ready` would hang `subscribeToPush()` forever on
+ * http:// LAN addresses, which is exactly how subscriptions silently never
+ * got created.
+ */
+export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  if (!isSecureContextForSw()) return null;
+  try {
+    return await navigator.serviceWorker.register("/service-worker.js", { scope: "/" });
+  } catch {
+    return null;
+  }
+}
+
 export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
-  if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+  if (!isSecureContextForSw()) return;
 
   const register = () => {
     void navigator.serviceWorker

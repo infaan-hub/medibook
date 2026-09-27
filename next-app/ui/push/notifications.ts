@@ -7,6 +7,8 @@
  */
 import { API_BASE_URL } from "../api/client";
 import { tokenStore } from "../api/tokens";
+import { ensureServiceWorker, isSecureContextForSw } from "../lib/pwa";
+import type { PushFailureReason } from "./prompt";
 
 let cachedKey: string | null = null;
 let keyPromise: Promise<string | null> | null = null;
@@ -50,47 +52,101 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return Notification.requestPermission();
 }
 
-export async function subscribeToPush(): Promise<PushSubscription | null> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+export type SubscribeResult =
+  | { ok: true; subscription: PushSubscription }
+  | { ok: false; reason: PushFailureReason };
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error as Error);
+      }
+    );
+  });
+}
+
+type RegResult =
+  | { ok: true; reg: ServiceWorkerRegistration }
+  | { ok: false; reason: PushFailureReason };
+
+/**
+ * Get a registration with an ACTIVE worker, or a typed failure reason.
+ * Registers the worker immediately instead of awaiting `serviceWorker.ready`
+ * unconditionally — on insecure origins `ready` never settles, which used to
+ * hang `subscribeToPush()` forever and left the server with zero subscriptions.
+ */
+async function activeRegistration(): Promise<RegResult> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { ok: false, reason: "unsupported" };
+  }
+  if (!isSecureContextForSw()) return { ok: false, reason: "insecure" };
+  const reg = await ensureServiceWorker();
+  if (!reg) return { ok: false, reason: "no-sw" };
+  if (reg.active) return { ok: true, reg };
+  try {
+    return { ok: true, reg: await withTimeout(navigator.serviceWorker.ready, 8000) };
+  } catch {
+    return { ok: false, reason: "timeout" };
+  }
+}
+
+/**
+ * Create (or reuse) the browser PushSubscription. Never hangs, never throws:
+ * failures come back as a typed reason the UI can show to the user instead of
+ * silently pretending the subscription succeeded.
+ */
+export async function subscribeToPush(): Promise<SubscribeResult> {
+  const ready = await activeRegistration();
+  if (!ready.ok) return ready;
 
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) return existing;
+    const existing = await ready.reg.pushManager.getSubscription();
+    if (existing) return { ok: true, subscription: existing };
+  } catch {
+    return { ok: false, reason: "failed" };
+  }
 
-    const key = await getVapidPublicKey();
-    if (!key) return null;
+  const key = await getVapidPublicKey();
+  if (!key) return { ok: false, reason: "no-vapid-key" };
 
-    const permission = await requestNotificationPermission();
-    if (permission !== "granted") return null;
+  const permission = await requestNotificationPermission();
+  if (permission !== "granted") return { ok: false, reason: "permission-denied" };
 
-    const subscription = await reg.pushManager.subscribe({
+  try {
+    const subscription = await ready.reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(key).buffer as ArrayBuffer,
     });
-    return subscription;
+    return { ok: true, subscription };
   } catch {
-    return null;
+    return { ok: false, reason: "failed" };
   }
 }
 
 export async function unsubscribeFromPush(): Promise<boolean> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  const ready = await activeRegistration();
+  if (!ready.ok) return false;
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const subscription = await reg.pushManager.getSubscription();
+    const subscription = await ready.reg.pushManager.getSubscription();
     if (!subscription) return false;
-    return subscription.unsubscribe();
+    return await subscription.unsubscribe();
   } catch {
     return false;
   }
 }
 
 export async function getPushSubscription(): Promise<PushSubscription | null> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const ready = await activeRegistration();
+  if (!ready.ok) return null;
   try {
-    const reg = await navigator.serviceWorker.ready;
-    return reg.pushManager.getSubscription();
+    return await ready.reg.pushManager.getSubscription();
   } catch {
     return null;
   }
