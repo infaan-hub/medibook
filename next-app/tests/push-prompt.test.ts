@@ -29,7 +29,7 @@ describe("pushPromptMode — what the patient-home banner shows", () => {
     expect(pushPromptMode("granted", false)).toBe("resubscribe");
   });
 
-  it("shows a blocked hint without a button when permission was denied", () => {
+  it("still offers Allow when permission was denied (asking the device is the only way back)", () => {
     expect(pushPromptMode("denied", false)).toBe("blocked");
   });
 
@@ -43,11 +43,9 @@ describe("pushPromptMode — what the patient-home banner shows", () => {
     expect(pushPromptMode("unsupported", false)).toBe("hidden");
   });
 
-  it("never renders both a button and nothing — enable/resubscribe are actionable, blocked is not", () => {
-    for (const permission of ["default", "granted"] as const) {
-      const mode = pushPromptMode(permission, false);
-      expect(["enable", "resubscribe"]).toContain(mode);
-    }
+  it("leaves no mode without an action — enable/resubscribe/blocked all keep a button", () => {
+    expect(pushPromptMode("default", false)).toBe("enable");
+    expect(pushPromptMode("granted", false)).toBe("resubscribe");
     expect(pushPromptMode("denied", false)).toBe("blocked");
   });
 });
@@ -92,5 +90,35 @@ describe("pushFailureMessage — every typed failure reason is explainable", () 
 
   it("explains the missing VAPID configuration", () => {
     expect(pushFailureMessage("no-vapid-key")).toMatch(/VAPID/i);
+  });
+});
+
+describe("copy never dead-ends into browser settings", () => {
+  // Product rule: the popup always offers an Allow/Enable button instead of
+  // telling the user to go hunting through their browser's site settings.
+  const BANNED = /browser settings|site settings|allow them for this site/i;
+
+  it("keeps every prompt-mode message actionable and free of settings instructions", () => {
+    for (const mode of ["enable", "resubscribe", "blocked"] as const) {
+      const message = pushPromptMessage(mode);
+      expect(message, mode).not.toMatch(BANNED);
+      expect(message, mode).toMatch(/tap|allow|enable/i);
+    }
+  });
+
+  it("keeps every failure message free of settings instructions", () => {
+    const reasons: PushFailureReason[] = [
+      "unsupported",
+      "insecure",
+      "no-sw",
+      "no-vapid-key",
+      "permission-denied",
+      "timeout",
+      "failed",
+    ];
+    for (const reason of reasons) {
+      expect(pushFailureMessage(reason), reason).not.toMatch(BANNED);
+    }
+    expect(pushFailureMessage("permission-denied")).toMatch(/allow/i);
   });
 });

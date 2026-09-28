@@ -850,7 +850,9 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
 .splash {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  /* Top of the stack: the boot splash must cover modals (120) and the bottom
+     nav, otherwise the first-load notification gate pops over the splash. */
+  z-index: 130;
   display: flex;
   flex-direction: column;
   background: #08a79d;

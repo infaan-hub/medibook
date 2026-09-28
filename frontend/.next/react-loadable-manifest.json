@@ -1,10 +1,10 @@
 {
   "app\\[[...slug]]\\page.tsx -> ../../src/App": {
-    "id": 1943,
+    "id": 6818,
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
-      "static/chunks/157.73ebb9c6d52dce2f.js",
-      "static/chunks/943.d78571176bef006a.js"
+      "static/chunks/604.df3a0eed022c4537.js",
+      "static/chunks/437.607b2caf964d5758.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -20,30 +20,30 @@
     ]
   },
   "src\\App.tsx -> ./screens": {
-    "id": 4235,
+    "id": 6753,
     "files": [
       "static/chunks/760.03bd18699c8f8211.js",
-      "static/chunks/840.428675870250ad3f.js",
-      "static/chunks/616.85060c45cfb140f3.js"
+      "static/chunks/840.9af9b469a61b4395.js",
+      "static/chunks/753.3ffc6952a0972b05.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-medical-treatment": {
     "id": 5840,
     "files": [
-      "static/chunks/840.428675870250ad3f.js",
+      "static/chunks/840.9af9b469a61b4395.js",
       "static/chunks/587.9e4ab0bf666a93da.js"
     ]
   },
   "src\\App.tsx -> ./screens/emergency": {
     "id": 5634,
     "files": [
-      "static/chunks/634.c0d4b4aaab8c3c78.js"
+      "static/chunks/634.aaa1c80cbdd0da16.js"
     ]
   },
   "src\\App.tsx -> ./screens/visit-history": {
     "id": 146,
     "files": [
-      "static/chunks/146.d0e12c9dd764249b.js"
+      "static/chunks/146.a28554d2dcfdea30.js"
     ]
   }
 }

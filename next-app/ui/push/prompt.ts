@@ -37,7 +37,9 @@ export type PushPromptMode =
  * - `default` + !subscribed → "enable" (first-time ask)
  * - `granted` + !subscribed → "resubscribe" (heals the broken state that
  *   previously hid the prompt forever)
- * - `denied` + !subscribed → "blocked" (instructions, no button)
+ * - `denied` + !subscribed → "blocked" (still an Allow button: asking the
+ *   device again is the only way permission ever comes back, so this never
+ *   degrades into instructions about browser settings)
  * - subscribed → "hidden"
  */
 export function pushPromptMode(

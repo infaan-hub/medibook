@@ -48,8 +48,17 @@ export async function getVapidPublicKey(): Promise<string | null> {
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!("Notification" in window)) return "denied";
   if (Notification.permission === "granted") return "granted";
-  if (Notification.permission === "denied") return "denied";
-  return Notification.requestPermission();
+  // Ask even when the recorded answer is already "denied": this is the only
+  // call that can ever produce the device permission bubble, so the modal's
+  // Allow button must always reach it. A permission the user reset since it
+  // was refused re-shows the bubble; one still refused resolves immediately
+  // without one — either way the answer comes from the device, never from a
+  // message telling the user to dig through browser settings.
+  try {
+    return await Notification.requestPermission();
+  } catch {
+    return Notification.permission;
+  }
 }
 
 export type SubscribeResult =
@@ -101,8 +110,16 @@ async function activeRegistration(): Promise<RegResult> {
  * Create (or reuse) the browser PushSubscription. Never hangs, never throws:
  * failures come back as a typed reason the UI can show to the user instead of
  * silently pretending the subscription succeeded.
+ *
+ * Device permission is requested FIRST. It needs a user gesture (the modal's
+ * Allow button), which does not survive the awaits below — and a service-worker
+ * or VAPID failure must never be able to swallow the permission request, or
+ * the popup would have failed at its one job.
  */
 export async function subscribeToPush(): Promise<SubscribeResult> {
+  const permission = await requestNotificationPermission();
+  if (permission !== "granted") return { ok: false, reason: "permission-denied" };
+
   const ready = await activeRegistration();
   if (!ready.ok) return ready;
 
@@ -115,9 +132,6 @@ export async function subscribeToPush(): Promise<SubscribeResult> {
 
   const key = await getVapidPublicKey();
   if (!key) return { ok: false, reason: "no-vapid-key" };
-
-  const permission = await requestNotificationPermission();
-  if (permission !== "granted") return { ok: false, reason: "permission-denied" };
 
   try {
     const subscription = await ready.reg.pushManager.subscribe({

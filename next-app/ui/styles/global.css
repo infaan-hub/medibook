@@ -3357,11 +3357,16 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .modal {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /* Above every piece of shell chrome (bottom nav, toasts, drawer, header):
+     a modal that lands behind them hides its action buttons (Allow / Use my
+     current location) on a phone. The boot splash sits higher still (130) so
+     the first-load notification gate never pops over it. */
+  z-index: 120;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + var(--safe-bottom, 0px));
 }
 .modal__backdrop {
   position: absolute;
@@ -3371,10 +3376,12 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 .modal__card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 420px;
-  max-height: calc(100dvh - 32px);
-  overflow: auto;
+  max-height: calc(100dvh - 32px - var(--safe-bottom, 0px));
+  overflow: hidden;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-lg, 16px);
@@ -3391,6 +3398,7 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 .modal__header {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
@@ -3409,12 +3417,22 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
   flex-shrink: 0;
 }
 .modal__close:hover { background: var(--color-border); color: var(--color-text); }
-.modal__body { margin-bottom: var(--space-4); }
+/* The header and footer never scroll away — only the body does, so the
+   primary action (Allow / Use my location / Save) is always on screen. */
+.modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .modal__actions {
+  flex: 0 0 auto;
   display: flex;
   gap: var(--space-3);
   justify-content: flex-end;
   flex-wrap: wrap;
+  padding-top: var(--space-4);
 }
 .modal__actions .btn { min-width: 0; }
 @media (max-width: 420px) {
@@ -3424,6 +3442,26 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* ---- Prompt content (location + notifications) ---- */
 .prompt { display: flex; flex-direction: column; gap: var(--space-3); }
+/* shell.css ALSO ships a bare `.prompt` — the fixed bottom toast used by the
+   splash screen and `.prompt-stack` — and it loads after this file. Unchecked
+   it turns a modal's content wrapper into a viewport-anchored bar (left/right
+   16px, 380px wide at >=1200px) that floats over the modal's action buttons,
+   which is what hid "Allow" / "Use my current location" on a phone.
+   `.modal .prompt` is more specific (0,2,0), so it wins over source order. */
+.modal .prompt {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: auto;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .prompt__icon {
   display: grid;
   place-items: center;
@@ -3452,6 +3490,14 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
   padding: 8px 10px;
 }
 .prompt__actions-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+/* Phone: never let a search field + button (or the location action pair) get
+   squeezed into an unreadable row — stack them into full-width tap targets. */
+@media (max-width: 480px) {
+  .location-search { flex-wrap: wrap; }
+  .location-search .field__input { flex: 1 1 160px; }
+  .location-search .btn { flex: 1 1 auto; }
+  .prompt__actions-row .btn { flex: 1 1 100%; }
+}
 
 /* ---- Location / distance badges (doctor cards + profiles) ---- */
 .geo-link {

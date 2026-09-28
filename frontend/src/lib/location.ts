@@ -55,8 +55,10 @@ const DEFAULT_OPTIONS: FixOptions = {
 function describePositionError(error: GeolocationPositionError): LocationError {
   switch (error.code) {
     case error.PERMISSION_DENIED:
+      // No dead-end "open your browser settings" — every surface that shows
+      // this message sits next to the button that retries the permission.
       return new LocationError(
-        "Location permission was denied. Allow it in your browser settings to continue.",
+        "Location permission is off — tap the location button again to allow it.",
         "PERMISSION_DENIED"
       );
     case error.TIMEOUT:
