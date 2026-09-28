@@ -1,10 +1,12 @@
 /**
  * Emergency section (§27) — one file, two role screens:
  *
- *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location + date
- *     + a merged slot grid across the doctors nearby). No doctor picker: whoever
- *     is free and nearest at that time is dispatched automatically and the
- *     appointment is confirmed on the spot. Plus the live status card.
+ *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location + a
+ *     merged slot grid for TODAY across the doctors nearby). No date picker: the
+ *     appointment starts the moment the emergency happens, so it is always
+ *     booked for the current day. No doctor picker either — whoever is free and
+ *     nearest at that time is dispatched automatically and the appointment is
+ *     confirmed on the spot. Plus the live status card.
  *   DoctorEmergencyScreen  (/doctor/emergency) — live requests assigned to them
  *     (auto-confirmed ones included) with patient contact details, plus the
  *     legacy pending queue with one-tap accept / reject.
@@ -60,6 +62,18 @@ function formatDate(d: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/**
+ * Today in the browser's own calendar, `YYYY-MM-DD`.
+ *
+ * Deliberately not `toISOString().slice(0, 10)`: that is the UTC day, which in
+ * Dar es Salaam (UTC+3) is still *yesterday* between 00:00 and 02:59 — an
+ * emergency raised then would be booked on the wrong date.
+ */
+export function todayStr(now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -156,7 +170,6 @@ export function PatientEmergencyScreen() {
 
   const [reason, setReason] = useState<EmergencyReason | "">("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState("");
   const [slot, setSlot] = useState<EmergencySlot | null>(null);
   const [slots, setSlots] = useState<EmergencySlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -192,9 +205,14 @@ export function PatientEmergencyScreen() {
     events: ["appointment.emergency_accepted", "appointment.emergency_rejected"],
   });
 
-  // The merged grid needs the patient's position (for distance) and a date.
+  // The day the appointment starts: the emergency's own day, never a choice.
+  // Declared above the slot effect so its dependency array can read it.
+  const today = todayStr();
+
+  // The merged grid needs the patient's position (for distance). The date is
+  // never asked for — an emergency starts today, so today is what we query.
   useEffect(() => {
-    if (!geo || !date) {
+    if (!geo) {
       setSlots(null);
       setSlot(null);
       return;
@@ -203,7 +221,7 @@ export function PatientEmergencyScreen() {
     setSlotsLoading(true);
     setSlots(null);
     setSlot(null);
-    listEmergencySlots({ latitude: geo.latitude, longitude: geo.longitude, date })
+    listEmergencySlots({ latitude: geo.latitude, longitude: geo.longitude, date: today })
       .then((response) => {
         if (!cancelled) setSlots(response.data ?? []);
       })
@@ -216,7 +234,7 @@ export function PatientEmergencyScreen() {
     return () => {
       cancelled = true;
     };
-  }, [geo, date]);
+  }, [geo, today]);
 
   const shareLocation = async () => {
     setLocating(true);
@@ -234,8 +252,8 @@ export function PatientEmergencyScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!reason || !date || !slot) {
-      setFormError("Choose an emergency reason, a date and a time slot.");
+    if (!reason || !slot) {
+      setFormError("Choose an emergency reason and a time slot.");
       return;
     }
     setSubmitting(true);
@@ -244,7 +262,7 @@ export function PatientEmergencyScreen() {
       const fix = geo ?? (await requestGeo());
       if (!geo) setGeo(fix);
       const response = await createEmergency({
-        appointment_date: date,
+        appointment_date: today,
         start_time: slot.start_time,
         end_time: slot.end_time,
         emergency_reason: reason,
@@ -263,7 +281,6 @@ export function PatientEmergencyScreen() {
       );
       setReason("");
       setDescription("");
-      setDate("");
       setSlot(null);
       setSlots(null);
       setGeo(null);
@@ -281,7 +298,6 @@ export function PatientEmergencyScreen() {
     }
   };
 
-  const today = new Date().toISOString().slice(0, 10);
   // Ward label for the live fix, so "Location shared" reads like a place name.
   const patientAreaFromFix = geo ? nearestAreaName(geo) : null;
 
@@ -451,29 +467,14 @@ export function PatientEmergencyScreen() {
               </Button>
             </div>
 
-            <div className="field">
-              <label className="field__label" htmlFor="em-date">
-                Date
-              </label>
-              <input
-                id="em-date"
-                type="date"
-                className="field__input"
-                min={today}
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                required
-              />
-            </div>
-
-            {date && geo && (
+            {geo && (
               <div className="field">
                 <span className="field__label">Available time</span>
                 {slotsLoading ? (
                   <Skeleton lines={2} />
                 ) : !slots || slots.length === 0 ? (
                   <p className="form-note">
-                    No doctor nearby has a free slot on that date — try another day.
+                    No doctor nearby has a free slot today — try again shortly.
                   </p>
                 ) : (
                   <div className="slot-grid">
@@ -501,7 +502,7 @@ export function PatientEmergencyScreen() {
               </div>
             )}
 
-            {date && !geo && (
+            {!geo && (
               <p className="form-note">
                 Share your location to see which doctors nearby have free times today.
               </p>

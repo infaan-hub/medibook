@@ -4,14 +4,15 @@
  *  1. Navigation — "Emergency" appears in the sidebar AND bottom bar for both
  *     patient (/emergency) and doctor (/doctor/emergency), and never for admin.
  *  2. PatientEmergencyScreen — renders the SOS request form when nothing is
- *     open (no doctor picker: the merged slot grid is chosen after sharing a
- *     location), and the live status card when a request is pending.
+ *     open (no date picker: an emergency is booked for today, the day it
+ *     happens; no doctor picker: the merged slot grid is chosen after sharing
+ *     a location), and the live status card when a request is pending.
  *  3. DoctorEmergencyScreen — renders the queue, accepts/rejects with the
  *     shared reason flow, and only offers Accept on still-pending requests.
  *  4. Route guards — /doctor/emergency is doctor-only.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -20,6 +21,7 @@ import { roleOwnsPath } from "../components/guards";
 import {
   PatientEmergencyScreen,
   DoctorEmergencyScreen,
+  todayStr,
 } from "../screens/emergency";
 import { ToastProvider } from "../state/app-context";
 import type { EmergencyAppointment, User } from "../api/types";
@@ -190,14 +192,27 @@ describe("PatientEmergencyScreen", () => {
     // No doctor picker: auto-dispatch decides who goes, the patient picks a time.
     expect(screen.queryByLabelText("Doctor")).not.toBeInTheDocument();
     expect(screen.getByLabelText("What is happening?")).toBeInTheDocument();
-    expect(screen.getByLabelText("Date")).toBeInTheDocument();
+    // No date picker: the appointment starts now, so it is always today's.
+    expect(screen.queryByLabelText("Date")).not.toBeInTheDocument();
     expect(screen.getByText("Your location")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /request emergency help/i })).toBeInTheDocument();
     expect(listEmergencies).toHaveBeenCalledTimes(1);
     expect(listEmergencySlots).not.toHaveBeenCalled();
   });
 
-  it("loads the merged slot grid once a location and a date are chosen", async () => {
+  it("books on the browser's local calendar day, not the UTC one", () => {
+    // 01:00 local on the 1st is still the 30th in UTC for zones east of
+    // Greenwich — an emergency raised then must not be booked on yesterday.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 1, 1, 0, 0));
+    try {
+      expect(todayStr()).toBe("2026-10-01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("loads the merged slot grid as soon as a location is shared", async () => {
     const who = userEvent.setup();
     listEmergencies.mockResolvedValue(envelope([]));
     listEmergencySlots.mockResolvedValue(
@@ -211,20 +226,45 @@ describe("PatientEmergencyScreen", () => {
     await who.click(await screen.findByRole("button", { name: /share my location/i }));
     expect(await screen.findByRole("button", { name: /location shared/i })).toBeInTheDocument();
 
-    fireEvent.change(await screen.findByLabelText("Date"), {
-      target: { value: "2026-10-01" },
-    });
-
     expect(await screen.findByText("09:00 – 09:30")).toBeInTheDocument();
     expect(screen.getAllByText(/Nungwi/).length).toBeGreaterThan(0);
     await waitFor(() =>
       expect(listEmergencySlots).toHaveBeenCalledWith({
         latitude: -6.162,
         longitude: 39.298,
-        date: "2026-10-01",
+        date: todayStr(),
       })
     );
     expect(screen.queryByLabelText("Doctor")).not.toBeInTheDocument();
+  });
+
+  it("submits the appointment for today — there is no date field to fill", async () => {
+    const who = userEvent.setup();
+    listEmergencies.mockResolvedValue(envelope([]));
+    listEmergencySlots.mockResolvedValue(
+      envelope([
+        { start_time: "09:00:00", end_time: "09:30:00", distance_km: 1.2, area: "Nungwi" },
+      ])
+    );
+
+    renderPatient();
+
+    await who.click(await screen.findByRole("button", { name: /share my location/i }));
+    await screen.findByText("09:00 – 09:30");
+    await who.selectOptions(await screen.findByLabelText("What is happening?"), "injury");
+    await who.click(screen.getByRole("button", { name: /09:00 – 09:30/ }));
+    await who.click(screen.getByRole("button", { name: /request emergency help/i }));
+
+    await waitFor(() =>
+      expect(createEmergency).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointment_date: todayStr(),
+          start_time: "09:00:00",
+          end_time: "09:30:00",
+          emergency_reason: "injury",
+        })
+      )
+    );
   });
 
   it("shows the live status card while a request is pending", async () => {
