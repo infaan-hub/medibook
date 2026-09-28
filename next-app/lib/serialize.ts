@@ -43,9 +43,14 @@ export function originOf(req: Request): string {
 }
 
 /**
- * Media URL for a stored MediaFile id: `/media/{id}` (Phase 11). The id is
+ * Media URL for a stored MediaFile id: `/media/{id}/` (Phase 11). The id is
  * immutable — a replaced image gets a NEW id — so the URL is stable across
  * localhost / preview / production domains and safe to cache forever.
+ *
+ * The trailing slash is required, not cosmetic: the API is trailing-slash
+ * canonical, so `/media/{id}` answers a 308. A browser follows that hop, but
+ * next/image's optimizer does not — it would receive no image bytes and answer
+ * 400, breaking every optimised profile/cover photo.
  */
 export const mediaUrl = (mediaId?: number | null): string | null =>
-  mediaId === null || mediaId === undefined ? null : `/media/${mediaId}`;
+  mediaId === null || mediaId === undefined ? null : `/media/${mediaId}/`;

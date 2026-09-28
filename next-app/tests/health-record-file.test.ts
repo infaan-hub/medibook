@@ -68,7 +68,7 @@ describe("healthRecordDto — file metadata for the Open/Download buttons", () =
       { ...base, file: { filename: "blood-work.pdf", contentType: "application/pdf" } },
       req
     );
-    expect(dto.file).toBe("/media/55");
+    expect(dto.file).toBe("/media/55/");
     expect(dto.file_name).toBe("blood-work.pdf");
     expect(dto.file_content_type).toBe("application/pdf");
   });
@@ -82,7 +82,7 @@ describe("healthRecordDto — file metadata for the Open/Download buttons", () =
 
   it("still serialises file metadata as null when the relation was not loaded", () => {
     const dto = healthRecordDto({ ...base }, req);
-    expect(dto.file).toBe("/media/55");
+    expect(dto.file).toBe("/media/55/");
     expect(dto.file_name).toBeNull();
     expect(dto.file_content_type).toBeNull();
   });

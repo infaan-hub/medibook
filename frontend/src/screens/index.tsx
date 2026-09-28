@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { listMyAppointments } from "../api/appointments";
 import { getPatientProfile } from "../api/patients";
@@ -177,7 +178,14 @@ function PatientHome({ user }: { user: User }) {
           <div className="home__doctor-list">
             {doctors.map((doctor, index) => (
               <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-                <img src={doctorCardImage(doctor, index)} alt={formatDoctorName(doctor)} />
+                <Image
+                  src={doctorCardImage(doctor, index)}
+                  alt={formatDoctorName(doctor)}
+                  width={500}
+                  height={333}
+                  sizes="40vw"
+                  priority={index === 0}
+                />
                 <span className="home__doctor-info">
                   <strong>{formatDoctorName(doctor)}</strong>
                   {doctor.specialties && doctor.specialties.length > 0 ? (
@@ -421,7 +429,13 @@ export function DoctorsPage() {
         <div className="home__doctor-list doctors__grid">
           {results.map((doctor, index) => (
             <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-              <img src={doctorCardImage(doctor, index)} alt={formatDoctorName(doctor)} loading="lazy" />
+              <Image
+                src={doctorCardImage(doctor, index)}
+                alt={formatDoctorName(doctor)}
+                width={500}
+                height={333}
+                sizes="25vw"
+              />
               <span className="home__doctor-info">
                 <strong>{formatDoctorName(doctor)}</strong>
                 {doctor.specialties && doctor.specialties.length > 0 ? (

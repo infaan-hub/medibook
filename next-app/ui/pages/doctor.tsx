@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import Image from "next/image";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -76,11 +77,13 @@ export function DoctorProfileScreen() {
       <Link to="/doctors"><ArrowLeft size={16} /> Back to doctors</Link>
       <Card className="card--fit">
         {doctor.profile_image && (
-          <img
+          <Image
             src={doctor.profile_image}
             alt={`${doctor.first_name} ${doctor.last_name}`}
             className="doctor-profile__photo"
-            loading="lazy"
+            width={320}
+            height={240}
+            sizes="320px"
           />
         )}
         <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
@@ -175,11 +178,13 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
   return (
     <Card className="doc-preview-card">
       <div className="doc-preview-card__photo-wrap">
-        <img
+        <Image
           src={profile.profile_image || "/images/splash-screen.jpeg"}
           alt={`Dr. ${profile.first_name} ${profile.last_name}`}
           className="doc-preview-card__photo"
-          loading="lazy"
+          width={380}
+          height={200}
+          sizes="380px"
         />
         <div className="doc-preview-card__photo-overlay" />
         {profile.phone && (

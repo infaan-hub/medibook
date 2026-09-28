@@ -6,6 +6,14 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Backend is trailing-slash canonical (same as the old Vite proxy).
   skipTrailingSlashRedirect: true,
+  // Card thumbnails are rendered through next/image so the browser downloads a
+  // srcset candidate sized to the card instead of one fixed 500px file.
+  // Uploaded photos (/media/{id}) are same-origin and need no allowlist entry.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com", pathname: "/**" },
+    ],
+  },
 };
 
 export default nextConfig;

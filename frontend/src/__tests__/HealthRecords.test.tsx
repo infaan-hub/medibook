@@ -153,7 +153,7 @@ function healthRecord(overrides: Partial<HealthRecord> = {}): HealthRecord {
     doctor: 3,
     doctor_name: "Ada Lovelace",
     appointment: null,
-    file: "/media/42",
+    file: "/media/42/",
     record_type: "lab_report",
     title: "CBC panel — March 2026",
     description: "Fasting sample",
@@ -431,10 +431,10 @@ describe("doctor /doctor/visit-history/:patientId — health records", () => {
     expect(screen.queryByText("No file attached")).not.toBeInTheDocument();
 
     await user.click(view);
-    expect(openMediaFile).toHaveBeenCalledWith("/media/42", "cbc-march.pdf", expect.any(Function));
+    expect(openMediaFile).toHaveBeenCalledWith("/media/42/", "cbc-march.pdf", expect.any(Function));
 
     await user.click(download);
-    expect(downloadMediaFile).toHaveBeenCalledWith("/media/42", "cbc-march.pdf", expect.any(Function));
+    expect(downloadMediaFile).toHaveBeenCalledWith("/media/42/", "cbc-march.pdf", expect.any(Function));
   });
 
   it("keeps View/Download visible but disabled (with a hint) when a record has no file", async () => {

@@ -4,7 +4,7 @@
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
       "static/chunks/604.df3a0eed022c4537.js",
-      "static/chunks/437.607b2caf964d5758.js"
+      "static/chunks/437.a8e317fa4d73ec34.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -22,9 +22,9 @@
   "src\\App.tsx -> ./screens": {
     "id": 6753,
     "files": [
-      "static/chunks/760.03bd18699c8f8211.js",
+      "static/chunks/694.37efcb99b0e4acc4.js",
       "static/chunks/840.9af9b469a61b4395.js",
-      "static/chunks/753.3ffc6952a0972b05.js"
+      "static/chunks/753.efab19cbd66c20b9.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-medical-treatment": {
