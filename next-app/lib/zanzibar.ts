@@ -445,3 +445,78 @@ export function areaMapsUrl(area: ZanzibarArea): string {
     `https://www.google.com/maps?q=${area.latitude},${area.longitude}`
   );
 }
+
+/**
+ * Well-known place names the ward table carries no row for. Stone Town is not
+ * a ward of its own — `nearestAreaName` resolves its coordinates to Kiponda
+ * (asserted by the "labels well-known places" test), so a typed "Stone Town"
+ * has to land on that same ward or the two halves of the picker disagree.
+ */
+const AREA_ALIASES: Record<string, string> = { "stone town": "kiponda" };
+
+/**
+ * Forward lookup behind the "type an area" half of the location picker.
+ *
+ * Purely local: the typed string is matched against the bundled ward, district
+ * and region names, so nothing leaves the browser — no geocoding key, no CSP
+ * change, no network round-trip. A hit always carries that ward's real WGS84
+ * pair, which is what makes a typed answer exactly as trustworthy as a fix
+ * the doctor captured with the GPS button.
+ *
+ * Scoring, highest first: 100 exact ward name, 90 ward-name prefix, 85 exact
+ * district/region, 80 ward-name substring, 70 district/region substring, then
+ * a +5 bonus when the query starts with the ward name. Every space-separated
+ * token has to appear somewhere in the row, so "nungwi kaskazini" and
+ * "chake chake" narrow down while "asdfgh" returns nothing. Ties break
+ * alphabetically, so the list a doctor sees is stable between renders.
+ */
+export function searchZanzibarAreas(query: string, limit: number = 8): ZanzibarArea[] {
+  const normalized = normalizeAreaQuery(query);
+  const key = AREA_ALIASES[normalized] ?? normalized;
+  if (key.length < 2) return [];
+  const tokens = key.split(" ").filter((token) => token.length >= 2);
+  if (tokens.length === 0) return [];
+
+  const hits: { area: ZanzibarArea; score: number }[] = [];
+  for (const area of ZANZIBAR_AREAS) {
+    const name = normalizeAreaQuery(area.name);
+    const district = normalizeAreaQuery(area.district);
+    const region = normalizeAreaQuery(area.region);
+    const island = area.island.toLowerCase();
+    const everyToken = tokens.every(
+      (token) =>
+        name.includes(token) ||
+        district.includes(token) ||
+        region.includes(token) ||
+        island.includes(token)
+    );
+    if (!everyToken) continue;
+
+    let score = 60;
+    if (name === key) score = 100;
+    else if (name.startsWith(key)) score = 90;
+    else if (district === key || region === key) score = 85;
+    else if (name.includes(key)) score = 80;
+    else if (district.includes(key) || region.includes(key)) score = 70;
+    if (name.startsWith(tokens[0])) score += 5;
+
+    hits.push({ area, score });
+  }
+
+  hits.sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.area.name.localeCompare(b.area.name) ||
+      a.area.district.localeCompare(b.area.district)
+  );
+  return hits.slice(0, limit).map((hit) => hit.area);
+}
+
+/** Lower-case, apostrophe-free, single-spaced — the shape both sides match on. */
+function normalizeAreaQuery(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}

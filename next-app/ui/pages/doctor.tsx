@@ -33,9 +33,10 @@ import type {
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { LocationLine } from "../components/Location";
 import { captureFix, LocationError } from "../lib/location";
+import { searchZanzibarAreas, type ZanzibarArea } from "../lib/zanzibar";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, Crosshair, Check, Phone, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, Crosshair, Check, MapPin, Phone, Plus, Search, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -246,6 +247,12 @@ export function DoctorPersonalScreen() {
   const [geo, setGeo] = useState<GeoInput>({ latitude: null, longitude: null, location_accuracy: null });
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  /** Method 1 of 2: a typed area name plus the wards it matched. */
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeHits, setPlaceHits] = useState<ZanzibarArea[]>([]);
+  const [placeSearched, setPlaceSearched] = useState(false);
+  /** Saving is blocked until one of the two methods has produced a fix. */
+  const hasLocation = geo.latitude !== null && geo.longitude !== null;
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -293,6 +300,37 @@ export function DoctorPersonalScreen() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  /** Method 1 — match the typed text against the bundled ward list. */
+  function updatePlace(value: string) {
+    setPlaceQuery(value);
+    const trimmed = value.trim();
+    setPlaceHits(trimmed.length >= 2 ? searchZanzibarAreas(trimmed) : []);
+    setPlaceSearched(trimmed.length >= 2);
+  }
+
+  /** A chosen ward replaces whatever fix was there — text and GPS are equal. */
+  function pickPlace(area: ZanzibarArea) {
+    setGeo({ latitude: area.latitude, longitude: area.longitude, location_accuracy: null });
+    setGeoError(null);
+    setFieldErrors((current) => {
+      if (!("latitude" in current)) return current;
+      const next = { ...current };
+      delete next.latitude;
+      return next;
+    });
+    setPlaceQuery("");
+    setPlaceHits([]);
+    setPlaceSearched(false);
+    notify("success", `Practice location set to ${area.name}, ${area.district}.`);
+  }
+
+  function clearPlace() {
+    setGeo({ latitude: null, longitude: null, location_accuracy: null });
+    setPlaceQuery("");
+    setPlaceHits([]);
+    setPlaceSearched(false);
+  }
+
   /** Grab a fresh fix for the practice location (saved with the card). */
   async function captureLocation() {
     setGeoError(null);
@@ -310,6 +348,12 @@ export function DoctorPersonalScreen() {
   async function onSave(event: FormEvent) {
     event.preventDefault();
     setFieldErrors({});
+    // A card without coordinates can never be booked — assertBookingLocation
+    // refuses it — so say so here instead of letting the API discover it.
+    if (geo.latitude === null || geo.longitude === null) {
+      setFieldErrors({ latitude: "Set your practice location before saving." });
+      return;
+    }
     setSaving(true);
     try {
       const envelope = await updateMyDoctorProfile({
@@ -382,13 +426,65 @@ export function DoctorPersonalScreen() {
             <TextField id="doc-fee" label="Consultation fee (TSh)" inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
           </div>
           {/* Real practice location — patients use it for "near me" and for
-              directions, and the booking gate refuses without it. */}
+              directions, and the booking gate refuses without it. Two ways in:
+              type an area, or take a fresh GPS fix. */}
           <div className="field">
-            <span className="field__label" id="doc-location-label">Practice location</span>
+            <span className="field__label">Practice location</span>
             <p className="page__subtitle">
-              Your GPS position, not a typed address. Patients see it as a directions link, and
-              appointments can only be booked once it is set.
+              Patients see this as a directions link, and appointments can only be booked once
+              it is set. Search for your area, or use your current position.
             </p>
+
+            {/* Method 1 — typed text, matched against the bundled ward list, so
+                nothing is sent anywhere and the answer is a real coordinate
+                pair rather than free text. */}
+            <label className="field__label" htmlFor="doc-place">Search an area</label>
+            <div className="location-search">
+              <input
+                id="doc-place"
+                className="field__input"
+                value={placeQuery}
+                placeholder="Nungwi, Chake Chake, Kaskazini A..."
+                autoComplete="off"
+                onChange={(event) => updatePlace(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    updatePlace(placeQuery);
+                  }
+                }}
+              />
+              <Button type="button" variant="secondary" onClick={() => updatePlace(placeQuery)}>
+                <Search size={14} /> Find
+              </Button>
+            </div>
+            {placeSearched && placeHits.length === 0 && (
+              <p className="field__hint" role="status">
+                No area matches &quot;{placeQuery.trim()}&quot;. Try a ward, district or region —
+                or use your current position below.
+              </p>
+            )}
+            {placeHits.length > 0 && (
+              <ul className="location-search__results" aria-label="Matching areas">
+                {placeHits.map((area) => (
+                  <li key={`${area.region}-${area.district}-${area.name}`}>
+                    <button
+                      type="button"
+                      className="location-search__hit"
+                      onClick={() => pickPlace(area)}
+                    >
+                      <MapPin size={14} aria-hidden="true" />
+                      <span>
+                        <b>{area.name}</b>
+                        <small>{area.district} · {area.region}</small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Method 2 — the device's own position. */}
             <p className="doctor-profile__location">
               <LocationLine
                 point={geo}
@@ -403,21 +499,23 @@ export function DoctorPersonalScreen() {
                 type="button"
                 variant="secondary"
                 loading={geoBusy}
-                aria-labelledby="doc-location-label"
                 onClick={() => void captureLocation()}
               >
-                <Crosshair size={14} /> {geo.latitude !== null ? "Update location" : "Set location"}
+                <Crosshair size={14} />{" "}
+                {geo.latitude !== null ? "Update from my position" : "Use my current location"}
               </Button>
               {geo.latitude !== null && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setGeo({ latitude: null, longitude: null, location_accuracy: null })}
-                >
+                <Button type="button" variant="ghost" onClick={clearPlace}>
                   Clear
                 </Button>
               )}
             </div>
+            {!hasLocation && (
+              <p className="field__hint">
+                Set your practice location before saving — patients cannot book appointments
+                without it.
+              </p>
+            )}
           </div>
 
           {/* Specialty picker — list of all specialties with their meanings */}
@@ -454,7 +552,7 @@ export function DoctorPersonalScreen() {
             {fieldErrors.specialties && <p className="field__error">{fieldErrors.specialties}</p>}
           </div>
 
-          <Button type="submit" loading={saving}>Save changes</Button>
+          <Button type="submit" loading={saving} disabled={!hasLocation}>Save changes</Button>
         </form>
       </Card>
       <Card>

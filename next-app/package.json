@@ -15,8 +15,9 @@
     "db:seed": "node scripts/seed.mjs",
     "db:import": "node scripts/import-sqlite.mjs",
     "reminders": "node scripts/send-reminders.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --config vitest.ui.config.ts && vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest run --config vitest.ui.config.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -35,11 +36,15 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.5.13",
+    "jsdom": "^29.1.1",
     "prisma": "^6.5.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
