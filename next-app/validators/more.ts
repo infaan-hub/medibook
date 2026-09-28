@@ -3,6 +3,7 @@
  */
 import { z } from "zod";
 import { drfDate, drfInteger, parse, REQUIRED } from "./base";
+import { geoFields, refineGeoPair } from "./doctor";
 
 /** reports AdminUserCreateSerializer (role limited to patient|doctor). */
 export const adminUserCreateSchema = z
@@ -53,14 +54,15 @@ export const adminDoctorCreateSchema = z
       }, { message: "Ensure this number has at most 2 decimal places." })
       .transform((v) => (v === undefined ? 0 : Number(v))),
     bio: z.string().optional(),
-    city: z.string().max(100, "Ensure this string has at most 100 characters.").optional(),
-    office_address: z.string().optional(),
+    /** Real practice coordinates (replaces the dropped `city`/`office_address`). */
+    ...geoFields,
     /** Doctor contact numbers — primary lands on the account row (user.phone,
      *  what every doctor card renders), the optional second on the profile. */
     phone: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
     phone_secondary: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => refineGeoPair(data, ctx));
 
 /** specialties.specialty create/update payload. */
 export const specialtyWriteSchema = z

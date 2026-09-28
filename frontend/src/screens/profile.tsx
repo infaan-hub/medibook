@@ -8,9 +8,13 @@ import { useCallback, useEffect, useState, useRef, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom";
 import { changePassword, updateMe, uploadProfileImage, removeProfileImage } from "../api/auth";
 import { getPatientProfile, updatePatientProfile } from "../api/patients";
+import type { GeoInput } from "../api/types";
 import { ApiError } from "../api/client";
+import { captureFix, LocationError, type CapturedFix } from "../lib/location";
 import { useSession, useToast } from "../state/app-context";
 import { Button, Card, TextField } from "../components/ui";
+import { LocationLine } from "../components/Location";
+import { Crosshair } from "lucide-react";
 
 function fieldErrors(error: unknown): Record<string, string> {
   if (error instanceof ApiError) {
@@ -64,15 +68,22 @@ export function ProfileScreen() {
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
   const [savingPw, setSavingPw] = useState(false);
 
-  // Patient-only: the saved location powers the nearby-doctor prefill on
-  // Find a doctor. Doctors manage their location on their own card screen.
-  const [location, setLocation] = useState({ city: "", address: "" });
+  // Patient-only: the saved position powers the "near me" prefill on Find a
+  // doctor. Doctors manage their practice location on their own card screen.
+  const [geo, setGeo] = useState<GeoInput>({ latitude: null, longitude: null, location_accuracy: null });
   const [locErrors, setLocErrors] = useState<Record<string, string>>({});
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [savingLoc, setSavingLoc] = useState(false);
   useEffect(() => {
     if (user?.role !== "patient") return;
     getPatientProfile()
-      .then((response) => setLocation({ city: response.data.city ?? "", address: response.data.address ?? "" }))
+      .then((response) =>
+        setGeo({
+          latitude: response.data.latitude,
+          longitude: response.data.longitude,
+          location_accuracy: response.data.location_accuracy,
+        })
+      )
       .catch(() => {});
   }, [user?.role]);
 
@@ -99,21 +110,52 @@ export function ProfileScreen() {
     }
   }
 
+  /** One action: grab a fresh GPS fix and persist it as the patient's location. */
   async function onSaveLocation(event: FormEvent) {
     event.preventDefault();
     setLocErrors({});
+    setGeoError(null);
     setSavingLoc(true);
+    let fix: CapturedFix;
+    try {
+      fix = await captureFix();
+    } catch (reason) {
+      setGeoError(
+        reason instanceof LocationError ? reason.message : "Could not read your location."
+      );
+      setSavingLoc(false);
+      return;
+    }
     try {
       const envelope = await updatePatientProfile({
-        city: location.city.trim(),
-        address: location.address.trim(),
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        location_accuracy: fix.accuracy,
       });
-      setLocation({ city: envelope.data.city ?? "", address: envelope.data.address ?? "" });
-      notify("success", "Location saved — nearby doctors surface first on Find a doctor.");
+      setGeo({
+        latitude: envelope.data.latitude,
+        longitude: envelope.data.longitude,
+        location_accuracy: envelope.data.location_accuracy,
+      });
+      notify("success", "Location saved — doctors near you now sort first on Find a doctor.");
     } catch (error) {
       const fields = fieldErrors(error);
       setLocErrors(fields);
       if (!Object.keys(fields).length) notify("error", "Could not save your location.");
+    } finally {
+      setSavingLoc(false);
+    }
+  }
+
+  async function onClearLocation() {
+    setSavingLoc(true);
+    setGeoError(null);
+    try {
+      await updatePatientProfile({ latitude: null, longitude: null, location_accuracy: null });
+      setGeo({ latitude: null, longitude: null, location_accuracy: null });
+      notify("info", "Location cleared.");
+    } catch (error) {
+      notify("error", fieldErrors(error).latitude ?? "Could not clear your location.");
     } finally {
       setSavingLoc(false);
     }
@@ -289,28 +331,29 @@ export function ProfileScreen() {
 
       {user.role === "patient" && (
         <Card>
-          <h2 className="card__title">Location &amp; address</h2>
-          <p className="page__subtitle">Used to surface nearby doctors first on Find a doctor.</p>
+          <h2 className="card__title">Location</h2>
+          <p className="page__subtitle">
+            Your real position (not a typed address) — used to sort doctors near you and to route
+            emergency requests. Appointments cannot be booked without it.
+          </p>
           <form className="form" onSubmit={onSaveLocation} noValidate>
-            <TextField
-              id="prof-city"
-              label="City / area"
-              autoComplete="address-level2"
-              value={location.city}
-              error={locErrors.city}
-              onChange={(e) => setLocation({ ...location, city: e.target.value })}
-            />
-            <TextField
-              id="prof-address"
-              label="Address"
-              autoComplete="street-address"
-              value={location.address}
-              error={locErrors.address}
-              onChange={(e) => setLocation({ ...location, address: e.target.value })}
-            />
-            <Button type="submit" loading={savingLoc}>
-              Save location
-            </Button>
+            <p className="doctor-profile__location">
+              <LocationLine point={geo} accuracy={geo.location_accuracy} />
+            </p>
+            {geoError && <p className="field__error" role="alert">{geoError}</p>}
+            {Object.entries(locErrors).map(([field, msg]) => (
+              <p className="field__error" key={field} role="alert">{msg}</p>
+            ))}
+            <div className="prompt__actions-row">
+              <Button type="submit" loading={savingLoc}>
+                <Crosshair size={14} /> {geo.latitude != null ? "Update my location" : "Share my location"}
+              </Button>
+              {geo.latitude != null && (
+                <Button type="button" variant="ghost" onClick={() => void onClearLocation()}>
+                  Clear
+                </Button>
+              )}
+            </div>
           </form>
         </Card>
       )}

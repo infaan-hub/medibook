@@ -51,13 +51,23 @@ export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput
   await validateRelationIds(input);
   const data: Record<string, unknown> = {};
   for (const key of [
-    "qualifications", "experience_years", "consultation_fee", "bio", "city",
-    "office_address", "is_available",
+    "qualifications", "experience_years", "consultation_fee", "bio", "is_available",
   ] as const) {
     if (input[key] !== undefined) data[key] = input[key];
   }
   if (input.phone !== undefined) data.phone = input.phone;
   if (input.phone_secondary !== undefined) data.phone_secondary = input.phone_secondary;
+  // Real practice coordinates — replaces the dropped `city`/`office_address`
+  // text fields. The schema guarantees the pair arrives together, so a write
+  // here always means "this doctor has a location"; stamp the capture time so
+  // the UI can show how fresh the fix is.
+  if (input.latitude !== undefined || input.longitude !== undefined) {
+    data.latitude = input.latitude ?? null;
+    data.longitude = input.longitude ?? null;
+    data.location_accuracy = input.location_accuracy ?? null;
+    data.location_captured_at =
+      input.latitude === null || input.longitude === null ? null : new Date();
+  }
   // Explicit join models (compound PK) — replace the set: clear then recreate.
   if (input.specialties !== undefined) {
     data.specialties = {
@@ -77,17 +87,23 @@ export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput
   }
 }
 
-/** GET /api/doctors/{id}/ — only is_available doctors are publicly visible. */
+/**
+ * GET /api/doctors/{id}/ — a suspended doctor's page still opens: the
+ * directory now lists them behind a "Not available" badge, so 404-ing here
+ * would turn every one of those cards into a dead link. Booking stays closed
+ * regardless — `availableSlots()` returns [] whenever `is_available` is false.
+ * The account itself must still be active.
+ */
 export async function retrieveDoctor(req: Request, id: number) {
-  const doctor = await doctors.findAvailableDoctorById(id);
-  if (!doctor) throw notFound();
+  const doctor = await doctors.findDoctorById(id);
+  if (!doctor || !doctor.user.is_active) throw notFound();
   return doctorDto(doctor, req);
 }
 
 /** PUT/PATCH /api/doctors/{id}/ — owner or admin only. */
 export async function updateDoctor(req: Request, user: AuthUser, id: number, body: unknown) {
   const doctor = await doctors.findDoctorById(id);
-  if (!doctor || !doctor.is_available) throw notFound();
+  if (!doctor) throw notFound();
   if (!checkOwner(user, doctor.user_id)) throw ownershipForbidden();
   await applyDoctorWrite(doctor.id, parseDoctorWrite(body));
   const refreshed = await doctors.findDoctorById(id);
@@ -97,7 +113,7 @@ export async function updateDoctor(req: Request, user: AuthUser, id: number, bod
 /** DELETE /api/doctors/{id}/ — profile row only (user account survives). */
 export async function destroyDoctor(user: AuthUser, id: number): Promise<void> {
   const doctor = await doctors.findDoctorById(id);
-  if (!doctor || !doctor.is_available) throw notFound();
+  if (!doctor) throw notFound();
   if (!checkOwner(user, doctor.user_id)) throw ownershipForbidden();
   const { prisma } = await import("@/lib/db");
   await prisma.doctor.delete({ where: { id } });

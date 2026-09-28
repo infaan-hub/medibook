@@ -12,10 +12,12 @@ import {
   uploadHealthRecord,
   type HealthRecord,
 } from "../api/health-records";
-import type { Gender, LinkedDoctor, PatientProfile } from "../api/types";
+import type { Gender, GeoInput, LinkedDoctor, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
+import { captureFix, LocationError } from "../lib/location";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { LocationLine } from "../components/Location";
 import { useToast } from "../state/app-context";
 import {
   User,
@@ -24,6 +26,7 @@ import {
   AlertTriangle,
   FileText,
   Calendar,
+  Crosshair,
   Heart,
   Shield,
   Edit3,
@@ -102,21 +105,13 @@ function MedicalDetailCard({ profile }: { profile: PatientProfile }) {
         <div className="med-detail__item">
           <div className="med-detail__icon"><MapPin size={16} /></div>
           <div className="med-detail__content">
-            <span className="med-detail__label">City</span>
-            <span className="med-detail__value">{profile.city || "Not specified"}</span>
+            <span className="med-detail__label">Location</span>
+            <span className="med-detail__value">
+              <LocationLine point={profile} accuracy={profile.location_accuracy} />
+            </span>
           </div>
         </div>
       </div>
-
-      {profile.address && (
-        <div className="med-detail__section">
-          <div className="med-detail__section-icon"><MapPin size={16} /></div>
-          <div>
-            <span className="med-detail__section-label">Address</span>
-            <span className="med-detail__section-value">{profile.address}</span>
-          </div>
-        </div>
-      )}
 
       {(profile.emergency_contact_name || profile.emergency_contact_phone) && (
         <div className="med-detail__section">
@@ -159,8 +154,6 @@ function MedicalDetailCard({ profile }: { profile: PatientProfile }) {
 interface MedForm {
   date_of_birth: string;
   gender: Gender;
-  address: string;
-  city: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   blood_group: string;
@@ -172,8 +165,6 @@ function profileToForm(p: PatientProfile): MedForm {
   return {
     date_of_birth: p.date_of_birth ?? "",
     gender: p.gender,
-    address: p.address,
-    city: p.city,
     emergency_contact_name: p.emergency_contact_name,
     emergency_contact_phone: p.emergency_contact_phone,
     blood_group: p.blood_group,
@@ -189,6 +180,11 @@ function MedicalEditForm({
   onCancel,
   saving,
   errors,
+  geo,
+  geoBusy,
+  geoError,
+  onCaptureLocation,
+  onClearLocation,
 }: {
   form: MedForm;
   setForm: (f: MedForm) => void;
@@ -196,6 +192,11 @@ function MedicalEditForm({
   onCancel: () => void;
   saving: boolean;
   errors: Record<string, string>;
+  geo: GeoInput;
+  geoBusy: boolean;
+  geoError: string | null;
+  onCaptureLocation: () => void;
+  onClearLocation: () => void;
 }) {
   function update<K extends keyof MedForm>(key: K, value: MedForm[K]) {
     setForm({ ...form, [key]: value });
@@ -220,19 +221,38 @@ function MedicalEditForm({
             </select>
           </div>
         </div>
-        <div className="form__row">
-          <div className="field">
-            <label className="field__label" htmlFor="med-blood">Blood group</label>
-            <input id="med-blood" className="field__input" placeholder="e.g. O+" value={form.blood_group} onChange={(e) => update("blood_group", e.target.value)} />
-          </div>
-          <div className="field">
-            <label className="field__label" htmlFor="med-city">City</label>
-            <input id="med-city" className="field__input" placeholder="e.g. Colombo" value={form.city} onChange={(e) => update("city", e.target.value)} />
-          </div>
-        </div>
         <div className="field">
-          <label className="field__label" htmlFor="med-address">Address</label>
-          <input id="med-address" className="field__input" value={form.address} onChange={(e) => update("address", e.target.value)} />
+          <label className="field__label" htmlFor="med-blood">Blood group</label>
+          <input id="med-blood" className="field__input" placeholder="e.g. O+" value={form.blood_group} onChange={(e) => update("blood_group", e.target.value)} />
+        </div>
+        {/* Real position — the address/city text boxes were dropped because
+            free text cannot power "near me", directions or emergencies. */}
+        <div className="field">
+          <span className="field__label" id="med-location-label">Location</span>
+          <p className="page__subtitle">
+            Captured with your device's GPS. Used to find doctors near you and to route emergency
+            requests — appointments cannot be booked without it.
+          </p>
+          <p className="doctor-profile__location">
+            <LocationLine point={geo} accuracy={geo.location_accuracy} />
+          </p>
+          {geoError && <p className="field__error" role="alert">{geoError}</p>}
+          {errors.latitude && <p className="field__error">{errors.latitude}</p>}
+          <div className="prompt__actions-row">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={geoBusy}
+              onClick={onCaptureLocation}
+            >
+              <Crosshair size={14} /> {geo.latitude != null ? "Update location" : "Set my location"}
+            </Button>
+            {geo.latitude != null && (
+              <Button type="button" variant="ghost" onClick={onClearLocation}>
+                Clear
+              </Button>
+            )}
+          </div>
         </div>
         <div className="form__row">
           <div className="field">
@@ -272,6 +292,10 @@ export function SettingsScreen() {
   const [form, setForm] = useState<MedForm | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  /** Pending GPS fix for the edit form (sent with the rest of the profile). */
+  const [geo, setGeo] = useState<GeoInput>({ latitude: null, longitude: null, location_accuracy: null });
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [linkedDoctors, setLinkedDoctors] = useState<LinkedDoctor[]>([]);
@@ -340,6 +364,12 @@ export function SettingsScreen() {
   function handleEdit() {
     if (!profile) return;
     setForm(profileToForm(profile));
+    setGeo({
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+      location_accuracy: profile.location_accuracy,
+    });
+    setGeoError(null);
     setErrors({});
     setEditing(true);
   }
@@ -347,7 +377,21 @@ export function SettingsScreen() {
   function handleCancel() {
     setEditing(false);
     setForm(null);
+    setGeoError(null);
     setErrors({});
+  }
+
+  async function handleCaptureLocation() {
+    setGeoError(null);
+    setGeoBusy(true);
+    try {
+      const fix = await captureFix();
+      setGeo({ latitude: fix.latitude, longitude: fix.longitude, location_accuracy: fix.accuracy });
+    } catch (reason) {
+      setGeoError(reason instanceof LocationError ? reason.message : "Could not read your location.");
+    } finally {
+      setGeoBusy(false);
+    }
   }
 
   async function handleSave() {
@@ -358,13 +402,14 @@ export function SettingsScreen() {
       const envelope = await updatePatientProfile({
         date_of_birth: form.date_of_birth || null,
         gender: form.gender,
-        address: form.address,
-        city: form.city,
         emergency_contact_name: form.emergency_contact_name,
         emergency_contact_phone: form.emergency_contact_phone,
         blood_group: form.blood_group,
         allergies: form.allergies,
         medical_history: form.medical_history,
+        latitude: geo.latitude ?? null,
+        longitude: geo.longitude ?? null,
+        location_accuracy: geo.location_accuracy ?? null,
       });
       setProfile(envelope.data);
       setEditing(false);
@@ -429,6 +474,13 @@ export function SettingsScreen() {
             onCancel={handleCancel}
             saving={saving}
             errors={errors}
+            geo={geo}
+            geoBusy={geoBusy}
+            geoError={geoError}
+            onCaptureLocation={() => void handleCaptureLocation()}
+            onClearLocation={() =>
+              setGeo({ latitude: null, longitude: null, location_accuracy: null })
+            }
           />
         ) : (
           <MedicalDetailCard profile={profile} />

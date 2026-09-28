@@ -24,6 +24,7 @@ import type {
   User,
 } from "@prisma/client";
 import { dateStr, dec2, iso, mediaUrl } from "./serialize";
+import { hasLocation, haversineKm, type GeoPoint } from "./geo";
 
 /** accounts.serializers.user_payload / UserSerializer. */
 export function userPayload(user: User, req: Request): Record<string, unknown> {
@@ -59,8 +60,13 @@ export function patientDto(patient: Patient & { user: User }): Record<string, un
     last_name: patient.user.last_name,
     date_of_birth: dateStr(patient.date_of_birth),
     gender: patient.gender,
-    address: patient.address,
-    city: patient.city,
+    /** REAL geolocation (the free-text address/city fields were dropped). */
+    latitude: patient.latitude,
+    longitude: patient.longitude,
+    location_accuracy: patient.location_accuracy,
+    location_captured_at: iso(patient.location_captured_at),
+    /** False → the client must prompt for a location before booking. */
+    has_location: hasLocation(patient),
     emergency_contact_name: patient.emergency_contact_name,
     emergency_contact_phone: patient.emergency_contact_phone,
     blood_group: patient.blood_group,
@@ -79,14 +85,29 @@ type SpecialtyRow = {
   what_to_expect: string;
 };
 
-/** doctors.serializers.DoctorSerializer. */
+/**
+ * The subset of `User` a doctor DTO actually reads. Declaring it structurally
+ * (instead of the whole `User`) lets callers that intentionally `select` only
+ * these columns — e.g. the emergency nearby search, which must not pull
+ * `password` — satisfy the signature without a cast.
+ */
+type DoctorDtoUser = Pick<User, "email" | "first_name" | "last_name" | "phone" | "profile_image_id">;
+
+/**
+ * doctors.serializers.DoctorSerializer.
+ *
+ * `origin` is optional: when the caller knows where the viewer is (the
+ * directory was asked for "near me"), each DTO carries a real `distance_km`.
+ * Without an origin the field is `null` rather than a misleading `0`.
+ */
 export function doctorDto(
   doctor: Doctor & {
-    user: User;
+    user: DoctorDtoUser;
     specialties: Array<{ specialty: SpecialtyRow }>;
     hospitals: Array<{ hospital_id: number }>;
   },
-  req: Request
+  req: Request,
+  origin?: GeoPoint | null
 ): Record<string, unknown> {
   return {
     id: doctor.id,
@@ -110,8 +131,15 @@ export function doctorDto(
     experience_years: doctor.experience_years,
     consultation_fee: dec2(doctor.consultation_fee),
     bio: doctor.bio,
-    city: doctor.city,
-    office_address: doctor.office_address,
+    /** REAL practice coordinates (city/office_address strings were dropped). */
+    latitude: doctor.latitude,
+    longitude: doctor.longitude,
+    location_accuracy: doctor.location_accuracy,
+    location_captured_at: iso(doctor.location_captured_at),
+    /** False → patients are prompted to nudge this doctor; booking is blocked. */
+    has_location: hasLocation(doctor),
+    /** Kilometres from `origin`, or null when no origin was supplied. */
+    distance_km: origin ? haversineKm(origin, doctor) : null,
     is_available: doctor.is_available,
     average_rating: dec2(doctor.average_rating),
     total_reviews: doctor.total_reviews,
@@ -338,7 +366,7 @@ export function appointmentDto(
  * doctor_phone / doctor_phone_secondary).
  */
 export function emergencyAppointmentDto(
-  appointment: Appointment & { patient: User; doctor: { user: User } }
+  appointment: Appointment & { patient: User; doctor: Doctor & { user: User } }
 ): Record<string, unknown> {
   const base = appointmentDto(appointment);
   return {
@@ -346,6 +374,10 @@ export function emergencyAppointmentDto(
     patient_name: `${appointment.patient.first_name} ${appointment.patient.last_name}`.trim(),
     patient_phone: appointment.patient.phone ?? "",
     appointment_type: appointment.appointment_type,
+    /** Auto-dispatch hands these to the patient so it can label who came. */
+    doctor_name: `${appointment.doctor.user.first_name} ${appointment.doctor.user.last_name}`.trim(),
+    doctor_latitude: appointment.doctor.latitude,
+    doctor_longitude: appointment.doctor.longitude,
     emergency_reason: appointment.emergency_reason,
     emergency_description: appointment.emergency_description,
     emergency_latitude: appointment.emergency_latitude,

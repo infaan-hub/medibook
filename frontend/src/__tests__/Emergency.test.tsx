@@ -4,13 +4,14 @@
  *  1. Navigation — "Emergency" appears in the sidebar AND bottom bar for both
  *     patient (/emergency) and doctor (/doctor/emergency), and never for admin.
  *  2. PatientEmergencyScreen — renders the SOS request form when nothing is
- *     open, and the live status card when a request is pending.
+ *     open (no doctor picker: the merged slot grid is chosen after sharing a
+ *     location), and the live status card when a request is pending.
  *  3. DoctorEmergencyScreen — renders the queue, accepts/rejects with the
- *     shared reason flow.
+ *     shared reason flow, and only offers Accept on still-pending requests.
  *  4. Route guards — /doctor/emergency is doctor-only.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -23,25 +24,26 @@ import {
 import { ToastProvider } from "../state/app-context";
 import type { EmergencyAppointment, User } from "../api/types";
 
-const { listEmergencies, createEmergency, respondToEmergency, listDoctors, getDoctorAvailability } =
-  vi.hoisted(() => ({
+const { listEmergencies, createEmergency, respondToEmergency, listEmergencySlots } = vi.hoisted(
+  () => ({
     listEmergencies: vi.fn(),
     createEmergency: vi.fn(),
     respondToEmergency: vi.fn(),
-    listDoctors: vi.fn(),
-    getDoctorAvailability: vi.fn(),
-  }));
+    listEmergencySlots: vi.fn(),
+  })
+);
 
 vi.mock("../api/emergency", () => ({
   listEmergencies,
   createEmergency,
   respondToEmergency,
+  listEmergencySlots,
   listNearbyDoctors: vi.fn(),
 }));
 
 vi.mock("../api/doctors", () => ({
-  listDoctors,
-  getDoctorAvailability,
+  listDoctors: vi.fn(),
+  getDoctorAvailability: vi.fn(),
   getDoctor: vi.fn(),
   getDoctorAvailableDays: vi.fn(),
   getMySchedule: vi.fn(),
@@ -109,10 +111,27 @@ function pendingRequest(overrides: Partial<EmergencyAppointment> = {}): Emergenc
   };
 }
 
+/** jsdom ships no geolocation — give the screen a real Zanzibar fix. */
+function stubGeolocation(latitude = -6.162, longitude = 39.298) {
+  Object.defineProperty(window.navigator, "geolocation", {
+    configurable: true,
+    value: {
+      getCurrentPosition: (
+        onSuccess: (position: {
+          coords: { latitude: number; longitude: number; accuracy: number };
+        }) => void
+      ) => onSuccess({ coords: { latitude, longitude, accuracy: 12 } }),
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  listDoctors.mockResolvedValue(envelope({ count: 0, next: null, previous: null, results: [] }));
-  getDoctorAvailability.mockResolvedValue(envelope({ doctor: 4, date: "2026-09-30", slots: [] }));
+  stubGeolocation();
+  listEmergencySlots.mockResolvedValue(envelope([]));
+  createEmergency.mockResolvedValue(
+    envelope(pendingRequest({ status: "confirmed", doctor_name: "Neema Kimaro" }))
+  );
 });
 
 function renderPatient() {
@@ -168,12 +187,44 @@ describe("PatientEmergencyScreen", () => {
     renderPatient();
 
     expect(await screen.findByRole("heading", { name: "Request emergency help" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Doctor")).toBeInTheDocument();
+    // No doctor picker: auto-dispatch decides who goes, the patient picks a time.
+    expect(screen.queryByLabelText("Doctor")).not.toBeInTheDocument();
     expect(screen.getByLabelText("What is happening?")).toBeInTheDocument();
     expect(screen.getByLabelText("Date")).toBeInTheDocument();
+    expect(screen.getByText("Your location")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /request emergency help/i })).toBeInTheDocument();
     expect(listEmergencies).toHaveBeenCalledTimes(1);
-    expect(listDoctors).toHaveBeenCalledTimes(1);
+    expect(listEmergencySlots).not.toHaveBeenCalled();
+  });
+
+  it("loads the merged slot grid once a location and a date are chosen", async () => {
+    const who = userEvent.setup();
+    listEmergencies.mockResolvedValue(envelope([]));
+    listEmergencySlots.mockResolvedValue(
+      envelope([
+        { start_time: "09:00:00", end_time: "09:30:00", distance_km: 1.2, area: "Nungwi" },
+      ])
+    );
+
+    renderPatient();
+
+    await who.click(await screen.findByRole("button", { name: /share my location/i }));
+    expect(await screen.findByRole("button", { name: /location shared/i })).toBeInTheDocument();
+
+    fireEvent.change(await screen.findByLabelText("Date"), {
+      target: { value: "2026-10-01" },
+    });
+
+    expect(await screen.findByText("09:00 – 09:30")).toBeInTheDocument();
+    expect(screen.getAllByText(/Nungwi/).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(listEmergencySlots).toHaveBeenCalledWith({
+        latitude: -6.162,
+        longitude: 39.298,
+        date: "2026-10-01",
+      })
+    );
+    expect(screen.queryByLabelText("Doctor")).not.toBeInTheDocument();
   });
 
   it("shows the live status card while a request is pending", async () => {
@@ -185,6 +236,33 @@ describe("PatientEmergencyScreen", () => {
     expect(screen.getByText(/severe pain|injury/i)).toBeInTheDocument();
     // No form while a request is open.
     expect(screen.queryByLabelText("What is happening?")).not.toBeInTheDocument();
+  });
+
+  it("names the auto-assigned doctor and the patient's Zanzibar area on the status card", async () => {
+    listEmergencies.mockResolvedValue(
+      envelope([
+        pendingRequest({
+          status: "confirmed",
+          doctor_name: "Neema Kimaro",
+          doctor_latitude: -6.1622,
+          doctor_longitude: 39.2982,
+          doctor_phone: "+255712000001",
+          emergency_latitude: -6.165,
+          emergency_longitude: 39.296,
+        }),
+      ])
+    );
+
+    renderPatient();
+
+    expect(
+      await screen.findByText(/The nearest available doctor has been assigned/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Dr\. Neema Kimaro/)).toBeInTheDocument();
+    expect(screen.getByText(/Your location:/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("Waiting for the doctor to accept your request…")
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -207,6 +285,31 @@ describe("DoctorEmergencyScreen", () => {
     expect(screen.getByRole("link", { name: /255712000111/ })).toHaveAttribute("href", "tel:+255712000111");
     expect(screen.getByRole("button", { name: /accept/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
+  });
+
+  it("hides Accept on an auto-confirmed request but keeps Reject and the maps link", async () => {
+    listEmergencies.mockResolvedValue(
+      envelope([
+        pendingRequest({
+          status: "confirmed",
+          doctor_name: "Neema Kimaro",
+          emergency_latitude: -6.165,
+          emergency_longitude: 39.296,
+        }),
+      ])
+    );
+
+    renderDoctor();
+
+    expect(await screen.findByText("Asha Juma")).toBeInTheDocument();
+    expect(screen.getByText(/auto-assigned/i)).toBeInTheDocument();
+    expect(screen.getByText(/Patient is in/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open in google maps/i })).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps?q=-6.165,39.296"
+    );
   });
 
   it("accepts a request and reloads the queue", async () => {

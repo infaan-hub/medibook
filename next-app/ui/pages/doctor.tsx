@@ -24,15 +24,18 @@ import type {
   AvailabilityBreak,
   DoctorAvailability,
   DoctorProfile,
+  GeoInput,
   Review,
   ScheduleException,
   ScheduleItem,
   Specialty,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
+import { LocationLine } from "../components/Location";
+import { captureFix, LocationError } from "../lib/location";
 import { DoctorReviewList, StarRating, formatRating, ratingNumber } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
-import { ArrowLeft, Clock, BadgeIndianRupee, Star, MapPin, Check, Phone, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, BadgeIndianRupee, Star, Crosshair, Check, Phone, Plus, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -80,11 +83,9 @@ export function DoctorProfileScreen() {
           />
         )}
         <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
-        {(doctor.office_address || doctor.city) && (
-          <p className="doctor-profile__location">
-            <MapPin size={14} /> {doctor.office_address || doctor.city}
-          </p>
-        )}
+        <p className="doctor-profile__location">
+          <LocationLine point={doctor} accuracy={doctor.location_accuracy} />
+        </p>
         {doctor.specialties && doctor.specialties.length > 0 ? (
           <p>
             <strong>{doctor.specialties[0].name}</strong>
@@ -115,22 +116,43 @@ export function DoctorProfileScreen() {
         )}
 
         {doctor.bio && <p>{doctor.bio}</p>}
-        <div style={{ marginTop: "var(--space-4)" }}>
-          <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
-        </div>
+        {doctor.is_available === false ? (
+          <>
+            <p className="form-note--error">
+              This doctor is not taking appointments right now. Their profile stays
+              open, but booking reopens only when they switch themselves back on.
+            </p>
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <Button disabled>Not available for booking</Button>
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
+          </div>
+        )}
       </Card>
       <Card className="card--fit">
         <h2>Available slots</h2>
-        <div className="field">
-          <label className="field__label" htmlFor="availability-date">Date</label>
-          <input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-        </div>
-        <Button onClick={loadSlots}>Check availability</Button>
-        {availability && (availability.slots.length ? (
-          <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul>
+        {doctor.is_available === false ? (
+          <EmptyState
+            title="Not available for booking"
+            description="This doctor has paused appointments — check back later."
+          />
         ) : (
-          <EmptyState title="No available slots" description="Try another date." />
-        ))}
+          <>
+            <div className="field">
+              <label className="field__label" htmlFor="availability-date">Date</label>
+              <input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </div>
+            <Button onClick={loadSlots}>Check availability</Button>
+            {availability && (availability.slots.length ? (
+              <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul>
+            ) : (
+              <EmptyState title="No available slots" description="Try another date." />
+            ))}
+          </>
+        )}
       </Card>
       <Card className="card--fit">
         <h2>Reviews</h2>
@@ -202,11 +224,9 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
             <BadgeIndianRupee size={14} /> TSh {profile.consultation_fee}
           </span>
         </div>
-        {(profile.office_address || profile.city) && (
-          <p className="doc-preview-card__location">
-            <MapPin size={13} /> <span>{profile.office_address || profile.city}</span>
-          </p>
-        )}
+        <p className="doc-preview-card__location">
+          <LocationLine point={profile} accuracy={profile.location_accuracy} />
+        </p>
       </div>
     </Card>
   );
@@ -221,7 +241,11 @@ export function DoctorPersonalScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", city: "", office_address: "", phone: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", phone: "" });
+  /** Real practice coordinates — the city/office-address text fields are gone. */
+  const [geo, setGeo] = useState<GeoInput>({ latitude: null, longitude: null, location_accuracy: null });
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -239,9 +263,12 @@ export function DoctorPersonalScreen() {
           last_name: response.data.last_name ?? "",
           experience_years: response.data.experience_years?.toString() ?? "",
           consultation_fee: response.data.consultation_fee?.toString() ?? "",
-          city: response.data.city ?? "",
-          office_address: response.data.office_address ?? "",
           phone: response.data.phone ?? "",
+        });
+        setGeo({
+          latitude: response.data.latitude,
+          longitude: response.data.longitude,
+          location_accuracy: response.data.location_accuracy,
         });
         setSelectedSpecialtyIds((response.data.specialties ?? []).map((s) => s.id));
       })
@@ -266,6 +293,20 @@ export function DoctorPersonalScreen() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  /** Grab a fresh fix for the practice location (saved with the card). */
+  async function captureLocation() {
+    setGeoError(null);
+    setGeoBusy(true);
+    try {
+      const fix = await captureFix();
+      setGeo({ latitude: fix.latitude, longitude: fix.longitude, location_accuracy: fix.accuracy });
+    } catch (reason) {
+      setGeoError(reason instanceof LocationError ? reason.message : "Could not read your location.");
+    } finally {
+      setGeoBusy(false);
+    }
+  }
+
   async function onSave(event: FormEvent) {
     event.preventDefault();
     setFieldErrors({});
@@ -278,8 +319,9 @@ export function DoctorPersonalScreen() {
         specialties: selectedSpecialtyIds,
         experience_years: form.experience_years === "" ? 0 : Number(form.experience_years),
         consultation_fee: form.consultation_fee.trim() === "" ? "0" : form.consultation_fee.trim(),
-        city: form.city.trim(),
-        office_address: form.office_address.trim(),
+        latitude: geo.latitude ?? null,
+        longitude: geo.longitude ?? null,
+        location_accuracy: geo.location_accuracy ?? null,
       });
       setProfile(envelope.data);
       notify("success", "Your card has been updated.");
@@ -339,9 +381,43 @@ export function DoctorPersonalScreen() {
             <TextField id="doc-exp" label="Experience (years)" type="number" min="0" value={form.experience_years} error={fieldErrors.experience_years} onChange={(e) => update("experience_years", e.target.value)} />
             <TextField id="doc-fee" label="Consultation fee (TSh)" inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
           </div>
-          <div className="form__row">
-            <TextField id="doc-city" label="City / area (nearby search)" value={form.city} error={fieldErrors.city} onChange={(e) => update("city", e.target.value)} />
-            <TextField id="doc-address" label="Office address (shown on your card)" value={form.office_address} error={fieldErrors.office_address} onChange={(e) => update("office_address", e.target.value)} />
+          {/* Real practice location — patients use it for "near me" and for
+              directions, and the booking gate refuses without it. */}
+          <div className="field">
+            <span className="field__label" id="doc-location-label">Practice location</span>
+            <p className="page__subtitle">
+              Your GPS position, not a typed address. Patients see it as a directions link, and
+              appointments can only be booked once it is set.
+            </p>
+            <p className="doctor-profile__location">
+              <LocationLine
+                point={geo}
+                accuracy={geo.location_accuracy}
+                suffix={geo.latitude !== null ? "on your card" : undefined}
+              />
+            </p>
+            {geoError && <p className="field__error" role="alert">{geoError}</p>}
+            {fieldErrors.latitude && <p className="field__error">{fieldErrors.latitude}</p>}
+            <div className="prompt__actions-row">
+              <Button
+                type="button"
+                variant="secondary"
+                loading={geoBusy}
+                aria-labelledby="doc-location-label"
+                onClick={() => void captureLocation()}
+              >
+                <Crosshair size={14} /> {geo.latitude !== null ? "Update location" : "Set location"}
+              </Button>
+              {geo.latitude !== null && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setGeo({ latitude: null, longitude: null, location_accuracy: null })}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Specialty picker — list of all specialties with their meanings */}

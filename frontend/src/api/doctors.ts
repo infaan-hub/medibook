@@ -19,15 +19,25 @@ import type {
   AvailabilityBreak,
   ScheduleException,
   ScheduleItem,
+  GeoInput,
 } from "./types";
 
 /** Query parameters accepted by GET /api/doctors/. */
 export interface ListDoctorsParams {
   search?: string;
   specialty?: number;
+  /** Hospital city — doctor rows no longer carry a city string. */
   city?: string;
   hospital?: number;
   min_rating?: number;
+  /**
+   * "Near me": send the viewer's coordinates (optionally with `radius_km`) to
+   * get only doctors with a real fix inside the circle, nearest-first, each
+   * with a `distance_km`.
+   */
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
   page?: number;
   page_size?: number;
 }
@@ -84,14 +94,13 @@ export function updateMyDoctorProfile(
       | "experience_years"
       | "consultation_fee"
       | "bio"
-      | "city"
-      | "office_address"
       | "is_available"
     >
   > & {
     /** Specialty ids (backend replaces the M2M set with these ids). */
     specialties?: number[];
-  }
+    /** Real practice coordinates — replaces the dropped city/office_address. */
+  } & GeoInput
 ): Promise<Envelope<DoctorProfile>> {
   return apiPatch<DoctorProfile>("/doctors/me/profile/", payload);
 }

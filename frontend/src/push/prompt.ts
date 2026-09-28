@@ -26,7 +26,8 @@ export type PushPromptMode =
   | "enable"
   /** Permission granted but no subscription stored → show Enable to heal. */
   | "resubscribe"
-  /** Permission denied → show a hint, no button (browser must be re-enabled). */
+  /** Permission denied → still show the Allow button (asking again is the only
+   *  path back to device permission; never dead-end into settings instructions). */
   | "blocked"
   /** Subscribed (or nothing sensible to show) → hide the prompt. */
   | "hidden";
@@ -58,7 +59,7 @@ export function pushPromptMessage(mode: PushPromptMode): string {
     case "resubscribe":
       return "Notifications are allowed but not active on this device — tap Enable to finish setup";
     case "blocked":
-      return "Notifications are blocked — allow them for this site in your browser settings";
+      return "Notifications are off — tap Allow to switch them on";
     default:
       return "";
   }
@@ -76,7 +77,7 @@ export function pushFailureMessage(reason: PushFailureReason): string {
     case "no-vapid-key":
       return "The server did not provide its push encryption key. Check that VAPID keys are configured.";
     case "permission-denied":
-      return "Notification permission was declined. Allow notifications for this site in your browser settings.";
+      return "Notification permission was not granted — tap Allow to request it again.";
     case "timeout":
       return "The background service took too long to start. Reload the page and try again.";
     default:

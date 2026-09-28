@@ -26,7 +26,7 @@ export async function updateProfile(user: AuthUser, body: unknown) {
   await getOrCreatePatient(user.id); // get_or_create before saving
   const data: Record<string, unknown> = {};
   const keys = [
-    "date_of_birth", "gender", "address", "city", "emergency_contact_name",
+    "date_of_birth", "gender", "emergency_contact_name",
     "emergency_contact_phone", "blood_group", "allergies", "medical_history",
     "reminder_preferences", "timezone",
   ] as const;
@@ -34,6 +34,15 @@ export async function updateProfile(user: AuthUser, body: unknown) {
     if (input[key] !== undefined) {
       data[key] = key === "date_of_birth" && input[key] ? new Date(`${input[key]}T00:00:00Z`) : input[key];
     }
+  }
+  // Real geolocation: when either coordinate is present the pair is complete
+  // (the schema rejects a half-written fix), so stamp when it was captured.
+  if (input.latitude !== undefined || input.longitude !== undefined) {
+    data.latitude = input.latitude ?? null;
+    data.longitude = input.longitude ?? null;
+    data.location_accuracy = input.location_accuracy ?? null;
+    data.location_captured_at =
+      input.latitude === null || input.longitude === null ? null : new Date();
   }
   const profile = await updateProfileRow(user.id, data);
   return patientDto(profile);

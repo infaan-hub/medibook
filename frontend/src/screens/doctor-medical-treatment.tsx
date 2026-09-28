@@ -12,6 +12,7 @@ import {
 import type { PatientProfile } from "../api/types";
 import { getHealthRecords, type HealthRecord } from "../api/health-records";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
+import { formatCoords } from "../lib/location";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -102,8 +103,8 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
           <strong>{fmtDate(profile.date_of_birth)}</strong>
         </div>
         <div className="treat-pf">
-          <span>City</span>
-          <strong>{profile.city || "—"}</strong>
+          <span>Location</span>
+          <strong>{formatCoords(profile) ?? "—"}</strong>
         </div>
         {profile.allergies && (
           <div className="treat-pf treat-pf--warn">

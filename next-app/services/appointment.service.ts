@@ -57,6 +57,20 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
       doctor: ["The selected doctor was not found."],
     });
   }
+  // The directory now lists suspended doctors behind a "Not available" chip, so
+  // their profile — and any deep link to the booking screen — still resolves.
+  // Booking stays closed, but with an explicit message instead of the vague
+  // "slot not available" that availableSlots() would produce for them.
+  if (!doctor.is_available) {
+    throw badRequest("This doctor is not taking appointments right now.", {
+      doctor: ["This doctor is not taking appointments right now."],
+    });
+  }
+  // Hard gate: no appointment without a real location on BOTH sides. The
+  // booking screen prompts for it first, so this only fires when the client is
+  // bypassed (curl, a stale tab, a doctor who cleared their location).
+  const { assertBookingLocation } = await import("@/services/location.service");
+  await assertBookingLocation(user, doctor.id);
   if (input.hospital !== undefined && input.hospital !== null) {
     const { findHospital } = await import("@/repositories/content.repo");
     if (!(await findHospital(input.hospital))) {

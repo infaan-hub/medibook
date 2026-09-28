@@ -164,6 +164,8 @@ export const createEmergencyAppointment = (data: {
   reason?: string;
   notes?: string;
   appointment_type: "EMERGENCY";
+  /** Auto-dispatched emergencies start `confirmed`; explicit picks stay `pending`. */
+  status?: AppointmentStatus;
   emergency_reason: string;
   emergency_description?: string;
   emergency_latitude: number;
@@ -182,6 +184,7 @@ export const createEmergencyAppointment = (data: {
       reason: data.reason ?? "",
       notes: data.notes ?? "",
       appointment_type: "EMERGENCY",
+      status: data.status ?? "pending",
       emergency_reason: data.emergency_reason,
       emergency_description: data.emergency_description ?? "",
       emergency_latitude: data.emergency_latitude,

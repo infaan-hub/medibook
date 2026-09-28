@@ -15,7 +15,8 @@ import {
 } from "../api/appointments";
 import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api/doctors";
 import { getDoctorReviews } from "../api/reviews";
-import { getPatientProfile, getPatientProfileById } from "../api/patients";
+import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
+import { ApiError } from "../api/client";
 import type {
   Appointment,
   AppointmentStatus,
@@ -25,15 +26,34 @@ import type {
   PatientProfile,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { Modal } from "../components/Modal";
+import { LocationPrompt } from "../components/LocationPrompt";
+import { NotificationPrompt } from "../components/NotificationPrompt";
+import { usePushNotifications } from "../push/usePushNotifications";
+import type { CapturedFix } from "../lib/location";
 import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, MapPin } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
+/**
+ * The booking gate: the API answers 403 with
+ * `{ errors: { location: ["patient" | "doctor" | "both"] } }` when either side
+ * has no coordinates on file. Returns whose prompt should open, or null when
+ * this error is unrelated to location.
+ */
+function locationGateFromError(error: unknown): "patient" | "doctor" | null {
+  if (!(error instanceof ApiError) || error.status !== 403) return null;
+  const flags = error.errors.location;
+  if (!Array.isArray(flags) || flags.length === 0) return null;
+  // "both" → fix the patient's side first; the doctor's gap is re-derived below.
+  return flags[0] === "doctor" ? "doctor" : "patient";
 }
 
 function formatTime(t: string): string {
@@ -87,6 +107,10 @@ export function BookingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  /** Set when the API answered 403 `errors.location` — the proactive gate
+   *  (below) covers the first visit, this catches a stale/changed profile. */
+  const [gateOverride, setGateOverride] = useState<"patient" | "doctor" | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const loadDoctor = useCallback(() => {
     if (!id) return;
@@ -185,13 +209,47 @@ export function BookingScreen() {
       // Rollback: restore the slot so the patient can retry or pick another.
       setAvailability(prevAvailability);
       setSelectedSlot(booked);
-      setError(message(e));
+      // Location refused → open the guided prompt instead of a raw error line.
+      const gate = locationGateFromError(e);
+      if (gate) {
+        setGateOverride(gate);
+        setError(null);
+      } else {
+        setError(message(e));
+      }
       // Reconcile with server (another client may have taken it while we failed).
       if (prevAvailability) loadSlots();
     } finally {
       setSubmitting(false);
     }
   }
+
+  /** Persist the captured fix on the patient profile, then drop the gate. */
+  async function savePatientLocation(fix: CapturedFix) {
+    setSavingLocation(true);
+    try {
+      const updated = await updatePatientProfile({
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        location_accuracy: fix.accuracy,
+      });
+      setPatientProfile(updated.data);
+      setGateOverride(null);
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
+  // Proactive gate: never let the user fill in a slot the API would reject.
+  const derivedGate =
+    !doctor || !patientProfile
+      ? null
+      : !patientProfile.has_location
+        ? "patient"
+        : !doctor.has_location
+          ? "doctor"
+          : null;
+  const locationGate = gateOverride ?? derivedGate;
 
   if (error && !doctor) return <div className="page"><ErrorState message={error} onRetry={loadDoctor} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
@@ -369,6 +427,47 @@ export function BookingScreen() {
           </form>
         </Card>
       )}
+
+      {/* Location gate — patient side. Blocking: no appointment is created
+          without a real position, so the prompt has to be answered first. */}
+      <LocationPrompt
+        open={locationGate === "patient"}
+        saving={savingLocation}
+        onCaptured={savePatientLocation}
+        title="Set your location to book"
+        description={`${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
+        actionLabel="Share my location"
+        privacyNote="Stored on your profile. Visible only to the doctor you book with."
+      />
+
+      {/* Location gate — doctor side. Nothing the patient can fix, so the only
+          way forward is back to the directory. */}
+      <Modal
+        open={locationGate === "doctor"}
+        title="This doctor has no location yet"
+        dismissible={false}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => navigate("/doctors")}>
+              Find another doctor
+            </Button>
+            <Button variant="primary" onClick={() => navigate(`/doctors/${id}`)}>
+              Back to profile
+            </Button>
+          </>
+        }
+      >
+        <div className="prompt">
+          <div className="prompt__icon" aria-hidden="true">
+            <MapPin size={26} />
+          </div>
+          <p className="prompt__description">
+            Dr. {doctor.first_name} {doctor.last_name} has not set their practice location, so
+            MediBook cannot confirm where the appointment will take place. Please pick another
+            doctor for now.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -378,6 +477,25 @@ export function BookingScreen() {
    ====================================== */
 
 export function BookingSuccessScreen() {
+  const { status, user } = useSession();
+  const userId = status === "authed" && user ? user.id : null;
+  const push = usePushNotifications(userId);
+  // Re-prompt at the exact moment a notification will matter: the doctor's
+  // reply. Uses the same key as the first-load gate so a user who already
+  // answered is not nagged twice — but permission still unresolved is worth
+  // asking about here, where the payoff is immediate.
+  const [asked, setAsked] = useState(() => {
+    try {
+      return localStorage.getItem("medibook_notifications_prompted") === "1";
+    } catch {
+      return true;
+    }
+  });
+  // Ask whenever permission is not yet granted — "default" pops the native
+  // bubble, and even a previous "denied" gets one more shot at the popup
+  // rather than a message telling the user to open browser settings.
+  const canAsk = typeof Notification !== "undefined" && Notification.permission !== "granted";
+
   return (
     <div className="page">
       <Card className="card--fit">
@@ -385,7 +503,7 @@ export function BookingSuccessScreen() {
           <div className="booking-success__icon"><CheckCircle2 size={48} /></div>
           <h1 className="page__title">Appointment requested</h1>
           <p className="page__subtitle">
-            Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects your request.
+            Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects the request.
           </p>
           <div className="booking-success__actions">
             <Link to="/appointments"><Button>View my appointments</Button></Link>
@@ -393,6 +511,30 @@ export function BookingSuccessScreen() {
           </div>
         </div>
       </Card>
+
+      <NotificationPrompt
+        open={!asked && canAsk}
+        busy={push.loading}
+        error={push.error}
+        onEnable={async () => {
+          await push.subscribe();
+          if (typeof Notification !== "undefined" && Notification.permission !== "default") {
+            try {
+              localStorage.setItem("medibook_notifications_prompted", "1");
+            } catch { /* ignore */ }
+            setAsked(true);
+          }
+        }}
+        onDismiss={() => {
+          try {
+            localStorage.setItem("medibook_notifications_prompted", "1");
+          } catch { /* ignore */ }
+          setAsked(true);
+        }}
+        title="Know the moment they reply"
+        description="Turn on notifications and you'll be alerted as soon as this doctor confirms, rejects or reschedules your appointment."
+        skipLabel="Not now"
+      />
     </div>
   );
 }

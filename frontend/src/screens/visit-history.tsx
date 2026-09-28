@@ -11,6 +11,7 @@ import {
 import type { PatientProfile } from "../api/types";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { LocationLine } from "../components/Location";
 import { useToast } from "../state/app-context";
 import {
   ArrowLeft,
@@ -77,10 +78,10 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
           </span>
         </div>
       </div>
-      {profile.address && (
+      {profile.has_location && (
         <div className="treat-patient-row">
-          <span className="treat-patient-label">Address</span>
-          <span>{profile.address}</span>
+          <span className="treat-patient-label">Location</span>
+          <LocationLine point={profile} accuracy={profile.location_accuracy} directions={false} />
         </div>
       )}
       {profile.medical_history && (

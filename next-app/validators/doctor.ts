@@ -5,12 +5,44 @@
 import { z } from "zod";
 import { drfDate, drfTime, parse, REQUIRED } from "./base";
 
+/**
+ * REAL geolocation fields shared by the patient and doctor profiles.
+ *
+ * These replace the dropped free-text `city` / `address` / `office_address`
+ * columns: a string location can't be measured, so every "nearby" feature was
+ * a substring match. Both coordinates must travel together — a latitude with
+ * no longitude is meaningless for the Haversine maths in `lib/geo.ts`.
+ */
+export const geoFields = {
+  latitude: z.number().min(-90, "Latitude must be between -90 and 90.").max(90, "Latitude must be between -90 and 90.").nullable().optional(),
+  longitude: z.number().min(-180, "Longitude must be between -180 and 180.").max(180, "Longitude must be between -180 and 180.").nullable().optional(),
+  /** Horizontal accuracy of the GPS fix in metres. */
+  location_accuracy: z.number().nonnegative("Accuracy cannot be negative.").nullable().optional(),
+} as const;
+
+const hasCoord = (value: number | null | undefined): boolean =>
+  value !== undefined && value !== null;
+
+/** Rejects a half-written fix: latitude without longitude (or vice versa). */
+export function refineGeoPair(
+  data: { latitude?: number | null; longitude?: number | null },
+  ctx: z.RefinementCtx
+): void {
+  const lat = hasCoord(data.latitude);
+  const lng = hasCoord(data.longitude);
+  if (lat === lng) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [lat ? "longitude" : "latitude"],
+    message: "Provide both latitude and longitude.",
+  });
+}
+
 export const patientProfileSchema = z
   .object({
     date_of_birth: drfDate().nullable().optional(),
     gender: z.enum(["", "male", "female", "other"]).optional(),
-    address: z.string().optional(),
-    city: z.string().max(100, "Ensure this string has at most 100 characters.").optional(),
+    ...geoFields,
     emergency_contact_name: z.string().max(150, "Ensure this string has at most 150 characters.").optional(),
     emergency_contact_phone: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
     blood_group: z.string().max(5, "Ensure this string has at most 5 characters.").optional(),
@@ -19,7 +51,8 @@ export const patientProfileSchema = z
     reminder_preferences: z.record(z.unknown()).optional(),
     timezone: z.string().max(64).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => refineGeoPair(data, ctx));
 
 const timePairRefine = (data: { start_time?: string | null; end_time?: string | null }, ctx: z.RefinementCtx) => {
   const start = data.start_time ? data.start_time.trim() : "";
@@ -123,8 +156,7 @@ export const doctorWriteSchema = z
       }, { message: "A valid number is required." })
       .transform((v) => (v === undefined || v === "" ? undefined : Number(v))),
     bio: z.string().optional(),
-    city: z.string().max(100, "Ensure this string has at most 100 characters.").optional(),
-    office_address: z.string().optional(),
+    ...geoFields,
     is_available: z
       .union([z.boolean(), z.string()])
       .optional()
@@ -134,6 +166,7 @@ export const doctorWriteSchema = z
     phone: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
     phone_secondary: z.string().max(16, "Ensure this string has at most 16 characters.").optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => refineGeoPair(data, ctx));
 
 export { parse, REQUIRED };

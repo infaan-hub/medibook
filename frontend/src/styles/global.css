@@ -924,6 +924,14 @@ a { color: var(--color-primary); }
   font-weight: var(--weight-semibold);
 }
 
+/* Emergency merged grid — distance + Zanzibar area under each free time. */
+.slot-btn small {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal, 400);
+  opacity: 0.75;
+}
+
 /* Appointment detail */
 .appt-detail__header {
   display: flex;
@@ -2226,8 +2234,28 @@ a { color: var(--color-primary); }
 .home__doctor-info strong,
 .home__doctor-info span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home__doctor-info strong { font-size: var(--text-sm); }
-.home__doctor-info > span:not(.home__doctor-rating) { color: var(--color-text-muted); font-size: var(--text-xs); }
-.home__doctor-rating { display: inline-flex; align-items: center; gap: 3px; color: var(--color-warning); font-size: var(--text-xs); }
+.home__doctor-info > span:not(.home__doctor-status) { color: var(--color-text-muted); font-size: var(--text-xs); }
+/* Availability chip that replaced the rating stars on every doctor card.
+   Escalated specificity: `.home__doctor-info span` clips with ellipsis. */
+.home__doctor-info > span.home__doctor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-success);
+}
+.home__doctor-info > span.home__doctor-status .home__doctor-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.home__doctor-info > span.home__doctor-status--off { color: var(--color-text-muted); }
 .home__doctor-location { display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-muted); font-size: var(--text-xs); }
 .home__doctor-location svg { flex: 0 0 auto; color: var(--color-primary); }
 .home__doctor-card > svg { display: none; }
@@ -2721,3 +2749,142 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .emergency__request-reason { margin: 6px 0; font-size: 14px; color: #334155; }
 
 .emergency__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+
+/* =========================================================
+   Modal + guided permission prompts (Phase 1/2)
+   ========================================================= */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 24, 32, 0.55);
+  backdrop-filter: blur(2px);
+}
+.modal__card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-3, 0 18px 48px rgba(16, 24, 32, 0.24));
+  padding: var(--space-5);
+  animation: mb-modal-in 0.18s ease-out;
+}
+@keyframes mb-modal-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@media (min-width: 600px) {
+  .modal { align-items: center; }
+}
+.modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.modal__title { margin: 0; font-size: var(--text-lg, 18px); font-weight: var(--weight-semibold, 600); }
+.modal__close {
+  display: inline-grid;
+  place-items: center;
+  width: 32px; height: 32px;
+  border: none;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-surface-alt, #f4f7f7);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.modal__close:hover { background: var(--color-border); color: var(--color-text); }
+.modal__body { margin-bottom: var(--space-4); }
+.modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.modal__actions .btn { min-width: 0; }
+@media (max-width: 420px) {
+  .modal__actions { flex-direction: column-reverse; }
+  .modal__actions .btn { width: 100%; }
+}
+
+/* ---- Prompt content (location + notifications) ---- */
+.prompt { display: flex; flex-direction: column; gap: var(--space-3); }
+.prompt__icon {
+  display: grid;
+  place-items: center;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(9, 169, 158, 0.12);
+  color: #09A99E;
+}
+.prompt__description { margin: 0; color: var(--color-text-muted); font-size: var(--text-md, 14px); }
+.prompt__fix,
+.prompt__privacy,
+.prompt__error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+.prompt__fix { color: #087F79; font-weight: 600; }
+.prompt__privacy { color: var(--color-text-muted); }
+.prompt__error {
+  color: #b0202a;
+  background: #fff1f1;
+  border: 1px solid #ffd4d4;
+  border-radius: var(--radius-sm, 8px);
+  padding: 8px 10px;
+}
+.prompt__actions-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+/* ---- Location / distance badges (doctor cards + profiles) ---- */
+.geo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #09A99E;
+  font-weight: 600;
+  text-decoration: none;
+}
+.geo-link:hover { text-decoration: underline; }
+.geo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  background: rgba(9, 169, 158, 0.1);
+  color: #087F79;
+  font-size: 12px;
+  font-weight: 600;
+}
+.geo-badge--warn { background: #fff7ed; color: #9a3412; }
+.geo-missing { display: inline-flex; align-items: center; gap: 5px; color: #9a3412; font-size: 13px; }
+
+/* "Near me" toggle in the doctor directory */
+.doctors__nearby {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.doctors__nearby[aria-pressed="true"] {
+  background: #09A99E;
+  color: #fff;
+  border-color: #09A99E;
+}

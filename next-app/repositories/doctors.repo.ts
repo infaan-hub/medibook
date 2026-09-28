@@ -17,12 +17,6 @@ export type DoctorWithRelations = Prisma.DoctorGetPayload<{ include: typeof DOCT
 export const findDoctorById = (id: number) =>
   prisma.doctor.findUnique({ where: { id }, include: DOCTOR_INCLUDE });
 
-/** Django's DoctorViewSet.get_queryset(): only is_available=True doctors. */
-export const findAvailableDoctorById = async (id: number) => {
-  const doctor = await prisma.doctor.findUnique({ where: { id }, include: DOCTOR_INCLUDE });
-  return doctor && doctor.is_available ? doctor : null;
-};
-
 export const findDoctorByUserId = (userId: number) =>
   prisma.doctor.findUnique({ where: { user_id: userId }, include: DOCTOR_INCLUDE });
 
@@ -35,22 +29,48 @@ export const doctorExists = async (userId: number) =>
 export interface DoctorListFilters {
   search?: string;
   specialty?: string;
+  /** Hospital city — `Doctor.city` no longer exists; only clinics keep a name. */
   city?: string;
   hospital?: string;
   minRating?: string;
+  /**
+   * Leave undefined to list every doctor and let the UI label them; pass a
+   * boolean when a caller genuinely wants only one side of the split.
+   */
+  isAvailable?: boolean;
+  /** "Near me": viewer's origin and radius in kilometres. */
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
 }
+
+/**
+ * Degrees of latitude covered by `radiusKm` (mean radius of the degree of
+ * latitude is effectively constant). Used for the cheap bounding-box prefilter.
+ */
+const LAT_PER_KM = 1 / 110.574;
+const LON_PER_KM = 1 / 111.32;
 
 /** Port of DoctorViewSet.get_queryset() filtering (icontains + distinct). */
 export function doctorListWhere(filters: DoctorListFilters): Prisma.DoctorWhereInput {
-  const where: Prisma.DoctorWhereInput = { is_available: true };
+  /**
+   * `is_available` is NOT a forced filter any more. The directory has to show
+   * suspended doctors too — otherwise every card could only ever read
+   * "Available", and a suspended doctor disappeared from the admin table with
+   * no way left to approve them again. Callers that do want one side of the
+   * split ask for it with `filters.isAvailable`.
+   */
+  const where: Prisma.DoctorWhereInput = {};
+  if (typeof filters.isAvailable === "boolean") where.is_available = filters.isAvailable;
   const AND: Prisma.DoctorWhereInput[] = [];
 
   if (filters.search) {
+    // Text search is names only: a doctor's location is now a pair of
+    // coordinates, so there is no address string left to match against.
     AND.push({
       OR: [
         { user: { first_name: { contains: filters.search, mode: "insensitive" } } },
         { user: { last_name: { contains: filters.search, mode: "insensitive" } } },
-        { office_address: { contains: filters.search, mode: "insensitive" } },
       ],
     });
   }
@@ -58,11 +78,9 @@ export function doctorListWhere(filters: DoctorListFilters): Prisma.DoctorWhereI
     AND.push({ specialties: { some: { specialty_id: Number(filters.specialty) } } });
   }
   if (filters.city) {
+    // `Doctor.city` was dropped — a doctor's area comes from their clinics.
     AND.push({
-      OR: [
-        { city: { contains: filters.city, mode: "insensitive" } },
-        { hospitals: { some: { hospital: { city: { contains: filters.city, mode: "insensitive" } } } } },
-      ],
+      hospitals: { some: { hospital: { city: { contains: filters.city, mode: "insensitive" } } } },
     });
   }
   if (filters.hospital) {
@@ -71,6 +89,31 @@ export function doctorListWhere(filters: DoctorListFilters): Prisma.DoctorWhereI
   if (filters.minRating) {
     const rating = Number(filters.minRating);
     if (Number.isFinite(rating)) where.average_rating = { gte: rating };
+  }
+  if (
+    typeof filters.latitude === "number" &&
+    Number.isFinite(filters.latitude) &&
+    typeof filters.longitude === "number" &&
+    Number.isFinite(filters.longitude)
+  ) {
+    // Bounding-box prefilter: keeps the DB from scanning rows that could never
+    // be inside the circle. The exact Haversine cut is applied by the caller.
+    const radiusKm = typeof filters.radiusKm === "number" && filters.radiusKm > 0 ? filters.radiusKm : 50;
+    const latSpan = radiusKm * LAT_PER_KM;
+    const lonSpan =
+      (radiusKm * LON_PER_KM) / Math.max(0.01, Math.cos((filters.latitude * Math.PI) / 180));
+    AND.push({
+      latitude: {
+        not: null,
+        gte: filters.latitude - latSpan,
+        lte: filters.latitude + latSpan,
+      },
+      longitude: {
+        not: null,
+        gte: filters.longitude - lonSpan,
+        lte: filters.longitude + lonSpan,
+      },
+    });
   }
   if (AND.length > 0) where.AND = AND;
   return where;
@@ -236,8 +279,11 @@ export const applyDoctorFields = (
     experience_years?: number;
     consultation_fee?: number;
     bio?: string;
-    city?: string;
-    office_address?: string;
+    /** Real practice coordinates (the `city`/`office_address` strings are gone). */
+    latitude?: number | null;
+    longitude?: number | null;
+    location_accuracy?: number | null;
+    location_captured_at?: Date | null;
     phone?: string;
     phone_secondary?: string;
   }

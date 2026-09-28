@@ -62,6 +62,14 @@ describe("emergencyAppointmentCreateSchema", () => {
     expect(input.emergency_reason).toBe("severe_pain");
   });
 
+  it("accepts a payload with no doctor — auto-dispatch picks the nearest free one", () => {
+    const { doctor: _omitted, ...withoutDoctor } = base;
+    const input = parse(emergencyAppointmentCreateSchema, withoutDoctor);
+    expect(input.doctor).toBeUndefined();
+    expect(input.emergency_reason).toBe("severe_pain");
+    expect(input.emergency_latitude).toBeCloseTo(-6.7924);
+  });
+
   it("rejects a payload with no location (the API requires GPS)", () => {
     let caught: ValidationError | null = null;
     try {

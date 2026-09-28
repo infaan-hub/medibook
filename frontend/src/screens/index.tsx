@@ -7,7 +7,9 @@ import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import { listArticles, type Article } from "../api/blog";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
-import { formatRating } from "../components/reviews";
+import { DistanceBadge } from "../components/Location";
+import { captureFix, directionsUrl, LocationError } from "../lib/location";
+import { nearestAreaName } from "../lib/zanzibar";
 import { useSession } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
@@ -16,12 +18,21 @@ import {
   Calendar,
   Bell,
   ChevronRight,
+  Crosshair,
   MapPin,
   Search,
-  Star,
   Phone,
   Newspaper,
 } from "lucide-react";
+
+/** Radius used by the directory's "Near me" toggle (matches the API default). */
+const NEAR_ME_RADIUS_KM = 5;
+
+/** Viewer position sent to the API for the "near me" sort/filter. */
+interface Origin {
+  latitude: number;
+  longitude: number;
+}
 
 /** Photo shown on every doctor card: uploaded picture first, placeholder last. */
 export function doctorCardImage(doctor: DoctorProfile, index = 0): string {
@@ -52,6 +63,24 @@ const dashboardDoctorImages = [
 
 function formatDoctorName(doctor: DoctorProfile): string {
   return `Dr. ${doctor.first_name} ${doctor.last_name}`.trim();
+}
+
+/**
+ * Availability chip on every doctor card — replaces the old rating stars.
+ * Read straight off the card so a patient knows whether they can book before
+ * they open the profile.
+ */
+function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
+  const available = doctor.is_available !== false;
+  return (
+    <span
+      className={`home__doctor-status${available ? "" : " home__doctor-status--off"}`}
+      title={available ? "Taking appointments" : "Not taking appointments right now"}
+    >
+      <span className="home__doctor-status-dot" aria-hidden="true" />
+      {available ? "Available" : "Not available"}
+    </span>
+  );
 }
 
 function PatientHome({ user }: { user: User }) {
@@ -122,16 +151,17 @@ function PatientHome({ user }: { user: User }) {
       {error && <ErrorState message={error} />}
 
       {/* Push notification prompt — enable (first ask), resubscribe (permission
-          granted but no subscription stored), or blocked (denied) hint. */}
+          granted but no subscription stored) or re-ask (permission denied).
+          Always has a button: the native permission bubble is the only way to
+          get device permission, so we keep offering it instead of printing
+          browser-settings instructions. */}
       {pushMode !== "hidden" && (
         <div className="home__push-prompt">
           <Bell size={18} />
           <span>{pushPromptMessage(pushMode)}</span>
-          {pushMode !== "blocked" && (
-            <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
-              {pushLoading ? "Enabling…" : "Enable"}
-            </button>
-          )}
+          <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
+            {pushLoading ? "Enabling…" : pushMode === "blocked" ? "Allow" : "Enable"}
+          </button>
         </div>
       )}
       {pushError && <div className="home__push-error">{pushError}</div>}
@@ -157,8 +187,16 @@ function PatientHome({ user }: { user: User }) {
                   ) : (
                     <span>Medical specialist</span>
                   )}
-                  {(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}
+                  {doctor.has_location && directionsUrl(doctor) && (
+                    <span className="home__doctor-location">
+                      <MapPin size={11} />
+                      <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
+                        {nearestAreaName(doctor) ?? "Directions"}
+                      </a>
+                    </span>
+                  )}
 {doctor.phone && <span className="home__doctor-phone"><Phone size={13} fill="currentColor" /> <a href={`tel:${doctor.phone}`} style={{color: "inherit", textDecoration: "none"}}>{doctor.phone}</a></span>}
+                  <AvailabilityChip doctor={doctor} />
                 </span>
                 <ChevronRight size={17} />
               </Link>
@@ -234,28 +272,186 @@ export function HomeScreen() {
   return <PatientHome user={user} />;
 }
 
+/**
+ * Directory. The free-text "Location / area" box is gone — `Doctor.city` and
+ * `Doctor.office_address` were dropped — and in its place is a real
+ * **Near me** toggle: send the viewer's coordinates and the API returns only
+ * doctors with a fix inside the circle, nearest first, each with `distance_km`.
+ */
 export function DoctorsPage() {
   const { user } = useSession();
-  const [search, setSearch] = useState(""); const [city, setCity] = useState("");
-  const [results, setResults] = useState<DoctorProfile[] | null>(null); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(false);
-  const fetchDoctors = useCallback((params: ListDoctorsParams) => { setLoading(true); setError(null); listDoctors(params).then((response) => setResults(response.data.results)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load doctors.")).finally(() => setLoading(false)); }, []);
-  const load = useCallback(() => { fetchDoctors({ search: search || undefined, city: city || undefined }); }, [fetchDoctors, search, city]);
-  // First visit: patients get their saved location pre-filled so doctors near
-  // them surface first; everyone else sees the full directory.
+  const [search, setSearch] = useState("");
+  const [origin, setOrigin] = useState<Origin | null>(null);
+  const [nearMe, setNearMe] = useState(false);
+  const [originError, setOriginError] = useState<string | null>(null);
+  const [results, setResults] = useState<DoctorProfile[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const buildParams = useCallback(
+    (opts: { search: string; nearMe: boolean; origin: Origin | null }): ListDoctorsParams => ({
+      search: opts.search || undefined,
+      ...(opts.nearMe && opts.origin
+        ? { latitude: opts.origin.latitude, longitude: opts.origin.longitude, radius_km: NEAR_ME_RADIUS_KM }
+        : {}),
+    }),
+    []
+  );
+
+  const fetchDoctors = useCallback(
+    (params: ListDoctorsParams) => {
+      setLoading(true);
+      setError(null);
+      listDoctors(params)
+        .then((response) => setResults(response.data.results))
+        .catch((reason: unknown) =>
+          setError(reason instanceof Error ? reason.message : "Could not load doctors.")
+        )
+        .finally(() => setLoading(false));
+    },
+    []
+  );
+
+  const load = useCallback(
+    (opts?: { search?: string; nearMe?: boolean; origin?: Origin | null }) => {
+      fetchDoctors(
+        buildParams({
+          search: opts?.search ?? search,
+          nearMe: opts?.nearMe ?? nearMe,
+          origin: opts?.origin ?? origin,
+        })
+      );
+    },
+    [buildParams, fetchDoctors, search, nearMe, origin]
+  );
+
+  // First visit: patients who already saved a fix get sorted by distance;
+  // everyone else sees the full directory until they ask for "Near me".
   useEffect(() => {
-    if (user?.role !== "patient") { load(); return; }
+    if (user?.role !== "patient") {
+      load();
+      return;
+    }
     let cancelled = false;
     getPatientProfile()
       .then((response) => {
         if (cancelled) return;
-        const homeCity = response.data.city?.trim() ?? "";
-        if (homeCity) setCity(homeCity);
-        fetchDoctors({ search: search || undefined, city: homeCity || undefined });
+        const profile = response.data;
+        if (profile.has_location && profile.latitude !== null && profile.longitude !== null) {
+          const stored: Origin = { latitude: profile.latitude, longitude: profile.longitude };
+          setOrigin(stored);
+          setNearMe(true);
+          load({ nearMe: true, origin: stored });
+        } else {
+          load();
+        }
       })
-      .catch(() => { if (!cancelled) load(); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) load();
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only on mount — later changes ride the explicit Search/toggle handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return <div className="page doctors-page"><h1 className="page__title">Find a doctor</h1><Card className="doctors__filters"><div className="field"><label className="field__label" htmlFor="doctor-search">Name</label><input id="doctor-search" className="field__input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" /></div><div className="field"><label className="field__label" htmlFor="doctor-city">Location</label><input id="doctor-city" className="field__input" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Filter by location / area" /></div><Button onClick={load} loading={loading}>Search</Button></Card>{error && <ErrorState message={error} onRetry={load} />}{loading && <Skeleton lines={5} />}{!loading && results?.length === 0 && <EmptyState title="No doctors found" description="Try another name or location." />}{!loading && !!results?.length && <div className="home__doctor-list doctors__grid">{results.map((doctor, index) => <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card"><img src={doctorCardImage(doctor, index)} alt={`Dr. ${doctor.first_name} ${doctor.last_name}`} loading="lazy" /><span className="home__doctor-info"><strong>Dr. {doctor.first_name} {doctor.last_name}</strong>{doctor.specialties && doctor.specialties.length > 0 ? <span className="home__doctor-specialties">{doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}</span> : <span>Medical specialist</span>}{(doctor.office_address || doctor.city) && <span className="home__doctor-location"><MapPin size={11} /> {doctor.office_address || doctor.city}</span>}<span className="home__doctor-rating"><Star size={13} fill="currentColor" /> {formatRating(doctor.average_rating)}</span></span><ChevronRight size={17} /></Link>)}</div>}</div>;
+
+  /** Turn "Near me" on: reuse the stored fix, or ask the browser for one. */
+  async function toggleNearMe() {
+    if (nearMe) {
+      setNearMe(false);
+      setOriginError(null);
+      load({ nearMe: false });
+      return;
+    }
+    setOriginError(null);
+    try {
+      const fix = origin ?? (await captureFix());
+      setOrigin(fix);
+      setNearMe(true);
+      load({ nearMe: true, origin: fix });
+    } catch (err) {
+      setOriginError(
+        err instanceof LocationError ? err.message : "Could not read your location."
+      );
+    }
+  }
+
+  return (
+    <div className="page doctors-page">
+      <h1 className="page__title">Find a doctor</h1>
+      <Card className="doctors__filters">
+        <div className="field">
+          <label className="field__label" htmlFor="doctor-search">Name</label>
+          <input
+            id="doctor-search"
+            className="field__input"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name"
+          />
+        </div>
+        <div className="field">
+          <span className="field__label" id="doctor-nearby-label">Location</span>
+          <button
+            type="button"
+            id="doctor-nearby"
+            className="btn btn--secondary doctors__nearby"
+            aria-pressed={nearMe}
+            aria-labelledby="doctor-nearby-label"
+            onClick={() => void toggleNearMe()}
+            disabled={loading}
+          >
+            <Crosshair size={14} />
+            {nearMe ? `Near me — ${NEAR_ME_RADIUS_KM} km` : "Near me"}
+          </button>
+        </div>
+        <Button onClick={() => load()} loading={loading}>Search</Button>
+      </Card>
+      {originError && <ErrorState message={originError} onRetry={() => void toggleNearMe()} />}
+      {error && <ErrorState message={error} onRetry={() => load()} />}
+      {loading && <Skeleton lines={5} />}
+      {!loading && results?.length === 0 && (
+        <EmptyState
+          title="No doctors found"
+          description={nearMe ? `No doctors within ${NEAR_ME_RADIUS_KM} km of you. Try turning off “Near me”.` : "Try another name."}
+        />
+      )}
+      {!loading && !!results?.length && (
+        <div className="home__doctor-list doctors__grid">
+          {results.map((doctor, index) => (
+            <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
+              <img src={doctorCardImage(doctor, index)} alt={formatDoctorName(doctor)} loading="lazy" />
+              <span className="home__doctor-info">
+                <strong>{formatDoctorName(doctor)}</strong>
+                {doctor.specialties && doctor.specialties.length > 0 ? (
+                  <span className="home__doctor-specialties">
+                    {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
+                  </span>
+                ) : (
+                  <span>Medical specialist</span>
+                )}
+                <span className="home__doctor-location">
+                  <MapPin size={11} />
+                  {doctor.distance_km != null ? (
+                    <DistanceBadge km={doctor.distance_km} point={doctor} />
+                  ) : doctor.has_location && directionsUrl(doctor) ? (
+                    <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
+                      {nearestAreaName(doctor) ?? "Directions"}
+                    </a>
+                  ) : (
+                    <span className="geo-missing">Location not shared yet</span>
+                  )}
+                </span>
+                <AvailabilityChip doctor={doctor} />
+              </span>
+              <ChevronRight size={17} />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function NotFoundPage() { return <div className="page"><EmptyState title="Page not found" description="The page you requested does not exist." action={<Link to="/">Go home</Link>} /></div>; }

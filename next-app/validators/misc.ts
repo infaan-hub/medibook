@@ -143,7 +143,8 @@ export const healthRecordCreateSchema = z
 /** Emergency appointment create payload. */
 export const emergencyAppointmentCreateSchema = z
   .object({
-    doctor: drfInteger(),
+    /** Omit it and the service auto-dispatches to the nearest available doctor. */
+    doctor: drfInteger().nullable().optional(),
     hospital: drfInteger().nullable().optional(),
     appointment_date: drfDate(),
     start_time: drfTime(),

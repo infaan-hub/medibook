@@ -62,16 +62,41 @@ export interface ResetConfirmPayload {
 
 export type Gender = "" | "male" | "female" | "other";
 
+/**
+ * Real geolocation shared by patient and doctor profiles (Phase 1).
+ *
+ * The old free-text `address` / `city` / `office_address` fields were dropped:
+ * they could not be measured, so "nearby" search and the emergency
+ * nearby-doctors route had nothing to sort on. Everything now uses WGS84
+ * coordinates captured through the browser Geolocation API.
+ */
+export interface GeoFields {
+  /** Degrees, or null when the user has never shared a location. */
+  latitude: number | null;
+  longitude: number | null;
+  /** Browser-reported accuracy in metres (null when unknown). */
+  location_accuracy: number | null;
+  /** ISO timestamp of the last capture — lets the UI show how fresh a fix is. */
+  location_captured_at: string | null;
+  /** False → the client must prompt for a location before booking an appointment. */
+  has_location: boolean;
+}
+
+/** Coordinates sent when saving a location. Both must be present or both null. */
+export interface GeoInput {
+  latitude?: number | null;
+  longitude?: number | null;
+  location_accuracy?: number | null;
+}
+
 /** GET/PATCH /api/patients/profile/ payload (backend patients/serializers.py). */
-export interface PatientProfile {
+export interface PatientProfile extends GeoFields {
   id: number;
   email: string;
   first_name: string;
   last_name: string;
   date_of_birth: string | null;
   gender: Gender;
-  address: string;
-  city: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   blood_group: string;
@@ -136,6 +161,10 @@ export interface EmergencyAppointment extends Appointment {
   /** Who is asking — shown on the doctor's emergency queue. */
   patient_name?: string;
   patient_phone?: string;
+  /** Auto-dispatch names the doctor it picked and shares their practice coordinates. */
+  doctor_name?: string;
+  doctor_latitude?: number | null;
+  doctor_longitude?: number | null;
 }
 
 /** Emergency reasons accepted by emergencyAppointmentCreateSchema. */
@@ -167,7 +196,7 @@ export interface Paginated<T> {
 
 /* ---- PHASE 7 — Doctor module ---- */
 
-export interface DoctorProfile {
+export interface DoctorProfile extends GeoFields {
   id: number;
   email: string;
   first_name: string;
@@ -183,9 +212,9 @@ export interface DoctorProfile {
   experience_years: number | null;
   consultation_fee: string;
   bio: string;
-  city: string;
-  office_address: string;
   is_available: boolean;
+  /** Present only when the request supplied an origin (near-me search). */
+  distance_km?: number | null;
   /* DRF DecimalField serializes as a string ("0.00"), so accept both. */
   average_rating: number | string | null;
   total_reviews: number;

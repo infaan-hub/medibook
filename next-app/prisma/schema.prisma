@@ -111,12 +111,23 @@ model PasswordResetToken {
 }
 
 /// Patient profile — one per patient-role user (1:1).
+///
+/// Location is REAL geolocation only: `latitude`/`longitude` captured from the
+/// device (see `lib/geo.ts` + `components/LocationPrompt.tsx`). The old free
+/// text `city` / `address` columns were dropped by migration
+/// `20260928000000_profile_geolocation` — a string never told the app where the
+/// patient actually was, so "nearby" sorting was fiction. NULL coords = not set
+/// yet, which is what triggers the fill-location prompt and blocks booking.
 model Patient {
   id                      Int       @id @default(autoincrement())
   date_of_birth           DateTime? @db.Date
   gender                  String    @default("") @db.VarChar(10)
-  address                 String    @default("")
-  city                    String    @default("") @db.VarChar(100)
+  latitude                Float?
+  longitude               Float?
+  /// Horizontal accuracy of the fix in metres (GPS reported).
+  location_accuracy       Float?
+  /// When the fix was taken — lets the UI say how stale the location is.
+  location_captured_at    DateTime?
   emergency_contact_name  String    @default("") @db.VarChar(150)
   emergency_contact_phone String    @default("") @db.VarChar(16)
   blood_group             String    @default("") @db.VarChar(5)
@@ -135,14 +146,20 @@ model Patient {
 }
 
 /// Doctor professional profile — one per doctor-role user (1:1).
+///
+/// Location semantics identical to Patient: `latitude`/`longitude` is the real
+/// position of the practice, captured from the doctor's device. Replaces the
+/// dropped `city` / `office_address` text columns.
 model Doctor {
   id               Int      @id @default(autoincrement())
   qualifications   String   @default("")
   experience_years Int      @default(0)
   consultation_fee Decimal  @default(0) @db.Decimal(10, 2)
   bio              String   @default("")
-  city             String   @default("") @db.VarChar(100)
-  office_address   String   @default("")
+  latitude         Float?
+  longitude        Float?
+  location_accuracy       Float?
+  location_captured_at    DateTime?
   is_available     Boolean  @default(true)
   average_rating   Decimal  @default(0) @db.Decimal(3, 2)
   total_reviews    Int      @default(0)
@@ -164,7 +181,6 @@ model Doctor {
 
   @@index([is_available, average_rating], map: "dr_avail_rat_idx")
   @@index([is_available])
-  @@index([city])
   @@index([created_at])
   @@map("doctors_doctor")
 }

@@ -1,23 +1,34 @@
 /**
  * Emergency section (§27) — one file, two role screens:
  *
- *   PatientEmergencyScreen (/emergency)      — SOS form (doctor + reason + date
- *     slot + live GPS), plus the patient's active request with live status.
- *   DoctorEmergencyScreen  (/doctor/emergency) — the pending request queue with
- *     patient contact details and one-tap accept / reject.
+ *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location + date
+ *     + a merged slot grid across the doctors nearby). No doctor picker: whoever
+ *     is free and nearest at that time is dispatched automatically and the
+ *     appointment is confirmed on the spot. Plus the live status card.
+ *   DoctorEmergencyScreen  (/doctor/emergency) — live requests assigned to them
+ *     (auto-confirmed ones included) with patient contact details, plus the
+ *     legacy pending queue with one-tap accept / reject.
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { createEmergency, listEmergencies, respondToEmergency } from "../api/emergency";
-import { getDoctorAvailability, listDoctors } from "../api/doctors";
-import type {
-  AvailabilitySlot,
-  DoctorProfile,
-  EmergencyAppointment,
-  EmergencyReason,
-} from "../api/types";
+import {
+  createEmergency,
+  listEmergencies,
+  listEmergencySlots,
+  respondToEmergency,
+} from "../api/emergency";
+import type { EmergencyAppointment, EmergencyReason } from "../api/types";
+import type { EmergencySlot } from "../api/emergency";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { ApiError } from "../api/client";
+import {
+  directionsUrl,
+  formatDistance,
+  formatCoords,
+  haversineKm,
+} from "../lib/location";
+import { nearestAreaName } from "../lib/zanzibar";
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import {
@@ -67,6 +78,40 @@ function reasonLabel(reason?: string | null): string {
   return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
 }
 
+/**
+ * Where the patient is: a Zanzibar ward name first (coordinates mean nothing
+ * on their own), then the raw coordinates and a one-tap maps link.
+ */
+function emergencyLocationRow(request: EmergencyAppointment) {
+  if (
+    typeof request.emergency_latitude !== "number" ||
+    typeof request.emergency_longitude !== "number"
+  ) {
+    return null;
+  }
+  const point = {
+    latitude: request.emergency_latitude,
+    longitude: request.emergency_longitude,
+  };
+  const area = nearestAreaName(point);
+  const coords = formatCoords(point);
+  const maps = directionsUrl(point);
+  return (
+    <p className="emergency__contact-line">
+      <MapPin size={14} /> {area ? `Patient is in ${area}` : "Patient location"}
+      {coords ? ` · ${coords}` : ""}
+      {maps && (
+        <>
+          {" · "}
+          <a href={maps} target="_blank" rel="noreferrer">
+            Open in Google Maps
+          </a>
+        </>
+      )}
+    </p>
+  );
+}
+
 interface GeoFix {
   latitude: number;
   longitude: number;
@@ -108,14 +153,12 @@ export function PatientEmergencyScreen() {
   const { notify } = useToast();
   const [emergencies, setEmergencies] = useState<EmergencyAppointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
 
-  const [doctorId, setDoctorId] = useState("");
   const [reason, setReason] = useState<EmergencyReason | "">("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
-  const [slot, setSlot] = useState<AvailabilitySlot | null>(null);
-  const [slots, setSlots] = useState<AvailabilitySlot[] | null>(null);
+  const [slot, setSlot] = useState<EmergencySlot | null>(null);
+  const [slots, setSlots] = useState<EmergencySlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [geo, setGeo] = useState<GeoFix | null>(null);
   const [locating, setLocating] = useState(false);
@@ -141,9 +184,6 @@ export function PatientEmergencyScreen() {
 
   useEffect(() => {
     load();
-    listDoctors({ page_size: 200 })
-      .then((response) => setDoctors(response.data.results ?? []))
-      .catch(() => setDoctors([]));
   }, [load]);
 
   // Doctor accepted / rejected while this screen is open → status updates live.
@@ -152,9 +192,9 @@ export function PatientEmergencyScreen() {
     events: ["appointment.emergency_accepted", "appointment.emergency_rejected"],
   });
 
-  // Slots depend on doctor + date.
+  // The merged grid needs the patient's position (for distance) and a date.
   useEffect(() => {
-    if (!doctorId || !date) {
+    if (!geo || !date) {
       setSlots(null);
       setSlot(null);
       return;
@@ -163,9 +203,9 @@ export function PatientEmergencyScreen() {
     setSlotsLoading(true);
     setSlots(null);
     setSlot(null);
-    getDoctorAvailability(Number(doctorId), date)
+    listEmergencySlots({ latitude: geo.latitude, longitude: geo.longitude, date })
       .then((response) => {
-        if (!cancelled) setSlots(response.data?.slots ?? []);
+        if (!cancelled) setSlots(response.data ?? []);
       })
       .catch(() => {
         if (!cancelled) setSlots([]);
@@ -176,7 +216,7 @@ export function PatientEmergencyScreen() {
     return () => {
       cancelled = true;
     };
-  }, [doctorId, date]);
+  }, [geo, date]);
 
   const shareLocation = async () => {
     setLocating(true);
@@ -194,8 +234,8 @@ export function PatientEmergencyScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!doctorId || !reason || !date || !slot) {
-      setFormError("Choose a doctor, an emergency reason, a date and a time slot.");
+    if (!reason || !date || !slot) {
+      setFormError("Choose an emergency reason, a date and a time slot.");
       return;
     }
     setSubmitting(true);
@@ -203,8 +243,7 @@ export function PatientEmergencyScreen() {
       // GPS is required by the API; reuse the shared fix or take one now.
       const fix = geo ?? (await requestGeo());
       if (!geo) setGeo(fix);
-      await createEmergency({
-        doctor: Number(doctorId),
+      const response = await createEmergency({
         appointment_date: date,
         start_time: slot.start_time,
         end_time: slot.end_time,
@@ -214,8 +253,14 @@ export function PatientEmergencyScreen() {
         emergency_longitude: fix.longitude,
         emergency_location_accuracy: fix.accuracy,
       });
-      notify("success", "Emergency request sent — a doctor will respond shortly.");
-      setDoctorId("");
+      const assigned = response.data?.doctor_name;
+      const where = formatDistance(slot.distance_km) ?? "nearby";
+      notify(
+        "success",
+        assigned
+          ? `Emergency sent to Dr. ${assigned} — ${where}${slot.area ? ` — ${slot.area}` : ""}.`
+          : "Emergency sent — the nearest available doctor has been assigned."
+      );
       setReason("");
       setDescription("");
       setDate("");
@@ -224,13 +269,41 @@ export function PatientEmergencyScreen() {
       setGeo(null);
       load();
     } catch (reason_) {
-      setFormError(message(reason_));
+      if (reason_ instanceof ApiError && Array.isArray(reason_.errors.location)) {
+        setFormError(
+          "A doctor in this area has not set a practice location. Please try another time slot."
+        );
+      } else {
+        setFormError(message(reason_));
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const today = new Date().toISOString().slice(0, 10);
+  // Ward label for the live fix, so "Location shared" reads like a place name.
+  const patientAreaFromFix = geo ? nearestAreaName(geo) : null;
+
+  // Zanzibar area labels for the live status card — coordinates alone mean
+  // nothing to a patient reading them under stress.
+  const patientPoint =
+    active &&
+    typeof active.emergency_latitude === "number" &&
+    typeof active.emergency_longitude === "number"
+      ? { latitude: active.emergency_latitude, longitude: active.emergency_longitude }
+      : null;
+  const doctorPoint =
+    active &&
+    typeof active.doctor_latitude === "number" &&
+    typeof active.doctor_longitude === "number"
+      ? { latitude: active.doctor_latitude, longitude: active.doctor_longitude }
+      : null;
+  const doctorDistance =
+    patientPoint && doctorPoint ? haversineKm(patientPoint, doctorPoint) : null;
+  const doctorArea = doctorPoint ? nearestAreaName(doctorPoint) : null;
+  const doctorMaps = doctorPoint ? directionsUrl(doctorPoint) : null;
+  const patientArea = patientPoint ? nearestAreaName(patientPoint) : null;
 
   return (
     <div className="page emergency-page">
@@ -266,10 +339,17 @@ export function PatientEmergencyScreen() {
             {active.emergency_requested_at &&
               ` · requested ${new Date(active.emergency_requested_at).toLocaleString()}`}
           </p>
-          {active.doctor_phone && (
+          {(active.doctor_name || active.doctor_phone) && (
             <p className="emergency__contact-line">
-              <Phone size={14} /> Doctor:{" "}
-              <a href={`tel:${active.doctor_phone}`}>{active.doctor_phone}</a>
+              <UserIcon size={14} /> {active.doctor_name ? `Dr. ${active.doctor_name}` : "Doctor"}
+              {doctorDistance !== null && ` · ${formatDistance(doctorDistance) ?? ""}`}
+              {doctorArea ? ` — ${doctorArea}` : ""}
+              {active.doctor_phone && (
+                <>
+                  {" · "}
+                  <a href={`tel:${active.doctor_phone}`}>{active.doctor_phone}</a>
+                </>
+              )}
               {active.doctor_phone_secondary && (
                 <>
                   {" · alt: "}
@@ -280,8 +360,27 @@ export function PatientEmergencyScreen() {
               )}
             </p>
           )}
+          {doctorMaps && (
+            <p className="emergency__contact-line">
+              <MapPin size={14} />{" "}
+              <a href={doctorMaps} target="_blank" rel="noreferrer">
+                Open the doctor's location in Google Maps
+              </a>
+            </p>
+          )}
+          {patientPoint && (
+            <p className="emergency__contact-line">
+              <MapPin size={14} /> Your location: {patientArea ?? "shared"} ·{" "}
+              {formatCoords(patientPoint)}
+            </p>
+          )}
           {active.status === "pending" && (
             <p className="form-note">Waiting for the doctor to accept your request…</p>
+          )}
+          {active.status === "confirmed" && (
+            <p className="form-note">
+              The nearest available doctor has been assigned — no waiting on an accept.
+            </p>
           )}
           <div className="emergency__actions">
             <Link to={`/appointments/${active.id}`}>
@@ -299,29 +398,6 @@ export function PatientEmergencyScreen() {
             <ShieldAlert size={18} /> Request emergency help
           </h2>
           <form className="form" onSubmit={submit}>
-            <div className="field">
-              <label className="field__label" htmlFor="em-doctor">
-                Doctor
-              </label>
-              <select
-                id="em-doctor"
-                className="field__input"
-                value={doctorId}
-                onChange={(event) => setDoctorId(event.target.value)}
-                required
-              >
-                <option value="">
-                  {doctors === null ? "Loading doctors…" : "Select a doctor…"}
-                </option>
-                {doctors?.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    Dr. {doctor.first_name} {doctor.last_name}
-                    {doctor.city ? ` — ${doctor.city}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div className="field">
               <label className="field__label" htmlFor="em-reason">
                 What is happening?
@@ -357,6 +433,25 @@ export function PatientEmergencyScreen() {
             </div>
 
             <div className="field">
+              <span className="field__label">Your location</span>
+              <p className="form-note">
+                Your GPS position picks the doctors near you and tells them how to
+                reach you.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={locating}
+                onClick={shareLocation}
+              >
+                <MapPin size={16} />
+                {geo
+                  ? `Location shared (±${geo.accuracy}m${patientAreaFromFix ? ` · ${patientAreaFromFix}` : ""})`
+                  : "Share my location"}
+              </Button>
+            </div>
+
+            <div className="field">
               <label className="field__label" htmlFor="em-date">
                 Date
               </label>
@@ -371,14 +466,14 @@ export function PatientEmergencyScreen() {
               />
             </div>
 
-            {date && doctorId && (
+            {date && geo && (
               <div className="field">
                 <span className="field__label">Available time</span>
                 {slotsLoading ? (
                   <Skeleton lines={2} />
                 ) : !slots || slots.length === 0 ? (
                   <p className="form-note">
-                    No free slots for this doctor on that date — pick another day.
+                    No doctor nearby has a free slot on that date — try another day.
                   </p>
                 ) : (
                   <div className="slot-grid">
@@ -388,12 +483,16 @@ export function PatientEmergencyScreen() {
                         slot?.end_time === item.end_time;
                       return (
                         <button
-                          key={item.start_time}
+                          key={`${item.start_time}-${item.end_time}`}
                           type="button"
                           className={`slot-btn${isSelected ? " slot-btn--selected" : ""}`}
                           onClick={() => setSlot(item)}
                         >
                           {formatTime(item.start_time)} – {formatTime(item.end_time)}
+                          <small>
+                            {formatDistance(item.distance_km) ?? ""}
+                            {item.area ? ` — ${item.area}` : ""}
+                          </small>
                         </button>
                       );
                     })}
@@ -402,24 +501,11 @@ export function PatientEmergencyScreen() {
               </div>
             )}
 
-            <div className="field">
-              <span className="field__label">Your location</span>
+            {date && !geo && (
               <p className="form-note">
-                Your GPS position is sent with the request so the doctor can reach
-                you.
+                Share your location to see which doctors nearby have free times today.
               </p>
-              <Button
-                type="button"
-                variant="secondary"
-                loading={locating}
-                onClick={shareLocation}
-              >
-                <MapPin size={16} />
-                {geo
-                  ? `Location shared (±${geo.accuracy}m)`
-                  : "Share my location"}
-              </Button>
-            </div>
+            )}
 
             {formError && <p className="form-note--error">{formError}</p>}
             <Button type="submit" loading={submitting}>
@@ -505,7 +591,8 @@ export function DoctorEmergencyScreen() {
         <div>
           <h1 className="page__title">Emergency requests</h1>
           <p className="page__subtitle">
-            Incoming urgent requests assigned to you — accept or reject.
+            Urgent requests assigned to you — auto-dispatched ones are already
+            confirmed; older pending ones still need accept or reject.
           </p>
         </div>
       </header>
@@ -559,6 +646,8 @@ export function DoctorEmergencyScreen() {
                 </a>
               </div>
 
+              {emergencyLocationRow(request)}
+
               {rejectingId === request.id ? (
                 <div className="form">
                   <div className="field">
@@ -597,12 +686,19 @@ export function DoctorEmergencyScreen() {
                 </div>
               ) : (
                 <div className="emergency__actions">
-                  <Button
-                    loading={acting === request.id}
-                    onClick={() => accept(request.id)}
-                  >
-                    <Check size={16} /> Accept
-                  </Button>
+                  {request.status === "pending" ? (
+                    <Button
+                      loading={acting === request.id}
+                      onClick={() => accept(request.id)}
+                    >
+                      <Check size={16} /> Accept
+                    </Button>
+                  ) : (
+                    <p className="form-note">
+                      Auto-assigned — already confirmed for the patient. Reject only if
+                      you cannot attend.
+                    </p>
+                  )}
                   <Button
                     variant="danger"
                     onClick={() => {

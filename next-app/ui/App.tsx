@@ -30,6 +30,7 @@ import { ProfileScreen } from "./pages/profile";
 import { SessionProvider, ToastProvider, useSession } from "./state/app-context";
 import { RealtimeProvider } from "./realtime/RealtimeProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { NotificationGate } from "./components/NotificationGate";
 
 /* ---- Lazy-loaded page groups (PHASE 18 code splitting) ---- */
 
@@ -110,6 +111,15 @@ function LaunchRoute() {
 function LaunchSplash({ timerComplete }: { timerComplete: boolean }) {
   const { status } = useSession();
   return <SplashScreen hidden={timerComplete && status !== "booting"} />;
+}
+
+/**
+ * Blocking notification prompt on first load (Phase 2). Mounted once at the
+ * app root so guests never see it and it never stacks on a screen's own UI.
+ */
+function NotificationGateRoot() {
+  const { status, user } = useSession();
+  return <NotificationGate userId={status === "authed" && user ? user.id : null} />;
 }
 
 export default function App() {
@@ -258,6 +268,7 @@ export default function App() {
           <div className="prompt-stack">
             <UpdatePrompt />
           </div>
+          <NotificationGateRoot />
           <ToastViewport />
           </RealtimeProvider>
         </ToastProvider>

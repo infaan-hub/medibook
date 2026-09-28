@@ -74,8 +74,13 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
     experience_years: input.experience_years,
     consultation_fee: input.consultation_fee,
     bio: input.bio,
-    city: input.city,
-    office_address: input.office_address,
+    // Real coordinates — the admin form may leave these blank, in which case
+    // the doctor is prompted for their location on first sign-in.
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    location_accuracy: input.location_accuracy ?? null,
+    location_captured_at:
+      input.latitude === undefined || input.latitude === null ? null : new Date(),
     phone_secondary: input.phone_secondary ?? "",
   });
   const fullName = `${input.first_name ?? ""} ${input.last_name ?? ""}`.trim();

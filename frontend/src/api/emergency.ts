@@ -2,8 +2,11 @@
  * Emergency appointment API (§27 — /api/emergency/*).
  *
  *  - GET  /api/emergency/                     — role-scoped queue (patient's own
- *       emergency appointments / doctor's pending requests / admin's platform queue)
+ *       emergency appointments / doctor's live requests / admin's platform queue)
  *  - POST /api/emergency/                     — patient requests emergency help
+ *       (no doctor in the payload: the server auto-dispatches to whoever is
+ *       free and nearest at the chosen time)
+ *  - GET  /api/emergency/available-slots/     — merged slot grid across nearby doctors
  *  - GET  /api/emergency/nearby-doctors/      — doctors near a location
  *  - POST /api/emergency/appointments/{id}/   — doctor accepts / rejects
  */
@@ -17,7 +20,8 @@ export function listEmergencies(): Promise<Envelope<EmergencyAppointment[]>> {
 }
 
 export interface EmergencyCreatePayload {
-  doctor: number;
+  /** Omit it and the server dispatches to the nearest free doctor. */
+  doctor?: number;
   appointment_date: string;
   start_time: string;
   end_time: string;
@@ -35,6 +39,25 @@ export function createEmergency(
   payload: EmergencyCreatePayload
 ): Promise<Envelope<EmergencyAppointment>> {
   return apiPost<EmergencyAppointment>("/emergency/", payload);
+}
+
+/** One free slot on the merged grid — the nearest doctor offering it, for distance. */
+export interface EmergencySlot {
+  start_time: string;
+  end_time: string;
+  distance_km: number;
+  /** Nearest Zanzibar area name for that doctor, when one is within 15 km. */
+  area: string | null;
+}
+
+/** GET /api/emergency/available-slots/ — every free slot that day, merged. */
+export function listEmergencySlots(params: {
+  latitude: number;
+  longitude: number;
+  date: string;
+  specialty?: number;
+}): Promise<Envelope<EmergencySlot[]>> {
+  return apiGet<EmergencySlot[]>("/emergency/available-slots/", params);
 }
 
 export interface NearbyDoctor {
