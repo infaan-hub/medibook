@@ -9,6 +9,9 @@
  * Save stays disabled until one of them has produced coordinates, because
  * `assertBookingLocation` refuses to book an appointment against a card that
  * has none — so a saved card without a location could never be used.
+ *
+ * Either way the preview names the ward only: raw coordinates and the GPS
+ * accuracy reading are never rendered for patients or doctors.
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -125,11 +128,14 @@ describe("DoctorPersonalScreen location", () => {
     const hit = await screen.findByRole("button", { name: /^nungwi/i });
     fireEvent.click(hit);
 
-    // The preview now names the ward, so the match can be checked by eye.
-    expect(await screen.findByText(/Nungwi ·/)).toBeInTheDocument();
+    // The preview now names the ward, so the match can be checked by eye — the
+    // raw coordinates and the accuracy reading stay internal.
+    expect(await screen.findByText(/Nungwi\s+—\s+on your card/)).toBeInTheDocument();
     expect(saveButton()).not.toBeDisabled();
     // Typed fixes carry no GPS accuracy reading.
     expect(screen.queryByText(/\(±/)).not.toBeInTheDocument();
+    // ...and no coordinate pair is printed anywhere on the screen.
+    expect(screen.queryByText(/-?\d+\.\d+,\s*-?\d+\.\d+/)).not.toBeInTheDocument();
   });
 
   it("says so instead of guessing when nothing matches", async () => {
@@ -150,7 +156,9 @@ describe("DoctorPersonalScreen location", () => {
     fireEvent.click(screen.getByRole("button", { name: /use my current location/i }));
 
     expect(captureFix).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/Nungwi ·/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nungwi\s+—\s+on your card/)).toBeInTheDocument();
+    // The card names the ward; the GPS numbers themselves never reach the screen.
+    expect(screen.queryByText(/-?\d+\.\d+,\s*-?\d+\.\d+/)).not.toBeInTheDocument();
     expect(saveButton()).not.toBeDisabled();
 
     fireEvent.click(saveButton());

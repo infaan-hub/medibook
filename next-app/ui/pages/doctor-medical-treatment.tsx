@@ -12,7 +12,7 @@ import {
 import type { PatientProfile } from "../api/types";
 import { getHealthRecords, type HealthRecord } from "../api/health-records";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
-import { formatCoords } from "../lib/location";
+import { nearestAreaName } from "../lib/zanzibar";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -104,7 +104,7 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
         </div>
         <div className="treat-pf">
           <span>Location</span>
-          <strong>{formatCoords(profile) ?? "—"}</strong>
+          <strong>{nearestAreaName(profile) ?? (profile.has_location ? "Location shared" : "—")}</strong>
         </div>
         {profile.allergies && (
           <div className="treat-pf treat-pf--warn">

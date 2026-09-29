@@ -17,7 +17,6 @@ import { usePushNotifications } from "../push/usePushNotifications";
 import { pushPromptMode, pushPromptMessage } from "../push/prompt";
 import {
   Calendar,
-  Bell,
   ChevronRight,
   Crosshair,
   MapPin,
@@ -138,10 +137,6 @@ function PatientHome({ user }: { user: User }) {
             <span>{user.first_name || user.last_name || "there"}</span>
           </span>
         </div>
-        <Link to="/notifications" className="home__notification" aria-label="Notifications">
-          <Bell size={19} />
-          <span className="home__notification-dot" />
-        </Link>
       </header>
 
       <Link to="/doctors" className="home__search">

@@ -27,7 +27,6 @@ import { ApiError } from "../api/client";
 import {
   directionsUrl,
   formatDistance,
-  formatCoords,
   haversineKm,
 } from "../lib/location";
 import { nearestAreaName } from "../lib/zanzibar";
@@ -93,8 +92,8 @@ function reasonLabel(reason?: string | null): string {
 }
 
 /**
- * Where the patient is: a Zanzibar ward name first (coordinates mean nothing
- * on their own), then the raw coordinates and a one-tap maps link.
+ * Where the patient is: the Zanzibar ward name plus a one-tap maps link. The
+ * raw coordinates stay internal — the ward is what a doctor can act on.
  */
 function emergencyLocationRow(request: EmergencyAppointment) {
   if (
@@ -108,12 +107,10 @@ function emergencyLocationRow(request: EmergencyAppointment) {
     longitude: request.emergency_longitude,
   };
   const area = nearestAreaName(point);
-  const coords = formatCoords(point);
   const maps = directionsUrl(point);
   return (
     <p className="emergency__contact-line">
       <MapPin size={14} /> {area ? `Patient is in ${area}` : "Patient location"}
-      {coords ? ` · ${coords}` : ""}
       {maps && (
         <>
           {" · "}
@@ -386,8 +383,7 @@ export function PatientEmergencyScreen() {
           )}
           {patientPoint && (
             <p className="emergency__contact-line">
-              <MapPin size={14} /> Your location: {patientArea ?? "shared"} ·{" "}
-              {formatCoords(patientPoint)}
+              <MapPin size={14} /> Your location: {patientArea ?? "shared"}
             </p>
           )}
           {active.status === "pending" && (
@@ -462,7 +458,7 @@ export function PatientEmergencyScreen() {
               >
                 <MapPin size={16} />
                 {geo
-                  ? `Location shared (±${geo.accuracy}m${patientAreaFromFix ? ` · ${patientAreaFromFix}` : ""})`
+                  ? `Location shared${patientAreaFromFix ? ` · ${patientAreaFromFix}` : ""}`
                   : "Share my location"}
               </Button>
             </div>

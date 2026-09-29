@@ -2,17 +2,17 @@
  * Location display primitives (Phase 1).
  *
  * A profile no longer has an address line — it has coordinates. These pieces
- * render them as something a user can act on: a compact "1.2 km" badge, an
- * exact coordinate label with the reported accuracy, and a directions link
- * (plain `<a>` to google.com/maps, so no map SDK and no CSP change).
+ * render them as something a user can act on: the nearest Zanzibar ward (or a
+ * neutral "Location shared" when the fix sits outside the ward table), a
+ * compact "1.2 km" badge, and a directions link (plain `<a>` to
+ * google.com/maps, so no map SDK and no CSP change).
+ *
+ * The stored WGS84 numbers and the device accuracy reading stay internal: they
+ * decide whether a fix exists and build the maps link, but they are never
+ * printed for patients or doctors.
  */
 import { Crosshair, MapPin, Navigation } from "lucide-react";
-import {
-  directionsUrl,
-  formatAccuracy,
-  formatCoords,
-  formatDistance,
-} from "../lib/location";
+import { directionsUrl, formatCoords, formatDistance } from "../lib/location";
 import { nearestAreaName } from "../lib/zanzibar";
 
 interface Point {
@@ -22,32 +22,34 @@ interface Point {
 
 export interface LocationLineProps {
   point: Point;
+  /** Metres as reported by the device. Accepted for callers that already pass
+   *  it, deliberately never rendered (see the module note above). */
   accuracy?: number | null;
   /** Render the "Directions" link. Default true — set false for a patient's
    *  own coordinates, which a doctor needs to see but not navigate to. */
   directions?: boolean;
-  /** Optional suffix after the coordinates, e.g. a hospital name. */
+  /** Optional suffix after the ward, e.g. "on your card". */
   suffix?: string;
   className?: string;
 }
 
 /**
- * "Nungwi · -5.73100, 39.30100 (±45 m)" with a directions link — the nearest
- * Zanzibar ward is named first because coordinates alone mean nothing to a
- * person — or the "not set yet" hint when the row carries no fix.
+ * "Nungwi" plus a directions link — the nearest Zanzibar ward is named because
+ * coordinates alone mean nothing to a person — or the "not set yet" hint when
+ * the row carries no fix.
  */
 export function LocationLine({
   point,
-  accuracy,
   directions = true,
   suffix,
   className = "",
 }: LocationLineProps) {
-  const coords = formatCoords(point);
+  // The formatted coordinates are only a presence check here — never rendered.
+  const hasFix = formatCoords(point) !== null;
   const area = nearestAreaName(point);
   const href = directions ? directionsUrl(point) : null;
 
-  if (!coords) {
+  if (!hasFix) {
     return (
       <span className={`geo-missing ${className}`.trim()}>
         <Crosshair size={13} aria-hidden="true" />
@@ -58,8 +60,7 @@ export function LocationLine({
 
   return (
     <span className={className || undefined}>
-      <MapPin size={13} aria-hidden="true" /> {area ? `${area} · ${coords}` : coords}
-      {accuracy !== null && accuracy !== undefined ? ` (${formatAccuracy(accuracy)})` : ""}
+      <MapPin size={13} aria-hidden="true" /> {area ?? "Location shared"}
       {suffix ? ` — ${suffix}` : ""}
       {href && (
         <>

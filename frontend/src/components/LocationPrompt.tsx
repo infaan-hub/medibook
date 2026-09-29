@@ -15,7 +15,8 @@ import { useCallback, useState } from "react";
 import { Crosshair, MapPin, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "./ui";
 import { Modal } from "./Modal";
-import { captureFix, formatAccuracy, formatCoords, LocationError, type CapturedFix } from "../lib/location";
+import { captureFix, LocationError, type CapturedFix } from "../lib/location";
+import { nearestAreaName } from "../lib/zanzibar";
 
 export interface LocationPromptProps {
   open: boolean;
@@ -50,6 +51,9 @@ export function LocationPrompt({
   const [error, setError] = useState<string | null>(null);
   const [lastFix, setLastFix] = useState<CapturedFix | null>(null);
   const working = busy || saving;
+  // The fix is confirmed by the ward it landed in — the raw coordinates and the
+  // accuracy reading are deliberately kept out of the UI.
+  const capturedArea = lastFix ? nearestAreaName(lastFix) : null;
 
   const grab = useCallback(async () => {
     setError(null);
@@ -102,8 +106,7 @@ export function LocationPrompt({
         {lastFix && (
           <p className="prompt__fix">
             <Crosshair size={14} aria-hidden="true" />
-            {formatCoords(lastFix)}
-            {lastFix.accuracy !== null ? ` (${formatAccuracy(lastFix.accuracy)})` : ""}
+            {capturedArea ? `Location captured · ${capturedArea}` : "Location captured"}
           </p>
         )}
 
