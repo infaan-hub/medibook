@@ -159,7 +159,6 @@ function PatientHome({ user }: { user: User }) {
           browser-settings instructions. */}
       {pushMode !== "hidden" && (
         <div className="home__push-prompt">
-          <Bell size={18} />
           <span>{pushPromptMessage(pushMode)}</span>
           <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
             {pushLoading ? "Enabling…" : pushMode === "blocked" ? "Allow" : "Enable"}
