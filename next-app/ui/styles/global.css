@@ -2990,7 +2990,63 @@ a { color: var(--color-primary); }
   .home__doctor-list { grid-template-columns: repeat(2, 1fr); }
   .home__doctor-card { flex: none; }
   .home__doctor-card > img { height: 126px; }
+  .home__blog-list { grid-template-columns: repeat(2, 1fr); }
+  .home__blog-card { flex: none; }
+  .home__blog-card > img { height: 126px; }
 }
+
+/* Health Tips card on the home dashboard — the markup is structurally the
+   same as .home__doctor-card (image + info + chevron), so it reuses that
+   card system: 2-in-row grid, surface/border/shadow shell, clipped image,
+   matching responsive behaviour on phones. */
+.home__blog-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+.home__blog-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.home__blog-card:hover { border-color: var(--color-primary); text-decoration: none; }
+.home__blog-card > img {
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: cover;
+  object-position: center top;
+}
+.home__blog-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: var(--space-3);
+}
+.home__blog-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+.home__blog-info span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.home__blog-card > svg { display: none; }
 
 /* ---- Admin control center ---- */
 .admin-workspace { width: 100%; max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-6); }
