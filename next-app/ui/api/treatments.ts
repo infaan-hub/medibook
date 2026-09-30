@@ -11,7 +11,11 @@ export interface MedicalTreatment {
   appointment: number | null;
   diagnosis: string;
   treatment_notes: string;
+  /** Plain-text rendering of `prescription_items` (kept for older screens). */
   prescription: string;
+  prescription_id: number | null;
+  prescription_notes: string;
+  prescription_items: import("./prescriptions").PrescriptionItem[];
   follow_up_date: string | null;
   follow_up_notes: string;
   created_at: string;
@@ -24,6 +28,9 @@ export interface CreateTreatmentPayload {
   diagnosis?: string;
   treatment_notes?: string;
   prescription?: string;
+  /** Structured medication lines (phase 1) — preferred over free text. */
+  items?: import("./prescriptions").PrescriptionItemInput[];
+  prescription_notes?: string;
   follow_up_date?: string | null;
   follow_up_notes?: string;
 }
@@ -32,6 +39,8 @@ export interface UpdateTreatmentPayload {
   diagnosis?: string;
   treatment_notes?: string;
   prescription?: string;
+  items?: import("./prescriptions").PrescriptionItemInput[];
+  prescription_notes?: string;
   follow_up_date?: string | null;
   follow_up_notes?: string;
 }

@@ -17,6 +17,7 @@ import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api
 import { getDoctorReviews } from "../api/reviews";
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
+import { getQueue, checkIn, startConsultation, type QueueSlot } from "../api/queue";
 import type {
   Appointment,
   AppointmentStatus,
@@ -34,7 +35,7 @@ import type { CapturedFix } from "../lib/location";
 import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, MapPin } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, MapPin, Users, UserCheck, Play } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -872,6 +873,10 @@ export function AppointmentDetailScreen() {
   const [medicalNote, setMedicalNote] = useState<string | null>(null);
   const [medicalLoading, setMedicalLoading] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
+  /** Waiting room (phase 11) — this appointment's place in the day's line. */
+  const [queueSlot, setQueueSlot] = useState<QueueSlot | null>(null);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueTick, setQueueTick] = useState(0);
 
   const isDoctor = user?.role === "doctor";
 
@@ -889,6 +894,59 @@ export function AppointmentDetailScreen() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Waiting room (phase 11): keep this appointment's position fresh while it
+  // is still live (check-ins and consults started by others move the line).
+  useEffect(() => {
+    if (!appointment) return;
+    if (appointment.status !== "pending" && appointment.status !== "confirmed") return;
+    let cancelled = false;
+    const loadQueue = () => {
+      getQueue(appointment.appointment_date)
+        .then((r) => {
+          if (cancelled) return;
+          const entry = r.data.find((item) => item.id === appointment.id);
+          setQueueSlot(entry?.queue ?? null);
+        })
+        .catch(() => {});
+    };
+    loadQueue();
+    const timer = window.setInterval(loadQueue, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [appointment?.id, appointment?.appointment_date, appointment?.status, queueTick]);
+
+  async function handleCheckIn() {
+    if (!appointment) return;
+    setQueueBusy(true);
+    try {
+      const result = await checkIn(appointment.id);
+      notify("success", result.message || "Checked in.");
+      load();
+      setQueueTick((tick) => tick + 1);
+    } catch (e) {
+      notify("error", message(e));
+    } finally {
+      setQueueBusy(false);
+    }
+  }
+
+  async function handleStartConsultation() {
+    if (!appointment) return;
+    setQueueBusy(true);
+    try {
+      await startConsultation(appointment.id);
+      notify("success", "Consultation started.");
+      load();
+      setQueueTick((tick) => tick + 1);
+    } catch (e) {
+      notify("error", message(e));
+    } finally {
+      setQueueBusy(false);
+    }
+  }
 
   // Live detail: reflect confirm/cancel/complete the moment the other side acts.
   useRealtimeEvent((event, payload) => {
@@ -1001,6 +1059,67 @@ export function AppointmentDetailScreen() {
           )}
         </div>
       </Card>
+
+      {/* Waiting room (phase 11) — live position for a today's appointment. */}
+      {queueSlot !== null && (
+        <Card className="queue-card">
+          <div className="queue-card__head">
+            <span className="queue-card__title">
+              <Users size={16} /> Waiting room
+            </span>
+            {queueSlot.being_seen && (
+              <span className="queue-badge queue-badge--live">In consultation</span>
+            )}
+            {!queueSlot.being_seen && queueSlot.position !== null && (
+              <span className="queue-badge">#{queueSlot.position}</span>
+            )}
+          </div>
+
+          {queueSlot.being_seen ? (
+            <p className="queue-card__msg">
+              {isDoctor ? "The patient is with you now." : "You are with the doctor now."}
+            </p>
+          ) : queueSlot.position !== null ? (
+            <>
+              <p className="queue-card__pos">
+                {isDoctor
+                  ? `Patient is #${queueSlot.position} in line`
+                  : `You are #${queueSlot.position} in line`}
+                {queueSlot.position > 1 && !isDoctor
+                  ? ` — ${queueSlot.position - 1} ahead of you`
+                  : ""}
+              </p>
+              <p className="queue-card__meta">
+                {queueSlot.waiting_count} waiting
+                {queueSlot.waited_minutes !== null && ` · waited ${queueSlot.waited_minutes} min`}
+              </p>
+            </>
+          ) : (
+            <p className="queue-card__msg">
+              {isDoctor
+                ? "The patient has not checked in yet."
+                : "You have not checked in yet."}
+            </p>
+          )}
+
+          <div className="queue-card__acts">
+            {!queueSlot.checked_in && canCancel && (
+              <Button variant="primary" loading={queueBusy} onClick={() => void handleCheckIn()}>
+                <UserCheck size={14} /> {isDoctor ? "Check patient in" : "Check in"}
+              </Button>
+            )}
+            {isDoctor && queueSlot.checked_in && !queueSlot.being_seen && (
+              <Button
+                variant="secondary"
+                loading={queueBusy}
+                onClick={() => void handleStartConsultation()}
+              >
+                <Play size={14} /> Start consultation
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {isDoctor && (
         <Card>

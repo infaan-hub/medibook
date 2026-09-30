@@ -148,6 +148,9 @@ export interface Appointment {
   appointment_type?: "NORMAL" | "EMERGENCY";
   doctor_phone?: string;
   doctor_phone_secondary?: string;
+  /** Waiting-room state (phase 11) — null until the patient checks in. */
+  checked_in_at?: string | null;
+  consultation_started_at?: string | null;
 }
 
 /** POST/GET /api/emergency/ rows (emergencyAppointmentDto). */

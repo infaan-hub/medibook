@@ -4,7 +4,9 @@
  * treatments/views_health_records.py). Strict server-side authorization:
  * patients only ever see their own records; doctors only their own uploads.
  */
+import type { Prisma } from "@prisma/client";
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
+import { prisma } from "@/lib/db";
 import { healthRecordDto, patientDto, treatmentDto } from "@/lib/serializers";
 import {
   healthRecordCreateSchema,
@@ -16,11 +18,54 @@ import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import * as appointments from "@/repositories/appointments.repo";
 import { findPatientsByUserIds, getPatientProfile } from "@/repositories/users.repo";
+import {
+  normalizePrescriptionItems,
+  prescriptionText,
+  type PrescriptionItemInput,
+} from "@/services/prescription.service";
 import type { AuthUser } from "@/lib/auth";
 
 /* ------------------------------ Treatments -------------------------------- */
 
 const ownDoctor = (user: AuthUser) => doctors.findDoctorByUserId(user.id);
+
+/**
+ * Structured prescription payload on a treatment write: when the client sends
+ * `items` / `prescription_notes` the legacy `prescription` column is re-rendered
+ * from them and the row is stored/updated in the same transaction. Clients that
+ * omit both keys keep the old free-text behaviour untouched.
+ */
+async function writePrescription(
+  tx: Prisma.TransactionClient,
+  treatment: { id: number; doctor_id: number; patient_id: number; appointment_id: number | null },
+  options: { items: Required<PrescriptionItemInput>[]; notes: string; existingId: number | null }
+) {
+  const { items, notes, existingId } = options;
+  if (items.length === 0) {
+    if (existingId !== null) await tx.prescription.delete({ where: { id: existingId } });
+    return;
+  }
+  const lines = items.map((item, index) => ({ ...item, sort_order: index }));
+  if (existingId !== null) {
+    await tx.prescriptionItem.deleteMany({ where: { prescription_id: existingId } });
+    await tx.prescription.update({
+      where: { id: existingId },
+      data: { notes, items: { create: lines } },
+    });
+    return;
+  }
+  await clinical.createPrescription(
+    {
+      doctor_id: treatment.doctor_id,
+      patient_id: treatment.patient_id,
+      appointment_id: treatment.appointment_id,
+      treatment_id: treatment.id,
+      notes,
+      items,
+    },
+    tx
+  );
+}
 
 /** GET /api/treatments/?patient= — doctor's own treatment records. */
 export async function listTreatments(user: AuthUser, patientId?: string) {
@@ -50,15 +95,31 @@ export async function createTreatment(user: AuthUser, body: unknown) {
       });
     }
   }
-  const row = await clinical.createTreatment({
-    doctor_id: doctor.id,
-    patient_id: input.patient,
-    appointment_id: input.appointment ?? null,
-    diagnosis: input.diagnosis,
-    treatment_notes: input.treatment_notes,
-    prescription: input.prescription,
-    follow_up_date: input.follow_up_date ?? null,
-    follow_up_notes: input.follow_up_notes,
+  const structured = input.items !== undefined || input.prescription_notes !== undefined;
+  const items = structured ? normalizePrescriptionItems(input.items ?? []) : [];
+  const rxNotes = input.prescription_notes ?? "";
+  const row = await prisma.$transaction(async (tx) => {
+    const treatment = await clinical.createTreatment(
+      {
+        doctor_id: doctor.id,
+        patient_id: input.patient,
+        appointment_id: input.appointment ?? null,
+        diagnosis: input.diagnosis,
+        treatment_notes: input.treatment_notes,
+        prescription: structured ? prescriptionText(items, rxNotes) : input.prescription,
+        follow_up_date: input.follow_up_date ?? null,
+        follow_up_notes: input.follow_up_notes,
+      },
+      tx
+    );
+    if (structured) {
+      await writePrescription(tx, treatment, {
+        items,
+        notes: rxNotes,
+        existingId: null,
+      });
+    }
+    return treatment;
   });
   return { data: treatmentDto(row), message: "Treatment record created." };
 }
@@ -86,7 +147,32 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
   if (input.patient !== undefined) data.patient_id = input.patient;
   if (input.appointment !== undefined) data.appointment_id = input.appointment;
   if (input.doctor !== undefined) data.doctor_id = input.doctor;
-  const updated = await clinical.updateTreatment(id, data);
+
+  const structured = input.items !== undefined || input.prescription_notes !== undefined;
+  const existingRx = row.prescriptions?.[0] ?? null;
+  let items: Required<PrescriptionItemInput>[] = [];
+  let rxNotes = existingRx?.notes ?? "";
+  if (structured) {
+    items = normalizePrescriptionItems(input.items ?? []);
+    if (input.prescription_notes !== undefined) rxNotes = input.prescription_notes;
+    data.prescription = prescriptionText(items, rxNotes);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const treatment = await tx.medicalTreatment.update({
+      where: { id },
+      data,
+      include: clinical.RX_INCLUDE,
+    });
+    if (structured) {
+      await writePrescription(tx, treatment, {
+        items,
+        notes: rxNotes,
+        existingId: existingRx?.id ?? null,
+      });
+    }
+    return treatment;
+  });
   return { data: treatmentDto(updated), message: "Treatment updated." };
 }
 

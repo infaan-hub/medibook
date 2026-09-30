@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { drfBoolean, drfDate, drfInteger, drfTime, parse, REQUIRED } from "./base";
+import { prescriptionItemsList } from "./clinical";
 
 /** appointments.serializers.AppointmentSerializer (create payload). */
 export const appointmentCreateSchema = z
@@ -102,6 +103,9 @@ export const treatmentCreateSchema = z
     diagnosis: z.string().max(255, "Ensure this string has at most 255 characters.").optional(),
     treatment_notes: z.string().optional(),
     prescription: z.string().optional(),
+    /** Structured e-prescription lines (phase 1) — replaces the free-text box. */
+    items: prescriptionItemsList.optional(),
+    prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
     follow_up_notes: z.string().optional(),
   })
@@ -116,6 +120,8 @@ export const treatmentPatchSchema = z
     diagnosis: z.string().max(255, "Ensure this string has at most 255 characters.").optional(),
     treatment_notes: z.string().optional(),
     prescription: z.string().optional(),
+    items: prescriptionItemsList.optional(),
+    prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
     follow_up_notes: z.string().optional(),
   })
@@ -199,3 +205,6 @@ export const articleReadSchema = z
 export { parse, drfBoolean, drfDate, drfInteger, drfTime, REQUIRED };
 
 
+
+/** Waiting-room queue (phase 11): POST /api/queue/check-in/ payload. */
+export const queueCheckInSchema = z.object({ appointment: drfInteger() }).passthrough();

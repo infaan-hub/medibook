@@ -16,6 +16,7 @@ import {
   updateAppointment,
 } from "../api/appointments";
 import { apiGet } from "../api/client";
+import { getQueue, startConsultation, checkIn, type QueueSlot } from "../api/queue";
 import { getDoctorAvailability, getMyDoctorProfile } from "../api/doctors";
 import { getPatientProfileById } from "../api/patients";
 import type { Appointment, DoctorAvailability, DoctorProfile, PatientProfile } from "../api/types";
@@ -41,6 +42,8 @@ import {
   User,
   Droplet,
   AlertTriangle,
+  UserCheck,
+  Play,
 } from "lucide-react";
 
 function message(error: unknown): string {
@@ -84,19 +87,38 @@ function PatientName({ patientId }: { patientId: number }) {
    APPOINTMENT ROW (with action buttons)
    ====================================== */
 
+/** Compact waiting-room chip: "#2 in line · 12 min" / "In consultation". */
+function QueueChip({ queue }: { queue: QueueSlot }) {
+  if (queue.being_seen) {
+    return <span className="queue-badge queue-badge--live">In consultation</span>;
+  }
+  if (queue.position === null) {
+    return <span className="queue-badge queue-badge--idle">Not checked in</span>;
+  }
+  return (
+    <span className="queue-badge">
+      #{queue.position} in line
+      {queue.waited_minutes !== null ? ` · ${queue.waited_minutes} min` : ""}
+    </span>
+  );
+}
+
 function AppointmentRow({
   appointment,
   onAction,
   doctorId,
   onChanged,
+  queue,
 }: {
   appointment: Appointment;
   onAction: (id: number, action: string) => Promise<void>;
   doctorId?: number | null;
   onChanged?: () => void;
+  queue?: QueueSlot | null;
 }) {
   const { notify } = useToast();
   const [acting, setActing] = useState(false);
+  const [queueBusy, setQueueBusy] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(appointment.notes);
   const [showReschedule, setShowReschedule] = useState(false);
@@ -117,6 +139,34 @@ function AppointmentRow({
       await onAction(appointment.id, action);
     } finally {
       setActing(false);
+    }
+  }
+
+  /* ---- Waiting room (phase 11) ---- */
+
+  async function handleCheckIn() {
+    setQueueBusy(true);
+    try {
+      const result = await checkIn(appointment.id);
+      notify("success", result.message || "Patient checked in.");
+      onChanged?.();
+    } catch (e) {
+      notify("error", message(e));
+    } finally {
+      setQueueBusy(false);
+    }
+  }
+
+  async function handleStartConsultation() {
+    setQueueBusy(true);
+    try {
+      await startConsultation(appointment.id);
+      notify("success", "Consultation started.");
+      onChanged?.();
+    } catch (e) {
+      notify("error", message(e));
+    } finally {
+      setQueueBusy(false);
     }
   }
 
@@ -204,6 +254,7 @@ function AppointmentRow({
           <span className="appt-card__status-dot" style={{ background: currentStatus.color }} />
           <span className="appt-card__status-label">{currentStatus.label}</span>
           <Badge status={appointment.status} />
+          {queue && <QueueChip queue={queue} />}
         </div>
         <div className="appt-card__time">
           <CalendarClock size={14} />
@@ -289,6 +340,25 @@ function AppointmentRow({
       </div>
 
       <div className="appt-card__actions">
+        {queue &&
+          (appointment.status === "pending" || appointment.status === "confirmed") &&
+          !queue.checked_in && (
+            <Button variant="secondary" loading={queueBusy} onClick={() => void handleCheckIn()}>
+              <UserCheck size={14} /> Check in
+            </Button>
+          )}
+        {queue &&
+          queue.checked_in &&
+          !queue.being_seen &&
+          (appointment.status === "pending" || appointment.status === "confirmed") && (
+            <Button
+              variant="primary"
+              loading={queueBusy}
+              onClick={() => void handleStartConsultation()}
+            >
+              <Play size={14} /> Start consultation
+            </Button>
+          )}
         {appointment.status === "pending" && (
           <>
             <Button variant="primary" loading={acting} onClick={() => handleAction("confirm")}>
@@ -423,12 +493,32 @@ function AppointmentRow({
    DOCTOR DASHBOARD (main screen)
    ====================================== */
 
+/** Today in UTC — the dashboard's queue window (patients live in TZ +3..). */
+const utcToday = () => new Date().toISOString().slice(0, 10);
+
+/** Queue entries → appointment-id keyed map (drops appointments with no slot). */
+function queueMap(entries: { id: number; queue: QueueSlot | null }[]): Map<number, QueueSlot> {
+  const next = new Map<number, QueueSlot>();
+  for (const entry of entries) if (entry.queue) next.set(entry.id, entry.queue);
+  return next;
+}
+
 export function DoctorDashboardScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  /** Waiting room (phase 11): today's queue keyed by appointment id. */
+  const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(
+    new Map()
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const loadQueue = useCallback(() => {
+    getQueue(utcToday())
+      .then((r) => setQueueByAppointment(queueMap(r.data)))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setError(null);
@@ -436,16 +526,28 @@ export function DoctorDashboardScreen() {
     Promise.all([
       getMyDoctorProfile(),
       listDoctorAppointments(),
+      getQueue(utcToday()).catch(() => ({
+        success: true,
+        message: "",
+        data: [] as { id: number; queue: QueueSlot | null }[],
+      })),
     ])
-      .then(([profileRes, apptsRes]) => {
+      .then(([profileRes, apptsRes, queueRes]) => {
         setProfile(profileRes.data);
         setAppointments(apptsRes.data);
+        setQueueByAppointment(queueMap(queueRes.data));
       })
       .catch((e) => setError(message(e)))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // The line moves as patients check in — keep it fresh between socket events.
+  useEffect(() => {
+    const timer = window.setInterval(() => loadQueue(), 20000);
+    return () => window.clearInterval(timer);
+  }, [loadQueue]);
 
   const refresh = useCallback(() => {
     Promise.all([
@@ -455,9 +557,10 @@ export function DoctorDashboardScreen() {
       .then(([appointmentsResponse, profileResponse]) => {
         setAppointments(appointmentsResponse.data);
         setProfile(profileResponse.data);
+        loadQueue();
       })
       .catch(() => {});
-  }, []);
+  }, [loadQueue]);
 
   useRealtimeSync({
     refresh,
@@ -566,7 +669,7 @@ export function DoctorDashboardScreen() {
 
       <Card className="doctor-appointments-card">
         <div className="doctor-card-heading"><div><h2>Today's schedule</h2><p>Appointments that need your attention</p></div><Link to="/doctor/appointments"><span>View all</span><ArrowUpRight size={15} /></Link></div>
-        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} doctorId={profile?.id ?? null} onChanged={load} />)}</div>}
+        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} doctorId={profile?.id ?? null} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
       </Card>
 
       <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link></div>
@@ -587,6 +690,10 @@ export function DoctorAppointmentsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [doctorId, setDoctorId] = useState<number | null>(null);
+  /** Waiting room (phase 11): today's queue keyed by appointment id. */
+  const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(
+    new Map()
+  );
 
   useEffect(() => {
     getMyDoctorProfile().then((r) => setDoctorId(r.data.id)).catch(() => {});
@@ -595,8 +702,15 @@ export function DoctorAppointmentsScreen() {
   const load = useCallback(() => {
     setError(null);
     setLoading(true);
-    listDoctorAppointments()
-      .then((r) => setAppointments(r.data))
+    Promise.all([listDoctorAppointments(), getQueue(utcToday()).catch(() => ({
+      success: true,
+      message: "",
+      data: [] as { id: number; queue: QueueSlot | null }[],
+    }))])
+      .then(([r, queueRes]) => {
+        setAppointments(r.data);
+        setQueueByAppointment(queueMap(queueRes.data));
+      })
       .catch((e) => setError(message(e)))
       .finally(() => setLoading(false));
   }, []);
@@ -604,8 +718,15 @@ export function DoctorAppointmentsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const refresh = useCallback(() => {
-    listDoctorAppointments()
-      .then((r) => setAppointments(r.data))
+    Promise.all([listDoctorAppointments(), getQueue(utcToday()).catch(() => ({
+      success: true,
+      message: "",
+      data: [] as { id: number; queue: QueueSlot | null }[],
+    }))])
+      .then(([r, queueRes]) => {
+        setAppointments(r.data);
+        setQueueByAppointment(queueMap(queueRes.data));
+      })
       .catch(() => {});
   }, []);
 
@@ -709,7 +830,7 @@ export function DoctorAppointmentsScreen() {
       ) : (
         <div className="appt-card-list">
           {filtered.map((a) => (
-            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} doctorId={doctorId} onChanged={load} />
+            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} doctorId={doctorId} onChanged={load} queue={queueByAppointment.get(a.id) ?? null} />
           ))}
         </div>
       )}

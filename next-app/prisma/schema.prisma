@@ -46,6 +46,15 @@ enum AppointmentType {
   EMERGENCY
 }
 
+/// Lifecycle of a lab order (phase 3): ordered → in_progress → resulted,
+/// with cancelled as the bail-out at any point before a result is entered.
+enum LabOrderStatus {
+  ordered
+  in_progress
+  resulted
+  cancelled
+}
+
 enum NotificationType {
   appointment_request
   appointment_confirmed
@@ -86,6 +95,9 @@ model User {
   patient_appointments Appointment[]        @relation("UserPatientAppointments")
   treatments           MedicalTreatment[]
   health_records       HealthRecord[]
+  prescriptions        Prescription[]
+  vitals               Vital[]
+  lab_orders           LabOrder[]
   audit_events         AuditEvent[]
   blog_articles        Article[]
   media_files          MediaFile[]
@@ -178,6 +190,9 @@ model Doctor {
   reviews             Review[]
   treatments          MedicalTreatment[]
   health_records      HealthRecord[]
+  prescriptions       Prescription[]
+  vitals              Vital[]
+  lab_orders          LabOrder[]
 
   @@index([is_available, average_rating], map: "dr_avail_rat_idx")
   @@index([is_available])
@@ -321,6 +336,11 @@ model Appointment {
   emergency_longitude    Float?
   emergency_location_accuracy Float?
   emergency_requested_at DateTime?
+  // Waiting-room queue (phase 11)
+  /// When the patient checked in — entering the waiting line for that day.
+  checked_in_at           DateTime?
+  /// When the doctor started this consultation — the "now serving" slot.
+  consultation_started_at DateTime?
   created_at             DateTime          @default(now())
   updated_at             DateTime          @updatedAt
   patient                User              @relation("UserPatientAppointments", fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -334,6 +354,9 @@ model Appointment {
   notifications  Notification[]
   treatments     MedicalTreatment[]
   health_records HealthRecord[]
+  prescriptions  Prescription[]
+  vitals         Vital[]
+  lab_orders     LabOrder[]
   review         Review?
 
   @@index([doctor_id, appointment_date, status])
@@ -469,12 +492,145 @@ model MedicalTreatment {
   appointment     Appointment? @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   appointment_id  Int?         @map("appointment_id")
 
+  prescriptions     Prescription[]
+
   @@index([doctor_id, patient_id], map: "treat_dr_pat_idx")
   @@index([doctor_id])
   @@index([patient_id])
   @@index([appointment_id])
   @@index([created_at])
   @@map("treatments_medicaltreatment")
+}
+
+/// Structured e-prescription issued by a doctor (phase 1: replaces the
+/// free-text `MedicalTreatment.prescription` box with real medication lines
+/// that patients can read on any screen).
+model Prescription {
+  id             Int              @id @default(autoincrement())
+  /// Free-text addendum rendered under the medication list.
+  notes          String           @default("")
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+  doctor         Doctor           @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id      Int              @map("doctor_id")
+  patient        User             @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id     Int              @map("patient_id")
+  appointment    Appointment?     @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  appointment_id Int?             @map("appointment_id")
+  treatment      MedicalTreatment? @relation(fields: [treatment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  treatment_id   Int?             @map("treatment_id")
+
+  items          PrescriptionItem[]
+
+  @@index([doctor_id, patient_id])
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([appointment_id])
+  @@index([treatment_id])
+  @@index([created_at])
+  @@map("prescriptions_prescription")
+}
+
+/// One medication line of a Prescription (drug + how to take it).
+model PrescriptionItem {
+  id               Int          @id @default(autoincrement())
+  medication       String       @db.VarChar(200)
+  /// Strength, e.g. "500 mg".
+  dosage           String       @default("") @db.VarChar(100)
+  /// How often, e.g. "3 times daily".
+  frequency        String       @default("") @db.VarChar(100)
+  /// Route of administration, e.g. "oral".
+  route            String       @default("") @db.VarChar(50)
+  duration_days    Int?
+  refills          Int          @default(0)
+  instructions     String       @default("")
+  /// Display order on the card (0-based).
+  sort_order       Int          @default(0)
+  created_at       DateTime     @default(now())
+  prescription     Prescription @relation(fields: [prescription_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  prescription_id  Int          @map("prescription_id")
+
+  @@index([prescription_id])
+  @@map("prescriptions_prescriptionitem")
+}
+
+/// One vitals reading taken for a patient (phase 2).
+///
+/// Any subset of the measurements may be filled in - a nurse might only have a
+/// blood pressure cuff while the doctor later adds weight and temperature.
+/// `bmi` is derived server-side (services/vital.service.ts) whenever both
+/// weight and height are present; `recorded_at` defaults to the wall clock but
+/// can be back-dated to when the reading was actually taken.
+model Vital {
+  id             Int           @id @default(autoincrement())
+  /// When the measurement was actually taken.
+  recorded_at    DateTime      @default(now())
+  systolic_bp    Int?
+  diastolic_bp   Int?
+  pulse_bpm      Int?
+  temperature_c  Float?
+  glucose_mg_dl  Int?
+  weight_kg      Float?
+  height_cm      Float?
+  /// Derived: weight_kg / (height_cm / 100)^2, rounded to 1 decimal.
+  bmi            Float?
+  spo2_percent   Int?
+  notes          String        @default("")
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  doctor         Doctor        @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id      Int           @map("doctor_id")
+  patient        User          @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id     Int           @map("patient_id")
+  appointment    Appointment?  @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  appointment_id Int?          @map("appointment_id")
+
+  @@index([patient_id, recorded_at])
+  @@index([doctor_id, patient_id])
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([appointment_id])
+  @@index([created_at])
+  @@map("vitals_vital")
+}
+
+/// A lab test ordered by a doctor for a patient (phase 3).
+///
+/// The order carries its own reference range, so a result can be flagged
+/// high/normal/low without looking the test up anywhere else. `status` moves
+/// ordered → in_progress → resulted (or is cancelled before a result exists);
+/// `resulted_at` is stamped the moment a result value is first entered.
+model LabOrder {
+  id            Int            @id @default(autoincrement())
+  status        LabOrderStatus @default(ordered)
+  /// What to run, e.g. "Complete blood count".
+  test_name     String         @db.VarChar(200)
+  unit          String         @default("") @db.VarChar(30)
+  reference_min Float?
+  reference_max Float?
+  /// Free-form result as the lab reports it ("13.8 g/dL").
+  result_value  String         @default("")
+  result_notes  String         @default("")
+  /// Order notes shown to the patient ("Fasting 12 hours").
+  notes         String         @default("")
+  resulted_at   DateTime?
+  ordered_at    DateTime       @default(now())
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  doctor        Doctor         @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  doctor_id     Int            @map("doctor_id")
+  patient       User           @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient_id    Int            @map("patient_id")
+  appointment   Appointment?   @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  appointment_id Int?          @map("appointment_id")
+
+  @@index([patient_id, status])
+  @@index([doctor_id, patient_id])
+  @@index([doctor_id])
+  @@index([patient_id])
+  @@index([appointment_id])
+  @@index([created_at])
+  @@map("labs_laborder")
 }
 
 /// File/document health record uploaded by a doctor.

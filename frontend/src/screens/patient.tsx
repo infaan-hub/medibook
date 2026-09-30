@@ -12,6 +12,11 @@ import {
   uploadHealthRecord,
   type HealthRecord,
 } from "../api/health-records";
+import { myPrescriptions, type Prescription } from "../api/prescriptions";
+import { myVitals, type Vital } from "../api/vitals";
+import { myLabOrders, type LabOrder } from "../api/lab-orders";
+import { vitalChips, vitalDate } from "../lib/vitals";
+import { statusLabel, flagLabel, referenceLabel, resultLabel } from "../lib/lab-orders";
 import type { Gender, GeoInput, LinkedDoctor, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
@@ -33,6 +38,9 @@ import {
   X,
   Save,
   Bell,
+  Pill,
+  Activity,
+  FlaskConical,
   Download,
   ExternalLink,
   File,
@@ -298,6 +306,12 @@ export function SettingsScreen() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [rxLoading, setRxLoading] = useState(true);
+  const [vitals, setVitals] = useState<Vital[]>([]);
+  const [vitalsLoading, setVitalsLoading] = useState(true);
+  const [labOrders, setLabOrders] = useState<LabOrder[]>([]);
+  const [labsLoading, setLabsLoading] = useState(true);
   const [linkedDoctors, setLinkedDoctors] = useState<LinkedDoctor[]>([]);
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [recordForm, setRecordForm] = useState(EMPTY_RECORD_FORM);
@@ -313,6 +327,33 @@ export function SettingsScreen() {
       .finally(() => setRecordsLoading(false));
   }, []);
 
+  /** Structured prescriptions issued by any of this patient's doctors. */
+  const loadPrescriptions = useCallback(() => {
+    setRxLoading(true);
+    myPrescriptions()
+      .then((r) => setPrescriptions(r.data ?? []))
+      .catch(() => setPrescriptions([]))
+      .finally(() => setRxLoading(false));
+  }, []);
+
+  /** The patient's own vitals history (phase 2). */
+  const loadVitals = useCallback(() => {
+    setVitalsLoading(true);
+    myVitals()
+      .then((r) => setVitals(r.data ?? []))
+      .catch(() => setVitals([]))
+      .finally(() => setVitalsLoading(false));
+  }, []);
+
+  /** Lab tests ordered for this patient, with any reported results (phase 3). */
+  const loadLabOrders = useCallback(() => {
+    setLabsLoading(true);
+    myLabOrders()
+      .then((r) => setLabOrders(r.data ?? []))
+      .catch(() => setLabOrders([]))
+      .finally(() => setLabsLoading(false));
+  }, []);
+
   const load = useCallback(() => {
     setLoadError(null);
     setProfile(null);
@@ -321,11 +362,14 @@ export function SettingsScreen() {
       .then((envelope) => setProfile(envelope.data))
       .catch(() => setLoadError("Could not load your medical details."));
     loadRecords();
+    loadPrescriptions();
+    loadVitals();
+    loadLabOrders();
     // Doctors this patient can share a record with (appointment-linked only).
     getLinkedDoctors()
       .then((r) => setLinkedDoctors(r.data ?? []))
       .catch(() => setLinkedDoctors([]));
-  }, [loadRecords]);
+  }, [loadRecords, loadPrescriptions, loadVitals, loadLabOrders]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -567,6 +611,169 @@ export function SettingsScreen() {
             ))}
           </datalist>
         </div>
+      </Card>
+
+      {/* Prescriptions (structured e-prescriptions, phase 1) */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><Pill size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Prescriptions</h2>
+              <p className="med-detail__subtitle">
+                Medicines prescribed for you during your visits
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {rxLoading ? (
+          <Skeleton lines={3} />
+        ) : prescriptions.length === 0 ? (
+          <EmptyState
+            icon={<Pill size={28} />}
+            title="No prescriptions yet"
+            description="Medications your doctors prescribe will appear here after a visit."
+          />
+        ) : (
+          <div className="rx-list">
+            {prescriptions.map((rx) => (
+              <div key={rx.id} className="rx-card">
+                <div className="rx-card__head">
+                  <span className="rx-card__date">
+                    <Calendar size={13} /> {new Date(rx.created_at).toLocaleDateString()}
+                  </span>
+                  <span className="rx-card__count">
+                    {rx.items.length} medication{rx.items.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ul className="rx-list rx-list--view">
+                  {rx.items.map((item) => (
+                    <li key={item.id ?? item.sort_order ?? item.medication} className="rx-item">
+                      <strong>
+                        {item.medication}
+                        {item.dosage ? ` ${item.dosage}` : ""}
+                      </strong>
+                      <span className="rx-item__meta">
+                        {[
+                          item.frequency,
+                          item.route,
+                          item.duration_days ? `${item.duration_days} days` : "",
+                          item.refills ? `${item.refills} refill${item.refills === 1 ? "" : "s"}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      {item.instructions && (
+                        <em className="rx-item__note">{item.instructions}</em>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {rx.notes && <p className="rx-card__notes">{rx.notes}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Vitals history (phase 2) */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><Activity size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Vitals</h2>
+              <p className="med-detail__subtitle">
+                Blood pressure, pulse and other readings recorded at your visits
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {vitalsLoading ? (
+          <Skeleton lines={3} />
+        ) : vitals.length === 0 ? (
+          <EmptyState
+            icon={<Activity size={28} />}
+            title="No readings yet"
+            description="Vitals recorded by your doctor during a visit will appear here."
+          />
+        ) : (
+          <div className="vit-list">
+            {vitals.map((vital) => (
+              <div key={vital.id} className="vit-row">
+                <div className="vit-row__head">
+                  <span className="vit-row__date">{vitalDate(vital.recorded_at)}</span>
+                  {vital.recorded_by && (
+                    <span className="vit-row__by">Recorded by Dr. {vital.recorded_by}</span>
+                  )}
+                </div>
+                <div className="vit-row__chips">
+                  {vitalChips(vital).map((chip) => (
+                    <span key={chip.label} className="vit-chip">
+                      <em>{chip.label}</em> {chip.value}
+                    </span>
+                  ))}
+                </div>
+                {vital.notes && <p className="vit-row__notes">{vital.notes}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Lab results (phase 3) */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><FlaskConical size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Lab results</h2>
+              <p className="med-detail__subtitle">
+                Tests ordered by your doctor and their reported results
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {labsLoading ? (
+          <Skeleton lines={3} />
+        ) : labOrders.length === 0 ? (
+          <EmptyState
+            icon={<FlaskConical size={28} />}
+            title="No lab tests yet"
+            description="Tests ordered during a visit will appear here with their results."
+          />
+        ) : (
+          <div className="lab-list">
+            {labOrders.map((order) => {
+              const flag = flagLabel(order);
+              return (
+                <div key={order.id} className="lab-row">
+                  <div className="lab-row__head">
+                    <strong className="lab-row__name">{order.test_name}</strong>
+                    <span className={`lab-status lab-status--${order.status}`}>
+                      {statusLabel(order.status)}
+                    </span>
+                    {flag && <span className={`lab-flag lab-flag--${order.flag}`}>{flag}</span>}
+                  </div>
+                  <div className="lab-row__meta">
+                    <span>Reference: {referenceLabel(order)}</span>
+                    <span>Result: {resultLabel(order)}</span>
+                    <span>
+                      Ordered {vitalDate(order.ordered_at)}
+                      {order.ordered_by ? ` by Dr. ${order.ordered_by}` : ""}
+                    </span>
+                    {order.resulted_at && <span>Resulted {vitalDate(order.resulted_at)}</span>}
+                  </div>
+                  {order.notes && <p className="vit-row__notes">{order.notes}</p>}
+                  {order.result_notes && <p className="vit-row__notes">{order.result_notes}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {/* Health Records */}

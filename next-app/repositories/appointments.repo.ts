@@ -194,3 +194,23 @@ export const createEmergencyAppointment = (data: {
     },
     include: APPOINTMENT_INCLUDE,
   });
+
+/**
+ * Another appointment of the same doctor that day whose consultation is
+ * already running (phase 11 waiting room) — the "one patient at a time" guard.
+ */
+export const findLiveConsultation = (
+  doctorId: number,
+  appointmentDate: Date,
+  excludeId: number
+) =>
+  prisma.appointment.findFirst({
+    where: {
+      doctor_id: doctorId,
+      appointment_date: appointmentDate,
+      id: { not: excludeId },
+      consultation_started_at: { not: null },
+      status: { in: ["pending", "confirmed"] },
+    },
+    select: { id: true },
+  });

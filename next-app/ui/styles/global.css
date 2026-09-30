@@ -3145,6 +3145,81 @@ a { color: var(--color-primary); }
   .treat-actions-row { flex-direction: column; align-items: stretch; gap: 12px; }
 }
 
+/* ---- Structured e-prescriptions (phase 1) ---- */
+.treat-form { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.treat-form h3 { margin: 0; }
+.treat-pf--wide { flex-direction: column; align-items: stretch; gap: 8px; }
+.treat-pf__label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
+.rx-list { display: flex; flex-direction: column; gap: 10px; }
+.rx-row { border: 1px solid #e8edf2; border-radius: 10px; padding: 12px; background: #f8fafc; display: flex; flex-direction: column; gap: 8px; }
+.rx-row__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.rx-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #64748b; min-width: 0; }
+.rx-field span { font-weight: 500; }
+.rx-field--num { max-width: 110px; }
+.rx-row__remove { align-self: flex-end; display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: #dc2626; font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+.rx-row__remove:hover { color: #b91c1c; }
+.rx-add { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; border: 1px dashed #09A99E; background: #f0fdf9; color: #09A99E; border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.rx-add:hover { background: #dff7f4; }
+.rx-list--view { list-style: none; margin: 0; padding: 0; gap: 8px; }
+.rx-item { padding: 8px 10px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #334155; }
+.rx-item strong { color: #0f172a; font-size: 13px; }
+.rx-item__meta, .rx-item__note { font-size: 12px; color: #64748b; }
+.rx-item__note { font-style: normal; }
+@media (max-width: 600px) {
+  .rx-field--num { max-width: none; }
+}
+
+.rx-card { border: 1px solid #e8edf2; border-radius: 12px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+.rx-card__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+.rx-card__date { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+.rx-card__count { background: #f0fdf9; color: #059669; border-radius: 20px; padding: 2px 8px; font-weight: 600; font-size: 11px; }
+.rx-card__notes { margin: 0; font-size: 13px; color: #475569; line-height: 1.6; white-space: pre-wrap; }
+/* ---- Vitals (phase 2) ---- */
+.vit-form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 4px; padding: 12px; border: 1px solid #e8edf2; border-radius: 12px; background: #f8fafc; }
+.vit-form__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.vit-list { display: flex; flex-direction: column; gap: 10px; }
+.vit-row { border: 1px solid #e8edf2; border-radius: 12px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+.vit-row__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #64748b; }
+.vit-row__date { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: #0f172a; }
+.vit-row__by { margin-right: auto; }
+.vit-row__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vit-chip { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; padding: 4px 10px; font-size: 12px; color: #0f172a; font-weight: 600; display: inline-flex; gap: 5px; align-items: baseline; }
+.vit-chip em { font-style: normal; color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.vit-row__notes { margin: 0; font-size: 13px; color: #475569; line-height: 1.6; white-space: pre-wrap; }
+@media (max-width: 900px) { .vit-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* ---- Lab orders (phase 3) ---- */
+.lab-list { display: flex; flex-direction: column; gap: 10px; }
+.lab-row { border: 1px solid #e8edf2; border-radius: 12px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+.lab-row__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lab-row__name { font-size: 14px; color: #0f172a; }
+.lab-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 20px; padding: 3px 9px; background: #f1f5f9; color: #475569; }
+.lab-status--in_progress { background: #eff6ff; color: #2563eb; }
+.lab-status--resulted { background: #f0fdf9; color: #059669; }
+.lab-status--cancelled { background: #fef2f2; color: #dc2626; }
+.lab-flag { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 3px 9px; border: 1px solid transparent; }
+.lab-flag--normal { background: #f0fdf9; color: #059669; border-color: #a7f3d0; }
+.lab-flag--high { background: #fff7ed; color: #ea580c; border-color: #fed7aa; }
+.lab-flag--low { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.lab-flag--unknown { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+.lab-row__meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #64748b; }
+.lab-row__acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lab-result-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; }
+.lab-result-form__acts { display: flex; gap: 6px; }
+.lab-form__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.lab-field--wide { grid-column: span 2; }
+@media (max-width: 900px) { .lab-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* ---- Waiting room (phase 11) ---- */
+.queue-card { display: flex; flex-direction: column; gap: 8px; }
+.queue-card__head { display: flex; align-items: center; gap: 8px; }
+.queue-card__title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: #0f172a; margin-right: auto; }
+.queue-card__pos { margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; }
+.queue-card__msg { margin: 0; font-size: 14px; color: #475569; }
+.queue-card__meta { margin: 0; font-size: 12px; color: #64748b; }
+.queue-card__acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.queue-badge { display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+.queue-badge--live { background: #ecfdf5; border-color: #a7f3d0; color: #059669; }
+.queue-badge--idle { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+.appt-card__status-line .queue-badge { margin-left: 4px; }
 /* ---- Booking Medical Preview ---- */
 .booking-medical-card { border-left: 3px solid #09A99E; }
 .booking-medical-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #09A99E; }

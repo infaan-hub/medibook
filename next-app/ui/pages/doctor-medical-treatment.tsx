@@ -9,10 +9,34 @@ import {
   deleteTreatment,
   type MedicalTreatment,
 } from "../api/treatments";
+import type { PrescriptionItemInput } from "../api/prescriptions";
+import {
+  listVitals,
+  createVital,
+  deleteVital,
+  type Vital,
+  type CreateVitalPayload,
+} from "../api/vitals";
 import type { PatientProfile } from "../api/types";
 import { getHealthRecords, type HealthRecord } from "../api/health-records";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { nearestAreaName } from "../lib/zanzibar";
+import { vitalChips } from "../lib/vitals";
+import {
+  listLabOrders,
+  createLabOrder,
+  updateLabOrder,
+  deleteLabOrder,
+  type LabOrder,
+  type LabOrderStatus,
+  type CreateLabOrderPayload,
+} from "../api/lab-orders";
+import {
+  statusLabel,
+  flagLabel,
+  referenceLabel,
+  resultLabel,
+} from "../lib/lab-orders";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import {
@@ -24,6 +48,9 @@ import {
   Trash2,
   X,
   Pill,
+  Plus,
+  Activity,
+  FlaskConical,
   Stethoscope,
   History,
   Download,
@@ -53,21 +80,648 @@ function fmtGender(g: string): string {
   return g.charAt(0).toUpperCase() + g.slice(1);
 }
 
+interface MedRow {
+  medication: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  duration_days: string;
+  refills: string;
+  instructions: string;
+}
+
 interface TForm {
   diagnosis: string;
   treatment_notes: string;
-  prescription: string;
+  items: MedRow[];
+  prescription_notes: string;
   follow_up_date: string;
   follow_up_notes: string;
 }
 
+const EMPTY_ROW: MedRow = {
+  medication: "",
+  dosage: "",
+  frequency: "",
+  route: "",
+  duration_days: "",
+  refills: "0",
+  instructions: "",
+};
+
 const EMPTY: TForm = {
   diagnosis: "",
   treatment_notes: "",
-  prescription: "",
+  items: [{ ...EMPTY_ROW }],
+  prescription_notes: "",
   follow_up_date: "",
   follow_up_notes: "",
 };
+
+/** Blank rows are dropped; blanks inside a row become empty/absent values. */
+function toPrescriptionItems(rows: MedRow[]): PrescriptionItemInput[] {
+  return rows
+    .filter((row) => row.medication.trim() !== "")
+    .map((row) => ({
+      medication: row.medication.trim(),
+      dosage: row.dosage.trim(),
+      frequency: row.frequency.trim(),
+      route: row.route.trim(),
+      duration_days: row.duration_days.trim() === "" ? null : Number(row.duration_days),
+      refills: row.refills.trim() === "" ? 0 : Number(row.refills),
+      instructions: row.instructions.trim(),
+    }));
+}
+
+function rowFromItem(item: {
+  medication: string;
+  dosage: string;
+  frequency: string;
+  route: string;
+  duration_days: number | null;
+  refills: number;
+  instructions: string;
+}): MedRow {
+  return {
+    medication: item.medication,
+    dosage: item.dosage,
+    frequency: item.frequency,
+    route: item.route,
+    duration_days: item.duration_days === null ? "" : String(item.duration_days),
+    refills: String(item.refills),
+    instructions: item.instructions,
+  };
+}
+
+/** One-line summary used on the record card ("500 mg · 3 times daily · 7 days"). */
+function itemMeta(item: {
+  dosage: string;
+  frequency: string;
+  route: string;
+  duration_days: number | null;
+  refills: number;
+}): string {
+  return [
+    item.dosage,
+    item.frequency,
+    item.route,
+    item.duration_days ? `${item.duration_days} days` : "",
+    item.refills ? `${item.refills} refill${item.refills === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/* ======================================
+   VITALS (phase 2)
+   ====================================== */
+
+interface VitalForm {
+  systolic_bp: string;
+  diastolic_bp: string;
+  pulse_bpm: string;
+  temperature_c: string;
+  glucose_mg_dl: string;
+  weight_kg: string;
+  height_cm: string;
+  spo2_percent: string;
+  notes: string;
+  recorded_at: string;
+}
+
+const todayISO = (): string => {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
+const EMPTY_VITAL: VitalForm = {
+  systolic_bp: "",
+  diastolic_bp: "",
+  pulse_bpm: "",
+  temperature_c: "",
+  glucose_mg_dl: "",
+  weight_kg: "",
+  height_cm: "",
+  spo2_percent: "",
+  notes: "",
+  recorded_at: "",
+};
+
+/** Blank stays null (the server rejects an all-blank reading anyway). */
+function numOrNull(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function vitalFormPayload(patientId: number, form: VitalForm): CreateVitalPayload {
+  return {
+    patient: patientId,
+    systolic_bp: numOrNull(form.systolic_bp),
+    diastolic_bp: numOrNull(form.diastolic_bp),
+    pulse_bpm: numOrNull(form.pulse_bpm),
+    temperature_c: numOrNull(form.temperature_c),
+    glucose_mg_dl: numOrNull(form.glucose_mg_dl),
+    weight_kg: numOrNull(form.weight_kg),
+    height_cm: numOrNull(form.height_cm),
+    spo2_percent: numOrNull(form.spo2_percent),
+    notes: form.notes.trim(),
+    ...(form.recorded_at ? { recorded_at: form.recorded_at } : {}),
+  };
+}
+
+/** Every measurement field is blank — nothing to send. */
+function vitalFormIsEmpty(form: VitalForm): boolean {
+  return [
+    form.systolic_bp,
+    form.diastolic_bp,
+    form.pulse_bpm,
+    form.temperature_c,
+    form.glucose_mg_dl,
+    form.weight_kg,
+    form.height_cm,
+    form.spo2_percent,
+  ].every((value) => value.trim() === "");
+}
+
+const VITAL_FIELDS: { key: keyof VitalForm; label: string; unit?: string; step?: string }[] = [
+  { key: "systolic_bp", label: "Systolic", unit: "mmHg", step: "1" },
+  { key: "diastolic_bp", label: "Diastolic", unit: "mmHg", step: "1" },
+  { key: "pulse_bpm", label: "Pulse", unit: "bpm", step: "1" },
+  { key: "temperature_c", label: "Temperature", unit: "°C", step: "0.1" },
+  { key: "spo2_percent", label: "SpO₂", unit: "%", step: "1" },
+  { key: "glucose_mg_dl", label: "Glucose", unit: "mg/dL", step: "1" },
+  { key: "weight_kg", label: "Weight", unit: "kg", step: "0.1" },
+  { key: "height_cm", label: "Height", unit: "cm", step: "0.1" },
+];
+
+function VitalsCard({
+  vitals,
+  loading,
+  showForm,
+  form,
+  saving,
+  onToggleForm,
+  onField,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  vitals: Vital[];
+  loading: boolean;
+  showForm: boolean;
+  form: VitalForm;
+  saving: boolean;
+  onToggleForm: () => void;
+  onField: (key: keyof VitalForm, value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onDelete: (id: number) => void;
+}) {
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
+  return (
+    <Card className="visit-records-card">
+      <div className="visit-card-header">
+        <div>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Vitals</h3>
+          <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+            Blood pressure, pulse, temperature and other readings for this patient
+          </p>
+        </div>
+        {!showForm && (
+          <Button variant="secondary" onClick={onToggleForm}>
+            <Activity size={14} /> Record vitals
+          </Button>
+        )}
+        {showForm && (
+          <Button variant="secondary" onClick={onCancel}>
+            <X size={14} /> Close
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <form
+          className="vit-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="vit-form__grid">
+            {VITAL_FIELDS.map((field) => (
+              <label className="rx-field rx-field--num" key={field.key}>
+                <span>
+                  {field.label}
+                  {field.unit ? ` (${field.unit})` : ""}
+                </span>
+                <input
+                  className="field__input"
+                  type="number"
+                  step={field.step ?? "1"}
+                  inputMode="decimal"
+                  value={form[field.key]}
+                  onChange={(e) => onField(field.key, e.target.value)}
+                  placeholder="—"
+                />
+              </label>
+            ))}
+            <label className="rx-field rx-field--num">
+              <span>Recorded on</span>
+              <input
+                className="field__input"
+                type="date"
+                value={form.recorded_at}
+                onChange={(e) => onField("recorded_at", e.target.value)}
+              />
+            </label>
+          </div>
+          <label className="rx-field">
+            <span>Notes</span>
+            <input
+              className="field__input"
+              type="text"
+              value={form.notes}
+              onChange={(e) => onField("notes", e.target.value)}
+              placeholder="e.g. Seated, resting 5 minutes"
+            />
+          </label>
+          <div className="treat-actions-row">
+            <Button type="submit" variant="primary" loading={saving}>
+              Save reading
+            </Button>
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <Skeleton lines={3} />
+      ) : vitals.length === 0 ? (
+        <EmptyState
+          icon={<Activity size={24} />}
+          title="No vitals recorded"
+          description="Readings recorded during visits will appear here."
+        />
+      ) : (
+        <div className="vit-list">
+          {vitals.map((vital) => (
+            <div key={vital.id} className="vit-row">
+              <div className="vit-row__head">
+                <span className="vit-row__date">
+                  <Calendar size={13} /> {fmtDate(vital.recorded_at)}
+                </span>
+                <span className="vit-row__by">
+                  {vital.recorded_by ? `Recorded by Dr. ${vital.recorded_by}` : ""}
+                </span>
+                {confirmId === vital.id ? (
+                  <span className="treat-confirm-del">
+                    Confirm?
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        setConfirmId(null);
+                        onDelete(vital.id);
+                      }}
+                    >
+                      Yes
+                    </Button>
+                    <Button variant="secondary" onClick={() => setConfirmId(null)}>
+                      No
+                    </Button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="rx-row__remove"
+                    onClick={() => setConfirmId(vital.id)}
+                    aria-label="Delete reading"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="vit-row__chips">
+                {vitalChips(vital).map((chip) => (
+                  <span key={chip.label} className="vit-chip">
+                    <em>{chip.label}</em> {chip.value}
+                  </span>
+                ))}
+              </div>
+              {vital.notes && <p className="vit-row__notes">{vital.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ======================================
+   LAB ORDERS (phase 3)
+   ====================================== */
+
+interface LabForm {
+  test_name: string;
+  unit: string;
+  reference_min: string;
+  reference_max: string;
+  notes: string;
+}
+
+const EMPTY_LAB: LabForm = {
+  test_name: "",
+  unit: "",
+  reference_min: "",
+  reference_max: "",
+  notes: "",
+};
+
+function labPayload(patientId: number, form: LabForm): CreateLabOrderPayload {
+  const bound = (value: string): number | null => {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  return {
+    patient: patientId,
+    test_name: form.test_name.trim(),
+    unit: form.unit.trim(),
+    reference_min: bound(form.reference_min),
+    reference_max: bound(form.reference_max),
+    notes: form.notes.trim(),
+  };
+}
+
+function LabOrdersCard({
+  orders,
+  loading,
+  showForm,
+  form,
+  saving,
+  onToggleForm,
+  onField,
+  onSave,
+  onCancel,
+  onAdvance,
+  onSaveResult,
+  onDelete,
+}: {
+  orders: LabOrder[];
+  loading: boolean;
+  showForm: boolean;
+  form: LabForm;
+  saving: boolean;
+  onToggleForm: () => void;
+  onField: (key: keyof LabForm, value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onAdvance: (id: number, status: LabOrderStatus) => void;
+  onSaveResult: (id: number, payload: { result_value: string; result_notes: string }) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [resultId, setResultId] = useState<number | null>(null);
+  const [resultForm, setResultForm] = useState({ result_value: "", result_notes: "" });
+
+  function openResult(order: LabOrder) {
+    setResultId(order.id);
+    setResultForm({ result_value: order.result_value, result_notes: order.result_notes });
+  }
+
+  return (
+    <Card className="visit-records-card">
+      <div className="visit-card-header">
+        <div>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Lab orders</h3>
+          <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+            Tests ordered for this patient and their reported results
+          </p>
+        </div>
+        {!showForm && (
+          <Button variant="secondary" onClick={onToggleForm}>
+            <FlaskConical size={14} /> Order a test
+          </Button>
+        )}
+        {showForm && (
+          <Button variant="secondary" onClick={onCancel}>
+            <X size={14} /> Close
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <form
+          className="vit-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="vit-form__grid lab-form__grid">
+            <label className="rx-field lab-field--wide">
+              <span>Test name</span>
+              <input
+                className="field__input"
+                type="text"
+                value={form.test_name}
+                onChange={(e) => onField("test_name", e.target.value)}
+                placeholder="e.g. Complete blood count"
+              />
+            </label>
+            <label className="rx-field">
+              <span>Unit</span>
+              <input
+                className="field__input"
+                type="text"
+                value={form.unit}
+                onChange={(e) => onField("unit", e.target.value)}
+                placeholder="g/dL"
+              />
+            </label>
+            <label className="rx-field rx-field--num">
+              <span>Ref. min</span>
+              <input
+                className="field__input"
+                type="number"
+                step="any"
+                value={form.reference_min}
+                onChange={(e) => onField("reference_min", e.target.value)}
+                placeholder="—"
+              />
+            </label>
+            <label className="rx-field rx-field--num">
+              <span>Ref. max</span>
+              <input
+                className="field__input"
+                type="number"
+                step="any"
+                value={form.reference_max}
+                onChange={(e) => onField("reference_max", e.target.value)}
+                placeholder="—"
+              />
+            </label>
+            <label className="rx-field lab-field--wide">
+              <span>Notes for the patient</span>
+              <input
+                className="field__input"
+                type="text"
+                value={form.notes}
+                onChange={(e) => onField("notes", e.target.value)}
+                placeholder="e.g. Fasting 12 hours"
+              />
+            </label>
+          </div>
+          <div className="treat-actions-row">
+            <Button type="submit" variant="primary" loading={saving}>
+              Place order
+            </Button>
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <Skeleton lines={3} />
+      ) : orders.length === 0 ? (
+        <EmptyState
+          icon={<FlaskConical size={24} />}
+          title="No lab orders"
+          description="Tests you order for this patient will appear here."
+        />
+      ) : (
+        <div className="lab-list">
+          {orders.map((order) => {
+            const flag = flagLabel(order);
+            const editingResult = resultId === order.id;
+            return (
+              <div key={order.id} className="lab-row">
+                <div className="lab-row__head">
+                  <strong className="lab-row__name">{order.test_name}</strong>
+                  <span className={`lab-status lab-status--${order.status}`}>
+                    {statusLabel(order.status)}
+                  </span>
+                  {flag && (
+                    <span className={`lab-flag lab-flag--${order.flag}`}>{flag}</span>
+                  )}
+                </div>
+
+                <div className="lab-row__meta">
+                  <span>Reference: {referenceLabel(order)}</span>
+                  <span>Result: {resultLabel(order)}</span>
+                  <span>
+                    Ordered {fmtDate(order.ordered_at)}
+                    {order.ordered_by ? ` by Dr. ${order.ordered_by}` : ""}
+                  </span>
+                  {order.resulted_at && <span>Resulted {fmtDate(order.resulted_at)}</span>}
+                </div>
+
+                {order.notes && <p className="vit-row__notes">{order.notes}</p>}
+                {order.result_notes && (
+                  <p className="vit-row__notes">{order.result_notes}</p>
+                )}
+
+                {editingResult && (
+                  <div className="lab-result-form">
+                    <label className="rx-field rx-field--num">
+                      <span>Result value{order.unit ? ` (${order.unit})` : ""}</span>
+                      <input
+                        className="field__input"
+                        type="text"
+                        value={resultForm.result_value}
+                        onChange={(e) =>
+                          setResultForm((cur) => ({ ...cur, result_value: e.target.value }))
+                        }
+                        placeholder={order.unit || "value"}
+                      />
+                    </label>
+                    <label className="rx-field">
+                      <span>Result notes</span>
+                      <input
+                        className="field__input"
+                        type="text"
+                        value={resultForm.result_notes}
+                        onChange={(e) =>
+                          setResultForm((cur) => ({ ...cur, result_notes: e.target.value }))
+                        }
+                        placeholder="e.g. Slightly elevated"
+                      />
+                    </label>
+                    <div className="lab-result-form__acts">
+                      <Button
+                        variant="primary"
+                        loading={saving}
+                        onClick={() => onSaveResult(order.id, { ...resultForm })}
+                      >
+                        Save result
+                      </Button>
+                      <Button variant="secondary" onClick={() => setResultId(null)}>
+                        Close
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="lab-row__acts">
+                  {order.status === "ordered" && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => onAdvance(order.id, "in_progress")}
+                    >
+                      Start test
+                    </Button>
+                  )}
+                  {order.status !== "cancelled" && !editingResult && (
+                    <Button variant="ghost" onClick={() => openResult(order)}>
+                      {order.status === "resulted" ? "Edit result" : "Record result"}
+                    </Button>
+                  )}
+                  {(order.status === "ordered" || order.status === "in_progress") && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => onAdvance(order.id, "cancelled")}
+                    >
+                      Cancel order
+                    </Button>
+                  )}
+                  {confirmId === order.id ? (
+                    <span className="treat-confirm-del">
+                      Confirm?
+                      <Button
+                        variant="danger"
+                        onClick={() => {
+                          setConfirmId(null);
+                          onDelete(order.id);
+                        }}
+                      >
+                        Yes
+                      </Button>
+                      <Button variant="secondary" onClick={() => setConfirmId(null)}>
+                        No
+                      </Button>
+                    </span>
+                  ) : (
+                    <Button variant="ghost" onClick={() => setConfirmId(order.id)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 /* ======================================
    PATIENT INFO CARD
@@ -178,11 +832,29 @@ function TxRecord({
         </div>
       )}
 
-      {record.prescription && (
+      {(record.prescription_items?.length ?? 0) > 0 ? (
         <div className="treat-rec-sec">
           <span className="treat-rec-lbl"><Pill size={12} /> Prescription</span>
-          <p className="treat-rec-val">{record.prescription}</p>
+          <ul className="rx-list rx-list--view">
+            {record.prescription_items.map((item) => (
+              <li key={item.id ?? item.sort_order} className="rx-item">
+                <strong>{item.medication}</strong>
+                {itemMeta(item) && <span className="rx-item__meta">{itemMeta(item)}</span>}
+                {item.instructions && <em className="rx-item__note">{item.instructions}</em>}
+              </li>
+            ))}
+          </ul>
+          {record.prescription_notes && (
+            <p className="treat-rec-val">{record.prescription_notes}</p>
+          )}
         </div>
+      ) : (
+        record.prescription && (
+          <div className="treat-rec-sec">
+            <span className="treat-rec-lbl"><Pill size={12} /> Prescription</span>
+            <p className="treat-rec-val">{record.prescription}</p>
+          </div>
+        )
       )}
 
       {record.follow_up_date && (
@@ -289,6 +961,20 @@ export function DoctorMedicalTreatmentScreen() {
   const [form, setForm] = useState<TForm>(EMPTY);
   const [saving, setSaving] = useState(false);
 
+  /* ---- Vitals (phase 2) ---- */
+  const [vitals, setVitals] = useState<Vital[]>([]);
+  const [vitalsLoading, setVitalsLoading] = useState(false);
+  const [showVitalForm, setShowVitalForm] = useState(false);
+  const [vitalForm, setVitalForm] = useState<VitalForm>(EMPTY_VITAL);
+  const [vitalSaving, setVitalSaving] = useState(false);
+
+  /* ---- Lab orders (phase 3) ---- */
+  const [labOrders, setLabOrders] = useState<LabOrder[]>([]);
+  const [labsLoading, setLabsLoading] = useState(false);
+  const [showLabForm, setShowLabForm] = useState(false);
+  const [labForm, setLabForm] = useState<LabForm>(EMPTY_LAB);
+  const [labSaving, setLabSaving] = useState(false);
+
   const loadPatients = useCallback(() => {
     setPatientsError(null);
     setPatientsLoading(true);
@@ -296,6 +982,22 @@ export function DoctorMedicalTreatmentScreen() {
       .then((r) => setPatients(r.data))
       .catch((e) => setPatientsError(msg(e)))
       .finally(() => setPatientsLoading(false));
+  }, []);
+
+  const loadVitals = useCallback((id: number) => {
+    setVitalsLoading(true);
+    listVitals(id)
+      .then((r) => setVitals(r.data))
+      .catch(() => setVitals([]))
+      .finally(() => setVitalsLoading(false));
+  }, []);
+
+  const loadLabs = useCallback((id: number) => {
+    setLabsLoading(true);
+    listLabOrders(id)
+      .then((r) => setLabOrders(r.data))
+      .catch(() => setLabOrders([]))
+      .finally(() => setLabsLoading(false));
   }, []);
 
   const loadPatient = useCallback(
@@ -314,8 +1016,10 @@ export function DoctorMedicalTreatmentScreen() {
         })
         .catch((e) => setDetailError(msg(e)))
         .finally(() => setDetailLoading(false));
+      loadVitals(id);
+      loadLabs(id);
     },
-    []
+    [loadVitals, loadLabs]
   );
 
   useEffect(() => {
@@ -337,7 +1041,11 @@ export function DoctorMedicalTreatmentScreen() {
     setForm({
       diagnosis: record.diagnosis,
       treatment_notes: record.treatment_notes,
-      prescription: record.prescription,
+      items:
+        record.prescription_items.length > 0
+          ? record.prescription_items.map(rowFromItem)
+          : [{ ...EMPTY_ROW }],
+      prescription_notes: record.prescription_notes,
       follow_up_date: record.follow_up_date ?? "",
       follow_up_notes: record.follow_up_notes,
     });
@@ -348,24 +1056,19 @@ export function DoctorMedicalTreatmentScreen() {
     if (!selectedId) return;
     setSaving(true);
     try {
+      const payload = {
+        diagnosis: form.diagnosis,
+        treatment_notes: form.treatment_notes,
+        items: toPrescriptionItems(form.items),
+        prescription_notes: form.prescription_notes,
+        follow_up_date: form.follow_up_date || null,
+        follow_up_notes: form.follow_up_notes,
+      };
       if (editing) {
-        await updateTreatment(editing.id, {
-          diagnosis: form.diagnosis,
-          treatment_notes: form.treatment_notes,
-          prescription: form.prescription,
-          follow_up_date: form.follow_up_date || null,
-          follow_up_notes: form.follow_up_notes,
-        });
+        await updateTreatment(editing.id, payload);
         notify("success", "Treatment record updated.");
       } else {
-        await createTreatment({
-          patient: selectedId,
-          diagnosis: form.diagnosis,
-          treatment_notes: form.treatment_notes,
-          prescription: form.prescription,
-          follow_up_date: form.follow_up_date || null,
-          follow_up_notes: form.follow_up_notes,
-        });
+        await createTreatment({ patient: selectedId, ...payload });
         notify("success", "Treatment record created.");
       }
       setShowForm(false);
@@ -384,6 +1087,139 @@ export function DoctorMedicalTreatmentScreen() {
       await deleteTreatment(id);
       notify("success", "Treatment record deleted.");
       if (selectedId) loadPatient(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    }
+  }
+
+  /* ---- Structured medication lines (phase 1 e-prescriptions) ---- */
+
+  function updateRow(index: number, patch: Partial<MedRow>) {
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }));
+  }
+
+  function addRow() {
+    setForm((current) => ({ ...current, items: [...current.items, { ...EMPTY_ROW }] }));
+  }
+
+  function removeRow(index: number) {
+    setForm((current) => ({
+      ...current,
+      items:
+        current.items.length > 1
+          ? current.items.filter((_, i) => i !== index)
+          : [{ ...EMPTY_ROW }],
+    }));
+  }
+
+  /* ---- Vitals (phase 2) ---- */
+
+  function setVitalField(key: keyof VitalForm, value: string) {
+    setVitalForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleCancelVital() {
+    setShowVitalForm(false);
+    setVitalForm(EMPTY_VITAL);
+  }
+
+  async function handleSaveVital() {
+    if (!selectedId) return;
+    if (vitalFormIsEmpty(vitalForm)) {
+      notify("error", "Record at least one measurement.");
+      return;
+    }
+    setVitalSaving(true);
+    try {
+      await createVital(vitalFormPayload(selectedId, vitalForm));
+      notify("success", "Vitals recorded.");
+      handleCancelVital();
+      loadVitals(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    } finally {
+      setVitalSaving(false);
+    }
+  }
+
+  async function handleDeleteVital(id: number) {
+    if (!selectedId) return;
+    try {
+      await deleteVital(id);
+      notify("success", "Reading deleted.");
+      loadVitals(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    }
+  }
+
+  /* ---- Lab orders (phase 3) ---- */
+
+  function setLabField(key: keyof LabForm, value: string) {
+    setLabForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleCancelLab() {
+    setShowLabForm(false);
+    setLabForm(EMPTY_LAB);
+  }
+
+  async function handleSaveLab() {
+    if (!selectedId) return;
+    if (!labForm.test_name.trim()) {
+      notify("error", "Test name is required.");
+      return;
+    }
+    setLabSaving(true);
+    try {
+      await createLabOrder(labPayload(selectedId, labForm));
+      notify("success", "Lab order placed.");
+      handleCancelLab();
+      loadLabs(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    } finally {
+      setLabSaving(false);
+    }
+  }
+
+  async function handleAdvanceLab(id: number, status: LabOrderStatus) {
+    if (!selectedId) return;
+    try {
+      await updateLabOrder(id, { status });
+      notify("success", status === "cancelled" ? "Lab order cancelled." : "Test started.");
+      loadLabs(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    }
+  }
+
+  async function handleSaveLabResult(
+    id: number,
+    payload: { result_value: string; result_notes: string }
+  ) {
+    if (!selectedId) return;
+    setLabSaving(true);
+    try {
+      await updateLabOrder(id, { ...payload, status: "resulted" });
+      notify("success", "Result recorded.");
+      loadLabs(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    } finally {
+      setLabSaving(false);
+    }
+  }
+
+  async function handleDeleteLab(id: number) {
+    if (!selectedId) return;
+    try {
+      await deleteLabOrder(id);
+      notify("success", "Lab order removed.");
+      loadLabs(selectedId);
     } catch (e) {
       notify("error", msg(e));
     }
@@ -475,6 +1311,42 @@ export function DoctorMedicalTreatmentScreen() {
         <>
           <PatientInfo profile={profile} />
 
+          {/* Vitals — readings taken for this patient (phase 2). */}
+          <VitalsCard
+            vitals={vitals}
+            loading={vitalsLoading}
+            showForm={showVitalForm}
+            form={vitalForm}
+            saving={vitalSaving}
+            onToggleForm={() => {
+              setVitalForm({ ...EMPTY_VITAL, recorded_at: todayISO() });
+              setShowVitalForm(true);
+            }}
+            onField={setVitalField}
+            onSave={() => void handleSaveVital()}
+            onCancel={handleCancelVital}
+            onDelete={(id) => void handleDeleteVital(id)}
+          />
+
+          {/* Lab orders — tests ordered and results recorded (phase 3). */}
+          <LabOrdersCard
+            orders={labOrders}
+            loading={labsLoading}
+            showForm={showLabForm}
+            form={labForm}
+            saving={labSaving}
+            onToggleForm={() => {
+              setLabForm(EMPTY_LAB);
+              setShowLabForm(true);
+            }}
+            onField={setLabField}
+            onSave={() => void handleSaveLab()}
+            onCancel={handleCancelLab}
+            onAdvance={(id, status) => void handleAdvanceLab(id, status)}
+            onSaveResult={(id, payload) => void handleSaveLabResult(id, payload)}
+            onDelete={(id) => void handleDeleteLab(id)}
+          />
+
           {/* Health records — documents/images the patient shared with this
               doctor plus anything this doctor uploaded for them. */}
           <Card className="visit-records-card">
@@ -502,7 +1374,7 @@ export function DoctorMedicalTreatmentScreen() {
           </Card>
 
           {showForm && (
-            <Card className="treat-form-hdr">
+            <Card className="treat-form-hdr treat-form">
               <h3>{editing ? "Edit Treatment" : "New Treatment"}</h3>
               <div className="treat-patient-fields">
                 <div className="treat-pf">
@@ -527,15 +1399,110 @@ export function DoctorMedicalTreatmentScreen() {
                     placeholder="Clinical notes, observations, procedures..."
                   />
                 </div>
+                <div className="treat-pf treat-pf--wide">
+                  <span className="treat-pf__label">Medications</span>
+                  <div className="rx-list">
+                    {form.items.map((row, index) => (
+                      <div className="rx-row" key={`rx-${index}`}>
+                        <div className="rx-row__grid">
+                          <label className="rx-field">
+                            <span>Medication</span>
+                            <input
+                              className="field__input"
+                              type="text"
+                              value={row.medication}
+                              onChange={(e) => updateRow(index, { medication: e.target.value })}
+                              placeholder="e.g. Amoxicillin"
+                            />
+                          </label>
+                          <label className="rx-field">
+                            <span>Dosage</span>
+                            <input
+                              className="field__input"
+                              type="text"
+                              value={row.dosage}
+                              onChange={(e) => updateRow(index, { dosage: e.target.value })}
+                              placeholder="500 mg"
+                            />
+                          </label>
+                          <label className="rx-field">
+                            <span>Frequency</span>
+                            <input
+                              className="field__input"
+                              type="text"
+                              value={row.frequency}
+                              onChange={(e) => updateRow(index, { frequency: e.target.value })}
+                              placeholder="3 times daily"
+                            />
+                          </label>
+                          <label className="rx-field">
+                            <span>Route</span>
+                            <input
+                              className="field__input"
+                              type="text"
+                              value={row.route}
+                              onChange={(e) => updateRow(index, { route: e.target.value })}
+                              placeholder="oral"
+                            />
+                          </label>
+                          <label className="rx-field rx-field--num">
+                            <span>Days</span>
+                            <input
+                              className="field__input"
+                              type="number"
+                              min={1}
+                              max={365}
+                              value={row.duration_days}
+                              onChange={(e) => updateRow(index, { duration_days: e.target.value })}
+                              placeholder="7"
+                            />
+                          </label>
+                          <label className="rx-field rx-field--num">
+                            <span>Refills</span>
+                            <input
+                              className="field__input"
+                              type="number"
+                              min={0}
+                              max={12}
+                              value={row.refills}
+                              onChange={(e) => updateRow(index, { refills: e.target.value })}
+                            />
+                          </label>
+                        </div>
+                        <label className="rx-field">
+                          <span>Instructions</span>
+                          <input
+                            className="field__input"
+                            type="text"
+                            value={row.instructions}
+                            onChange={(e) => updateRow(index, { instructions: e.target.value })}
+                            placeholder="e.g. Take with food"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="rx-row__remove"
+                          onClick={() => removeRow(index)}
+                          aria-label={`Remove medication ${index + 1}`}
+                        >
+                          <X size={14} /> Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="rx-add" onClick={addRow}>
+                    <Plus size={14} /> Add medication
+                  </button>
+                </div>
                 <div className="treat-pf">
-                  <label htmlFor="tx-rx">Prescription</label>
+                  <label htmlFor="tx-rx-notes">Prescription notes</label>
                   <textarea
-                    id="tx-rx"
+                    id="tx-rx-notes"
                     className="field__input"
                     rows={2}
-                    value={form.prescription}
-                    onChange={(e) => setForm({ ...form, prescription: e.target.value })}
-                    placeholder="Medications, dosages, duration..."
+                    value={form.prescription_notes}
+                    onChange={(e) => setForm({ ...form, prescription_notes: e.target.value })}
+                    placeholder="Advice shown under the medication list..."
                   />
                 </div>
                 <div className="treat-pf">

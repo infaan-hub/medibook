@@ -79,14 +79,14 @@ export function DoctorProfileScreen() {
         {doctor.profile_image && (
           <Image
             src={doctor.profile_image}
-            alt={`${doctor.first_name} ${doctor.last_name}`}
+            alt={`Dr. ${doctor.first_name} ${doctor.last_name}`}
             className="doctor-profile__photo"
             width={320}
             height={240}
             sizes="320px"
           />
         )}
-        <h1 className="page__title">{doctor.first_name} {doctor.last_name}</h1>
+        <h1 className="page__title">Dr. {doctor.first_name} {doctor.last_name}</h1>
         <p className="doctor-profile__location">
           <LocationLine point={doctor} accuracy={doctor.location_accuracy} />
         </p>

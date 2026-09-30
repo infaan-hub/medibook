@@ -14,14 +14,18 @@ import type {
   Doctor,
   HealthRecord,
   Hospital,
+  LabOrder,
   MedicalTreatment,
   Notification,
   Patient,
+  Prescription,
+  PrescriptionItem,
   PushSubscription,
   Review,
   ScheduleException,
   Specialty,
   User,
+  Vital,
 } from "@prisma/client";
 import { dateStr, dec2, iso, mediaUrl } from "./serialize";
 import { hasLocation, haversineKm, type GeoPoint } from "./geo";
@@ -280,7 +284,15 @@ export function healthRecordDto(
 }
 
 /** treatments.serializers.MedicalTreatmentSerializer. */
-export function treatmentDto(treatment: MedicalTreatment): Record<string, unknown> {
+export function treatmentDto(
+  treatment: MedicalTreatment & {
+    prescriptions?: (Prescription & { items?: PrescriptionItem[] })[];
+  }
+): Record<string, unknown> {
+  // The structured prescription issued alongside this treatment (phase 1):
+  // rows always carry the include, so `prescription_items` is authoritative
+  // and the legacy `prescription` string is only its plain-text rendering.
+  const prescription = treatment.prescriptions?.[0] ?? null;
   return {
     id: treatment.id,
     doctor: treatment.doctor_id,
@@ -289,10 +301,124 @@ export function treatmentDto(treatment: MedicalTreatment): Record<string, unknow
     diagnosis: treatment.diagnosis,
     treatment_notes: treatment.treatment_notes,
     prescription: treatment.prescription,
+    prescription_id: prescription?.id ?? null,
+    prescription_notes: prescription?.notes ?? "",
+    prescription_items: prescription?.items ? prescription.items.map(prescriptionItemDto) : [],
     follow_up_date: dateStr(treatment.follow_up_date),
     follow_up_notes: treatment.follow_up_notes,
     created_at: iso(treatment.created_at),
     updated_at: iso(treatment.updated_at),
+  };
+}
+
+/** prescriptions.PrescriptionItemSerializer (one medication line). */
+export function prescriptionItemDto(item: PrescriptionItem): Record<string, unknown> {
+  return {
+    id: item.id,
+    medication: item.medication,
+    dosage: item.dosage,
+    frequency: item.frequency,
+    route: item.route,
+    duration_days: item.duration_days,
+    refills: item.refills,
+    instructions: item.instructions,
+    sort_order: item.sort_order,
+  };
+}
+
+/** prescriptions.PrescriptionSerializer. */
+export function prescriptionDto(
+  prescription: Prescription & { items?: PrescriptionItem[] }
+): Record<string, unknown> {
+  return {
+    id: prescription.id,
+    patient: prescription.patient_id,
+    doctor: prescription.doctor_id,
+    appointment: prescription.appointment_id,
+    treatment: prescription.treatment_id,
+    notes: prescription.notes,
+    items: (prescription.items ?? []).map(prescriptionItemDto),
+    created_at: iso(prescription.created_at),
+    updated_at: iso(prescription.updated_at),
+  };
+}
+
+/** vitals.VitalSerializer — one reading, plus who took it (phase 2). */
+export function vitalDto(
+  vital: Vital & { doctor?: (Doctor & { user: User }) | null }
+): Record<string, unknown> {
+  const recorder = vital.doctor?.user;
+  const fullName = recorder ? `${recorder.first_name} ${recorder.last_name}`.trim() : "";
+  return {
+    id: vital.id,
+    patient: vital.patient_id,
+    doctor: vital.doctor_id,
+    appointment: vital.appointment_id,
+    recorded_at: iso(vital.recorded_at),
+    systolic_bp: vital.systolic_bp,
+    diastolic_bp: vital.diastolic_bp,
+    pulse_bpm: vital.pulse_bpm,
+    temperature_c: vital.temperature_c,
+    glucose_mg_dl: vital.glucose_mg_dl,
+    weight_kg: vital.weight_kg,
+    height_cm: vital.height_cm,
+    bmi: vital.bmi,
+    spo2_percent: vital.spo2_percent,
+    notes: vital.notes,
+    recorded_by: fullName || null,
+    created_at: iso(vital.created_at),
+    updated_at: iso(vital.updated_at),
+  };
+}
+
+/**
+ * Where a reported result falls against the order's own reference range
+ * (phase 3). `"13.8 g/dL"` parses as 13.8; anything unparsable is "unknown";
+ * a blank result is `null` (nothing reported yet).
+ */
+export function labResultFlag(
+  resultValue: string | null | undefined,
+  min: number | null | undefined,
+  max: number | null | undefined
+): "low" | "normal" | "high" | "unknown" | null {
+  if (resultValue === null || resultValue === undefined || resultValue.trim() === "") {
+    return null;
+  }
+  const parsed = Number.parseFloat(resultValue);
+  if (Number.isNaN(parsed)) return "unknown";
+  const hasMin = min !== null && min !== undefined;
+  const hasMax = max !== null && max !== undefined;
+  if (hasMin && parsed < min) return "low";
+  if (hasMax && parsed > max) return "high";
+  if (!hasMin && !hasMax) return "unknown";
+  return "normal";
+}
+
+/** labs.LabOrderSerializer — one ordered test plus its result (phase 3). */
+export function labOrderDto(
+  order: LabOrder & { doctor?: (Doctor & { user: User }) | null }
+): Record<string, unknown> {
+  const by = order.doctor?.user;
+  const fullName = by ? `${by.first_name} ${by.last_name}`.trim() : "";
+  return {
+    id: order.id,
+    patient: order.patient_id,
+    doctor: order.doctor_id,
+    appointment: order.appointment_id,
+    status: order.status,
+    test_name: order.test_name,
+    unit: order.unit,
+    reference_min: order.reference_min,
+    reference_max: order.reference_max,
+    result_value: order.result_value,
+    result_notes: order.result_notes,
+    notes: order.notes,
+    flag: labResultFlag(order.result_value, order.reference_min, order.reference_max),
+    ordered_by: fullName || null,
+    resulted_at: iso(order.resulted_at),
+    ordered_at: iso(order.ordered_at),
+    created_at: iso(order.created_at),
+    updated_at: iso(order.updated_at),
   };
 }
 
@@ -355,8 +481,37 @@ export function appointmentDto(
     /** Doctor's phone numbers shown in appointment booking. */
     doctor_phone: appointment.doctor.user.phone ?? "",
     doctor_phone_secondary: (appointment.doctor as { phone_secondary?: string }).phone_secondary ?? "",
+    /** Waiting-room state (phase 11) — null until the patient checks in. */
+    checked_in_at: iso(appointment.checked_in_at),
+    consultation_started_at: iso(appointment.consultation_started_at),
   };
   return base;
+}
+
+/**
+ * One appointment's place in the waiting line (phase 11).
+ *
+ * `position` is 1-based among the checked-in, not-yet-seen patients of that
+ * doctor/day; `null` means "not waiting" (never checked in, or already being
+ * seen). `waiting_count` is the size of that line, so a patient can render
+ * "2 ahead of you" without a second request.
+ */
+export function queueSlotDto(slot: {
+  appointment: number;
+  position: number | null;
+  being_seen: boolean;
+  checked_in: boolean;
+  waited_minutes: number | null;
+  waiting_count: number;
+}): Record<string, unknown> {
+  return {
+    appointment: slot.appointment,
+    position: slot.position,
+    being_seen: slot.being_seen,
+    checked_in: slot.checked_in,
+    waited_minutes: slot.waited_minutes,
+    waiting_count: slot.waiting_count,
+  };
 }
 
 /**
