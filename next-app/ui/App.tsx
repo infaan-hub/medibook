@@ -51,6 +51,7 @@ const DoctorPersonalScreen = lazy(() => import("./pages").then((m) => ({ default
 const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default: m.NotificationsScreen })));
 const PatientEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.PatientEmergencyScreen })));
 const DoctorEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorEmergencyScreen })));
+const DoctorHealthTipsScreen = lazy(() => import("./pages/doctor-health-tips").then((m) => ({ default: m.DoctorHealthTipsScreen })));
 const MyReviewsScreen = lazy(() => import("./pages").then((m) => ({ default: m.MyReviewsScreen })));
 const AdminDashboardScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazy(() => import("./pages").then((m) => ({ default: m.AdminUsersScreen })));
@@ -233,6 +234,7 @@ export default function App() {
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
                 <Route path="/doctor/emergency" element={<RequireRole role="doctor"><DoctorEmergencyScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
+<Route path="/doctor/health-tips" element={<RequireRole role="doctor"><DoctorHealthTipsScreen /></RequireRole>} />
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />

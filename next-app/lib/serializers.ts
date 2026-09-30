@@ -222,7 +222,14 @@ export function reviewDto(review: Review & { doctor: { user: User } }): Record<s
 }
 
 /** blog.serializers.ArticleListSerializer. */
-export function articleListDto(article: Article, req: Request): Record<string, unknown> {
+export function articleListDto(
+  article: Article & { author?: User | null },
+  req: Request
+): Record<string, unknown> {
+  const author = article.author ?? null;
+  const authorName = author
+    ? `${author.first_name} ${author.last_name}`.trim() || author.email
+    : "";
   return {
     id: article.id,
     title: article.title,
@@ -230,6 +237,8 @@ export function articleListDto(article: Article, req: Request): Record<string, u
     excerpt: article.excerpt,
     image: mediaUrl(article.image_id),
     category: article.category,
+    author_name: authorName,
+    author_role: author?.role ?? "",
     published_at: iso(article.published_at),
     created_at: iso(article.created_at),
   };

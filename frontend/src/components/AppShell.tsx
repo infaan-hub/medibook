@@ -74,6 +74,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
+      { to: "/doctor/health-tips", label: "Health Tips", icon: <Newspaper size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
     ];
   }

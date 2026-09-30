@@ -60,6 +60,7 @@ describe("sidebar navigation — no Profile button for any role", () => {
       "/doctor/appointments",
       "/doctor/emergency",
       "/doctor/medical-treatment",
+      "/doctor/health-tips",
       "/notifications",
     ]);
     expect(sidebarByRole.admin).toEqual([

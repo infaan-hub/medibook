@@ -15,6 +15,11 @@ const CATEGORIES = [
   { key: "general", labelKey: "blog.categories.general" },
 ];
 
+function authorLabel(article: Article): string {
+  if (!article.author_name) return "";
+  return article.author_role === "doctor" ? `Dr. ${article.author_name}` : article.author_name;
+}
+
 export function BlogListPage() {
   const { t } = useTranslation();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -88,6 +93,9 @@ export function BlogListPage() {
                 </span>
                 <h3 className="blog__card-title">{article.title}</h3>
                 <p className="blog__card-excerpt">{article.excerpt}</p>
+                {article.author_name && (
+                  <span className="blog__card-author">{authorLabel(article)}</span>
+                )}
                 {article.published_at && (
                   <time className="blog__card-date">
                     {new Date(article.published_at).toLocaleDateString()}
@@ -151,7 +159,7 @@ export function BlogArticlePage() {
         </span>
         <h1>{article.title}</h1>
         <div className="blog-article__meta">
-          {article.author_name && <span>{article.author_name}</span>}
+          {article.author_name && <span>{authorLabel(article)}</span>}
           {article.published_at && (
             <time>{new Date(article.published_at).toLocaleDateString()}</time>
           )}

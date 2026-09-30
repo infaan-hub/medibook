@@ -42,6 +42,11 @@ export const publicArticleCount = (category?: string) => content.countPublishedA
 export const publicArticlePage = (category: string | undefined, skip: number, take: number) =>
   content.listPublishedArticles(category, skip, take);
 
+/** GET /api/blog/articles/?mine=1 — the caller's own articles (any status). */
+export const myArticleCount = (authorId: number) => content.countAuthorArticles(authorId);
+export const myArticlePage = (authorId: number, skip: number, take: number) =>
+  content.listAuthorArticles(authorId, skip, take);
+
 /** GET /api/blog/articles/{slug}/ — single published article. */
 export async function publicArticleDetail(req: Request, slug: string) {
   const article = await content.findPublishedArticle(slug);
@@ -87,16 +92,21 @@ async function storeArticleImage(
   return media.id;
 }
 
-/** Admin create (POST /api/admin/blog/articles/) — JSON or multipart with `image`. */
+/**
+ * Create (POST /api/blog/articles/ + /api/admin/blog/articles/) — JSON or
+ * multipart with `image`. `opts.publish` forces the row live (doctor-written
+ * health tips go straight to the patient feed).
+ */
 export async function adminCreateArticle(
   req: Request,
   user: AuthUser,
   body: unknown,
-  file?: File | null
+  file?: File | null,
+  opts?: { publish?: boolean }
 ) {
   const input = parse(articleSchema, body);
   const slug = await uniqueSlug(input.slug ?? input.title);
-  const published = input.published ?? false;
+  const published = opts?.publish ?? input.published ?? false;
   let imageId: number | null = null;
   if (file && file.size > 0) imageId = await storeArticleImage(user, file);
   else if (input.image !== undefined) imageId = await resolveArticleImageId(input.image);

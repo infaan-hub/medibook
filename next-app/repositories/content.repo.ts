@@ -11,6 +11,7 @@ export const listPublishedArticles = (category: string | undefined, skip: number
   prisma.article.findMany({
     where: { published: true, ...(category ? { category } : {}) },
     orderBy: [{ published_at: { sort: "desc", nulls: "last" } }, { created_at: "desc" }],
+    include: { author: true },
     skip,
     take,
   });
@@ -23,6 +24,19 @@ export const countAllArticles = () => prisma.article.count();
 export const listAllArticles = (skip: number, take: number) =>
   prisma.article.findMany({
     orderBy: [{ published_at: { sort: "desc", nulls: "last" } }, { created_at: "desc" }],
+    include: { author: true },
+    skip,
+    take,
+  });
+
+export const countAuthorArticles = (authorId: number) =>
+  prisma.article.count({ where: { author_id: authorId } });
+
+export const listAuthorArticles = (authorId: number, skip: number, take: number) =>
+  prisma.article.findMany({
+    where: { author_id: authorId },
+    orderBy: [{ created_at: "desc" }],
+    include: { author: true },
     skip,
     take,
   });
