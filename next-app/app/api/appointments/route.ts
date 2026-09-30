@@ -8,6 +8,7 @@ import * as doctors from "@/repositories/doctors.repo";
 import {
   appointmentListWhere,
   countAppointments,
+  isAppointmentStatus,
   listAppointments,
   listAppointmentsUnpaginated,
 } from "@/repositories/appointments.repo";
@@ -16,6 +17,13 @@ export const GET = handler(async (ctx) => {
   const user = await requireAuth(ctx.req);
   const qs = new URL(ctx.req.url).searchParams;
   const status = qs.get("status") ?? undefined;
+  // An unknown status would reach Prisma as an invalid enum value and surface
+  // as a 500 — answer with a DRF-style 400 instead.
+  if (status !== undefined && !isAppointmentStatus(status)) {
+    throw badRequest("Select a valid choice. That choice is not one of the available choices.", {
+      status: [`"${status}" is not a valid appointment status.`],
+    });
+  }
   const role = user.is_superuser ? "admin" : user.role;
   const doctor =
     role === "doctor" ? await doctors.findDoctorByUserId(user.id) : null;

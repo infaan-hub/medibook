@@ -765,6 +765,9 @@ export function SettingsScreen() {
                       Ordered {vitalDate(order.ordered_at)}
                       {order.ordered_by ? ` by Dr. ${order.ordered_by}` : ""}
                     </span>
+                    {order.result_due_date && (
+                      <span>Results required by {vitalDate(order.result_due_date)}</span>
+                    )}
                     {order.resulted_at && <span>Resulted {vitalDate(order.resulted_at)}</span>}
                   </div>
                   {order.notes && <p className="vit-row__notes">{order.notes}</p>}

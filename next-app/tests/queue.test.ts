@@ -11,7 +11,7 @@ import { appointmentDto, queueSlotDto } from "@/lib/serializers";
 import type { Appointment, Doctor, User } from "@prisma/client";
 
 const row = (over: Partial<QueueRow> & { id: number }): QueueRow => ({
-  status: "confirmed",
+  status: "accepted",
   start_time: "09:00:00",
   checked_in_at: null,
   consultation_started_at: null,
@@ -77,10 +77,10 @@ describe("buildQueue", () => {
     expect(slots.every((slot) => slot.waiting_count === 0)).toBe(true);
   });
 
-  it("drops completed and cancelled appointments — they left the room", () => {
+  it("drops done and cancelled appointments — they left the room", () => {
     const slots = buildQueue(
       [
-        row({ id: 1, status: "completed", checked_in_at: at("2026-09-30T08:00:00Z") }),
+        row({ id: 1, status: "done", checked_in_at: at("2026-09-30T08:00:00Z") }),
         row({ id: 2, status: "cancelled", checked_in_at: at("2026-09-30T08:30:00Z") }),
         row({ id: 3, status: "rejected", checked_in_at: at("2026-09-30T08:40:00Z") }),
         row({ id: 4, status: "pending", checked_in_at: at("2026-09-30T09:00:00Z") }),
@@ -167,7 +167,7 @@ describe("appointmentDto carries the waiting-room timestamps", () => {
       appointment_date: at("2026-09-30T00:00:00Z"),
       start_time: "09:00:00",
       end_time: "09:30:00",
-      status: "confirmed",
+      status: "accepted",
       reason: "",
       notes: "",
       cancel_reason: "",
@@ -189,7 +189,7 @@ describe("appointmentDto carries the waiting-room timestamps", () => {
       appointment_date: at("2026-09-30T00:00:00Z"),
       start_time: "10:00:00",
       end_time: "10:30:00",
-      status: "confirmed",
+      status: "accepted",
       reason: "",
       notes: "",
       cancel_reason: "",

@@ -188,7 +188,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     longitude: input.emergency_longitude,
   };
 
-  // Patient-level guard first: if they already hold a pending/confirmed
+  // Patient-level guard first: if they already hold a pending/accepted
   // emergency, say so (409) instead of "slot not available" — the slot is
   // often taken by their own active emergency.
   const existingEmergency = await appointments.findPatientEmergencyAppointment(user.id);
@@ -266,8 +266,8 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     reason: input.reason ?? "",
     notes: input.notes ?? "",
     appointment_type: "EMERGENCY",
-    // Auto-dispatch books straight into `confirmed`: there is no accept step.
-    status: input.doctor !== undefined && input.doctor !== null ? "pending" : "confirmed",
+    // Auto-dispatch books straight into `accepted`: there is no accept step.
+    status: input.doctor !== undefined && input.doctor !== null ? "pending" : "accepted",
     emergency_reason: input.emergency_reason,
     emergency_description: input.emergency_description ?? "",
     emergency_latitude: input.emergency_latitude,
@@ -283,7 +283,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     `Emergency ${date} ${formatClock(start)}–${formatClock(end)} assigned to you: ${input.emergency_reason.replace("_", " ")}.`,
     appointment.id
   );
-  if (appointment.status === "confirmed") {
+  if (appointment.status === "accepted") {
     await notify(
       user.id,
       emergencyNotificationType("accepted"),
@@ -377,7 +377,7 @@ export async function acceptEmergencyAppointment(req: Request, user: AuthUser, i
     throw conflict("This emergency appointment is no longer pending.");
   }
 
-  const updated = await appointments.updateAppointment(id, { status: "confirmed" });
+  const updated = await appointments.updateAppointment(id, { status: "accepted" });
 
   await notify(
     appointment.patient_id,
@@ -411,9 +411,9 @@ export async function rejectEmergencyAppointment(req: Request, user: AuthUser, i
     throw forbidden("Only the assigned doctor can reject this emergency appointment.");
   }
 
-  // Auto-dispatched emergencies land on `confirmed`, so rejecting has to work
+  // Auto-dispatched emergencies land on `accepted`, so rejecting has to work
   // there too — the patient still needs a way out if the doctor cannot attend.
-  if (appointment.status !== "pending" && appointment.status !== "confirmed") {
+  if (appointment.status !== "pending" && appointment.status !== "accepted") {
     throw conflict("This emergency appointment is no longer open.");
   }
 
@@ -457,7 +457,7 @@ export async function getDoctorEmergencyAppointments(user: AuthUser) {
     where: {
       doctor_id: ownDoctor,
       appointment_type: "EMERGENCY",
-      status: { in: ["pending", "confirmed"] },
+      status: { in: ["pending", "accepted"] },
     },
     include: {
       patient: true,
@@ -472,7 +472,7 @@ export async function getDoctorEmergencyAppointments(user: AuthUser) {
  * GET /api/emergency/ — role-scoped emergency queue (the UI's sidebar screen
  * loads exactly this):
  *   patient → their own emergency appointments, newest first (0..1 active)
- *   doctor  → live requests assigned to them (pending or auto-confirmed)
+ *   doctor  → live requests assigned to them (pending or auto-accepted)
  *   admin   → every live emergency on the platform
  */
 export async function listEmergencies(user: AuthUser) {
@@ -481,7 +481,7 @@ export async function listEmergencies(user: AuthUser) {
 
   if (user.role === "admin" || user.is_superuser) {
     return prisma.appointment.findMany({
-      where: { appointment_type: "EMERGENCY", status: { in: ["pending", "confirmed"] } },
+      where: { appointment_type: "EMERGENCY", status: { in: ["pending", "accepted"] } },
       include,
       orderBy: { emergency_requested_at: "asc" },
     });

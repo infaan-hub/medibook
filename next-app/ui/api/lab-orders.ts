@@ -15,6 +15,7 @@ export interface LabOrder {
   appointment: number | null;
   status: LabOrderStatus;
   test_name: string;
+  result_due_date: string | null;
   unit: string;
   reference_min: number | null;
   reference_max: number | null;
@@ -33,6 +34,7 @@ export interface CreateLabOrderPayload {
   patient: number;
   appointment?: number | null;
   test_name: string;
+  result_due_date: string;
   unit?: string;
   reference_min?: number | null;
   reference_max?: number | null;

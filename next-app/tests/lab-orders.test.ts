@@ -76,16 +76,18 @@ describe("labOrderWhere", () => {
 });
 
 describe("labOrderCreateSchema", () => {
-  it("requires a test name and coerces the reference bounds", () => {
+  it("requires a test name, a results date and coerces the reference bounds", () => {
     const input = parse(labOrderCreateSchema, {
       patient: "7",
       test_name: "  Fasting glucose  ",
+      result_due_date: "2026-10-05",
       reference_min: "3.9",
       reference_max: "5.5",
       unit: "mmol/L",
     });
     expect(input.patient).toBe(7);
     expect(input.test_name).toBe("Fasting glucose");
+    expect(input.result_due_date).toBe("2026-10-05");
     expect(input.reference_min).toBe(3.9);
     expect(input.reference_max).toBe(5.5);
   });
@@ -93,7 +95,11 @@ describe("labOrderCreateSchema", () => {
   it("rejects a blank test name with a DRF field error", () => {
     let caught: ValidationError | null = null;
     try {
-      parse(labOrderCreateSchema, { patient: 7, test_name: "   " });
+      parse(labOrderCreateSchema, {
+        patient: 7,
+        test_name: "   ",
+        result_due_date: "2026-10-05",
+      });
     } catch (error) {
       caught = error as ValidationError;
     }
@@ -101,21 +107,64 @@ describe("labOrderCreateSchema", () => {
     expect(caught?.errors.test_name).toBeDefined();
   });
 
+  it("requires the results date", () => {
+    let caught: ValidationError | null = null;
+    try {
+      parse(labOrderCreateSchema, { patient: 7, test_name: "CBC" });
+    } catch (error) {
+      caught = error as ValidationError;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect(caught?.errors.result_due_date).toEqual(["This field is required."]);
+  });
+
+  it("rejects a results date that is not YYYY-MM-DD", () => {
+    let caught: ValidationError | null = null;
+    try {
+      parse(labOrderCreateSchema, {
+        patient: 7,
+        test_name: "CBC",
+        result_due_date: "05/10/2026",
+      });
+    } catch (error) {
+      caught = error as ValidationError;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect(caught?.errors.result_due_date).toEqual([
+      "Date has wrong format. Use YYYY-MM-DD.",
+    ]);
+  });
+
   it("rejects a reference minimum above the maximum", () => {
     expect(() =>
-      parse(labOrderCreateSchema, { patient: 7, test_name: "CBC", reference_min: 9, reference_max: 4 })
+      parse(labOrderCreateSchema, {
+        patient: 7,
+        test_name: "CBC",
+        result_due_date: "2026-10-05",
+        reference_min: 9,
+        reference_max: 4,
+      })
     ).toThrow(ValidationError);
   });
 
   it("rejects unparsable reference bounds", () => {
     expect(() =>
-      parse(labOrderCreateSchema, { patient: 7, test_name: "CBC", reference_min: "high" })
+      parse(labOrderCreateSchema, {
+        patient: 7,
+        test_name: "CBC",
+        result_due_date: "2026-10-05",
+        reference_min: "high",
+      })
     ).toThrow(ValidationError);
   });
 
   it("accepts an order with no reference range at all", () => {
     expect(() =>
-      parse(labOrderCreateSchema, { patient: 7, test_name: "Urinalysis" })
+      parse(labOrderCreateSchema, {
+        patient: 7,
+        test_name: "Urinalysis",
+        result_due_date: "2026-10-05",
+      })
     ).not.toThrow();
   });
 });
@@ -186,6 +235,7 @@ describe("labOrderDto", () => {
     appointment_id: null,
     status: "resulted",
     test_name: "Fasting glucose",
+    result_due_date: new Date("2026-10-05T00:00:00Z"),
     unit: "mmol/L",
     reference_min: 3.9,
     reference_max: 5.5,
@@ -205,6 +255,7 @@ describe("labOrderDto", () => {
     expect(dto.doctor).toBe(5);
     expect(dto.status).toBe("resulted");
     expect(dto.test_name).toBe("Fasting glucose");
+    expect(dto.result_due_date).toBe("2026-10-05");
     expect(dto.result_value).toBe("6.2");
     expect(dto.flag).toBe("high");
     expect(dto.ordered_by).toBe("Asha Moshi");

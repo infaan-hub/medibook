@@ -11,6 +11,8 @@ const API_PROXY_TARGET =
     ? "https://medibook-backend-jade.vercel.app"
     : "http://127.0.0.1:8000");
 
+export const maxDuration = 60;
+
 async function proxy(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
   const target = `${API_PROXY_TARGET}${url.pathname}${url.search}`;

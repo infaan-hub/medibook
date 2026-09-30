@@ -97,8 +97,8 @@
     "noAppointmentsDesc": "Your appointment history will appear here.",
     "status": {
       "pending": "Pending",
-      "confirmed": "Confirmed",
-      "completed": "Completed",
+      "accepted": "Accepted",
+      "done": "Done",
       "cancelled": "Cancelled",
       "rejected": "Rejected"
     },

@@ -27,6 +27,32 @@ const SLOT_TAKEN = () =>
     start_time: ["This slot was just booked."],
   });
 
+/* -------------------- One open appointment per patient --------------------- */
+
+/** The bits of an appointment the booking gate reports back. */
+export interface OpenAppointment {
+  id: number;
+  status: string;
+  appointment_date: Date;
+  start_time: string;
+}
+
+/**
+ * Message shown when a patient still holds an appointment (pure — the tests
+ * pin the wording so the UI never has to guess why booking was refused).
+ */
+export function activeAppointmentMessage(appointment: OpenAppointment): string {
+  const date = appointment.appointment_date.toISOString().slice(0, 10);
+  const clock = appointment.start_time.slice(0, 5);
+  return `You already have an appointment on ${date} at ${clock}. It has to be marked as done by your doctor before you can book another one.`;
+}
+
+/** 409 for the gate above, in the API's usual error envelope. */
+export function activeAppointmentConflict(appointment: OpenAppointment) {
+  const message = activeAppointmentMessage(appointment);
+  return conflict(message, { non_field_errors: [message] });
+}
+
 /** Serializable-transaction retry around the unique-slot insert. */
 async function createWithSlotGuard<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -50,6 +76,12 @@ async function createWithSlotGuard<T>(fn: () => Promise<T>): Promise<T> {
 /** POST /api/appointments/ — patient books a slot (201 "Appointment requested."). */
 export async function bookAppointment(req: Request, user: AuthUser, body: unknown) {
   const input = parse(appointmentCreateSchema, body);
+
+  // One open appointment per patient: until the doctor closes the last visit
+  // (`done`) the patient already holds a slot and may not book a second one.
+  // Cancelling or rejecting an appointment releases them too.
+  const open = await appointments.findOpenAppointmentForPatient(user.id);
+  if (open) throw activeAppointmentConflict(open);
 
   const doctor = await doctors.findDoctorById(Number(input.doctor)).catch(() => null);
   if (!doctor) {
@@ -280,25 +312,42 @@ export async function destroyAppointment(id: number): Promise<void> {
   );
 }
 
+/**
+ * Action → resulting status.
+ *
+ * The lifecycle the doctor works through: accept a pending request, then close
+ * the visit once the patient has been seen. Both spellings are accepted
+ * (`confirm`/`accept` and `complete`/`done`) so older clients and the clearer
+ * new wording keep working against the same endpoints.
+ */
 const ACTION_MAP: Record<string, { status: string; roles: string[] }> = {
-  confirm: { status: "confirmed", roles: ["doctor", "admin"] },
-  complete: { status: "completed", roles: ["doctor", "admin"] },
+  accept: { status: "accepted", roles: ["doctor", "admin"] },
+  confirm: { status: "accepted", roles: ["doctor", "admin"] },
+  done: { status: "done", roles: ["doctor", "admin"] },
+  complete: { status: "done", roles: ["doctor", "admin"] },
   cancel: { status: "cancelled", roles: ["patient", "doctor", "admin"] },
   reject: { status: "rejected", roles: ["doctor", "admin"] },
 };
 
+/** Resulting status for an action name, or null when the action is unknown. */
+export const actionTargetStatus = (action: string): string | null =>
+  ACTION_MAP[action]?.status ?? null;
+
 /** Allowed next statuses from each current status (terminal states have none). */
 const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
-  pending: ["confirmed", "cancelled", "rejected"],
-  confirmed: ["completed", "cancelled"],
-  completed: [],
+  pending: ["accepted", "cancelled", "rejected"],
+  accepted: ["done", "cancelled"],
+  done: [],
   cancelled: [],
   rejected: [],
 };
 
+/** True when `from` may legally move to `to` (pure — used by the tests too). */
+export const canTransition = (from: string, to: string): boolean =>
+  (STATUS_TRANSITIONS[from] ?? []).includes(to);
+
 function assertTransition(from: string, to: string): void {
-  const allowed = STATUS_TRANSITIONS[from];
-  if (!allowed || !allowed.includes(to)) {
+  if (!canTransition(from, to)) {
     throw conflict(
       `Cannot change appointment status from "${from}" to "${to}".`,
       { status: [`Invalid transition ${from} → ${to}.`] }
@@ -307,15 +356,15 @@ function assertTransition(from: string, to: string): void {
 }
 
 const NOTIFY_TYPE: Record<string, string> = {
-  confirmed: "appointment_confirmed",
-  completed: "system",
+  accepted: "appointment_confirmed",
+  done: "system",
   cancelled: "appointment_cancelled",
   rejected: "appointment_rejected",
 };
 
 const NOTIFY_MESSAGE: Record<string, string> = {
-  confirmed: "Appointment confirmed",
-  completed: "Appointment completed",
+  accepted: "Appointment accepted",
+  done: "Appointment marked as done",
   cancelled: "Appointment cancelled",
   rejected: "Appointment rejected",
 };
@@ -360,8 +409,8 @@ export async function runAction(user: AuthUser, id: number, action: string, body
     ...(payload.notes ? { notes: payload.notes } : {}),
   });
 
-  // Auto-create 1h/24h/1w reminders when an appointment is confirmed.
-  if (config.status === "confirmed") await createReminders(updated);
+  // Auto-create 1h/24h/1w reminders when an appointment is accepted.
+  if (config.status === "accepted") await createReminders(updated);
 
   const doctor = await doctors.findDoctorById(updated.doctor_id);
   const other =

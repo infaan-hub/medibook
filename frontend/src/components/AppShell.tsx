@@ -19,6 +19,7 @@ import {
   listUnreadNotifications,
   registerPushSubscription,
 } from "../api/notifications";
+import { tokenStore } from "../api/tokens";
 import { getPushSubscription, subscribeToPush } from "../push/notifications";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { useInstallAvailability } from "../pwa/installPrompt";
@@ -143,6 +144,7 @@ function NotificationBell() {
   const { notify } = useToast();
 
   const refresh = useCallback(() => {
+    if (!tokenStore.getAccess()) return;
     listUnreadNotifications()
       .then((r) => setUnreadCount(r.data.count))
       .catch(() => {});

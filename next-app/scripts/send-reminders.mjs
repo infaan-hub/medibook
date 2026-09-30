@@ -108,7 +108,7 @@ async function localRun() {
     if (claimed.count === 0) continue;
 
     const appt = reminder.appointment;
-    if (["cancelled", "rejected", "completed"].includes(appt.status)) {
+    if (["cancelled", "rejected", "done"].includes(appt.status)) {
       skipped += 1;
       continue;
     }

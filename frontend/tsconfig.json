@@ -23,6 +23,6 @@
     "esModuleInterop": true,
     "types": ["vitest/globals"]
   },
-  "include": ["next-env.d.ts", "app", "src", "next.config.ts", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "src/__tests__", "src/test", "vitest.config.ts"]
+  "include": ["next-env.d.ts", "app", "src", "next.config.ts", "vitest.config.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

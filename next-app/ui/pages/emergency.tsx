@@ -6,9 +6,9 @@
  *     appointment starts the moment the emergency happens, so it is always
  *     booked for the current day. No doctor picker either — whoever is free and
  *     nearest at that time is dispatched automatically and the appointment is
- *     confirmed on the spot. Plus the live status card.
+ *     accepted on the spot. Plus the live status card.
  *   DoctorEmergencyScreen  (/doctor/emergency) — live requests assigned to them
- *     (auto-confirmed ones included) with patient contact details, plus the
+ *     (auto-accepted ones included) with patient contact details, plus the
  *     legacy pending queue with one-tap accept / reject.
  */
 
@@ -177,7 +177,7 @@ export function PatientEmergencyScreen() {
 
   // The screen shows the live request whenever one is open; the form otherwise.
   const active =
-    emergencies?.find((item) => item.status === "pending" || item.status === "confirmed") ??
+    emergencies?.find((item) => item.status === "pending" || item.status === "accepted") ??
     null;
 
   const load = useCallback(() => {
@@ -389,7 +389,7 @@ export function PatientEmergencyScreen() {
           {active.status === "pending" && (
             <p className="form-note">Waiting for the doctor to accept your request…</p>
           )}
-          {active.status === "confirmed" && (
+          {active.status === "accepted" && (
             <p className="form-note">
               The nearest available doctor has been assigned — no waiting on an accept.
             </p>
@@ -589,7 +589,7 @@ export function DoctorEmergencyScreen() {
           <h1 className="page__title">Emergency requests</h1>
           <p className="page__subtitle">
             Urgent requests assigned to you — auto-dispatched ones are already
-            confirmed; older pending ones still need accept or reject.
+            accepted; older pending ones still need accept or reject.
           </p>
         </div>
       </header>
@@ -692,7 +692,7 @@ export function DoctorEmergencyScreen() {
                     </Button>
                   ) : (
                     <p className="form-note">
-                      Auto-assigned — already confirmed for the patient. Reject only if
+                      Auto-assigned — already accepted for the patient. Reject only if
                       you cannot attend.
                     </p>
                   )}

@@ -150,7 +150,7 @@ export async function sendDueReminders(): Promise<ReminderRunResult> {
     }
 
     const appointment = appointmentBase(reminder);
-    if (["cancelled", "rejected", "completed"].includes(appointment.status)) {
+    if (["cancelled", "rejected", "done"].includes(appointment.status)) {
       result.skipped += 1;
       continue;
     }

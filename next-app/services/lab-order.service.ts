@@ -140,6 +140,7 @@ export async function createLabOrder(user: AuthUser, body: unknown) {
     patient_id: target.patientId,
     appointment_id: appointmentId,
     test_name: input.test_name,
+    result_due_date: new Date(`${input.result_due_date}T00:00:00Z`),
     unit: input.unit ?? "",
     reference_min: input.reference_min ?? null,
     reference_max: input.reference_max ?? null,

@@ -35,6 +35,8 @@ export function vitalChips(vital: Vital): VitalChip[] {
 
 /** "30 Sep 2026" — safe for malformed timestamps (shows "—"). */
 export function vitalDate(value: string): string {
-  const dt = new Date(value);
+  // Date-only values ("YYYY-MM-DD") parse as UTC midnight and would render a
+  // day early in negative-offset timezones — give them a local time part.
+  const dt = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
   return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString();
 }

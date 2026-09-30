@@ -60,6 +60,7 @@ export const createLabOrder = (
     patient_id: number;
     appointment_id?: number | null;
     test_name: string;
+    result_due_date?: Date | null;
     unit?: string;
     reference_min?: number | null;
     reference_max?: number | null;
@@ -74,6 +75,7 @@ export const createLabOrder = (
       patient_id: data.patient_id,
       appointment_id: data.appointment_id ?? null,
       test_name: data.test_name,
+      result_due_date: data.result_due_date ?? null,
       unit: data.unit ?? "",
       reference_min: data.reference_min ?? null,
       reference_max: data.reference_max ?? null,

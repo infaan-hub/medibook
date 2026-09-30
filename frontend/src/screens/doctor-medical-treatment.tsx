@@ -34,7 +34,6 @@ import {
 import {
   statusLabel,
   flagLabel,
-  referenceLabel,
   resultLabel,
 } from "../lib/lab-orders";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -246,6 +245,66 @@ function vitalFormIsEmpty(form: VitalForm): boolean {
   ].every((value) => value.trim() === "");
 }
 
+/** Integer measurement ranges — mirrors vitalsCreateSchema on the server. */
+const VITAL_INT_RULES: { key: keyof VitalForm; min: number; max: number }[] = [
+  { key: "systolic_bp", min: 20, max: 300 },
+  { key: "diastolic_bp", min: 10, max: 200 },
+  { key: "pulse_bpm", min: 20, max: 300 },
+  { key: "glucose_mg_dl", min: 10, max: 1000 },
+  { key: "spo2_percent", min: 40, max: 100 },
+];
+
+/**
+ * Client-side mirror of vitalsCreateSchema so a bad reading fails fast with
+ * the same reason the API would report (the server re-validates anyway).
+ */
+function vitalValidationError(form: VitalForm): string | null {
+  if (vitalFormIsEmpty(form)) return "Record at least one measurement.";
+  for (const rule of VITAL_INT_RULES) {
+    const raw = form[rule.key].trim();
+    if (raw === "") continue;
+    const parsed = numOrNull(raw);
+    if (parsed === null || !Number.isInteger(parsed)) return "A valid integer is required.";
+    if (parsed < rule.min || parsed > rule.max) {
+      return `Ensure this value is greater than or equal to ${rule.min}.`;
+    }
+  }
+  const temperature = form.temperature_c.trim();
+  if (temperature !== "") {
+    const parsed = numOrNull(temperature);
+    if (parsed === null || parsed < 25 || parsed > 45) {
+      return "Enter a temperature between 25 and 45 °C.";
+    }
+  }
+  const weight = form.weight_kg.trim();
+  if (weight !== "") {
+    const parsed = numOrNull(weight);
+    if (parsed === null || parsed < 1 || parsed > 400) {
+      return "Enter a weight between 1 and 400 kg.";
+    }
+  }
+  const height = form.height_cm.trim();
+  if (height !== "") {
+    const parsed = numOrNull(height);
+    if (parsed === null || parsed < 30 || parsed > 250) {
+      return "Enter a height between 30 and 250 cm.";
+    }
+  }
+  const hasSystolic = form.systolic_bp.trim() !== "";
+  const hasDiastolic = form.diastolic_bp.trim() !== "";
+  if (hasSystolic !== hasDiastolic) {
+    return "Systolic and diastolic blood pressure are recorded together.";
+  }
+  if (hasSystolic) {
+    const systolic = numOrNull(form.systolic_bp);
+    const diastolic = numOrNull(form.diastolic_bp);
+    if (systolic !== null && diastolic !== null && systolic <= diastolic) {
+      return "Systolic pressure must be higher than diastolic.";
+    }
+  }
+  return null;
+}
+
 const VITAL_FIELDS: { key: keyof VitalForm; label: string; unit?: string; step?: string }[] = [
   { key: "systolic_bp", label: "Systolic", unit: "mmHg", step: "1" },
   { key: "diastolic_bp", label: "Diastolic", unit: "mmHg", step: "1" },
@@ -428,34 +487,19 @@ function VitalsCard({
 
 interface LabForm {
   test_name: string;
-  unit: string;
-  reference_min: string;
-  reference_max: string;
-  notes: string;
+  result_due_date: string;
 }
 
 const EMPTY_LAB: LabForm = {
   test_name: "",
-  unit: "",
-  reference_min: "",
-  reference_max: "",
-  notes: "",
+  result_due_date: "",
 };
 
 function labPayload(patientId: number, form: LabForm): CreateLabOrderPayload {
-  const bound = (value: string): number | null => {
-    const trimmed = value.trim();
-    if (trimmed === "") return null;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
   return {
     patient: patientId,
     test_name: form.test_name.trim(),
-    unit: form.unit.trim(),
-    reference_min: bound(form.reference_min),
-    reference_max: bound(form.reference_max),
-    notes: form.notes.trim(),
+    result_due_date: form.result_due_date.trim(),
   };
 }
 
@@ -536,45 +580,13 @@ function LabOrdersCard({
               />
             </label>
             <label className="rx-field">
-              <span>Unit</span>
+              <span>Results required by</span>
               <input
                 className="field__input"
-                type="text"
-                value={form.unit}
-                onChange={(e) => onField("unit", e.target.value)}
-                placeholder="g/dL"
-              />
-            </label>
-            <label className="rx-field rx-field--num">
-              <span>Ref. min</span>
-              <input
-                className="field__input"
-                type="number"
-                step="any"
-                value={form.reference_min}
-                onChange={(e) => onField("reference_min", e.target.value)}
-                placeholder="—"
-              />
-            </label>
-            <label className="rx-field rx-field--num">
-              <span>Ref. max</span>
-              <input
-                className="field__input"
-                type="number"
-                step="any"
-                value={form.reference_max}
-                onChange={(e) => onField("reference_max", e.target.value)}
-                placeholder="—"
-              />
-            </label>
-            <label className="rx-field lab-field--wide">
-              <span>Notes for the patient</span>
-              <input
-                className="field__input"
-                type="text"
-                value={form.notes}
-                onChange={(e) => onField("notes", e.target.value)}
-                placeholder="e.g. Fasting 12 hours"
+                type="date"
+                required
+                value={form.result_due_date}
+                onChange={(e) => onField("result_due_date", e.target.value)}
               />
             </label>
           </div>
@@ -615,12 +627,14 @@ function LabOrdersCard({
                 </div>
 
                 <div className="lab-row__meta">
-                  <span>Reference: {referenceLabel(order)}</span>
                   <span>Result: {resultLabel(order)}</span>
                   <span>
                     Ordered {fmtDate(order.ordered_at)}
                     {order.ordered_by ? ` by Dr. ${order.ordered_by}` : ""}
                   </span>
+                  {order.result_due_date && (
+                    <span>Results required by {fmtDate(order.result_due_date)}</span>
+                  )}
                   {order.resulted_at && <span>Resulted {fmtDate(order.resulted_at)}</span>}
                 </div>
 
@@ -1130,8 +1144,9 @@ export function DoctorMedicalTreatmentScreen() {
 
   async function handleSaveVital() {
     if (!selectedId) return;
-    if (vitalFormIsEmpty(vitalForm)) {
-      notify("error", "Record at least one measurement.");
+    const invalid = vitalValidationError(vitalForm);
+    if (invalid) {
+      notify("error", invalid);
       return;
     }
     setVitalSaving(true);
@@ -1173,6 +1188,10 @@ export function DoctorMedicalTreatmentScreen() {
     if (!selectedId) return;
     if (!labForm.test_name.trim()) {
       notify("error", "Test name is required.");
+      return;
+    }
+    if (!labForm.result_due_date.trim()) {
+      notify("error", "Results required by date is required.");
       return;
     }
     setLabSaving(true);
@@ -1338,7 +1357,7 @@ export function DoctorMedicalTreatmentScreen() {
             form={labForm}
             saving={labSaving}
             onToggleForm={() => {
-              setLabForm(EMPTY_LAB);
+              setLabForm({ ...EMPTY_LAB, result_due_date: todayISO() });
               setShowLabForm(true);
             }}
             onField={setLabField}

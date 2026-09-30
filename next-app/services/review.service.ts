@@ -22,15 +22,15 @@ async function refreshDoctorRating(doctorId: number): Promise<void> {
   );
 }
 
-/** POST /api/appointments/{id}/review/ — patient reviews a completed visit. */
+/** POST /api/appointments/{id}/review/ — patient reviews a visit marked done. */
 export async function submitReview(req: Request, user: AuthUser, appointmentId: number, body: unknown) {
   const appointment = await appointments.findAppointmentById(appointmentId);
   if (!appointment) throw notFound(); // "The requested resource was not found."
 
   const input = parse(reviewCreateSchema, body);
   // ReviewSerializer.validate_appointment field checks (in order).
-  if (appointment.status !== "completed") {
-    throw new ValidationError({ appointment: ["Only completed appointments can be reviewed."] });
+  if (appointment.status !== "done") {
+    throw new ValidationError({ appointment: ["Only appointments marked as done can be reviewed."] });
   }
   if (appointment.patient_id !== user.id) {
     throw new ValidationError({ appointment: ["You can only review your own appointments."] });

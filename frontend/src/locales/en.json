@@ -97,8 +97,8 @@
     "noAppointmentsDesc": "Your appointment history will appear here.",
     "status": {
       "pending": "Pending",
-      "confirmed": "Confirmed",
-      "completed": "Completed",
+      "accepted": "Accepted",
+      "done": "Done",
       "cancelled": "Cancelled",
       "rejected": "Rejected"
     },
@@ -241,9 +241,9 @@
       "cancel": "Cancel Request",
       "note": "A doctor will review your request shortly. You'll be notified when they respond."
     },
-    "confirmed": {
-      "title": "Emergency Appointment Confirmed",
-      "subtitle": "Your emergency appointment has been confirmed",
+    "accepted": {
+      "title": "Emergency Appointment Accepted",
+      "subtitle": "Your emergency appointment has been accepted",
       "doctor": "Doctor",
       "date": "Date",
       "time": "Time",

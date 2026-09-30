@@ -13,7 +13,7 @@ import type { Notification, NotificationType, Appointment } from "@prisma/client
 /** Django _TITLES map (helpers.py). */
 const TITLES: Record<string, string> = {
   appointment_request: "New appointment request",
-  appointment_confirmed: "Appointment confirmed",
+  appointment_confirmed: "Appointment accepted",
   appointment_cancelled: "Appointment cancelled",
   appointment_rejected: "Appointment rejected",
   appointment_reminder: "Appointment reminder",

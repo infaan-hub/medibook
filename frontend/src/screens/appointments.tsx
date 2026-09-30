@@ -1,7 +1,7 @@
 /**
  * PHASE 10–11 — Appointment Engine: booking flow, list, detail, cancel, reschedule, success.
  * Patient books from doctor profile → selects slot → confirms → views list/detail/cancel/reschedule.
- * PHASE 15: Review form on completed appointments.
+ * PHASE 15: Review form on done appointments.
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -57,6 +57,18 @@ function locationGateFromError(error: unknown): "patient" | "doctor" | null {
   return flags[0] === "doctor" ? "doctor" : "patient";
 }
 
+/**
+ * The exact sentence the API's booking gate sends with its 409
+ * (activeAppointmentMessage) — one open appointment per patient until the
+ * doctor marks it done — so the proactive gate below and a refused booking
+ * read identically.
+ */
+function openAppointmentMessage(appointment: Appointment): string {
+  const date = appointment.appointment_date.slice(0, 10);
+  const clock = appointment.start_time.slice(0, 5);
+  return `You already have an appointment on ${date} at ${clock}. It has to be marked as done by your doctor before you can book another one.`;
+}
+
 function formatTime(t: string): string {
   return t.slice(0, 5);
 }
@@ -68,8 +80,8 @@ function formatDate(d: string): string {
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
   pending: "Pending",
-  confirmed: "Confirmed",
-  completed: "Completed",
+  accepted: "Accepted",
+  done: "Done",
   cancelled: "Cancelled",
   rejected: "Rejected",
 };
@@ -128,6 +140,8 @@ export function BookingScreen() {
    *  (below) covers the first visit, this catches a stale/changed profile. */
   const [gateOverride, setGateOverride] = useState<"patient" | "doctor" | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
+  /** This patient's oldest open booking (pending/accepted), if they hold one. */
+  const [openAppointment, setOpenAppointment] = useState<Appointment | null>(null);
 
   const loadDoctor = useCallback(() => {
     if (!id) return;
@@ -162,6 +176,28 @@ export function BookingScreen() {
       .then((r) => setPatientProfile(r.data))
       .catch(() => setPatientProfile(null));
   }, []);
+
+  // One open appointment per patient: name the appointment being held before a
+  // slot is picked, so the API's 409 never lands as a surprise. A failed lookup
+  // stays silent — the booking POST enforces the rule either way.
+  const loadOpenAppointment = useCallback(() => {
+    if (!patientProfile) return; // doctors and admins are not gated
+    Promise.all([
+      listMyAppointments({ status: "pending" }),
+      listMyAppointments({ status: "accepted" }),
+    ])
+      .then(([pending, accepted]) => {
+        const rows = [...pending.data.results, ...accepted.data.results].sort(
+          (a, b) =>
+            a.appointment_date.localeCompare(b.appointment_date) ||
+            a.start_time.localeCompare(b.start_time)
+        );
+        setOpenAppointment(rows[0] ?? null);
+      })
+      .catch(() => setOpenAppointment(null));
+  }, [patientProfile]);
+
+  useEffect(() => { loadOpenAppointment(); }, [loadOpenAppointment]);
 
   // Another client booked a slot on this doctor/date — refresh open slots live.
   useRealtimeEvent((event, payload) => {
@@ -236,6 +272,9 @@ export function BookingScreen() {
       }
       // Reconcile with server (another client may have taken it while we failed).
       if (prevAvailability) loadSlots();
+      // 409 = the slot went, or an open appointment still holds this patient's
+      // slot — re-check the gate so the screen explains it instead of re-failing.
+      if (e instanceof ApiError && e.status === 409) loadOpenAppointment();
     } finally {
       setSubmitting(false);
     }
@@ -270,6 +309,33 @@ export function BookingScreen() {
 
   if (error && !doctor) return <div className="page"><ErrorState message={error} onRetry={loadDoctor} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
+
+  // Blocking gate: the API refuses a second open appointment with a 409, so
+  // send the patient to the one they are holding instead of a refused submit.
+  if (openAppointment) {
+    return (
+      <div className="page">
+        <Link to={`/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
+        <Card className="card--fit">
+          <h1 className="page__title">Book appointment</h1>
+          <p className="page__subtitle">
+            Dr. {doctor.first_name} {doctor.last_name}
+          </p>
+          <EmptyState
+            icon={<Calendar size={28} />}
+            title="Finish your current appointment first"
+            description={openAppointmentMessage(openAppointment)}
+            action={
+              <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "center" }}>
+                <Link to="/appointments">View my appointments</Link>
+                <Button variant="secondary" onClick={loadOpenAppointment}>Check again</Button>
+              </div>
+            }
+          />
+        </Card>
+      </div>
+    );
+  }
 
   const calDays = new Date(calYear, calMonth, 0).getDate();
   const firstDayOfWeek = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
@@ -655,13 +721,13 @@ export function RescheduleScreen() {
   if (error && !appointment) return <div className="page"><ErrorState message={error} onRetry={loadAppointment} /></div>;
   if (!appointment) return <div className="page"><Skeleton lines={6} /></div>;
 
-  const canReschedule = appointment.status === "pending" || appointment.status === "confirmed";
+  const canReschedule = appointment.status === "pending" || appointment.status === "accepted";
   if (!canReschedule) {
     return (
       <div className="page">
         <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> Back to appointment</Link>
         <Card className="card--fit">
-          <EmptyState title="Cannot reschedule" description="Only pending or confirmed appointments can be rescheduled." />
+          <EmptyState title="Cannot reschedule" description="Only pending or accepted appointments can be rescheduled." />
         </Card>
       </div>
     );
@@ -773,17 +839,17 @@ export function AppointmentsListScreen() {
 
   const now = new Date().toISOString().slice(0, 10);
   const upcoming = appointments.filter(
-    (a) => a.appointment_date >= now && (a.status === "pending" || a.status === "confirmed")
+    (a) => a.appointment_date >= now && (a.status === "pending" || a.status === "accepted")
   );
   const past = appointments.filter(
-    (a) => a.appointment_date < now || a.status === "completed" || a.status === "cancelled" || a.status === "rejected"
+    (a) => a.appointment_date < now || a.status === "done" || a.status === "cancelled" || a.status === "rejected"
   );
   const visible = tab === "upcoming" ? upcoming : past;
 
   const statusConfig: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
     pending: { icon: <Clock3 size={14} />, color: "#d97706", bg: "#fef3c7" },
-    confirmed: { icon: <CheckCircle2 size={14} />, color: "#059669", bg: "#d1fae5" },
-    completed: { icon: <CheckCircle2 size={14} />, color: "#2563eb", bg: "#dbeafe" },
+    accepted: { icon: <CheckCircle2 size={14} />, color: "#059669", bg: "#d1fae5" },
+    done: { icon: <CheckCircle2 size={14} />, color: "#2563eb", bg: "#dbeafe" },
     cancelled: { icon: <XCircle size={14} />, color: "#dc2626", bg: "#fee2e2" },
     rejected: { icon: <XCircle size={14} />, color: "#9333ea", bg: "#ede9fe" },
   };
@@ -822,7 +888,7 @@ export function AppointmentsListScreen() {
         <div className="patient-appt-empty">
           <div className="patient-appt-empty__icon"><Calendar size={40} /></div>
           <h3>{tab === "upcoming" ? "No upcoming appointments" : "No past appointments"}</h3>
-          <p>{tab === "upcoming" ? "Find a doctor to book your next visit." : "Your completed and cancelled appointments will appear here."}</p>
+          <p>{tab === "upcoming" ? "Find a doctor to book your next visit." : "Your past and cancelled appointments will appear here."}</p>
           {tab === "upcoming" && <Link to="/doctors"><Button>Find a Doctor</Button></Link>}
         </div>
       ) : (
@@ -906,7 +972,7 @@ export function AppointmentDetailScreen() {
     setError(null);
     getAppointment(Number(id)).then((r) => {
       setAppointment(r.data);
-      if (r.data.status === "completed" && r.data.doctor) {
+      if (r.data.status === "done" && r.data.doctor) {
         getDoctorReviews(r.data.doctor).then((reviews) => {
           setHasReview(reviews.data.some((rev) => rev.appointment === r.data.id));
         }).catch(() => {});
@@ -920,7 +986,7 @@ export function AppointmentDetailScreen() {
   // is still live (check-ins and consults started by others move the line).
   useEffect(() => {
     if (!appointment) return;
-    if (appointment.status !== "pending" && appointment.status !== "confirmed") return;
+    if (appointment.status !== "pending" && appointment.status !== "accepted") return;
     let cancelled = false;
     const loadQueue = () => {
       getQueue(appointment.appointment_date)
@@ -1034,7 +1100,7 @@ export function AppointmentDetailScreen() {
   if (error && !appointment) return <div className="page"><ErrorState message={error} onRetry={load} /></div>;
   if (!appointment) return <div className="page"><Skeleton lines={6} /></div>;
 
-  const canCancel = appointment.status === "pending" || appointment.status === "confirmed";
+  const canCancel = appointment.status === "pending" || appointment.status === "accepted";
   const canReschedule = canCancel;
 
   return (
@@ -1253,11 +1319,11 @@ export function AppointmentDetailScreen() {
         )}
       </Card>
 
-      {appointment.status === "completed" && !hasReview && id && (
+      {appointment.status === "done" && !hasReview && id && (
         <ReviewForm appointmentId={Number(id)} onSuccess={load} />
       )}
 
-      {appointment.status === "completed" && hasReview && (
+      {appointment.status === "done" && hasReview && (
         <Card className="card--fit">
           <p className="page__subtitle">You have already reviewed this appointment.</p>
           <Link to={`/doctors/${appointment.doctor}`}>

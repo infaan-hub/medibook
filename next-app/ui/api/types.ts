@@ -125,8 +125,8 @@ export interface LinkedDoctor {
 
 export type AppointmentStatus =
   | "pending"
-  | "confirmed"
-  | "completed"
+  | "accepted"
+  | "done"
   | "cancelled"
   | "rejected";
 

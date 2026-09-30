@@ -6,7 +6,7 @@
 import { apiDelete, apiGet, apiPost } from "./client";
 import type { Envelope, Paginated, Review } from "./types";
 
-/** POST /api/appointments/:id/review/ — submit a review for a completed appointment. */
+/** POST /api/appointments/:id/review/ — submit a review for a finished appointment. */
 export function submitReview(
   appointmentId: number,
   payload: { rating: number; comment?: string }

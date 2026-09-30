@@ -1,4 +1,4 @@
-/** POST /api/appointments/{id}/review/ — patient reviews a completed visit. */
+/** POST /api/appointments/{id}/review/ — patient reviews a visit marked done. */
 import { handler, created, intParam, notFound, readJson } from "@/lib/route";
 import { requirePatient } from "@/lib/auth";
 import { submitReview } from "@/services/review.service";

@@ -132,7 +132,7 @@ beforeEach(() => {
   stubGeolocation();
   listEmergencySlots.mockResolvedValue(envelope([]));
   createEmergency.mockResolvedValue(
-    envelope(pendingRequest({ status: "confirmed", doctor_name: "Neema Kimaro" }))
+    envelope(pendingRequest({ status: "accepted", doctor_name: "Neema Kimaro" }))
   );
 });
 
@@ -282,7 +282,7 @@ describe("PatientEmergencyScreen", () => {
     listEmergencies.mockResolvedValue(
       envelope([
         pendingRequest({
-          status: "confirmed",
+          status: "accepted",
           doctor_name: "Neema Kimaro",
           doctor_latitude: -6.1622,
           doctor_longitude: 39.2982,
@@ -327,11 +327,11 @@ describe("DoctorEmergencyScreen", () => {
     expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
   });
 
-  it("hides Accept on an auto-confirmed request but keeps Reject and the maps link", async () => {
+  it("hides Accept on an auto-accepted request but keeps Reject and the maps link", async () => {
     listEmergencies.mockResolvedValue(
       envelope([
         pendingRequest({
-          status: "confirmed",
+          status: "accepted",
           doctor_name: "Neema Kimaro",
           emergency_latitude: -6.165,
           emergency_longitude: 39.296,
@@ -355,7 +355,7 @@ describe("DoctorEmergencyScreen", () => {
   it("accepts a request and reloads the queue", async () => {
     const who = userEvent.setup();
     listEmergencies.mockResolvedValue(envelope([pendingRequest()]));
-    respondToEmergency.mockResolvedValue(envelope(pendingRequest({ status: "confirmed" })));
+    respondToEmergency.mockResolvedValue(envelope(pendingRequest({ status: "accepted" })));
 
     renderDoctor();
     await screen.findByText("Asha Juma");

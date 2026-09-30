@@ -97,8 +97,8 @@
     "noAppointmentsDesc": "Historia ya miadi yako itaonekana hapa.",
     "status": {
       "pending": "Inasubiri",
-      "confirmed": "Imethibitishwa",
-      "completed": "Imekamilika",
+      "accepted": "Imekubaliwa",
+      "done": "Imekamilika",
       "cancelled": "Imefutwa",
       "rejected": "Imekataliwa"
     },
@@ -241,9 +241,9 @@
       "cancel": "Ghairi Ombi",
       "note": "Daktari atachambua ombi lako hivi karibuni. Utaarishiwa anaporudia."
     },
-    "confirmed": {
-      "title": "Miadi ya Dharura Imethibitishwa",
-      "subtitle": "Miadi yako ya dharura imethibitishwa",
+    "accepted": {
+      "title": "Miadi ya Dharura Imekubaliwa",
+      "subtitle": "Miadi yako ya dharura imekubaliwa",
       "doctor": "Daktari",
       "date": "Tarehe",
       "time": "Muda",

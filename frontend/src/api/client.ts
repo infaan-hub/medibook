@@ -37,7 +37,7 @@ export class ApiError extends Error {
 
 export const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15_000,
+  timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -59,7 +59,7 @@ export function refreshAccessToken(): Promise<string | null> {
       const { data } = await axios.post<Envelope<{ access: string; refresh: string }>>(
         `${API_BASE_URL}/auth/token/refresh/`,
         { refresh },
-        { timeout: 15_000 }
+        { timeout: 30_000 }
       );
       if (!data.success) return null;
       tokenStore.setAccess(data.data.access);
@@ -93,9 +93,22 @@ http.interceptors.response.use(
     }
 
     const payload = error.response?.data;
+    // Surface the first field-level reason so validation failures read as
+    // "Systolic and diastolic blood pressure are recorded together." instead
+    // of the generic envelope message.
+    const errors =
+      payload && typeof payload === "object" ? payload.errors : undefined;
+    const firstFieldError =
+      errors && typeof errors === "object"
+        ? Object.values(errors)
+            .flat()
+            .find((message): message is string => typeof message === "string")
+        : undefined;
     const message =
-      payload?.message ?? (status ? `Request failed (${status})` : "Network error — check your connection");
-    throw new ApiError(message, status ?? 0, payload?.errors ?? {});
+      firstFieldError ??
+      (payload && typeof payload === "object" ? payload.message : undefined) ??
+      (status ? `Request failed (${status})` : "Network error — check your connection");
+    throw new ApiError(message, status ?? 0, errors ?? {});
   }
 );
 

@@ -168,6 +168,14 @@ describe("vitalsCreateSchema", () => {
       parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 70, recorded_at: "2026-09-30" })
     ).not.toThrow();
   });
+
+  it("treats a blank recorded_at as omitted", () => {
+    const input = parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 70, recorded_at: "" });
+    expect(input.recorded_at).toBeUndefined();
+    expect(() =>
+      parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 70, recorded_at: "   " })
+    ).not.toThrow();
+  });
 });
 
 describe("vitalDto", () => {

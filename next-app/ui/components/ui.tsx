@@ -89,8 +89,8 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 
 export type BadgeStatus =
   | "pending"
-  | "confirmed"
-  | "completed"
+  | "accepted"
+  | "done"
   | "cancelled"
   | "rejected"
   | "no-show";

@@ -33,10 +33,15 @@ enum Role {
   admin
 }
 
+/// Appointment lifecycle:
+/// pending  → doctor has not answered the request yet
+/// accepted → doctor accepted the request; the visit is on the calendar
+/// done     → the visit took place and the doctor closed it
+/// cancelled / rejected → the booking is off (terminal)
 enum AppointmentStatus {
   pending
-  confirmed
-  completed
+  accepted
+  done
   cancelled
   rejected
 }
@@ -605,6 +610,8 @@ model LabOrder {
   status        LabOrderStatus @default(ordered)
   /// What to run, e.g. "Complete blood count".
   test_name     String         @db.VarChar(200)
+  /// When the results are required by — the date the doctor needs them back.
+  result_due_date DateTime?    @db.Date
   unit          String         @default("") @db.VarChar(30)
   reference_min Float?
   reference_max Float?

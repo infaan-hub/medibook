@@ -1,45 +1,58 @@
 /**
- * Zanzibar reference geography — every ward (Kata) of the five Zanzibar
- * regions, with WGS84 coordinates.
+ * Zanzibar reference geography — the bundled gazetteer behind every area
+ * label, the typed location picker and the 5 km "Near me" filter.
  *
  * Why this exists: Patient/Doctor rows store raw lat/lng, which is exact but
  * meaningless to a human ("-5.73100, 39.30100"). Reverse-geocoding each card
  * against a map SDK would need an API key and a CSP change, so the nearest
- * ward is resolved locally with the same Haversine formula that powers the
+ * area is resolved locally with the same Haversine formula that powers the
  * 5 km "Near me" filter. A doctor card can therefore say "1.2 km — Nungwi".
  *
- * Coverage: all 331 wards of Unguja (Kaskazini Unguja, Kusini Unguja,
- * Mjini Magharibi) and Pemba (Kaskazini Pemba, Kusini Pemba) — every
- * addressable area in the archipelago, so any fix on the islands has a label
- * within a few kilometres and distances stay easy to sanity-check.
+ * Three layers, all reachable through `searchZanzibarAreas`:
+ * - settlements — every ward (Kata) of the five Zanzibar regions (331), plus
+ *   well-known villages and towns the ward table has no row for (Makunduchi,
+ *   Kendwa, Jozani, Pingwe, …) and Stone Town itself;
+ * - admin areas — Unguja's six districts and three regions at their real
+ *   centroids, so "Kaskazini A" or "Mjini Magharibi" resolve to a coordinate
+ *   pair of their own;
+ * - streets — the named streets mapped across Unguja, so a typed "Darajani"
+ *   lands on Darajani Street.
+ *
+ * Reverse labels (`nearestAreaName`) only draw from settlements and admin
+ * areas: street coverage is too patchy for a stable label, while any land
+ * point is always within a few kilometres of a ward. The 15 km cap keeps
+ * Dar es Salaam and the open ocean unlabelled.
  *
  * Coordinates are WGS84 decimal degrees — the datum Google Maps uses — so a
  * stored fix, a computed distance and `https://www.google.com/maps?q=lat,lng`
  * all land on exactly the same spot.
  *
- * Source: Tanzania Administrative Divisions Dataset
- * (https://github.com/open-admin-data/tanzania-administrative-divisions)
- * © Open Admin Data, CC-BY-4.0 — attribution kept here as the licence requires.
+ * Sources:
+ * - wards, districts and regions: Tanzania Administrative Divisions Dataset
+ *   (https://github.com/open-admin-data/tanzania-administrative-divisions)
+ *   © Open Admin Data, CC-BY-4.0 — attribution kept here as the licence requires.
+ * - streets and village coordinates: © OpenStreetMap contributors (ODbL),
+ *   fetched through the Overpass and Nominatim APIs.
  */
 import { directionsUrl, haversineKm } from "./location";
 
-/** One ward as stored in the bundled dataset. */
-type WardRow = [name: string, district: string, region: string, latitude: number, longitude: number];
+/** One row as stored in the bundled dataset. */
+type PlaceRow = [name: string, district: string, region: string, latitude: number, longitude: number];
 
 /** An area somebody can actually point at on a map. */
 export interface ZanzibarArea {
-  /** Ward name — what people say out loud ("Nungwi", "Stone Town"). */
+  /** Place name — what people say out loud ("Nungwi", "Darajani Street"). */
   name: string;
-  /** District the ward belongs to, e.g. "Kaskazini A". */
+  /** District it sits in, e.g. "Kaskazini A"; district rows carry their own name. */
   district: string;
-  /** One of the five Zanzibar regions. */
+  /** One of the five Zanzibar regions; region rows carry their own name. */
   region: string;
   island: "Unguja" | "Pemba";
   latitude: number;
   longitude: number;
 }
 
-const WARD_ROWS: WardRow[] = [
+const WARD_ROWS: PlaceRow[] = [
   ["Bopwe", "Wete", "Kaskazini Pemba", -5.051, 39.725],
   ["Chimba", "Micheweni", "Kaskazini Pemba", -4.975, 39.764],
   ["Chwale", "Wete", "Kaskazini Pemba", -5.103, 39.817],
@@ -373,21 +386,173 @@ const WARD_ROWS: WardRow[] = [
   ["Welezo", "Magharibi", "Mjini Magharibi", -6.158, 39.228],
 ];
 
+/**
+ * Villages and towns that are not wards of their own — real settlements
+ * people name out loud, geocoded from OpenStreetMap. Stone Town closes the
+ * list: it is the old city, not a ward, and used to be fudged through the
+ * alias table.
+ */
+const PLACE_ROWS: PlaceRow[] = [
+  ["Jozani", "Kusini", "Kusini Unguja", -6.26715, 39.42843],
+  ["Kendwa", "Kaskazini A", "Kaskazini Unguja", -5.75158, 39.29122],
+  ["Makunduchi", "Kusini", "Kusini Unguja", -6.41275, 39.55337],
+  ["Mbweni", "Magharibi", "Mjini Magharibi", -6.21835, 39.20393],
+  ["Michenzani", "Mjini", "Mjini Magharibi", -6.1652, 39.19889],
+  ["Mtegani", "Kusini", "Kusini Unguja", -6.407, 39.55511],
+  ["Pingwe", "Kati", "Kusini Unguja", -6.14998, 39.51659],
+  ["Stone Town", "Mjini", "Mjini Magharibi", -6.16266, 39.19001],
+];
+
+/** Unguja's districts and regions at their administrative centroids (OAD). */
+const ADMIN_ROWS: PlaceRow[] = [
+  ["Kaskazini A", "Kaskazini A", "Kaskazini Unguja", -5.856, 39.299],
+  ["Kaskazini B", "Kaskazini B", "Kaskazini Unguja", -5.966, 39.291],
+  ["Kati", "Kati", "Kusini Unguja", -6.207, 39.399],
+  ["Kusini", "Kusini", "Kusini Unguja", -6.327, 39.484],
+  ["Magharibi", "Magharibi", "Mjini Magharibi", -6.174, 39.255],
+  ["Mjini", "Mjini", "Mjini Magharibi", -6.167, 39.206],
+  ["Kaskazini Unguja", "Kaskazini Unguja", "Kaskazini Unguja", -5.881, 39.291],
+  ["Kusini Unguja", "Kusini Unguja", "Kusini Unguja", -6.25, 39.425],
+  ["Mjini Magharibi", "Mjini Magharibi", "Mjini Magharibi", -6.174, 39.248],
+];
+
+/**
+ * Named streets of Unguja (© OpenStreetMap contributors, ODbL), each row
+ * parked in the district of its nearest ward. Searchable so a typed address
+ * lands on real coordinates, but never used as a reverse-geocode label.
+ */
+const STREET_ROWS: PlaceRow[] = [
+  ["Afya Street", "Magharibi", "Mjini Magharibi", -6.21407, 39.20817],
+  ["Ali Mtumwa Road", "Kusini", "Kusini Unguja", -6.30605, 39.54109],
+  ["Baghani Street", "Mjini", "Mjini Magharibi", -6.16363, 39.1883],
+  ["Barabara Doctor Shein", "Kati", "Kusini Unguja", -6.27776, 39.36515],
+  ["Barabara Kibaoni", "Kati", "Kusini Unguja", -6.14105, 39.32706],
+  ["Barabara Taec", "Kati", "Kusini Unguja", -6.14367, 39.33834],
+  ["Barabara U/Ukuu - Uzi", "Kati", "Kusini Unguja", -6.27836, 39.3654],
+  ["Barabara ya Fuoni Jitimai", "Magharibi", "Mjini Magharibi", -6.19941, 39.25352],
+  ["Barabara ya Kinuni", "Magharibi", "Mjini Magharibi", -6.17354, 39.24486],
+  ["Barabara ya Kwarara", "Magharibi", "Mjini Magharibi", -6.1939, 39.24416],
+  ["Barabara ya MamboSasa", "Magharibi", "Mjini Magharibi", -6.17857, 39.25578],
+  ["Barabara ya Nyarugusu", "Magharibi", "Mjini Magharibi", -6.17449, 39.24016],
+  ["Benjamin Mkapa Road", "Mjini", "Mjini Magharibi", -6.167, 39.19203],
+  ["Benjamin William Road", "Mjini", "Mjini Magharibi", -6.1495, 39.22141],
+  ["Bima Road", "Magharibi", "Mjini Magharibi", -6.21058, 39.20668],
+  ["Bondeni viamboni", "Kaskazini A", "Kaskazini Unguja", -5.72896, 39.30256],
+  ["Cathedral Street", "Mjini", "Mjini Magharibi", -6.16227, 39.18898],
+  ["Changa Bazaar", "Mjini", "Mjini Magharibi", -6.16123, 39.19142],
+  ["Chumbuni Road", "Mjini", "Mjini Magharibi", -6.15778, 39.22195],
+  ["Chwaka Road", "Kati", "Kusini Unguja", -6.15902, 39.37815],
+  ["Cocobelo Way", "Kaskazini A", "Kaskazini Unguja", -5.735, 39.29201],
+  ["Creek Road", "Mjini", "Mjini Magharibi", -6.16126, 39.19433],
+  ["Darajani Street", "Mjini", "Mjini Magharibi", -6.16104, 39.19571],
+  ["Daznundaz maskan", "Kusini", "Kusini Unguja", -6.41696, 39.54854],
+  ["Felix Moumi Road", "Mjini", "Mjini Magharibi", -6.1722, 39.20195],
+  ["Forest Conservancy Road", "Kati", "Kusini Unguja", -6.17408, 39.41008],
+  ["Forodhani Street", "Mjini", "Mjini Magharibi", -6.16069, 39.19025],
+  ["Fumba Road", "Magharibi", "Mjini Magharibi", -6.19722, 39.21297],
+  ["Gizenga Street", "Mjini", "Mjini Magharibi", -6.16203, 39.18864],
+  ["Glorious School Street", "Mjini", "Mjini Magharibi", -6.18481, 39.21507],
+  ["Hamamni Street", "Mjini", "Mjini Magharibi", -6.1623, 39.19004],
+  ["Hospital Road", "Kusini", "Kusini Unguja", -6.4171, 39.55521],
+  ["Huda Street", "Magharibi", "Mjini Magharibi", -6.22039, 39.21458],
+  ["Hurumzi Street", "Mjini", "Mjini Magharibi", -6.16092, 39.19088],
+  ["Ipa Road", "Kati", "Kusini Unguja", -6.19976, 39.30491],
+  ["Jamatini Road", "Mjini", "Mjini Magharibi", -6.16063, 39.19189],
+  ["Jambiani Road", "Kusini", "Kusini Unguja", -6.3433, 39.55137],
+  ["Jambo Beach", "Kusini", "Kusini Unguja", -6.26359, 39.53565],
+  ["Jaws Corner", "Mjini", "Mjini Magharibi", -6.1633, 39.18981],
+  ["Kajengwa Road", "Kusini", "Kusini Unguja", -6.40916, 39.55228],
+  ["Kajifichenii Street", "Mjini", "Mjini Magharibi", -6.1626, 39.19046],
+  ["Karume Road", "Mjini", "Mjini Magharibi", -6.17305, 39.21743],
+  ["Kaunda Road", "Mjini", "Mjini Magharibi", -6.16757, 39.19014],
+  ["Kendwa Road", "Kaskazini A", "Kaskazini Unguja", -5.75571, 39.29604],
+  ["Kenyatta Road", "Mjini", "Mjini Magharibi", -6.16334, 39.18763],
+  ["Kibondeni Road", "Kusini", "Kusini Unguja", -6.42892, 39.54901],
+  ["Kibunju Street", "Magharibi", "Mjini Magharibi", -6.24449, 39.25139],
+  ["Kihindi - Chwaka Conservancy Road", "Kati", "Kusini Unguja", -6.17209, 39.41561],
+  ["Kijini to mialeni Way", "Kusini", "Kusini Unguja", -6.41716, 39.54739],
+  ["Kikwajuni Juu Street", "Mjini", "Mjini Magharibi", -6.16672, 39.19798],
+  ["Kikwajuni kwa Bi Thania Street", "Mjini", "Mjini Magharibi", -6.1674, 39.19532],
+  ["Kisakasaka Road", "Magharibi", "Mjini Magharibi", -6.24654, 39.27525],
+  ["Kisernakani Road", "Kaskazini A", "Kaskazini Unguja", -5.77096, 39.30221],
+  ["Kisima Majongoo Street", "Mjini", "Mjini Magharibi", -6.16528, 39.19695],
+  ["Kisiwani Street", "Magharibi", "Mjini Magharibi", -6.22292, 39.21174],
+  ["Kwa Mjeshi Street", "Magharibi", "Mjini Magharibi", -6.22338, 39.24906],
+  ["Kwamchina Road", "Mjini", "Mjini Magharibi", -6.18969, 39.218],
+  ["La gemma Road", "Kaskazini A", "Kaskazini Unguja", -5.74315, 39.2967],
+  ["Labama Street", "Mjini", "Mjini Magharibi", -6.16789, 39.20128],
+  ["Lebanon Street", "Mjini", "Mjini Magharibi", -6.1632, 39.18901],
+  ["Mahodhini Street", "Magharibi", "Mjini Magharibi", -6.22332, 39.20864],
+  ["Makunduchi Road", "Kusini", "Kusini Unguja", -6.4151, 39.52953],
+  ["Malawi Road", "Magharibi", "Mjini Magharibi", -6.12758, 39.21364],
+  ["Malindi Road", "Mjini", "Mjini Magharibi", -6.15756, 39.19337],
+  ["Malindi Street", "Mjini", "Mjini Magharibi", -6.15939, 39.19327],
+  ["Mapinduzi Road", "Mjini", "Mjini Magharibi", -6.16914, 39.19349],
+  ["Market Street", "Mjini", "Mjini Magharibi", -6.16257, 39.19294],
+  ["Mataka Street", "Magharibi", "Mjini Magharibi", -6.21853, 39.21814],
+  ["Mbweni Road", "Magharibi", "Mjini Magharibi", -6.21422, 39.2122],
+  ["Meli saba to kijichi Road", "Magharibi", "Mjini Magharibi", -6.09348, 39.22159],
+  ["Michamvi Road", "Kati", "Kusini Unguja", -6.14462, 39.49764],
+  ["Mizingani Road", "Mjini", "Mjini Magharibi", -6.16012, 39.18992],
+  ["Mkangeni", "Magharibi", "Mjini Magharibi", -6.08595, 39.24217],
+  ["Mkunazini Street", "Mjini", "Mjini Magharibi", -6.16434, 39.19154],
+  ["Mkunguni", "Kaskazini A", "Kaskazini Unguja", -5.72661, 39.30397],
+  ["Mkungwini", "Kusini", "Kusini Unguja", -6.40382, 39.55016],
+  ["Mlandege Road", "Mjini", "Mjini Magharibi", -6.16968, 39.19886],
+  ["Mrembo Street", "Mjini", "Mjini Magharibi", -6.16298, 39.18951],
+  ["Mskiti Mabatini Street", "Mjini", "Mjini Magharibi", -6.16528, 39.1955],
+  ["Mtaa Kidundo", "Magharibi", "Mjini Magharibi", -6.18228, 39.22451],
+  ["Mtende Road", "Kusini", "Kusini Unguja", -6.4445, 39.52178],
+  ["Mtoro Road", "Mjini", "Mjini Magharibi", -6.16656, 39.19093],
+  ["Museum Road", "Mjini", "Mjini Magharibi", -6.16728, 39.19038],
+  ["Mwakani Road", "Kusini", "Kusini Unguja", -6.42074, 39.5509],
+  ["Mwana Street", "Magharibi", "Mjini Magharibi", -6.21921, 39.21604],
+  ["Mwanakwerekwe Flyover", "Mjini", "Mjini Magharibi", -6.17767, 39.22227],
+  ["New Mkunazini Road", "Mjini", "Mjini Magharibi", -6.16375, 39.1919],
+  ["Ngongoni Street", "Mjini", "Mjini Magharibi", -6.16921, 39.19579],
+  ["Njia ya Chunga", "Magharibi", "Mjini Magharibi", -6.17882, 39.26126],
+  ["Njia ya Garagara", "Magharibi", "Mjini Magharibi", -6.13841, 39.22677],
+  ["Njia ya Kwarara madina", "Magharibi", "Mjini Magharibi", -6.21164, 39.2493],
+  ["Njia ya Maharibiko", "Magharibi", "Mjini Magharibi", -6.18745, 39.25363],
+  ["Njia ya Matemwe", "Kaskazini A", "Kaskazini Unguja", -5.88503, 39.288],
+  ["Njia ya Mina", "Mjini", "Mjini Magharibi", -6.14499, 39.2219],
+  ["Njia ya Mtundani", "Magharibi", "Mjini Magharibi", -6.18931, 39.25699],
+  ["Nyerere Road", "Mjini", "Mjini Magharibi", -6.1723, 39.1968],
+  ["Nyumba ya Moto Street", "Mjini", "Mjini Magharibi", -6.16025, 39.19057],
+  ["Pigawadi Street", "Mjini", "Mjini Magharibi", -6.16419, 39.18989],
+  ["Shangani Street", "Mjini", "Mjini Magharibi", -6.16343, 39.18691],
+  ["Soko Muhogo Street", "Mjini", "Mjini Magharibi", -6.16434, 39.19042],
+  ["Suicide Alley", "Mjini", "Mjini Magharibi", -6.16412, 39.18695],
+  ["Tharia Street", "Mjini", "Mjini Magharibi", -6.16214, 39.19219],
+  ["Ufufuma Streetway", "Kati", "Kusini Unguja", -6.17591, 39.39985],
+  ["Vuga Road", "Mjini", "Mjini Magharibi", -6.16548, 39.18973],
+];
+
 const UNGUJA_REGIONS = new Set(["Kaskazini Unguja", "Kusini Unguja", "Mjini Magharibi"]);
 
-/** Every Zanzibar ward, sorted by region then name (stable for tests). */
-export const ZANZIBAR_AREAS: readonly ZanzibarArea[] = WARD_ROWS.map(
-  ([name, district, region, latitude, longitude]): ZanzibarArea => ({
-    name,
-    district,
-    region,
-    island: UNGUJA_REGIONS.has(region) ? "Unguja" : "Pemba",
-    latitude,
-    longitude,
-  })
-);
+const toArea = ([name, district, region, latitude, longitude]: PlaceRow): ZanzibarArea => ({
+  name,
+  district,
+  region,
+  island: UNGUJA_REGIONS.has(region) ? "Unguja" : "Pemba",
+  latitude,
+  longitude,
+});
 
-/** How far a fix may sit from the nearest ward centroid and still get a label. */
+/**
+ * Everything a point may be labelled with: wards first (so the dataset's
+ * first row stays stable), then villages, the city and the admin areas.
+ * Streets deliberately stay out — see `nearestZanzibarArea`.
+ */
+const LABELLED_AREAS: ZanzibarArea[] = [...WARD_ROWS, ...PLACE_ROWS, ...ADMIN_ROWS].map(toArea);
+
+/** Every bundled area — `LABELLED_AREAS` plus the searchable street rows. */
+export const ZANZIBAR_AREAS: readonly ZanzibarArea[] = [
+  ...LABELLED_AREAS,
+  ...STREET_ROWS.map(toArea),
+];
+
+/** How far a fix may sit from the nearest settlement or admin centroid and still get a label. */
 const MAX_AREA_RADIUS_KM = 15;
 
 export interface NearestZanzibarArea {
@@ -402,9 +567,10 @@ export interface Point {
 }
 
 /**
- * Closest ward to a point, with the great-circle distance that was used to
- * pick it. `null` when the point is unusable — never throws, so it is safe to
- * call straight from a render.
+ * Closest settlement or admin area to a point, with the great-circle
+ * distance that was used to pick it. Streets are skipped — street coverage
+ * is too patchy for a stable label. `null` when the point is unusable —
+ * never throws, so it is safe to call straight from a render.
  */
 export function nearestZanzibarArea(point: Point): NearestZanzibarArea | null {
   const latitude = point.latitude;
@@ -415,7 +581,7 @@ export function nearestZanzibarArea(point: Point): NearestZanzibarArea | null {
   const origin = { latitude, longitude };
   let best: ZanzibarArea | null = null;
   let bestKm = Number.POSITIVE_INFINITY;
-  for (const area of ZANZIBAR_AREAS) {
+  for (const area of LABELLED_AREAS) {
     const km = haversineKm(origin, area);
     if (km !== null && km < bestKm) {
       best = area;
@@ -429,8 +595,8 @@ export function nearestZanzibarArea(point: Point): NearestZanzibarArea | null {
  * "Nungwi" for a point inside Zanzibar, `null` outside it.
  *
  * The 15 km cap is what keeps Dar es Salaam or the open Indian Ocean from
- * being labelled as a Zanzibar ward — ward centroids are dense enough that any
- * land point on Unguja or Pemba is well inside it.
+ * being labelled as a Zanzibar area — settlement centroids are dense enough
+ * that any land point on Unguja or Pemba is well inside it.
  */
 export function nearestAreaName(point: Point, withinKm: number = MAX_AREA_RADIUS_KM): string | null {
   const nearest = nearestZanzibarArea(point);
@@ -447,25 +613,29 @@ export function areaMapsUrl(area: ZanzibarArea): string {
 }
 
 /**
- * Well-known place names the ward table carries no row for. Stone Town is not
- * a ward of its own — `nearestAreaName` resolves its coordinates to Kiponda
- * (asserted by the "labels well-known places" test), so a typed "Stone Town"
- * has to land on that same ward or the two halves of the picker disagree.
+ * Alternate names the row table has no exact row for. Stone Town now carries
+ * its own row, so the aliases only bridge the city's other spellings —
+ * "Zanzibar City" shares no token with "Stone Town" and would otherwise
+ * return nothing.
  */
-const AREA_ALIASES: Record<string, string> = { "stone town": "kiponda" };
+const AREA_ALIASES: Record<string, string> = {
+  "zanzibar city": "stone town",
+  "mji mkongwe": "stone town",
+};
 
 /**
  * Forward lookup behind the "type an area" half of the location picker.
  *
- * Purely local: the typed string is matched against the bundled ward, district
- * and region names, so nothing leaves the browser — no geocoding key, no CSP
- * change, no network round-trip. A hit always carries that ward's real WGS84
+ * Purely local: the typed string is matched against the bundled place,
+ * district and region names — wards, villages, admin areas and streets —
+ * so nothing leaves the browser — no geocoding key, no CSP
+ * change, no network round-trip. A hit always carries that row's real WGS84
  * pair, which is what makes a typed answer exactly as trustworthy as a fix
  * the doctor captured with the GPS button.
  *
- * Scoring, highest first: 100 exact ward name, 90 ward-name prefix, 85 exact
- * district/region, 80 ward-name substring, 70 district/region substring, then
- * a +5 bonus when the query starts with the ward name. Every space-separated
+ * Scoring, highest first: 100 exact place name, 90 place-name prefix, 85 exact
+ * district/region, 80 place-name substring, 70 district/region substring, then
+ * a +5 bonus when the query starts with the place name. Every space-separated
  * token has to appear somewhere in the row, so "nungwi kaskazini" and
  * "chake chake" narrow down while "asdfgh" returns nothing. Ties break
  * alphabetically, so the list a doctor sees is stable between renders.

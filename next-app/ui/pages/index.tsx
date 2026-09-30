@@ -122,7 +122,7 @@ function PatientHome({ user }: { user: User }) {
   });
 
   const upcoming = appointments
-    ?.filter((item) => item.status === "pending" || item.status === "confirmed")
+    ?.filter((item) => item.status === "pending" || item.status === "accepted")
     .sort((a, b) => (a.appointment_date + a.start_time).localeCompare(b.appointment_date + b.start_time)) ?? [];
 
   return (

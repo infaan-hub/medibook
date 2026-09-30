@@ -407,6 +407,7 @@ export function labOrderDto(
     appointment: order.appointment_id,
     status: order.status,
     test_name: order.test_name,
+    result_due_date: dateStr(order.result_due_date),
     unit: order.unit,
     reference_min: order.reference_min,
     reference_max: order.reference_max,

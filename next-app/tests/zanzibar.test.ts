@@ -8,8 +8,8 @@ import {
 } from "@/lib/zanzibar";
 
 describe("zanzibar areas", () => {
-  it("covers every ward of the five Zanzibar regions", () => {
-    expect(ZANZIBAR_AREAS.length).toBe(331);
+  it("covers every ward, place, district, region and street of Zanzibar", () => {
+    expect(ZANZIBAR_AREAS.length).toBe(452);
     expect(new Set(ZANZIBAR_AREAS.map((a) => a.region))).toEqual(
       new Set(["Kaskazini Unguja", "Kusini Unguja", "Mjini Magharibi", "Kaskazini Pemba", "Kusini Pemba"])
     );
@@ -22,8 +22,8 @@ describe("zanzibar areas", () => {
 
   it("labels well-known places correctly", () => {
     expect(nearestAreaName({ latitude: -5.7265, longitude: 39.2987 })).toBe("Nungwi");
-    // Stone Town sits inside the Kiponda ward of Mjini.
-    expect(nearestAreaName({ latitude: -6.1621, longitude: 39.1876 })).toBe("Kiponda");
+    // Stone Town has a row of its own now, so the old city labels as itself.
+    expect(nearestAreaName({ latitude: -6.1621, longitude: 39.1876 })).toBe("Stone Town");
     // Central Pemba: the town is a district, so the label is its ward.
     const chake = nearestZanzibarArea({ latitude: -5.24, longitude: 39.77 });
     expect(chake!.area.district).toBe("Chake Chake");
@@ -73,9 +73,44 @@ describe("searchZanzibarAreas", () => {
     expect(searchZanzibarAreas("mjini magharibi").length).toBeGreaterThan(0);
   });
 
-  it("lands Stone Town on the ward the reverse lookup uses", () => {
-    expect(searchZanzibarAreas("Stone Town")[0].name).toBe("Kiponda");
-    expect(nearestAreaName({ latitude: -6.1621, longitude: 39.1876 })).toBe("Kiponda");
+  it("labels and searches Stone Town consistently", () => {
+    expect(searchZanzibarAreas("Stone Town")[0].name).toBe("Stone Town");
+    expect(nearestAreaName({ latitude: -6.1621, longitude: 39.1876 })).toBe("Stone Town");
+    expect(searchZanzibarAreas("Zanzibar City")[0].name).toBe("Stone Town");
+    expect(searchZanzibarAreas("Mji Mkongwe")[0].name).toBe("Stone Town");
+  });
+
+  it("finds the villages the ward table has no row for", () => {
+    const makunduchi = searchZanzibarAreas("Makunduchi")[0];
+    expect(makunduchi).toMatchObject({
+      name: "Makunduchi",
+      district: "Kusini",
+      region: "Kusini Unguja",
+    });
+    expect(nearestAreaName(makunduchi)).toBe("Makunduchi");
+    // Pemba also has a Kendwa ward — the Unguja village must still come first.
+    expect(searchZanzibarAreas("Kendwa")[0].region).toBe("Kaskazini Unguja");
+  });
+
+  it("labels districts and regions as their own rows", () => {
+    expect(searchZanzibarAreas("Kaskazini A")[0]).toMatchObject({
+      name: "Kaskazini A",
+      district: "Kaskazini A",
+      region: "Kaskazini Unguja",
+    });
+    expect(searchZanzibarAreas("Kaskazini Unguja")[0].name).toBe("Kaskazini Unguja");
+    expect(searchZanzibarAreas("Mjini Magharibi")[0].name).toBe("Mjini Magharibi");
+  });
+
+  it("finds streets by name but never labels a fix with one", () => {
+    const darajani = searchZanzibarAreas("Darajani")[0];
+    expect(darajani).toMatchObject({
+      name: "Darajani Street",
+      district: "Mjini",
+      region: "Mjini Magharibi",
+    });
+    // Gizenga Street runs through the old town; the reverse label stays a settlement.
+    expect(nearestAreaName({ latitude: -6.16203, longitude: 39.18864 })).toBe("Stone Town");
   });
 
   it("matches through apostrophes so Ng'ambwa is findable as Ngambwa", () => {

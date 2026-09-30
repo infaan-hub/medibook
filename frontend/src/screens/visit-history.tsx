@@ -109,8 +109,8 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
   const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes;
 
   const statusColors: Record<string, string> = {
-    completed: "var(--color-status-completed)",
-    confirmed: "var(--color-status-confirmed)",
+    done: "var(--color-status-done)",
+    accepted: "var(--color-status-accepted)",
     pending: "var(--color-status-pending)",
     cancelled: "var(--color-status-cancelled)",
     rejected: "var(--color-status-rejected)",

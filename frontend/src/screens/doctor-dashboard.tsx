@@ -1,6 +1,6 @@
 /**
  * PHASE 12 — Doctor Dashboard (§61): dashboard stats, appointment management
- * with accept/reject/complete/cancel actions, pending/confirmed/completed tabs.
+ * with accept/reject/complete/cancel actions, pending/accepted/done tabs.
  */
 
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
@@ -235,12 +235,12 @@ function AppointmentRow({
   }
 
   const canReschedule =
-    appointment.status === "pending" || appointment.status === "confirmed";
+    appointment.status === "pending" || appointment.status === "accepted";
 
   const statusConfig = {
     pending: { icon: <Clock3 size={14} />, label: "Awaiting review", color: "var(--color-status-pending)" },
-    confirmed: { icon: <CheckCircle2 size={14} />, label: "Confirmed", color: "var(--color-status-confirmed)" },
-    completed: { icon: <CheckCircle2 size={14} />, label: "Completed", color: "var(--color-status-completed)" },
+    accepted: { icon: <CheckCircle2 size={14} />, label: "Accepted", color: "var(--color-status-accepted)" },
+    done: { icon: <CheckCircle2 size={14} />, label: "Done", color: "var(--color-status-done)" },
     cancelled: { icon: <Ban size={14} />, label: "Cancelled", color: "var(--color-status-cancelled)" },
     rejected: { icon: <XCircle size={14} />, label: "Rejected", color: "var(--color-status-rejected)" },
   };
@@ -341,7 +341,7 @@ function AppointmentRow({
 
       <div className="appt-card__actions">
         {queue &&
-          (appointment.status === "pending" || appointment.status === "confirmed") &&
+          (appointment.status === "pending" || appointment.status === "accepted") &&
           !queue.checked_in && (
             <Button variant="secondary" loading={queueBusy} onClick={() => void handleCheckIn()}>
               <UserCheck size={14} /> Check in
@@ -350,7 +350,7 @@ function AppointmentRow({
         {queue &&
           queue.checked_in &&
           !queue.being_seen &&
-          (appointment.status === "pending" || appointment.status === "confirmed") && (
+          (appointment.status === "pending" || appointment.status === "accepted") && (
             <Button
               variant="primary"
               loading={queueBusy}
@@ -369,10 +369,10 @@ function AppointmentRow({
             </Button>
           </>
         )}
-        {appointment.status === "confirmed" && (
+        {appointment.status === "accepted" && (
           <>
             <Button variant="primary" loading={acting} onClick={() => handleAction("complete")}>
-              <CheckCircle2 size={14} /> Complete
+              <CheckCircle2 size={14} /> Done
             </Button>
             <Button variant="secondary" loading={acting} onClick={() => setShowNotes(!showNotes)}>
               <Pencil size={14} /> {showNotes ? "Close notes" : "Notes"}
@@ -382,7 +382,7 @@ function AppointmentRow({
             </Button>
           </>
         )}
-        {appointment.status === "completed" && (
+        {appointment.status === "done" && (
           <Button variant="secondary" onClick={() => setShowNotes(!showNotes)}>
             <FileText size={14} /> {showNotes ? "Close notes" : "View notes"}
           </Button>
@@ -392,7 +392,7 @@ function AppointmentRow({
             <CalendarClock size={14} /> {showReschedule ? "Close" : "Reschedule"}
           </Button>
         )}
-        {appointment.status !== "completed" && appointment.status !== "cancelled" && appointment.status !== "rejected" && (
+        {appointment.status !== "done" && appointment.status !== "cancelled" && appointment.status !== "rejected" && (
           <Link to={`/appointments/${appointment.id}`} className="appt-card__detail-link">
             <Button variant="ghost">
               <ArrowUpRight size={14} /> Details
@@ -589,8 +589,8 @@ export function DoctorDashboardScreen() {
 
   async function handleAction(id: number, action: string) {
     const nextStatus: Partial<Record<string, Appointment["status"]>> = {
-      confirm: "confirmed",
-      complete: "completed",
+      confirm: "accepted",
+      complete: "done",
       reject: "rejected",
       cancel: "cancelled",
     };
@@ -614,7 +614,7 @@ export function DoctorDashboardScreen() {
         case "cancel": await cancelAppointment(id, "Cancelled by doctor"); break;
         case "delete": await deleteAppointment(id); break;
       }
-      notify("success", action === "delete" ? "Appointment deleted." : `Appointment ${action === "confirm" ? "accepted" : action === "reject" ? "rejected" : action === "complete" ? "completed" : "cancelled"}.`);
+      notify("success", action === "delete" ? "Appointment deleted." : `Appointment ${action === "confirm" ? "accepted" : action === "reject" ? "rejected" : action === "complete" ? "done" : "cancelled"}.`);
       load();
     } catch (e) {
       setAppointments(snapshot);
@@ -628,8 +628,8 @@ export function DoctorDashboardScreen() {
   const today = new Date().toISOString().slice(0, 10);
   const todayAppts = appointments.filter((a) => a.appointment_date === today);
   const pending = appointments.filter((a) => a.status === "pending");
-  const confirmed = appointments.filter((a) => a.status === "confirmed");
-  const completed = appointments.filter((a) => a.status === "completed");
+  const accepted = appointments.filter((a) => a.status === "accepted");
+  const done = appointments.filter((a) => a.status === "done");
   const cancelled = appointments.filter((a) => a.status === "cancelled" || a.status === "rejected");
   const statusTotal = Math.max(appointments.length, 1);
   const visibleAppointments = [...todayAppts, ...pending.filter((item) => !todayAppts.some((today) => today.id === item.id))].slice(0, 5);
@@ -651,23 +651,23 @@ export function DoctorDashboardScreen() {
       <div className="doctor-metrics">
         <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>Today's visits</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? "Schedule is active" : "No visits scheduled"}</small></Card>
         <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span><span>Pending requests</span><strong>{pending.length}</strong><small>{pending.length ? "Needs your review" : "All caught up"}</small></Card>
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span><span>Confirmed</span><strong>{confirmed.length}</strong><small>Upcoming appointments</small></Card>
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>Completed visits</span><strong>{completed.length}</strong><small>Recorded in your practice</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span><span>Accepted</span><strong>{accepted.length}</strong><small>Upcoming appointments</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>Visits done</span><strong>{done.length}</strong><small>Recorded in your practice</small></Card>
       </div>
 
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">
           <div className="doctor-card-heading"><div><h2>Appointment overview</h2><p>Live distribution of your appointment pipeline</p></div><span className="doctor-live"><Activity size={14} /> Live data</span></div>
           <div className="doctor-chart-layout">
-            <div className="doctor-donut" style={{ "--doctor-donut": `${(completed.length / statusTotal) * 100}%` } as CSSProperties}><span>{Math.round((completed.length / statusTotal) * 100)}%<small>completed</small></span></div>
-            <div className="doctor-legend"><span><i className="doctor-dot doctor-dot--teal" /> Confirmed <b>{confirmed.length}</b></span><span><i className="doctor-dot doctor-dot--amber" /> Pending <b>{pending.length}</b></span><span><i className="doctor-dot doctor-dot--blue" /> Completed <b>{completed.length}</b></span><span><i className="doctor-dot doctor-dot--muted" /> Closed <b>{cancelled.length}</b></span></div>
+            <div className="doctor-donut" style={{ "--doctor-donut": `${(done.length / statusTotal) * 100}%` } as CSSProperties}><span>{Math.round((done.length / statusTotal) * 100)}%<small>done</small></span></div>
+            <div className="doctor-legend"><span><i className="doctor-dot doctor-dot--teal" /> Accepted <b>{accepted.length}</b></span><span><i className="doctor-dot doctor-dot--amber" /> Pending <b>{pending.length}</b></span><span><i className="doctor-dot doctor-dot--blue" /> Done <b>{done.length}</b></span><span><i className="doctor-dot doctor-dot--muted" /> Closed <b>{cancelled.length}</b></span></div>
           </div>
         </Card>
         <Card className="doctor-chart-card doctor-workload-card">
           <div className="doctor-card-heading"><div><h2>Practice workload</h2><p>Current appointment volume</p></div><MoreHorizontal size={18} /></div>
           <div className="doctor-workload-number"><strong>{appointments.length}</strong><span>total visits</span></div>
-          <div className="doctor-progress"><span style={{ width: `${Math.min((confirmed.length / statusTotal) * 100, 100)}%` }} /></div>
-          <div className="doctor-workload-footer"><span><CheckCircle2 size={14} /> {completed.length} completed</span><span><Clock3 size={14} /> {pending.length} pending</span></div>
+          <div className="doctor-progress"><span style={{ width: `${Math.min((accepted.length / statusTotal) * 100, 100)}%` }} /></div>
+          <div className="doctor-workload-footer"><span><CheckCircle2 size={14} /> {done.length} done</span><span><Clock3 size={14} /> {pending.length} pending</span></div>
         </Card>
       </div>
 
@@ -685,7 +685,7 @@ export function DoctorDashboardScreen() {
    DOCTOR APPOINTMENTS (full list with tabs)
    ====================================== */
 
-type Tab = "pending" | "confirmed" | "completed";
+type Tab = "pending" | "accepted" | "done";
 
 export function DoctorAppointmentsScreen() {
   const { notify } = useToast();
@@ -757,8 +757,8 @@ export function DoctorAppointmentsScreen() {
 
   async function handleAction(id: number, action: string) {
     const nextStatus: Partial<Record<string, Appointment["status"]>> = {
-      confirm: "confirmed",
-      complete: "completed",
+      confirm: "accepted",
+      complete: "done",
       reject: "rejected",
       cancel: "cancelled",
     };
@@ -781,7 +781,7 @@ export function DoctorAppointmentsScreen() {
         case "cancel": await cancelAppointment(id, "Cancelled by doctor"); break;
         case "delete": await deleteAppointment(id); break;
       }
-      notify("success", action === "delete" ? "Appointment deleted." : `Appointment ${action === "confirm" ? "accepted" : action === "reject" ? "rejected" : action === "complete" ? "completed" : "cancelled"}.`);
+      notify("success", action === "delete" ? "Appointment deleted." : `Appointment ${action === "confirm" ? "accepted" : action === "reject" ? "rejected" : action === "complete" ? "done" : "cancelled"}.`);
       load();
     } catch (e) {
       setAppointments(snapshot);
@@ -791,8 +791,8 @@ export function DoctorAppointmentsScreen() {
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "pending", label: "Pending", count: appointments.filter((a) => a.status === "pending").length },
-    { key: "confirmed", label: "Confirmed", count: appointments.filter((a) => a.status === "confirmed").length },
-    { key: "completed", label: "Completed", count: appointments.filter((a) => a.status === "completed").length },
+    { key: "accepted", label: "Accepted", count: appointments.filter((a) => a.status === "accepted").length },
+    { key: "done", label: "Done", count: appointments.filter((a) => a.status === "done").length },
   ];
 
   const filtered = appointments.filter((a) => a.status === activeTab);
@@ -826,9 +826,9 @@ export function DoctorAppointmentsScreen() {
           description={
             activeTab === "pending"
               ? "No new appointment requests to review."
-              : activeTab === "confirmed"
-              ? "No confirmed appointments."
-              : "No completed appointments yet."
+              : activeTab === "accepted"
+              ? "No accepted appointments."
+              : "No done appointments yet."
           }
         />
       ) : (

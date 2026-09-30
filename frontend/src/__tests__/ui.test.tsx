@@ -80,9 +80,9 @@ describe("Card", () => {
 
 describe("Badge", () => {
   it("renders status text with badge class", () => {
-    render(<Badge status="confirmed" />);
-    const badge = screen.getByText("confirmed");
-    expect(badge).toHaveClass("badge", "badge--confirmed");
+    render(<Badge status="accepted" />);
+    const badge = screen.getByText("accepted");
+    expect(badge).toHaveClass("badge", "badge--accepted");
   });
 });
 

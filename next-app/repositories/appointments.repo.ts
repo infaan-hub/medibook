@@ -30,7 +30,48 @@ export const liveSlotExists = async (
     select: { id: true },
   })) !== null;
 
-/** Confirmed-set membership for available_slots() (excludes cancelled/rejected). */
+/**
+ * Every appointment status the API accepts (mirrors the AppointmentStatus enum).
+ * Used to validate the `?status=` filter instead of letting an unknown value
+ * reach Prisma and blow up as a 500.
+ */
+export const APPOINTMENT_STATUSES = [
+  "pending",
+  "accepted",
+  "done",
+  "cancelled",
+  "rejected",
+] as const;
+
+/**
+ * Statuses that mean the patient still HOLDS the appointment: the doctor has
+ * not closed the visit yet. A patient may only have one such appointment at a
+ * time — the booking gate in appointment.service reads this list.
+ */
+export const OPEN_APPOINTMENT_STATUSES = ["pending", "accepted"] as const;
+
+export const isAppointmentStatus = (value: string): boolean =>
+  (APPOINTMENT_STATUSES as readonly string[]).includes(value);
+
+/**
+ * Where-clause for "the patient already has an appointment the doctor has not
+ * finished". Pure, so the one-appointment-at-a-time rule stays unit-testable.
+ */
+export const openAppointmentWhere = (
+  patientUserId: number
+): Prisma.AppointmentWhereInput => ({
+  patient_id: patientUserId,
+  status: { in: [...OPEN_APPOINTMENT_STATUSES] },
+});
+
+/** Oldest open appointment (pending/accepted) — the one blocking a new booking. */
+export const findOpenAppointmentForPatient = (patientUserId: number) =>
+  prisma.appointment.findFirst({
+    where: openAppointmentWhere(patientUserId),
+    orderBy: [{ appointment_date: "asc" }, { start_time: "asc" }],
+  });
+
+/** Accepted-set membership for available_slots() (excludes cancelled/rejected). */
 export const bookedSlotKeysForDate = async (doctorId: number, date: string): Promise<Set<string>> => {
   const rows = await prisma.appointment.findMany({
     where: {
@@ -149,7 +190,7 @@ export const findPatientEmergencyAppointment = (patientId: number) =>
     where: {
       patient_id: patientId,
       appointment_type: "EMERGENCY",
-      status: { in: ["pending", "confirmed"] },
+      status: { in: ["pending", "accepted"] },
     },
     include: APPOINTMENT_INCLUDE,
   });
@@ -164,7 +205,7 @@ export const createEmergencyAppointment = (data: {
   reason?: string;
   notes?: string;
   appointment_type: "EMERGENCY";
-  /** Auto-dispatched emergencies start `confirmed`; explicit picks stay `pending`. */
+  /** Auto-dispatched emergencies start `accepted`; explicit picks stay `pending`. */
   status?: AppointmentStatus;
   emergency_reason: string;
   emergency_description?: string;
@@ -210,7 +251,7 @@ export const findLiveConsultation = (
       appointment_date: appointmentDate,
       id: { not: excludeId },
       consultation_started_at: { not: null },
-      status: { in: ["pending", "confirmed"] },
+      status: { in: ["pending", "accepted"] },
     },
     select: { id: true },
   });

@@ -148,8 +148,8 @@ export function AdminAppointmentsScreen() {
   const statusCounts = {
     all: appointments.length,
     pending: appointments.filter((a) => a.status === "pending").length,
-    confirmed: appointments.filter((a) => a.status === "confirmed").length,
-    completed: appointments.filter((a) => a.status === "completed").length,
+    accepted: appointments.filter((a) => a.status === "accepted").length,
+    done: appointments.filter((a) => a.status === "done").length,
     cancelled: appointments.filter((a) => a.status === "cancelled" || a.status === "rejected").length,
   };
 
@@ -174,8 +174,8 @@ export function AdminAppointmentsScreen() {
             {([
               ["", "All", statusCounts.all],
               ["pending", "Pending", statusCounts.pending],
-              ["confirmed", "Confirmed", statusCounts.confirmed],
-              ["completed", "Completed", statusCounts.completed],
+              ["accepted", "Accepted", statusCounts.accepted],
+              ["done", "Done", statusCounts.done],
               ["cancelled", "Cancelled", statusCounts.cancelled],
             ] as [string, string, number][]).map(([key, label, count]) => (
               <button
@@ -218,7 +218,7 @@ export function AdminAppointmentsScreen() {
                       <br />
                       <small>{a.start_time?.slice(0, 5)} – {a.end_time?.slice(0, 5)}</small>
                     </td>
-                    <td><span className={`admin-role admin-role--${a.status === "pending" ? "patient" : a.status === "confirmed" ? "doctor" : a.status === "completed" ? "admin" : "patient"}`}>{a.status}</span></td>
+                    <td><span className={`admin-role admin-role--${a.status === "pending" ? "patient" : a.status === "accepted" ? "doctor" : a.status === "done" ? "admin" : "patient"}`}>{a.status}</span></td>
                     <td><small>{a.reason || "—"}</small></td>
                     <td>
                       <button

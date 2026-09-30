@@ -45,7 +45,7 @@ export const appointmentPatchSchema = z
 /** AppointmentStatusSerializer (confirm/complete/cancel/reject bodies). */
 export const appointmentActionSchema = z
   .object({
-    status: z.enum(["confirmed", "completed", "cancelled", "rejected"]),
+    status: z.enum(["accepted", "done", "cancelled", "rejected"]),
     cancel_reason: z.string().max(1000, "Ensure this string has at most 1000 characters.").optional(),
     notes: z.string().optional(),
   })

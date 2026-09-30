@@ -7,7 +7,7 @@ export interface HealthRecord {
   doctor: number;
   /** Display name of the doctor the record belongs to / was shared with. */
   doctor_name?: string;
-  appointment?: number;
+  appointment?: number | null;
   file?: string | null;
   /** Original uploaded filename (used to name Open/Download saves). */
   file_name?: string | null;

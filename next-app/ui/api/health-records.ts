@@ -7,7 +7,7 @@ export interface HealthRecord {
   doctor: number;
   /** Display name of the doctor the record belongs to / was shared with. */
   doctor_name?: string;
-  appointment?: number;
+  appointment?: number | null;
   /** Same-origin media URL (`/media/{id}`) — requires the JWT to fetch. */
   file?: string | null;
   /** Original uploaded filename (for Open/Download). */

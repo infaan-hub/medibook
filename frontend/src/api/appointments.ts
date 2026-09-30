@@ -1,6 +1,6 @@
 /**
  * Appointments API (A27 �?" /api/appointments/, backend slice B5).
- * Booking, list, detail, and lifecycle actions (confirm/cancel/complete/reject).
+ * Booking, list, detail, and lifecycle actions (accept/done/cancel/reject).
  */
 
 import { apiGet, apiPatch, apiPost, apiDelete } from "./client";
@@ -56,12 +56,12 @@ export function cancelAppointment(
   return apiPost<Appointment>(`/appointments/${id}/cancel/`, { cancel_reason });
 }
 
-/** POST /api/appointments/:id/confirm/ �?" doctor confirms. */
+/** POST /api/appointments/:id/confirm/ �?" doctor accepts the request. */
 export function confirmAppointment(id: number): Promise<Envelope<Appointment>> {
   return apiPost<Appointment>(`/appointments/${id}/confirm/`, {});
 }
 
-/** POST /api/appointments/:id/complete/ �?" doctor completes. */
+/** POST /api/appointments/:id/complete/ �?" doctor marks the visit done. */
 export function completeAppointment(id: number): Promise<Envelope<Appointment>> {
   return apiPost<Appointment>(`/appointments/${id}/complete/`, {});
 }

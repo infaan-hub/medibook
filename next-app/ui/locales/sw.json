@@ -97,8 +97,8 @@
     "noAppointmentsDesc": "Historia ya miadi yako itaonekana hapa.",
     "status": {
       "pending": "Inasubiri",
-      "confirmed": "Imethibitishwa",
-      "completed": "Imekamilika",
+      "accepted": "Imekubaliwa",
+      "done": "Imekamilika",
       "cancelled": "Imefutwa",
       "rejected": "Imekataliwa"
     },

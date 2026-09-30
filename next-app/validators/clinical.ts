@@ -7,7 +7,7 @@
  * the API emits.
  */
 import { z } from "zod";
-import { drfInteger, REQUIRED } from "./base";
+import { drfDate, drfInteger, REQUIRED } from "./base";
 
 /** Upper bound on medication lines per prescription (keeps payloads sane). */
 export const PRESCRIPTION_MAX_ITEMS = 30;
@@ -156,8 +156,16 @@ export const vitalsCreateSchema = z
     notes: z.string().max(1000, "Ensure this string has at most 1000 characters.").optional(),
     recorded_at: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/, "Date has wrong format.")
-      .optional(),
+      .optional()
+      .transform((value, ctx) => {
+        // Blank comes back from date inputs that were never touched.
+        if (value === undefined || value.trim() === "") return undefined;
+        if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/.test(value)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Date has wrong format." });
+          return z.NEVER;
+        }
+        return value;
+      }),
   })
   .passthrough()
   .superRefine((data, ctx) => {
@@ -209,6 +217,7 @@ export const labOrderCreateSchema = z
       .trim()
       .min(1, REQUIRED)
       .max(200, "Ensure this string has at most 200 characters."),
+    result_due_date: drfDate(),
     unit: z.string().max(30, "Ensure this string has at most 30 characters.").optional(),
     reference_min: z
       .union([z.string(), z.number()])

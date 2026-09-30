@@ -374,7 +374,7 @@ describe("doctor /doctor/visit-history/:patientId — health records", () => {
     appointment_date: "2026-08-12",
     start_time: "09:30",
     end_time: "10:00",
-    status: "completed",
+    status: "done",
     reason: "Persistent cough",
     notes: "",
     diagnosis: "Bronchitis",

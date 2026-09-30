@@ -2,7 +2,7 @@
  * PHASE 15 — Patient review management ("My reviews").
  *
  * Patients can see every review they have left, who they reviewed, and remove
- * a review they no longer stand behind. Deletion is confirmed inline (two-step)
+ * a review they no longer stand behind. Deletion is accepted inline (two-step)
  * and the doctor's cached average/count is recalculated server-side, so the
  * directory ratings stay accurate after a removal.
  */
@@ -76,7 +76,7 @@ export function MyReviewsScreen() {
     <div className="page my-reviews">
       <h1 className="page__title">My reviews</h1>
       <p className="page__subtitle">
-        Feedback you have left after completed appointments. Delete a review if your
+        Feedback you have left after finished appointments. Delete a review if your
         experience changed — the doctor&apos;s rating updates automatically.
       </p>
 
@@ -88,7 +88,7 @@ export function MyReviewsScreen() {
         <EmptyState
           icon={<Star size={40} />}
           title="No reviews yet"
-          description="Reviews you leave after a completed appointment will appear here."
+          description="Reviews you leave after a finished appointment will appear here."
           action={
             <Link to="/appointments">
               <Button>View my appointments</Button>
