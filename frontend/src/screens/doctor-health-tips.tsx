@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { createArticle, listMyArticles, type Article } from "../api/blog";
+import {
+  createArticle,
+  deleteArticle,
+  listMyArticles,
+  updateArticle,
+  type Article,
+} from "../api/blog";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { useToast } from "../state/app-context";
 import { Newspaper } from "lucide-react";
@@ -9,11 +15,16 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
+function authorLabel(article: Article): string {
+  if (!article.author_name) return "";
+  return article.author_role === "doctor" ? `Dr. ${article.author_name}` : article.author_name;
+}
+
 const CATEGORIES = ["health_tips", "wellness", "nutrition", "mental_health", "fitness", "general"];
 
 /**
- * Doctor → Health Tips: write an article (front image required) and review the
- * ones already published to the patient Health Tips feed.
+ * Doctor → Health Tips: write an article (front image required), then edit or
+ * delete the ones already sent to the patient Health Tips feed.
  */
 export function DoctorHealthTipsScreen() {
   const { t } = useTranslation();
@@ -23,6 +34,8 @@ export function DoctorHealthTipsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<Article | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
@@ -43,13 +56,42 @@ export function DoctorHealthTipsScreen() {
     load();
   }, [load]);
 
+  function clearImageInput() {
+    setFile(null);
+    const input = document.getElementById("health-tip-image") as HTMLInputElement | null;
+    if (input) input.value = "";
+  }
+
+  function resetForm() {
+    setTitle("");
+    setExcerpt("");
+    setContent("");
+    setCategory("health_tips");
+    clearImageInput();
+  }
+
+  function startEdit(article: Article) {
+    setEditing(article);
+    setTitle(article.title);
+    setExcerpt(article.excerpt ?? "");
+    setContent(article.content ?? "");
+    setCategory(article.category);
+    clearImageInput();
+    document.getElementById("health-tip-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    resetForm();
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim() || !content.trim()) {
       notify("error", "Title and article text are required.");
       return;
     }
-    if (!file) {
+    if (!editing && !file) {
       notify("error", "Choose a front image for the article.");
       return;
     }
@@ -58,23 +100,41 @@ export function DoctorHealthTipsScreen() {
     form.append("excerpt", excerpt.trim());
     form.append("content", content.trim());
     form.append("category", category);
-    form.append("image", file);
+    if (file) form.append("image", file);
     setSaving(true);
     try {
-      await createArticle(form);
-      notify("success", "Health tip published — patients can read it now.");
-      setTitle("");
-      setExcerpt("");
-      setContent("");
-      setCategory("health_tips");
-      setFile(null);
-      const input = document.getElementById("health-tip-image") as HTMLInputElement | null;
-      if (input) input.value = "";
+      if (editing) {
+        await updateArticle(editing.slug, form);
+        notify("success", "Health tip updated.");
+      } else {
+        await createArticle(form);
+        notify("success", "Health tip published — patients can read it now.");
+      }
+      setEditing(null);
+      resetForm();
       load();
     } catch (reason) {
       notify("error", message(reason));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove(article: Article) {
+    if (!window.confirm(`Delete "${article.title}"? Patients will no longer see it.`)) return;
+    setDeleting(article.id);
+    try {
+      await deleteArticle(article.slug);
+      notify("success", "Health tip deleted.");
+      if (editing?.id === article.id) {
+        setEditing(null);
+        resetForm();
+      }
+      load();
+    } catch (reason) {
+      notify("error", message(reason));
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -87,7 +147,15 @@ export function DoctorHealthTipsScreen() {
       </p>
 
       <Card className="admin-form-card health-tips-page__form">
-        <form onSubmit={submit} className="admin-form-grid">
+        <div className="health-tips-page__form-head">
+          <h2>{editing ? "Edit health tip" : "New health tip"}</h2>
+          {editing && (
+            <Button type="button" variant="ghost" onClick={cancelEdit}>
+              Cancel
+            </Button>
+          )}
+        </div>
+        <form id="health-tip-form" onSubmit={submit} className="admin-form-grid">
           <TextField
             id="health-tip-title"
             label="Title"
@@ -133,19 +201,24 @@ export function DoctorHealthTipsScreen() {
           </label>
           <label className="admin-field admin-field--wide">
             <span>
-              Front image <b aria-hidden="true">*</b>
+              Front image{" "}
+              {editing ? (
+                "(optional — keeps the current image)"
+              ) : (
+                <b aria-hidden="true">*</b>
+              )}
             </span>
             <input
               id="health-tip-image"
               type="file"
               accept="image/*"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              required
+              required={!editing}
             />
           </label>
           <div className="admin-form-actions">
             <Button type="submit" loading={saving}>
-              Publish health tip
+              {editing ? "Save changes" : "Publish health tip"}
             </Button>
           </div>
         </form>
@@ -178,10 +251,27 @@ export function DoctorHealthTipsScreen() {
                 <span className="blog__card-category">{t(`blog.categories.${article.category}`)}</span>
                 <h3 className="blog__card-title">{article.title}</h3>
                 <p className="blog__card-excerpt">{article.excerpt}</p>
+                {article.author_name && (
+                  <span className="blog__card-author">{authorLabel(article)}</span>
+                )}
+                {!article.published && <span className="blog__card-status">Draft</span>}
                 <time className="blog__card-date">
                   {(article.published_at ?? article.created_at) &&
                     new Date(article.published_at ?? article.created_at).toLocaleDateString()}
                 </time>
+                <div className="health-tips-card-actions">
+                  <Button type="button" variant="secondary" onClick={() => startEdit(article)}>
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    loading={deleting === article.id}
+                    onClick={() => remove(article)}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

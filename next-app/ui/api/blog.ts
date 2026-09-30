@@ -41,6 +41,20 @@ export function createArticle(form: FormData): Promise<Envelope<Article>> {
     .then((r) => r.data);
 }
 
+/** PATCH /api/blog/articles/{slug}/ — author-owned edit (multipart, image optional). */
+export function updateArticle(slug: string, form: FormData): Promise<Envelope<Article>> {
+  return http
+    .patch<Envelope<Article>>(`/blog/articles/${slug}/`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+}
+
+/** DELETE /api/blog/articles/{slug}/ — author-owned delete. */
+export function deleteArticle(slug: string): Promise<void> {
+  return http.delete(`/blog/articles/${slug}/`).then((r) => r.data).then(() => undefined);
+}
+
 export function getArticle(slug: string): Promise<Envelope<Article>> {
   return apiGet<Article>(`/blog/articles/${slug}/`);
 }

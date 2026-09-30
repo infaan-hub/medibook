@@ -14,9 +14,11 @@ export const GET = handler(async (ctx) => {
       where: { author_id: user.id },
       count: () => content.myArticleCount(user.id),
       fetch: ({ skip, take }) =>
-        content.myArticlePage(user.id, skip, take).then((rows) => rows.map((a) => articleListDto(a, ctx.req))),
+        content
+          .myArticlePage(user.id, skip, take)
+          .then((rows) => rows.map((a) => articleDetailDto(a, ctx.req))),
       fetchAll: async () =>
-        (await content.myArticlePage(user.id, 0, 1000)).map((a) => articleListDto(a, ctx.req)),
+        (await content.myArticlePage(user.id, 0, 1000)).map((a) => articleDetailDto(a, ctx.req)),
     });
   }
 

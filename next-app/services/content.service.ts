@@ -3,7 +3,7 @@
  * specialty/hospital catalogs (port of blog/views.py, specialties/views.py,
  * hospitals/views.py).
  */
-import { ValidationError, notFound } from "@/lib/errors";
+import { ValidationError, notFound, forbidden } from "@/lib/errors";
 import { articleDetailDto, articleListDto, hospitalDto, specialtyDto } from "@/lib/serializers";
 import { hospitalWriteSchema, specialtyWriteSchema } from "@/validators/more";
 import { articleSchema } from "@/validators/misc";
@@ -178,6 +178,34 @@ export async function adminDestroyArticle(id: number): Promise<void> {
     await content.deleteArticle(id, tx);
     await deleteMediaIfUnreferenced(existing.image_id, tx);
   });
+}
+
+/** Author ownership gate: the writer (or a superuser) may edit/delete. */
+async function requireArticleOwner(user: AuthUser, slug: string) {
+  const existing = await content.findArticleBySlug(slug);
+  if (!existing) throw notFound("Article not found.");
+  if (existing.author_id !== user.id && !user.is_superuser) {
+    throw forbidden("You can only modify your own health tips.");
+  }
+  return existing;
+}
+
+/** Author-owned edit — doctor updating their own health tip (PATCH .../articles/{slug}/). */
+export async function authorPatchArticle(
+  req: Request,
+  user: AuthUser,
+  slug: string,
+  body: unknown,
+  file?: File | null
+) {
+  const existing = await requireArticleOwner(user, slug);
+  return adminPatchArticle(req, user, existing.id, body, file);
+}
+
+/** Author-owned delete (DELETE .../articles/{slug}/). */
+export async function authorDestroyArticle(user: AuthUser, slug: string): Promise<void> {
+  const existing = await requireArticleOwner(user, slug);
+  await adminDestroyArticle(existing.id);
 }
 
 export { articleListDto };
