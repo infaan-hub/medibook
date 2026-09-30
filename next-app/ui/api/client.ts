@@ -99,26 +99,48 @@ http.interceptors.response.use(
   }
 );
 
+/**
+ * Asserts a response body is the §28 envelope before screens touch it.
+ *
+ * A misdeployed backend (or a proxy answering with an HTML page) would
+ * otherwise hand screens a value they go on to iterate, surfacing as a cryptic
+ * "… is not iterable" instead of a readable API error.
+ */
+export function envelope<T>(body: unknown, url: string, status: number): Envelope<T> {
+  const valid =
+    typeof body === "object" &&
+    body !== null &&
+    typeof (body as { success?: unknown }).success === "boolean";
+  if (!valid) {
+    throw new ApiError(
+      `Unexpected response from ${url} — expected the API JSON envelope.`,
+      status
+    );
+  }
+  return body as Envelope<T>;
+}
+
 /** GET returning the unwrapped §28 envelope. */
 export async function apiGet<T>(url: string, params?: Record<string, unknown>): Promise<Envelope<T>> {
   const { data } = await http.get<Envelope<T>>(url, { params });
-  return data;
+  return envelope<T>(data, url, 200);
 }
 
 /** POST returning the unwrapped §28 envelope. */
 export async function apiPost<T>(url: string, body?: unknown): Promise<Envelope<T>> {
   const { data } = await http.post<Envelope<T>>(url, body ?? {});
-  return data;
+  return envelope<T>(data, url, 200);
 }
 
 /** PATCH returning the unwrapped §28 envelope. */
 export async function apiPatch<T>(url: string, body?: unknown): Promise<Envelope<T>> {
   const { data } = await http.patch<Envelope<T>>(url, body ?? {});
-  return data;
+  return envelope<T>(data, url, 200);
 }
 
-/** DELETE returning the unwrapped Â§28 envelope where supplied by the API. */
+/** DELETE returning the §28 envelope where supplied by the API. */
 export async function apiDelete<T = void>(url: string): Promise<Envelope<T> | undefined> {
   const response = await http.delete<Envelope<T>>(url);
-  return response.status === 204 ? undefined : response.data;
+  if (response.status === 204) return undefined;
+  return envelope<T>(response.data, url, response.status);
 }

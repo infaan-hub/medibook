@@ -197,7 +197,7 @@ export const createEmergencyAppointment = (data: {
 
 /**
  * Another appointment of the same doctor that day whose consultation is
- * already running (phase 11 waiting room) — the "one patient at a time" guard.
+ * already running (phase 11 waiting room) â€” the "one patient at a time" guard.
  */
 export const findLiveConsultation = (
   doctorId: number,

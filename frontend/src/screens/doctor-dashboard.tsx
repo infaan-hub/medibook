@@ -496,10 +496,14 @@ function AppointmentRow({
 /** Today in UTC — the dashboard's queue window (patients live in TZ +3..). */
 const utcToday = () => new Date().toISOString().slice(0, 10);
 
-/** Queue entries → appointment-id keyed map (drops appointments with no slot). */
-function queueMap(entries: { id: number; queue: QueueSlot | null }[]): Map<number, QueueSlot> {
+/** Queue entries → appointment-id keyed map (drops anything that is not a queue list). */
+function queueMap(entries: unknown): Map<number, QueueSlot> {
   const next = new Map<number, QueueSlot>();
-  for (const entry of entries) if (entry.queue) next.set(entry.id, entry.queue);
+  if (!Array.isArray(entries)) return next;
+  for (const entry of entries) {
+    const slot = entry as { id?: unknown; queue?: QueueSlot | null };
+    if (slot && typeof slot.id === "number" && slot.queue) next.set(slot.id, slot.queue);
+  }
   return next;
 }
 
