@@ -1004,15 +1004,17 @@ export function DoctorMedicalTreatmentScreen() {
     (id: number) => {
       setDetailError(null);
       setDetailLoading(true);
-      Promise.all([
-        getPatientProfileById(id),
-        listTreatments(id),
-        getHealthRecords(id),
-      ])
-        .then(([profileRes, txRes, recordRes]) => {
+      // Records load on their own: a failed health-record call must not blank
+      // the profile/treatments, and a switch between patients must never show
+      // the previous chart's documents.
+      setRecords([]);
+      getHealthRecords(id)
+        .then((r) => setRecords(r.data?.results ?? []))
+        .catch(() => setRecords([]));
+      Promise.all([getPatientProfileById(id), listTreatments(id)])
+        .then(([profileRes, txRes]) => {
           setProfile(profileRes.data);
           setTreatments(txRes.data);
-          setRecords(recordRes.data?.results ?? []);
         })
         .catch((e) => setDetailError(msg(e)))
         .finally(() => setDetailLoading(false));

@@ -255,8 +255,21 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
 
 /** Role-scoped where-builder for GET /api/health-records/. */
 export async function healthRecordScope(user: AuthUser, patientFilter?: string) {
-  const doctor = user.role === "doctor" ? await ownDoctor(user) : null;
-  return clinical.healthRecordWhere(user.role, user.id, doctor?.id ?? null, patientFilter);
+  if (user.role !== "doctor") {
+    return clinical.healthRecordWhere(user.role, user.id, null, patientFilter);
+  }
+  const doctor = await ownDoctor(user);
+  if (!doctor) return clinical.healthRecordWhere("doctor", user.id, null, patientFilter);
+  // Every patient this doctor treats: their own uploads plus anything shared
+  // with another doctor for the same chart must still show up for them.
+  const links = await clinical.listPatientUserIdsForDoctor(doctor.id);
+  return clinical.healthRecordWhere(
+    "doctor",
+    user.id,
+    doctor.id,
+    patientFilter,
+    links.map((row) => row.patient_id)
+  );
 }
 
 /**

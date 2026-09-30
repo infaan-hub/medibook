@@ -61,20 +61,27 @@ export const deleteTreatment = (id: number) => prisma.medicalTreatment.delete({ 
  * - patient → their own chart ONLY. The `?patient=` query param is ignored on
  *   purpose: applying it here would let any signed-in patient swap in another
  *   patient's id and read that person's records.
- * - doctor  → records that doctor owns (uploads + shares), optionally narrowed
- *   to one patient they are looking at.
+ * - doctor  → the chart of every patient they treat: records they uploaded
+ *   themselves OR records any doctor received for a patient this doctor has an
+ *   appointment with, optionally narrowed to one patient they are looking at.
+ *   Sharing addressed one doctor used to hide the document from every other
+ *   doctor opening that same chart, so the patient's files "never appeared".
  * - admin   → empty set (Django: queryset.none()).
  */
 export const healthRecordWhere = (
   role: string,
   userId: number,
   doctorId: number | null,
-  patientFilter?: string
+  patientFilter?: string,
+  /** Patient user ids with an appointment for this doctor (empty by default). */
+  linkedPatientIds: number[] = []
 ): Prisma.HealthRecordWhereInput => {
   if (role === "patient") return { patient_id: userId };
   if (role !== "doctor") return { id: -1 };
 
-  const where: Prisma.HealthRecordWhereInput = { doctor_id: doctorId ?? -1 };
+  const where: Prisma.HealthRecordWhereInput = {
+    OR: [{ doctor_id: doctorId ?? -1 }, { patient_id: { in: linkedPatientIds } }],
+  };
   if (patientFilter !== undefined && patientFilter !== "") {
     const parsed = Number(patientFilter);
     // Non-numeric filter matches nothing instead of quietly dropping the filter.

@@ -112,19 +112,41 @@ describe("healthRecordWhere", () => {
   });
 
   it("scopes a doctor to their own records, optionally narrowed to one patient", () => {
-    expect(healthRecordWhere("doctor", 7, 3)).toEqual({ doctor_id: 3 });
+    expect(healthRecordWhere("doctor", 7, 3)).toEqual({
+      OR: [{ doctor_id: 3 }, { patient_id: { in: [] } }],
+    });
     expect(healthRecordWhere("doctor", 7, 3, "12")).toEqual({
-      doctor_id: 3,
+      OR: [{ doctor_id: 3 }, { patient_id: { in: [] } }],
       patient_id: 12,
     });
   });
 
+  it("lets a treating doctor read records another doctor was shared with", () => {
+    // Patient 11 shared their chart with doctor 3; doctor 7 also treats them.
+    expect(healthRecordWhere("doctor", 7, 7, "11", [11, 34])).toEqual({
+      OR: [{ doctor_id: 7 }, { patient_id: { in: [11, 34] } }],
+      patient_id: 11,
+    });
+    // Without the patient filter the whole treated chart is visible.
+    expect(healthRecordWhere("doctor", 7, 7, undefined, [11])).toEqual({
+      OR: [{ doctor_id: 7 }, { patient_id: { in: [11] } }],
+    });
+  });
+
+  it("narrows the treated-chart scope to the requested patient only", () => {
+    const where = healthRecordWhere("doctor", 7, 7, "999", [11, 34]);
+    expect(where.patient_id).toBe(999);
+    expect(where.OR).toEqual([{ doctor_id: 7 }, { patient_id: { in: [11, 34] } }]);
+  });
+
   it("matches nothing for junk filters and roles without a scope", () => {
     expect(healthRecordWhere("doctor", 7, 3, "abc")).toEqual({
-      doctor_id: 3,
+      OR: [{ doctor_id: 3 }, { patient_id: { in: [] } }],
       patient_id: -1,
     });
     expect(healthRecordWhere("admin", 1, null, "12")).toEqual({ id: -1 });
-    expect(healthRecordWhere("doctor", 1, null)).toEqual({ doctor_id: -1 });
+    expect(healthRecordWhere("doctor", 1, null)).toEqual({
+      OR: [{ doctor_id: -1 }, { patient_id: { in: [] } }],
+    });
   });
 });
