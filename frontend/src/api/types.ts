@@ -1,5 +1,5 @@
-/**
- * Shared API types (§28 envelope).
+﻿/**
+ * Shared API types (Â§28 envelope).
  */
 
 export interface User {
@@ -33,7 +33,7 @@ export interface AuthPayload extends AuthPair {
   user: User;
 }
 
-/* ---- Request payloads (§27 contracts, PHASE 5) ---- */
+/* ---- Request payloads (Â§27 contracts, PHASE 5) ---- */
 
 export interface RegisterPayload {
   username: string;
@@ -58,7 +58,7 @@ export interface ResetConfirmPayload {
   new_password_confirm: string;
 }
 
-/* ---- PHASE 6 — Patient module ---- */
+/* ---- PHASE 6 â€” Patient module ---- */
 
 export type Gender = "" | "male" | "female" | "other";
 
@@ -76,9 +76,9 @@ export interface GeoFields {
   longitude: number | null;
   /** Browser-reported accuracy in metres (null when unknown). */
   location_accuracy: number | null;
-  /** ISO timestamp of the last capture — lets the UI show how fresh a fix is. */
+  /** ISO timestamp of the last capture â€” lets the UI show how fresh a fix is. */
   location_captured_at: string | null;
-  /** False → the client must prompt for a location before booking an appointment. */
+  /** False â†’ the client must prompt for a location before booking an appointment. */
   has_location: boolean;
 }
 
@@ -114,7 +114,7 @@ export type UpdatePatientProfilePayload = Partial<
   timezone?: string;
 };
 
-/** GET /api/patients/linked-doctors/ — doctors a patient may share records with. */
+/** GET /api/patients/linked-doctors/ â€” doctors a patient may share records with. */
 export interface LinkedDoctor {
   id: number;
   first_name: string;
@@ -163,7 +163,7 @@ export interface Appointment {
   emergency_longitude?: number;
   emergency_location_accuracy?: number;
   emergency_requested_at?: string | null;
-  /** Waiting-room state (phase 11) — null until the patient checks in. */
+  /** Waiting-room state (phase 11) â€” null until the patient checks in. */
   checked_in_at?: string | null;
   consultation_started_at?: string | null;
 }
@@ -181,7 +181,7 @@ export interface EmergencyAppointment extends Appointment {
   doctor_longitude?: number | null;
 }
 
-/** §28 response envelope: success/message/data on success, errors on failure. */
+/** Â§28 response envelope: success/message/data on success, errors on failure. */
 export interface Envelope<T = unknown> {
   success: boolean;
   message: string;
@@ -197,14 +197,14 @@ export interface Paginated<T> {
   results: T[];
 }
 
-/* ---- PHASE 7 — Doctor module ---- */
+/* ---- PHASE 7 â€” Doctor module ---- */
 
 export interface DoctorProfile extends GeoFields {
   id: number;
   email: string;
   first_name: string;
   last_name: string;
-  /** Contact number on the account — shown on the doctor card and to patients. */
+  /** Contact number on the account â€” shown on the doctor card and to patients. */
   phone: string;
   profile_image: string | null;
   specialties: Specialty[];
@@ -265,7 +265,7 @@ export interface ScheduleException {
   reason: string;
 }
 
-/* ---- PHASE 8 — Specialty & Hospital module ---- */
+/* ---- PHASE 8 â€” Specialty & Hospital module ---- */
 
 export interface Specialty {
   id: number;
@@ -286,7 +286,7 @@ export interface Hospital {
   location_details: Record<string, unknown>;
 }
 
-/* ---- PHASE 13 — Notifications ---- */
+/* ---- PHASE 13 â€” Notifications ---- */
 
 export type NotificationType =
   | "appointment_request"
@@ -317,17 +317,3 @@ export interface PushSubscription {
   is_active: boolean;
 }
 
-/* ---- PHASE 15 — Reviews ---- */
-
-export interface Review {
-  id: number;
-  appointment: number;
-  patient: number;
-  doctor: number;
-  /** Rendered server-side from the doctor's account row (e.g. "Dr. Jane Doe"). */
-  doctor_name: string;
-  rating: number;
-  comment: string;
-  is_visible: boolean;
-  created_at: string;
-}

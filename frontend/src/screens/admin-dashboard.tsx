@@ -6,11 +6,16 @@ import { deleteAppointment, listAllAppointments } from "../api/appointments";
 import { listDoctors } from "../api/doctors";
 import type { Appointment, AuditEvent, DoctorProfile, User } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
-import { formatRating } from "../components/reviews";
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 
 function message(error: unknown): string { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
+/** Format a stored doctor rating (Decimal may arrive as a string) for display. */
+function formatRating(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "New";
+  const num = typeof value === "string" ? Number(value) : value;
+  return (Number.isFinite(num) ? num : 0).toFixed(1);
+}
 function formatDate(value: string): string { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
 function formatTime(value: string): string { return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
 /** Compact rows carry an `HTTP …` detail line — show the target path instead. */

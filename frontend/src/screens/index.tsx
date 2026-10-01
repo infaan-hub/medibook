@@ -46,7 +46,6 @@ export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 export { NotificationsScreen } from "./notifications";
-export { MyReviewsScreen } from "./reviews";
 export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen, AdminAppointmentsScreen } from "./admin-dashboard";
 export { BlogListPage, BlogArticlePage } from "./blog";
 

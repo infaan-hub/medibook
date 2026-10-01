@@ -77,7 +77,6 @@ export function roleOwnsPath(pathname: string, user: RoleUser): boolean {
     "/doctors",
     "/booking",
     "/appointments",
-    "/reviews",
     "/settings",
   ];
   if (patientOnly.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

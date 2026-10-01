@@ -1,6 +1,6 @@
-/**
- * MediBook root (PHASE 5 — React Authentication).
- * Providers → routes. Guest-only screens render without the app shell;
+﻿/**
+ * MediBook root (PHASE 5 â€” React Authentication).
+ * Providers â†’ routes. Guest-only screens render without the app shell;
  * every app screen sits behind RequireSession (+ RequireRole/RequirePatient
  * for finer role slices). Guests never reach the shell without a login.
  * The Splash hides once the boot probe resolves.
@@ -82,7 +82,6 @@ const DoctorMedicalTreatmentScreen = lazyWithRetry(() => import("./screens/docto
 const DoctorAvailabilityScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorAvailabilityScreen })));
 const DoctorPersonalScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorPersonalScreen })));
 const NotificationsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
-const MyReviewsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.MyReviewsScreen })));
 const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
@@ -110,7 +109,7 @@ function PageFallback() {
 }
 
 /**
- * First-run flag (§21 onboarding). Written by `OnboardingScreen` when the
+ * First-run flag (Â§21 onboarding). Written by `OnboardingScreen` when the
  * carousel is finished or skipped, and deliberately kept across logout so a
  * returning visitor lands on /login instead of the carousel again.
  */
@@ -120,7 +119,7 @@ function hasOnboarded(): boolean {
   try {
     return localStorage.getItem(ONBOARDED_KEY) === "1";
   } catch {
-    // Storage unavailable (private mode) — never block the sign-in screen.
+    // Storage unavailable (private mode) â€” never block the sign-in screen.
     return true;
   }
 }
@@ -129,14 +128,14 @@ function hasOnboarded(): boolean {
  * The root route is deliberately unguarded.  It resolves the launch destination
  * before a guest can reach RequireSession (which would otherwise redirect to login).
  *
- *   already signed in       → that role's home (no onboarding, no welcome)
- *   first ever visit        → /onboarding → /onboarding/welcome (sign up / sign in)
- *   signed out, seen before → /login
+ *   already signed in       â†’ that role's home (no onboarding, no welcome)
+ *   first ever visit        â†’ /onboarding â†’ /onboarding/welcome (sign up / sign in)
+ *   signed out, seen before â†’ /login
  */
 function LaunchRoute() {
   const { status, user } = useSession();
   const destination = launchPath(status, user, hasOnboarded());
-  // `null` → the boot probe is still running and the splash is still up.
+  // `null` â†’ the boot probe is still running and the splash is still up.
   if (!destination) return null;
   return <Navigate to={destination} replace />;
 }
@@ -195,7 +194,7 @@ export default function App() {
                   </RequireGuest>
                 }
               />
-              {/* Legacy /welcome bookmark → the onboarding flow. */}
+              {/* Legacy /welcome bookmark â†’ the onboarding flow. */}
               <Route
                 path="/welcome"
                 element={<Navigate to="/onboarding/welcome" replace />}
@@ -243,7 +242,7 @@ export default function App() {
               />
               {/* Authenticated app screens (inside the shell).
                   RequireSession: must be signed in AND allowed on this path
-                  prefix — roles stay independent on refresh and deep links. */}
+                  prefix â€” roles stay independent on refresh and deep links. */}
               <Route
                 element={
                   <RequireSession>
@@ -270,7 +269,6 @@ export default function App() {
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
           <Route path="/doctor/emergency" element={<RequireRole role="doctor"><DoctorEmergencyScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
-                <Route path="/reviews" element={<RequirePatient><MyReviewsScreen /></RequirePatient>} />
           <Route path="/emergency" element={<RequirePatient><PatientEmergencyScreen /></RequirePatient>} />
                 <Route path="/profile" element={<ProfileScreen />} />
                 <Route
@@ -298,7 +296,7 @@ export default function App() {
               </Route>
             </Routes>
           </Suspense>
-          {/* PWA banners (§18) live at app level; the stack keeps them clear of
+          {/* PWA banners (Â§18) live at app level; the stack keeps them clear of
               each other and of the guest screens (which have no bottom nav). */}
           <div className="prompt-stack">
             <UpdatePrompt />

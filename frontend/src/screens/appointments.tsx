@@ -1,7 +1,6 @@
 /**
  * PHASE 10–11 — Appointment Engine: booking flow, list, detail, cancel, reschedule, success.
  * Patient books from doctor profile → selects slot → confirms → views list/detail/cancel/reschedule.
- * PHASE 15: Review form on done appointments.
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -14,7 +13,6 @@ import {
   listMyAppointments,
 } from "../api/appointments";
 import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api/doctors";
-import { getDoctorReviews } from "../api/reviews";
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
 import { getQueue, checkIn, startConsultation, type QueueSlot } from "../api/queue";
@@ -32,7 +30,6 @@ import { LocationPrompt } from "../components/LocationPrompt";
 import { NotificationPrompt } from "../components/NotificationPrompt";
 import { usePushNotifications } from "../push/usePushNotifications";
 import type { CapturedFix } from "../lib/location";
-import { ReviewForm } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play } from "lucide-react";
@@ -953,7 +950,6 @@ export function AppointmentDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelForm, setShowCancelForm] = useState(false);
-  const [hasReview, setHasReview] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [patientMedical, setPatientMedical] = useState<PatientProfile | null>(null);
@@ -972,11 +968,6 @@ export function AppointmentDetailScreen() {
     setError(null);
     getAppointment(Number(id)).then((r) => {
       setAppointment(r.data);
-      if (r.data.status === "done" && r.data.doctor) {
-        getDoctorReviews(r.data.doctor).then((reviews) => {
-          setHasReview(reviews.data.some((rev) => rev.appointment === r.data.id));
-        }).catch(() => {});
-      }
     }).catch((e) => setError(message(e)));
   }, [id]);
 
@@ -1318,19 +1309,6 @@ export function AppointmentDetailScreen() {
           </form>
         )}
       </Card>
-
-      {appointment.status === "done" && !hasReview && id && (
-        <ReviewForm appointmentId={Number(id)} onSuccess={load} />
-      )}
-
-      {appointment.status === "done" && hasReview && (
-        <Card className="card--fit">
-          <p className="page__subtitle">You have already reviewed this appointment.</p>
-          <Link to={`/doctors/${appointment.doctor}`}>
-            <Button variant="secondary">View doctor profile</Button>
-          </Link>
-        </Card>
-      )}
     </div>
   );
 }

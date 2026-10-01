@@ -1,12 +1,12 @@
-/**
- * Navigation entries per role — sidebar (`navItemsFor`) and mobile bottom bar
+﻿/**
+ * Navigation entries per role â€” sidebar (`navItemsFor`) and mobile bottom bar
  * (`bottomNavItemsFor`).
  *
  * The sidebar "Profile" button (generic Lucide `User` icon) was removed for
  * every role (admin, doctor, patient): `/profile` is already the destination of
  * the sidebar footer user card (avatar / initials + name + role), so the extra
  * generic-icon entry was redundant. The mobile bottom bar keeps its Profile
- * slot — that is the only place the real `profile_image` is shown.
+ * slot â€” that is the only place the real `profile_image` is shown.
  */
 import { describe, expect, it } from "vitest";
 import { bottomNavItemsFor, navItemsFor } from "../components/AppShell";
@@ -35,7 +35,7 @@ const sidebarByRole = {
   admin: navItemsFor(admin).map((i) => i.to),
 };
 
-describe("sidebar navigation — no Profile button for any role", () => {
+describe("sidebar navigation â€” no Profile button for any role", () => {
   it("drops the Lucide-icon Profile entry for admin, doctor and patient", () => {
     for (const user of [patient, doctor, admin]) {
       const items = navItemsFor(user);
@@ -50,7 +50,6 @@ describe("sidebar navigation — no Profile button for any role", () => {
       "/doctors",
       "/appointments",
       "/emergency",
-      "/reviews",
       "/settings",
       "/notifications",
     ]);
@@ -82,7 +81,7 @@ describe("sidebar navigation — no Profile button for any role", () => {
   });
 });
 
-describe("mobile bottom bar — Profile slot kept where it existed", () => {
+describe("mobile bottom bar â€” Profile slot kept where it existed", () => {
   it("still exposes /profile for admin and doctor (photo item)", () => {
     expect(bottomNavItemsFor(admin).map((i) => i.to)).toContain("/profile");
     expect(bottomNavItemsFor(doctor).map((i) => i.to)).toContain("/profile");

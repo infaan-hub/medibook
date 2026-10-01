@@ -1,4 +1,4 @@
-/** Notification inbox + push subscriptions + review rows. */
+/** Notification inbox + push subscriptions. */
 import { prisma } from "@/lib/db";
 import type { NotificationType, Prisma } from "@prisma/client";
 
@@ -113,39 +113,3 @@ export const createPushSubscription = (
   });
 
 export const deletePushSubscription = (id: number) => prisma.pushSubscription.delete({ where: { id } });
-
-/* --------------------------------- Reviews --------------------------------- */
-
-export const reviewWithRelations = {
-  doctor: { include: { user: true } },
-} satisfies Prisma.ReviewInclude;
-
-export const reviewExistsForAppointment = async (appointmentId: number) =>
-  (await prisma.review.findUnique({ where: { appointment_id: appointmentId } })) !== null;
-
-export const createReview = (data: { appointment_id: number; patient_id: number; doctor_id: number; rating: number; comment?: string }) =>
-  prisma.review.create({ data: { ...data, comment: data.comment ?? "" }, include: reviewWithRelations });
-
-export const listVisibleReviews = (doctorId: number) =>
-  prisma.review.findMany({
-    where: { doctor_id: doctorId, is_visible: true },
-    include: reviewWithRelations,
-    orderBy: { created_at: "desc" },
-  });
-
-export const listReviewsForUser = (userId: number, isAdmin: boolean, skip: number, take: number) =>
-  prisma.review.findMany({
-    where: isAdmin ? {} : { patient_id: userId },
-    include: reviewWithRelations,
-    orderBy: { created_at: "desc" },
-    skip,
-    take,
-  });
-
-export const countReviewsForUser = (userId: number, isAdmin: boolean) =>
-  prisma.review.count({ where: isAdmin ? {} : { patient_id: userId } });
-
-export const findReviewById = (id: number) =>
-  prisma.review.findUnique({ where: { id }, include: reviewWithRelations });
-
-export const deleteReview = (id: number) => prisma.review.delete({ where: { id } });

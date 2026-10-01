@@ -1,7 +1,7 @@
-/**
- * App shell (§22.6 responsive layout): sticky header, phone bottom nav,
+﻿/**
+ * App shell (Â§22.6 responsive layout): sticky header, phone bottom nav,
  * tablet+ sidebar rail, update prompt, offline banner. The A2HS install CTA
- * lives in `components/InstallAppButton.tsx` (§69) — patient header plus the
+ * lives in `components/InstallAppButton.tsx` (Â§69) â€” patient header plus the
  * first-run guest screens.
  * PHASE 5: navigation and the header user chip are role-aware.
  * PHASE 13: notification bell with unread count badge.
@@ -37,7 +37,6 @@ import {
   ChevronRight,
   Activity,
   FilePlus2,
-  Star,
   Users as UsersIcon,
   UserPlus,
   X,
@@ -84,7 +83,6 @@ export function navItemsFor(user: User | null): NavItem[] {
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
     { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
-    { to: "/reviews", label: "My reviews", icon: <Star size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
   ];
@@ -183,12 +181,12 @@ function NotificationBell() {
  * Shared by patients, doctors, and admins (the shell header is the same for
  * all three roles):
  *
- *   Not installed yet          → the "Download app" button (§22.1) replaces
+ *   Not installed yet          â†’ the "Download app" button (Â§22.1) replaces
  *                                the bell; one tap runs the browser install,
  *                                which puts a MediBook shortcut on the desktop
  *                                (Windows) / home screen (Android) connected
  *                                to the web app.
- *   Installed (standalone PWA) → the notification bell; notifications also
+ *   Installed (standalone PWA) â†’ the notification bell; notifications also
  *                                stay reachable from the drawer / sidebar.
  */
 function HeaderActions() {
@@ -251,12 +249,12 @@ function useOnline(): boolean {
 /**
  * Self-heal the Web Push subscription once per login session, for every role.
  * Push only reaches the OS notification bar when the server holds a row in
- * `PushSubscription` — but rows were only created by the patient-home Enable
+ * `PushSubscription` â€” but rows were only created by the patient-home Enable
  * button, and registration failures used to be swallowed, leaving the database
  * empty (send path exits at `subs.length === 0`). This effect repairs every
  * broken state in the background when permission is already granted:
- * - browser subscription missing → re-subscribe;
- * - browser subscription present but no active server row → re-register
+ * - browser subscription missing â†’ re-subscribe;
+ * - browser subscription present but no active server row â†’ re-register
  *   (POST /push-subscriptions/ is idempotent per endpoint).
  * Best-effort: any failure is ignored (the manual prompt still reports errors).
  */
@@ -290,7 +288,7 @@ function usePushResync(userId: number | null): void {
           device_info: { userAgent: navigator.userAgent },
         });
       } catch {
-        /* background self-heal — never surface into the shell */
+        /* background self-heal â€” never surface into the shell */
       }
     })();
   }, [userId]);
@@ -301,7 +299,7 @@ function usePushResync(userId: number | null): void {
  * ONE active item: the current pathname is resolved through
  * `findActiveNavItem()` (longest/most-specific match wins), so prefix routes
  * like `/admin` can never stay active inside `/admin/appointments`. The class
- * list and `aria-current` are both derived from that single result — no
+ * list and `aria-current` are both derived from that single result â€” no
  * per-item state, no click history.
  */
 export function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
@@ -485,7 +483,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => {
               closeSidebar();
               logout().then(() => {
-                // Every role lands on the guest-only sign-in screen only —
+                // Every role lands on the guest-only sign-in screen only â€”
                 // never another role's dashboard.
                 navigate("/login", { replace: true });
               });
@@ -499,7 +497,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="shell__content" id="main">
           {!online && (
             <div className="offline-banner" role="alert">
-              You're offline — some features are unavailable.
+              You're offline â€” some features are unavailable.
             </div>
           )}
           {children}

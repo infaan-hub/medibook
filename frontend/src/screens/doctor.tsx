@@ -18,7 +18,6 @@ import {
   deleteScheduleException,
 } from "../api/doctors";
 import { uploadProfileImage } from "../api/auth";
-import { getDoctorReviews } from "../api/reviews";
 import { listSpecialties } from "../api/specialties";
 import { ApiError } from "../api/client";
 import type {
@@ -26,7 +25,6 @@ import type {
   DoctorAvailability,
   DoctorProfile,
   GeoInput,
-  Review,
   ScheduleException,
   ScheduleItem,
   Specialty,
@@ -35,7 +33,6 @@ import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../co
 import { LocationLine } from "../components/Location";
 import { captureFix, LocationError } from "../lib/location";
 import { searchZanzibarAreas, type ZanzibarArea } from "../lib/zanzibar";
-import { DoctorReviewList } from "../components/reviews";
 import { useSession, useToast } from "../state/app-context";
 import { ArrowLeft, Clock, BadgeIndianRupee, Crosshair, Check, MapPin, Phone, Plus, Search, Trash2 } from "lucide-react";
 
@@ -52,7 +49,6 @@ export function DoctorProfileScreen() {
   const { id } = useParams<{ id: string }>();
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +56,6 @@ export function DoctorProfileScreen() {
     if (!id) return;
     setError(null);
     getDoctor(Number(id)).then((response) => setDoctor(response.data)).catch((reason: unknown) => setError(message(reason)));
-    getDoctorReviews(Number(id)).then((response) => setReviews(response.data)).catch(() => {});
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
@@ -160,12 +155,8 @@ export function DoctorProfileScreen() {
             ) : (
               <EmptyState title="No available slots" description="Try another date." />
             ))}
-          </>
+          </>  
         )}
-      </Card>
-      <Card className="card--fit">
-        <h2>Reviews</h2>
-        <DoctorReviewList reviews={reviews} />
       </Card>
     </div>
   );

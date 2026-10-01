@@ -21,7 +21,6 @@ import type {
   Prescription,
   PrescriptionItem,
   PushSubscription,
-  Review,
   ScheduleException,
   Specialty,
   User,
@@ -201,23 +200,6 @@ export function pushSubscriptionDto(sub: PushSubscription): Record<string, unkno
     fcm_token: sub.fcm_token,
     device_info: sub.device_info,
     is_active: sub.is_active,
-  };
-}
-
-/** reviews.serializers.ReviewSerializer (doctor_name rendered server-side). */
-export function reviewDto(review: Review & { doctor: { user: User } }): Record<string, unknown> {
-  const user = review.doctor.user;
-  const fullName = `${user.first_name} ${user.last_name}`.trim();
-  return {
-    id: review.id,
-    appointment: review.appointment_id,
-    patient: review.patient_id,
-    doctor: review.doctor_id,
-    doctor_name: fullName ? `Dr. ${fullName}` : user.email,
-    rating: review.rating,
-    comment: review.comment,
-    is_visible: review.is_visible,
-    created_at: iso(review.created_at),
   };
 }
 
