@@ -3147,7 +3147,16 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
   .blog__card { flex: none; }
 }
 .blog-article__meta { display: flex; align-items: center; gap: 12px; margin: 6px 0 14px; color: #536b7a; font-size: 13px; }
-.blog-article__image { width: 100%; max-height: 380px; object-fit: cover; border-radius: 14px; margin: 12px 0 18px; }
+/* Medium-sized image inside a health tip — centered, not a full-width banner. */
+.blog-article__image {
+  display: block;
+  width: 100%;
+  max-width: 460px;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 14px;
+  margin: 12px auto 18px;
+}
 .blog-article__back { margin-bottom: 14px; }
 .blog-article__content h1 { margin: 6px 0 8px; color: #17384a; line-height: 1.25; }
 .blog-article__body { color: #365365; font-size: 15px; line-height: 1.7; white-space: pre-line; }
@@ -3163,3 +3172,7 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .health-tips-page__form-head h2 { margin: 0; color: var(--color-text); font-size: var(--text-base, 15px); font-weight: var(--weight-semibold); }
 .health-tips-card-actions { display: flex; gap: 8px; margin-top: var(--space-3); }
 .blog__card-status { align-self: flex-start; padding: 2px 8px; border-radius: var(--radius-full); background: #fff7ed; color: #9a3412; font-size: 11px; font-weight: var(--weight-semibold); }
+
+/* Emergency appointment card on the patient dashboard (red date instead of green) */
+.home__appointment-datebox--emergency { background: #fef2f2; color: #dc2626; }
+.home__appointment-title--emergency { color: #dc2626; }

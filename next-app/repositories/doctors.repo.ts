@@ -232,6 +232,26 @@ export const listExceptionsForDate = (doctorId: number, date: string) =>
     where: { doctor_id: doctorId, date: new Date(`${date}T00:00:00Z`) },
   });
 
+export const listActiveWindowDoctorIds = (weekday: number, doctorIds: number[]) =>
+  prisma.availability
+    .findMany({
+      where: { doctor_id: { in: doctorIds }, weekday, is_active: true },
+      select: { doctor_id: true },
+    })
+    .then((rows) => new Set(rows.map((row) => row.doctor_id)));
+
+export const listFullDayClosureDoctorIds = (date: string, doctorIds: number[]) =>
+  prisma.scheduleException
+    .findMany({
+      where: {
+        doctor_id: { in: doctorIds },
+        date: new Date(`${date}T00:00:00Z`),
+        start_time: null,
+      },
+      select: { doctor_id: true },
+    })
+    .then((rows) => new Set(rows.map((row) => row.doctor_id)));
+
 export const findExceptionOwned = (id: number, doctorId?: number) =>
   prisma.scheduleException.findFirst({
     where: doctorId === undefined ? { id } : { id, doctor_id: doctorId },

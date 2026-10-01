@@ -4,10 +4,12 @@ import { paginationParams, paginate } from "@/lib/pagination";
 import { doctorListWhere, countDoctors, listDoctors } from "@/repositories/doctors.repo";
 import { doctorDto } from "@/lib/serializers";
 import { hasLocation, haversineKm } from "@/lib/geo";
-import { createOwnDoctorProfile } from "@/services/doctor.service";
+import { availableTodayIds, createOwnDoctorProfile } from "@/services/doctor.service";
 
 /** Default "near me" circle, in km — patients usually want walking distance. */
 const DEFAULT_RADIUS_KM = 5;
+
+type DoctorRow = Awaited<ReturnType<typeof listDoctors>>[number];
 
 /**
  * GET /api/doctors/ — public directory (search/specialty/city/hospital/
@@ -19,6 +21,18 @@ const DEFAULT_RADIUS_KM = 5;
  * for one side only.
  * POST — authenticated profile creation.
  */
+async function withAvailableToday(
+  req: Request,
+  rows: DoctorRow[],
+  origin?: { latitude: number; longitude: number }
+) {
+  const todayIds = await availableTodayIds(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...doctorDto(row, req, origin),
+    available_today: row.is_available && todayIds.has(row.id),
+  }));
+}
+
 export const GET = handler(async ({ req }) => {
   const url = new URL(req.url);
   const latitude = Number(url.searchParams.get("latitude"));
@@ -56,20 +70,24 @@ export const GET = handler(async ({ req }) => {
       rows
         .filter(hasLocation)
         .map((row) => ({ row, distance: haversineKm(origin, row) }))
-        .filter((entry): entry is { row: (typeof rows)[number]; distance: number } => {
+        .filter((entry): entry is { row: DoctorRow; distance: number } => {
           const km = entry.distance;
           return km !== null && Number.isFinite(km) && km <= radiusKm;
         })
         .sort((a, b) => a.distance - b.distance)
     );
-    const toDto = (row: (typeof ranked)[number]["row"]) => doctorDto(row, req, origin);
+    const all = await withAvailableToday(
+      req,
+      ranked.map((entry) => entry.row),
+      origin
+    );
 
     return paginate({
       req,
       where,
       count: () => Promise.resolve(ranked.length),
-      fetch: ({ skip, take }) => Promise.resolve(ranked.slice(skip, skip + take).map((e) => toDto(e.row))),
-      fetchAll: () => Promise.resolve(ranked.map((e) => toDto(e.row))),
+      fetch: ({ skip, take }) => Promise.resolve(all.slice(skip, skip + take)),
+      fetchAll: () => Promise.resolve(all),
     });
   }
 
@@ -78,14 +96,13 @@ export const GET = handler(async ({ req }) => {
     req,
     where,
     count: () => countDoctors(where),
-    fetch: ({ skip, take }) =>
-      listDoctors(where, skip, pageSize === 0 ? Number.MAX_SAFE_INTEGER : take).then((rows) =>
-        rows.map((row) => doctorDto(row, req))
+    fetch: async ({ skip, take }) =>
+      withAvailableToday(
+        req,
+        await listDoctors(where, skip, pageSize === 0 ? Number.MAX_SAFE_INTEGER : take)
       ),
-    fetchAll: () =>
-      listDoctors(where, 0, Number.MAX_SAFE_INTEGER).then((rows) =>
-        rows.map((row) => doctorDto(row, req))
-      ),
+    fetchAll: async () =>
+      withAvailableToday(req, await listDoctors(where, 0, Number.MAX_SAFE_INTEGER)),
   });
 });
 
@@ -93,5 +110,6 @@ export const POST = handler(async ({ req }) => {
   const user = await requireAuth(req);
   const body = await readJson(req);
   const doctor = await createOwnDoctorProfile(user, body);
-  return ok(doctor ? doctorDto(doctor, req) : null, "Doctor profile created.", 201);
+  const [dto] = doctor ? await withAvailableToday(req, [doctor]) : [null];
+  return ok(dto, "Doctor profile created.", 201);
 });

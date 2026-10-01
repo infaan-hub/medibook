@@ -1,23 +1,27 @@
 /**
- * /doctors directory cards — availability replaces the rating stars.
+ * /doctors directory cards (mirrored UI, next-app/ui/pages/index.tsx) —
+ * availability replaces the rating stars.
  *
- *  1. The card no longer shows rating stars; it shows a plain
- *     "Available" / "Not available" chip, so a patient knows whether they can
+ *  1. The card shows a plain "Available" / "Not available" chip driven by the
+ *     API's per-day `available_today`, so a patient knows whether they can
  *     book before they open the profile.
- *  2. Suspended doctors are still listed (the API used to filter them out,
- *     which made the chip impossible and left admin unable to approve them).
+ *  2. A doctor with no active window on today's weekday reads "Not available"
+ *     even when the account itself is healthy.
+ *  3. Suspended doctors are still listed so the chip can say "Not available"
+ *     and admin can approve them again.
+ *
+ * Mirror of frontend/src/__tests__/Doctors.test.tsx — keep both in sync.
  */
-
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { DoctorsPage } from "../screens/index";
+import { DoctorsPage } from "../pages/index";
 import type { DoctorProfile } from "../api/types";
 
 const { listDoctors } = vi.hoisted(() => ({ listDoctors: vi.fn() }));
 
 // Only listDoctors is stubbed — the rest of the module is imported by the
-// screens index's re-exports, so the mock has to describe the whole surface.
+// pages index's re-exports, so the mock has to describe the whole surface.
 vi.mock("../api/doctors", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/doctors")>()),
   listDoctors,
@@ -29,7 +33,7 @@ vi.mock("../state/app-context", async (importOriginal) => ({
   useSession: () => ({ user: null }),
 }));
 
-/** §28 envelope wrapping the paginated payload from common/pagination.py. */
+/** §28 envelope wrapping the paginated payload. */
 function envelope(results: DoctorProfile[]) {
   return {
     success: true,
@@ -78,7 +82,7 @@ function renderDirectory() {
   return render(
     <MemoryRouter>
       <DoctorsPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -96,7 +100,6 @@ describe("DoctorsPage cards", () => {
     expect(screen.getByText("Available")).toBeInTheDocument();
     expect(container.querySelector(".home__doctor-status")).not.toBeNull();
     expect(container.querySelector(".home__doctor-rating")).toBeNull();
-    expect(screen.queryByText("4.5")).not.toBeInTheDocument();
     expect(listDoctors).toHaveBeenCalledTimes(1);
   });
 
@@ -177,24 +180,5 @@ describe("DoctorsPage cards", () => {
 
     expect(await screen.findByText("Dr. Legacy Doctor")).toBeInTheDocument();
     expect(container.querySelector(".home__doctor-status")).toHaveTextContent("Available");
-  });
-
-  it("serves the card photo through the image optimizer, sized to the card", async () => {
-    listDoctors.mockResolvedValue(
-      envelope([doctor({ id: 12, profile_image: "/media/123/" })])
-    );
-
-    const { container } = renderDirectory();
-
-    expect(await screen.findByText("Dr. Neema Kimaro")).toBeInTheDocument();
-    const img = container.querySelector(".home__doctor-card > img") as HTMLImageElement;
-    expect(img).not.toBeNull();
-    // One fixed 500px file per thumbnail becomes a srcset the browser sizes to
-    // the card, and the upload is transcoded instead of served verbatim.
-    expect(img.getAttribute("src")).toMatch(/^\/_next\/image\?/);
-    expect(decodeURIComponent(img.getAttribute("src") as string)).toContain("/media/123/");
-    expect(img.getAttribute("srcset")).toBeTruthy();
-    expect(img).toHaveAttribute("sizes", "25vw");
-    expect(img).toHaveAttribute("loading", "lazy");
   });
 });

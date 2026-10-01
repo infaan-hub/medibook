@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Image from "next/image";
-import { useTranslation } from "react-i18next";
 import { listMyAppointments } from "../api/appointments";
 import { getPatientProfile } from "../api/patients";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
-import { listArticles, type Article } from "../api/blog";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { DistanceBadge } from "../components/Location";
@@ -71,11 +69,11 @@ function formatDoctorName(doctor: DoctorProfile): string {
  * they open the profile.
  */
 function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
-  const available = doctor.is_available !== false;
+  const available = doctor.available_today ?? doctor.is_available !== false;
   return (
     <span
       className={`home__doctor-status${available ? "" : " home__doctor-status--off"}`}
-      title={available ? "Taking appointments" : "Not taking appointments right now"}
+      title={available ? "Taking appointments today" : "No availability today"}
     >
       <span className="home__doctor-status-dot" aria-hidden="true" />
       {available ? "Available" : "Not available"}
@@ -84,10 +82,8 @@ function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
 }
 
 function PatientHome({ user }: { user: User }) {
-  const { t } = useTranslation();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
-  const [articles, setArticles] = useState<Article[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { permission, subscribed, toggle: togglePush, loading: pushLoading, error: pushError } =
     usePushNotifications(user.id);
@@ -110,9 +106,6 @@ function PatientHome({ user }: { user: User }) {
     listDoctors()
       .then((response) => setDoctors((response.data?.results ?? []).slice(0, 3)))
       .catch(() => setDoctors([]));
-    listArticles()
-      .then((response) => setArticles((response.data?.results ?? []).slice(0, 3)))
-      .catch(() => setArticles([]));
   }, [loadAppointments]);
 
   useRealtimeSync({
@@ -214,20 +207,27 @@ function PatientHome({ user }: { user: User }) {
         </div>
         {appointments === null ? <Skeleton lines={3} /> : upcoming.length > 0 ? (
           <div className="home__appointment-list">
-            {upcoming.slice(0, 3).map((appt) => (
-              <Link key={appt.id} to={`/appointments/${appt.id}`} className="home__appointment-card">
-                <span className="home__appointment-datebox">
-                  <strong>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { day: "2-digit" })}</strong>
-                  <span>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { month: "short" })}</span>
-                </span>
-                <span className="home__appointment-info">
-                  <strong>Doctor appointment</strong>
-                  <span>{formatAppointment(appt)}</span>
-                  <span className={`badge badge--${appt.status}`}>{appt.status}</span>
-                </span>
-                <ChevronRight size={17} />
-              </Link>
-            ))}
+            {upcoming.slice(0, 3).map((appt) => {
+              const emergency = appt.appointment_type === "EMERGENCY";
+              return (
+                <Link key={appt.id} to={`/appointments/${appt.id}`} className="home__appointment-card">
+                  <span
+                    className={`home__appointment-datebox${emergency ? " home__appointment-datebox--emergency" : ""}`}
+                  >
+                    <strong>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { day: "2-digit" })}</strong>
+                    <span>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { month: "short" })}</span>
+                  </span>
+                  <span className="home__appointment-info">
+                    <strong className={emergency ? "home__appointment-title--emergency" : undefined}>
+                      {emergency ? "Emergency appointment" : "Doctor appointment"}
+                    </strong>
+                    <span>{formatAppointment(appt)}</span>
+                    <span className={`badge badge--${appt.status}`}>{appt.status}</span>
+                  </span>
+                  <ChevronRight size={17} />
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <EmptyState icon={<Calendar size={28} />} title="No upcoming appointments" description="Find a doctor to book your next visit." action={<Link to="/doctors">Find a doctor</Link>} />
@@ -241,27 +241,6 @@ function PatientHome({ user }: { user: User }) {
           <span>Health Tips</span>
         </Link>
       </div>
-
-      {articles.length > 0 && (
-        <section className="home__section">
-          <div className="home__section-heading">
-            <h2>{t("home.healthTips")}</h2>
-            <Link to="/blog">{t("home.seeAll")} <ChevronRight size={15} /></Link>
-          </div>
-          <div className="home__blog-list">
-            {articles.map((article) => (
-              <Link key={article.id} to={`/blog/${article.slug}`} className="home__blog-card">
-                {article.image && <img src={article.image} alt={article.title} loading="lazy" />}
-                <div className="home__blog-info">
-                  <strong>{article.title}</strong>
-                  <span>{article.excerpt}</span>
-                </div>
-                <ChevronRight size={17} />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

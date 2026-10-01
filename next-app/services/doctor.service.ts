@@ -4,6 +4,7 @@
  * (port of doctors/views.py).
  */
 import { ValidationError, notFound, forbidden } from "@/lib/errors";
+import { todayIso, isoWeekday } from "@/lib/dates";
 import { doctorDto } from "@/lib/serializers";
 import { doctorWriteSchema } from "@/validators/doctor";
 import { parse } from "@/validators/base";
@@ -17,6 +18,17 @@ const ownershipForbidden = () => forbidden("You do not have permission to perfor
 
 const checkOwner = (user: AuthUser, doctorUserId: number): boolean =>
   user.is_superuser || user.role === "admin" || doctorUserId === user.id;
+
+export async function availableTodayIds(doctorIds: number[]): Promise<Set<number>> {
+  if (doctorIds.length === 0) return new Set<number>();
+  const today = todayIso();
+  const weekday = isoWeekday(today);
+  const [windows, closures] = await Promise.all([
+    doctors.listActiveWindowDoctorIds(weekday, doctorIds),
+    doctors.listFullDayClosureDoctorIds(today, doctorIds),
+  ]);
+  return new Set([...windows].filter((id) => !closures.has(id)));
+}
 
 export function parseDoctorWrite(body: unknown) {
   return parse(doctorWriteSchema, body);
@@ -97,7 +109,11 @@ export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput
 export async function retrieveDoctor(req: Request, id: number) {
   const doctor = await doctors.findDoctorById(id);
   if (!doctor || !doctor.user.is_active) throw notFound();
-  return doctorDto(doctor, req);
+  const todayIds = await availableTodayIds([doctor.id]);
+  return {
+    ...doctorDto(doctor, req),
+    available_today: doctor.is_available && todayIds.has(doctor.id),
+  };
 }
 
 /** PUT/PATCH /api/doctors/{id}/ — owner or admin only. */

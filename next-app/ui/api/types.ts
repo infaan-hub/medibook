@@ -216,6 +216,7 @@ export interface DoctorProfile extends GeoFields {
   consultation_fee: string;
   bio: string;
   is_available: boolean;
+  available_today?: boolean;
   /** Present only when the request supplied an origin (near-me search). */
   distance_km?: number | null;
   /* DRF DecimalField serializes as a string ("0.00"), so accept both. */
