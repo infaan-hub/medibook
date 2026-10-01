@@ -52,9 +52,6 @@ export async function listAudit(req: Request, scope?: { actorId: number }) {
   });
 }
 
-/** GET /api/doctor/audit/ — the signed-in doctor's own activity trail. */
-export const listMyAudit = (req: Request, userId: number) => listAudit(req, { actorId: userId });
-
 /** POST /api/admin/users/create/ — patient/doctor accounts. */
 export async function createUser(req: Request, actor: AuthUser, body: unknown) {
   const input = parse(adminUserCreateSchema, body);

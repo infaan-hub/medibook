@@ -42,7 +42,6 @@ export function doctorCardImage(doctor: DoctorProfile, index = 0): string {
 
 export { DoctorAvailabilityScreen, DoctorProfileScreen, DoctorPersonalScreen } from "./doctor";
 export { DoctorDashboardScreen, DoctorAppointmentsScreen } from "./doctor-dashboard";
-export { DoctorActivityScreen } from "./doctor-activity";
 export { DoctorMedicalTreatmentScreen } from "./doctor-medical-treatment";
 export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";

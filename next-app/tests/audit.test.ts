@@ -98,7 +98,6 @@ describe("handler audit capture", () => {
 
   it("does not feed the audit list from itself (stable pagination)", async () => {
     await call("/api/admin/audit/?page=2");
-    await call("/api/doctor/audit/");
     expect(state.create).not.toHaveBeenCalled();
   });
 

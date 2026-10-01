@@ -20,7 +20,7 @@ const MAX_DETAIL = 255; // AuditEvent.detail VarChar(255)
 const WRITE_TIMEOUT_MS = 2_000;
 
 /** Reading the audit log must not feed it (keeps pagination stable). */
-const AUDIT_LIST_PATHS = new Set(["/api/admin/audit/", "/api/doctor/audit/"]);
+const AUDIT_LIST_PATHS = new Set(["/api/admin/audit/"]);
 /** Auth POSTs — the attempted identity is captured for failed logins. */
 const AUTH_IDENT_PATH =
   /\/api\/auth\/(login|register|social|password-change|password-reset|password-reset-confirm)\/?$/;

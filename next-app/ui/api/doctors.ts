@@ -1,17 +1,16 @@
-/**
- * Doctor discovery API (§27 — /api/doctors/*, backend slice B3).
+﻿/**
+ * Doctor discovery API (Â§27 â€” /api/doctors/*, backend slice B3).
  *
  * Public endpoints:
- *  - GET /api/doctors/              — paginated list + search + filters
- *  - GET /api/doctors/:id/         — single doctor profile
- *  - GET /api/doctors/:id/availability/?date=YYYY-MM-DD — available slots
- *  - GET /api/doctors/me/schedule/ — doctor's own schedule (doctor role)
- *  - GET /api/doctors/me/schedule/:id/ — single schedule window
+ *  - GET /api/doctors/              â€” paginated list + search + filters
+ *  - GET /api/doctors/:id/         â€” single doctor profile
+ *  - GET /api/doctors/:id/availability/?date=YYYY-MM-DD â€” available slots
+ *  - GET /api/doctors/me/schedule/ â€” doctor's own schedule (doctor role)
+ *  - GET /api/doctors/me/schedule/:id/ â€” single schedule window
  */
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
 import type {
-  AuditEvent,
   Envelope,
   Paginated,
   DoctorProfile,
@@ -27,7 +26,7 @@ import type {
 export interface ListDoctorsParams {
   search?: string;
   specialty?: number;
-  /** Hospital city — doctor rows no longer carry a city string. */
+  /** Hospital city â€” doctor rows no longer carry a city string. */
   city?: string;
   hospital?: number;
   min_rating?: number;
@@ -43,19 +42,19 @@ export interface ListDoctorsParams {
   page_size?: number;
 }
 
-/** GET /api/doctors/ — paginated doctor directory with search + filters. */
+/** GET /api/doctors/ â€” paginated doctor directory with search + filters. */
 export function listDoctors(params: ListDoctorsParams = {}): Promise<
   Envelope<Paginated<DoctorProfile>>
 > {
   return apiGet<Paginated<DoctorProfile>>("/doctors/", params as Record<string, unknown>);
 }
 
-/** GET /api/doctors/:id/ — a single doctor's public professional profile. */
+/** GET /api/doctors/:id/ â€” a single doctor's public professional profile. */
 export function getDoctor(id: number): Promise<Envelope<DoctorProfile>> {
   return apiGet<DoctorProfile>(`/doctors/${id}/`);
 }
 
-/** GET /api/doctors/:id/availability/?date=YYYY-MM-DD — available slots. */
+/** GET /api/doctors/:id/availability/?date=YYYY-MM-DD â€” available slots. */
 export function getDoctorAvailability(
   id: number,
   date?: string
@@ -65,7 +64,7 @@ export function getDoctorAvailability(
   return apiGet<DoctorAvailability>(`/doctors/${id}/availability/`, params);
 }
 
-/** GET /api/doctors/:id/available-days/?year=YYYY&month=MM — days with slots in a month. */
+/** GET /api/doctors/:id/available-days/?year=YYYY&month=MM â€” days with slots in a month. */
 export function getDoctorAvailableDays(
   id: number,
   year: number,
@@ -74,12 +73,12 @@ export function getDoctorAvailableDays(
   return apiGet<DoctorAvailableDays>(`/doctors/${id}/available-days/`, { year, month });
 }
 
-/** GET /api/doctors/me/schedule/ — the signed-in doctor's schedule windows. */
+/** GET /api/doctors/me/schedule/ â€” the signed-in doctor's schedule windows. */
 export function getMySchedule(): Promise<Envelope<ScheduleItem[]>> {
   return apiGet<ScheduleItem[]>("/doctors/me/schedule/");
 }
 
-/** GET /api/doctors/me/schedule/:id/ — a single schedule window. */
+/** GET /api/doctors/me/schedule/:id/ â€” a single schedule window. */
 export function getMyScheduleItem(id: number): Promise<Envelope<ScheduleItem>> {
   return apiGet<ScheduleItem>(`/doctors/me/schedule/${id}/`);
 }
@@ -105,7 +104,7 @@ export function updateMyDoctorProfile(
   > & {
     /** Specialty ids (backend replaces the M2M set with these ids). */
     specialties?: number[];
-    /** Real practice coordinates — replaces the dropped city/office_address. */
+    /** Real practice coordinates â€” replaces the dropped city/office_address. */
   } & GeoInput
 ): Promise<Envelope<DoctorProfile>> {
   return apiPatch<DoctorProfile>("/doctors/me/profile/", payload);
@@ -160,11 +159,4 @@ export function updateScheduleException(id: number, payload: Partial<Omit<Schedu
 
 export function deleteScheduleException(id: number): Promise<void> {
   return apiDelete(`/doctors/me/schedule/exceptions/${id}/`).then(() => undefined);
-}
-
-/** GET /api/doctor/audit/ — the signed-in doctor's own activity trail. */
-export function listMyActivity(
-  params?: Record<string, unknown>
-): Promise<Envelope<Paginated<AuditEvent>>> {
-  return apiGet<Paginated<AuditEvent>>("/doctor/audit/", params);
 }
