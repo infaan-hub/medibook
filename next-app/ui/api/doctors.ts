@@ -11,6 +11,7 @@
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
 import type {
+  AuditEvent,
   Envelope,
   Paginated,
   DoctorProfile,
@@ -159,4 +160,11 @@ export function updateScheduleException(id: number, payload: Partial<Omit<Schedu
 
 export function deleteScheduleException(id: number): Promise<void> {
   return apiDelete(`/doctors/me/schedule/exceptions/${id}/`).then(() => undefined);
+}
+
+/** GET /api/doctor/audit/ — the signed-in doctor's own activity trail. */
+export function listMyActivity(
+  params?: Record<string, unknown>
+): Promise<Envelope<Paginated<AuditEvent>>> {
+  return apiGet<Paginated<AuditEvent>>("/doctor/audit/", params);
 }

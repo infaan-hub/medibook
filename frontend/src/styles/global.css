@@ -3182,3 +3182,9 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .home__appointment-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .badge--emergency { background: #dc2626; color: #fff; }
 .home__appointment-info > span.home__appointment-emergency-reason { color: #b91c1c; font-weight: 600; }
+
+/* Audit trail pager (admin + doctor activity screens) */
+.admin-audit-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid #eef2f4; color: #82909d; font-size: var(--text-xs); }
+.admin-audit-pager span { display: inline-flex; align-items: center; gap: 14px; }
+.admin-audit-pager button:disabled { opacity: 0.4; cursor: default; }
+.admin-audit-row > span:nth-child(2) small { word-break: break-all; }

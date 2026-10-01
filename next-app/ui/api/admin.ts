@@ -80,6 +80,8 @@ export function deleteAdminDoctor(doctorId: number): Promise<Envelope<null> | un
   return apiDelete<null>(`/admin/doctors/${doctorId}/`);
 }
 
-export function listAuditEvents(): Promise<Envelope<AuditEvent[]>> {
-  return apiGet<AuditEvent[]>("/admin/audit/");
+export function listAuditEvents(
+  params?: Record<string, unknown>
+): Promise<Envelope<Paginated<AuditEvent>>> {
+  return apiGet<Paginated<AuditEvent>>("/admin/audit/", params);
 }

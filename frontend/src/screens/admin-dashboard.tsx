@@ -13,6 +13,10 @@ import { useRealtimeSync } from "../realtime/socket";
 function message(error: unknown): string { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 function formatDate(value: string): string { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
 function formatTime(value: string): string { return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
+/** Compact rows carry an `HTTP …` detail line — show the target path instead. */
+function activityLine(event: AuditEvent): string {
+  return event.detail && !event.detail.startsWith("HTTP ") ? event.detail : event.target;
+}
 
 function AdminHeader({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return <div className="admin-page-header"><div><p className="admin-eyebrow">MediBook control center</p><h1>{title}</h1><p>{description}</p></div>{action}</div>;
@@ -24,8 +28,8 @@ function MetricCard({ label, value, icon, tone, detail }: { label: string; value
 
 export function AdminDashboardScreen() {
   const [stats, setStats] = useState<AdminStats | null>(null); const [events, setEvents] = useState<AuditEvent[]>([]); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true);
-  const load = useCallback(() => { setLoading(true); setError(null); Promise.all([getAdminStats(), listAuditEvents()]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data); }).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, []);
-  const refresh = useCallback(() => { Promise.all([getAdminStats(), listAuditEvents()]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data); }).catch(() => {}); }, []);
+  const load = useCallback(() => { setLoading(true); setError(null); Promise.all([getAdminStats(), listAuditEvents({ page_size: 5 })]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data.results); }).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, []);
+  const refresh = useCallback(() => { Promise.all([getAdminStats(), listAuditEvents({ page_size: 5 })]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data.results); }).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   useRealtimeSync({ refresh, events: ["appointment.created", "appointment.updated", "user.created", "doctor.updated"] });
   if (loading) return <div className="admin-workspace"><Skeleton lines={8} /></div>;
@@ -35,7 +39,7 @@ export function AdminDashboardScreen() {
     <AdminHeader title="Overview" description="A clear view of your healthcare platform." action={<div className="admin-header-actions"><Link to="/admin/audit" className="admin-outline-button"><Activity size={16} /> Audit log</Link><Link to="/admin/users/new" className="admin-primary-button"><Plus size={16} /> Add user</Link></div>} />
     <div className="admin-metrics"><MetricCard label="Total users" value={stats.users} detail="Across all roles" tone="admin-metric__icon--blue" icon={<Users size={19} />} /><MetricCard label="Patients" value={stats.patients} detail="Registered patients" tone="admin-metric__icon--teal" icon={<ShieldCheck size={19} />} /><MetricCard label="Doctors" value={stats.doctors} detail="Active profiles" tone="admin-metric__icon--violet" icon={<Stethoscope size={19} />} /><MetricCard label="Appointments" value={stats.appointments} detail="All-time bookings" tone="admin-metric__icon--amber" icon={<Clock3 size={19} />} /></div>
     <div className="admin-dashboard-grid"><Card className="admin-chart-card"><div className="admin-card-heading"><div><h2>Appointment activity</h2><p>Distribution by current status</p></div><span className="admin-chart-caption"><Activity size={15} /> Live data</span></div><div className="admin-bar-chart">{statuses.length ? statuses.map(([status, count]) => <div className="admin-bar-row" key={status}><span>{status}</span><div><i style={{ width: `${Math.max((count / maxStatus) * 100, count ? 8 : 0)}%` }} /></div><strong>{count}</strong></div>) : <EmptyState title="No appointment activity" />}</div></Card><Card className="admin-chart-card admin-breakdown"><div className="admin-card-heading"><div><h2>Platform health</h2><p>At-a-glance operating mix</p></div><CircleDollarSign size={19} /></div><div className="admin-donut" style={{ "--donut": `${stats.users ? (stats.patients / stats.users) * 100 : 0}%` } as React.CSSProperties}><span>{stats.users ? Math.round((stats.patients / stats.users) * 100) : 0}%<small>patients</small></span></div><div className="admin-legend"><span><i className="admin-dot admin-dot--teal" /> Patients <b>{stats.patients}</b></span><span><i className="admin-dot admin-dot--violet" /> Doctors <b>{stats.doctors}</b></span></div></Card></div>
-    <div className="admin-dashboard-grid admin-dashboard-grid--lower"><Card className="admin-quick-card"><div className="admin-card-heading"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div className="admin-action-grid"><Link to="/admin/users/new"><UserPlus size={18} /><span><b>Add a user</b><small>Create a patient or staff account</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors/new"><FilePlus2 size={18} /><span><b>Add a doctor</b><small>Set up a professional profile</small></span><ChevronRight size={15} /></Link><Link to="/admin/users"><Users size={18} /><span><b>Review users</b><small>Search and filter accounts</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors"><Stethoscope size={18} /><span><b>Review doctors</b><small>Approve or suspend profiles</small></span><ChevronRight size={15} /></Link><Link to="/admin/appointments"><Clock3 size={18} /><span><b>Manage appointments</b><small>View, filter, and delete bookings</small></span><ChevronRight size={15} /></Link></div></Card><Card className="admin-activity-card"><div className="admin-card-heading"><div><h2>Recent activity</h2><p>Latest privileged actions</p></div><Link to="/admin/audit">View all <ArrowUpRight size={15} /></Link></div>{events.length ? <div className="admin-activity-list">{events.slice(0, 5).map((event) => <div key={event.id}><span className="admin-activity-icon"><CheckCircle2 size={15} /></span><span><b>{event.action.replace(".", " ")}</b><small>{event.detail || event.target} Â· {formatTime(event.created_at)}</small></span></div>)}</div> : <EmptyState title="No activity yet" description="Admin actions will appear here." />}</Card></div>
+    <div className="admin-dashboard-grid admin-dashboard-grid--lower"><Card className="admin-quick-card"><div className="admin-card-heading"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div className="admin-action-grid"><Link to="/admin/users/new"><UserPlus size={18} /><span><b>Add a user</b><small>Create a patient or staff account</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors/new"><FilePlus2 size={18} /><span><b>Add a doctor</b><small>Set up a professional profile</small></span><ChevronRight size={15} /></Link><Link to="/admin/users"><Users size={18} /><span><b>Review users</b><small>Search and filter accounts</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors"><Stethoscope size={18} /><span><b>Review doctors</b><small>Approve or suspend profiles</small></span><ChevronRight size={15} /></Link><Link to="/admin/appointments"><Clock3 size={18} /><span><b>Manage appointments</b><small>View, filter, and delete bookings</small></span><ChevronRight size={15} /></Link></div></Card><Card className="admin-activity-card"><div className="admin-card-heading"><div><h2>Recent activity</h2><p>Latest activity across the platform</p></div><Link to="/admin/audit">View all <ArrowUpRight size={15} /></Link></div>{events.length ? <div className="admin-activity-list">{events.slice(0, 5).map((event) => <div key={event.id}><span className="admin-activity-icon"><CheckCircle2 size={15} /></span><span><b>{event.action.replace(/[._]/g, " ")}</b><small>{activityLine(event)} Â· {formatTime(event.created_at)}</small></span></div>)}</div> : <EmptyState title="No activity yet" description="Logins, bookings and admin actions will appear here." />}</Card></div>
   </div>;
 }
 
@@ -82,9 +86,116 @@ export function AdminCreateDoctorScreen() {
   return <div className="admin-workspace admin-form-page"><AdminHeader title="Add doctor" description="Create an account and professional profile together." action={<Link to="/admin/doctors" className="admin-outline-button">Back to doctors</Link>} /><Card className="admin-form-card"><form onSubmit={submit}><div className="admin-form-grid"><TextField id="admin-doctor-first-name" label="First name" name="first_name" value={form.first_name} onChange={(e) => update("first_name", e.target.value)} required /><TextField id="admin-doctor-last-name" label="Last name" name="last_name" value={form.last_name} onChange={(e) => update("last_name", e.target.value)} required /><TextField id="admin-doctor-username" label="Username" name="username" value={form.username} onChange={(e) => update("username", e.target.value)} required /><TextField id="admin-doctor-email" label="Email" name="email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required /><TextField id="admin-doctor-password" label="Temporary password" name="password" type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required /><TextField id="admin-doctor-experience" label="Experience (years)" name="experience_years" type="number" value={form.experience_years} onChange={(e) => update("experience_years", e.target.value)} /><TextField id="admin-doctor-fee" label="Consultation fee (TSh)" name="consultation_fee" value={form.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} /><TextField id="admin-doctor-qualifications" label="Qualifications" name="qualifications" value={form.qualifications} onChange={(e) => update("qualifications", e.target.value)} /><label className="admin-field admin-field--wide"><span>Professional bio</span><textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} rows={4} /></label></div><div className="admin-form-actions"><Link to="/admin/doctors" className="admin-outline-button">Cancel</Link><button className="admin-primary-button" disabled={saving} type="submit"><Stethoscope size={16} /> {saving ? "Creating..." : "Create doctor"}</button></div></form></Card></div>;
 }
 
+const AUDIT_PAGE_SIZE = 20;
+const AUDIT_TABS: [string, string][] = [
+  ["", "All"],
+  ["auth.", "Auth"],
+  ["user.,admin_user.,doctor.,admin_doctor.", "Accounts"],
+  ["appointment.,emergency_appointment.", "Appointments"],
+];
+
 export function AdminAuditScreen() {
-  const [events, setEvents] = useState<AuditEvent[] | null>(null); const [error, setError] = useState<string | null>(null); useEffect(() => { listAuditEvents().then((response) => setEvents(response.data)).catch((reason) => setError(message(reason))); }, []);
-  return <div className="admin-workspace"><AdminHeader title="Audit log" description="A traceable record of privileged platform activity." action={<Link to="/admin" className="admin-outline-button">Back to overview</Link>} /><Card className="admin-table-card">{error && <ErrorState message={error} />}{events === null ? <Skeleton lines={6} /> : events.length === 0 ? <EmptyState title="No audit events" description="Actions performed by administrators will be recorded here." /> : <div className="admin-audit-list">{events.map((event) => <div className="admin-audit-row" key={event.id}><span className="admin-activity-icon"><Activity size={16} /></span><span><b>{event.action.replace(".", " ")}</b><small>{event.detail || event.target}</small></span><span className="admin-audit-meta"><b>{event.actor}</b><small>{formatTime(event.created_at)}</small></span></div>)}</div>}</Card></div>;
+  const [events, setEvents] = useState<AuditEvent[] | null>(null);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [actionPrefix, setActionPrefix] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    const params: Record<string, unknown> = { page, page_size: AUDIT_PAGE_SIZE };
+    if (search) params.search = search;
+    if (actionPrefix) params.action = actionPrefix;
+    listAuditEvents(params)
+      .then((response) => {
+        setEvents(response.data.results);
+        setCount(response.data.count);
+      })
+      .catch((reason) => {
+        setError(message(reason));
+        setEvents((current) => current ?? []);
+      });
+  }, [page, search, actionPrefix]);
+  useEffect(() => { load(); }, [load]);
+
+  // Debounced search — typing resets to the first page.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(query.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const totalPages = Math.max(1, Math.ceil(count / AUDIT_PAGE_SIZE));
+  const from = count === 0 ? 0 : (page - 1) * AUDIT_PAGE_SIZE + 1;
+  const to = Math.min(page * AUDIT_PAGE_SIZE, count);
+
+  return (
+    <div className="admin-workspace">
+      <AdminHeader
+        title="Audit log"
+        description="Every login, booking and change across the platform."
+        action={<Link to="/admin" className="admin-outline-button">Back to overview</Link>}
+      />
+      <Card className="admin-table-card">
+        <div className="admin-table-toolbar">
+          <div className="admin-search">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search action, path, person..."
+            />
+          </div>
+          <div className="admin-filter-tabs">
+            {AUDIT_TABS.map(([key, label]) => (
+              <button
+                key={key || "all"}
+                className={actionPrefix === key ? "active" : ""}
+                onClick={() => { setActionPrefix(key); setPage(1); }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {error && <ErrorState message={error} onRetry={load} />}
+        {events === null ? (
+          <Skeleton lines={6} />
+        ) : events.length === 0 ? (
+          <EmptyState title="No audit events" description="Logins, bookings and admin actions will appear here." />
+        ) : (
+          <>
+            <div className="admin-audit-list">
+              {events.map((event) => (
+                <div className="admin-audit-row" key={event.id}>
+                  <span className="admin-activity-icon"><Activity size={16} /></span>
+                  <span>
+                    <b>{event.action.replace(/[._]/g, " ")}</b>
+                    <small>{event.target} · {event.detail}</small>
+                  </span>
+                  <span className="admin-audit-meta">
+                    <b>{event.actor}</b>
+                    <small>{formatTime(event.created_at)}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="admin-audit-pager">
+              <span>{from}–{to} of {count.toLocaleString()} events</span>
+              <span>
+                <button className="admin-table-action" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>← Previous</button>
+                <button className="admin-table-action" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next →</button>
+              </span>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  );
 }
 
 export function AdminAppointmentsScreen() {

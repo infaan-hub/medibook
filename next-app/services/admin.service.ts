@@ -6,6 +6,7 @@ import { ValidationError, notFound, badRequest } from "@/lib/errors";
 import { userPayload } from "@/lib/serializers";
 import { mediaUrl } from "@/lib/serialize";
 import { hashPassword, validateNewPassword } from "@/lib/password";
+import { paginate } from "@/lib/pagination";
 import { adminDoctorCreateSchema, adminUserCreateSchema } from "@/validators/more";
 import { parse } from "@/validators/base";
 import * as admin from "@/repositories/admin.repo";
@@ -14,19 +15,45 @@ import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
 
 export const stats = () => admin.platformStats();
-export const listAudit = async () =>
-  (await admin.listAuditEvents()).map((event) => {
-    const actor = event.actor;
-    const fullName = actor ? `${actor.first_name} ${actor.last_name}`.trim() : "";
-    return {
-      id: event.id,
-      action: event.action,
-      target: event.target,
-      detail: event.detail,
-      actor: actor ? fullName || String(event.actor_id) : "System",
-      created_at: event.created_at.toISOString(),
-    };
+
+type AuditRow = Awaited<ReturnType<typeof admin.findAuditEvents>>[number];
+
+function auditRowDto(event: AuditRow) {
+  const actor = event.actor;
+  const fullName = actor ? `${actor.first_name} ${actor.last_name}`.trim() : "";
+  return {
+    id: event.id,
+    action: event.action,
+    target: event.target,
+    detail: event.detail,
+    actor: actor ? fullName || String(event.actor_id) : "System",
+    created_at: event.created_at.toISOString(),
+  };
+}
+
+/** GET /api/admin/audit/ — paginated, filterable platform activity trail. */
+export async function listAudit(req: Request, scope?: { actorId: number }) {
+  const url = new URL(req.url);
+  const param = (key: string) => url.searchParams.get(key);
+  const filters: admin.AuditFilters = {
+    search: param("search"),
+    action: param("action"),
+    actor: param("actor") ? Number(param("actor")) : null,
+    from: param("from"),
+    to: param("to"),
+  };
+  const where = admin.auditWhere(filters, scope?.actorId ?? null);
+  return paginate({
+    req,
+    where,
+    count: (w) => admin.countAuditEvents(w),
+    fetch: ({ skip, take }) =>
+      admin.findAuditEvents(where, skip, take).then((rows) => rows.map(auditRowDto)),
   });
+}
+
+/** GET /api/doctor/audit/ — the signed-in doctor's own activity trail. */
+export const listMyAudit = (req: Request, userId: number) => listAudit(req, { actorId: userId });
 
 /** POST /api/admin/users/create/ — patient/doctor accounts. */
 export async function createUser(req: Request, actor: AuthUser, body: unknown) {

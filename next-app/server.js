@@ -41,6 +41,27 @@ globalThis.__medibook_prisma = prisma;
 /** Open sockets; broadcast helper exposed to the TypeScript runtime. */
 const sockets = new Set();
 
+/**
+ * Compact audit row for realtime activity (connect/reject/disconnect) —
+ * same `AuditEvent` table the HTTP audit trail writes to. Never throws.
+ */
+function recordRealtimeAudit(actorId, detail) {
+  try {
+    prisma.auditEvent
+      .create({
+        data: {
+          actor_id: actorId,
+          action: "realtime.connect",
+          target: "/ws/notifications/",
+          detail,
+        },
+      })
+      .catch(() => {});
+  } catch {
+    /* audit must never break the connection */
+  }
+}
+
 function b64urlDecode(part) {
   return Buffer.from(part, "base64url");
 }
@@ -149,10 +170,12 @@ async function main() {
       const { query } = parse(req.url || "", true);
       const userId = await userIdForToken(query.token);
       if (userId === null) {
+        recordRealtimeAudit(null, "HTTP 401 · SSE rejected");
         res.writeHead(401, { "Content-Type": "text/plain" });
         res.end("unauthorized");
         return;
       }
+      recordRealtimeAudit(userId, "HTTP 200 · SSE connected");
       
       // Set SSE headers
       res.writeHead(200, {
@@ -187,6 +210,7 @@ async function main() {
       req.on("close", () => {
         clearInterval(heartbeat);
         sockets.delete(sseSocket);
+        recordRealtimeAudit(userId, "HTTP 200 · SSE disconnected");
       });
       return;
     }
@@ -206,13 +230,18 @@ async function main() {
       .then((userId) => {
         if (userId === null || socket.readyState !== 1) {
           // Rejected: client receives close code 4001 and refreshes its token.
+          recordRealtimeAudit(null, "WS rejected · close 4001");
           socket.close(4001, "unauthorized");
           return;
         }
         socket.__userId = userId;
+        recordRealtimeAudit(userId, "WS connected");
         socket.send(JSON.stringify({ event: "connected", payload: { user_id: userId } }));
       })
-      .catch(() => socket.close(4001, "unauthorized"));
+      .catch(() => {
+        recordRealtimeAudit(null, "WS rejected · close 4001");
+        socket.close(4001, "unauthorized");
+      });
 
     socket.on("message", (raw) => {
       let content;
@@ -226,7 +255,10 @@ async function main() {
       }
     });
 
-    socket.on("close", () => sockets.delete(socket));
+    socket.on("close", () => {
+      sockets.delete(socket);
+      if (socket.__userId != null) recordRealtimeAudit(socket.__userId, "WS disconnected");
+    });
     socket.on("error", () => sockets.delete(socket));
   });
 

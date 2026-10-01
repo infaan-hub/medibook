@@ -9,6 +9,7 @@
  * Routes then only assert roles (requirePatient/…) and validate input.
  */
 import { optionalAuth, type AuthUser } from "./auth";
+import { auditRequest, startIdentifierCapture } from "./audit";
 import { errorResponseFrom, applySecurityHeaders, successResponse } from "./responses";
 import { throttleIdentity, throttleScope } from "./throttle";
 
@@ -35,7 +36,14 @@ export function handler(
   options: { throttle?: ThrottleScope } = {}
 ) {
   return async (req: Request, ctx: NextRouteContext): Promise<Response> => {
+    const startedAt = Date.now();
+    const pathname = new URL(req.url).pathname;
+    let user: AuthUser | null = null;
+    let identifierPromise: Promise<string | null> | null = null;
+    let response: Response;
     try {
+      identifierPromise = startIdentifierCapture(req, pathname);
+
       const rawParams = ctx?.params ? await ctx.params : {};
       const params: Record<string, string> = {};
       for (const [key, value] of Object.entries(rawParams ?? {})) {
@@ -43,7 +51,7 @@ export function handler(
       }
 
       // 1) Authentication (invalid tokens → 401, exactly like SimpleJWT).
-      const user = await optionalAuth(req);
+      user = await optionalAuth(req);
 
       // 2) Rate limiting — scoped views use ONLY their scope limit (DRF swaps
       //    the throttle classes on those views); everything else uses the
@@ -52,11 +60,22 @@ export function handler(
       else throttleIdentity(req, user ? user.id : null);
 
       // 3) The route itself (role checks + validation happen inside).
-      const response = await fn({ req, user, params });
-      return applySecurityHeaders(response);
+      response = await fn({ req, user, params });
     } catch (error) {
-      return applySecurityHeaders(errorResponseFrom(error));
+      response = errorResponseFrom(error);
     }
+    response = applySecurityHeaders(response);
+
+    // 4) Audit — one compact row per request (never breaks the response).
+    await auditRequest({
+      req,
+      pathname,
+      status: response.status,
+      userId: user ? user.id : null,
+      identifierPromise,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   };
 }
 
