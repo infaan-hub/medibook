@@ -4,8 +4,8 @@
  *  - GET  /api/emergency/                     — role-scoped queue (patient's own
  *       emergency appointments / doctor's live requests / admin's platform queue)
  *  - POST /api/emergency/                     — patient requests emergency help
- *       (no doctor in the payload: the server auto-dispatches to whoever is
- *       free and nearest at the chosen time)
+ *       (no doctor in the payload: the server auto-dispatches on the current
+ *       time — a doctor available right now, or the nearest one otherwise)
  *  - GET  /api/emergency/available-slots/     — merged slot grid across nearby doctors
  *  - GET  /api/emergency/nearby-doctors/      — doctors near a location
  *  - POST /api/emergency/appointments/{id}/   — doctor accepts / rejects
@@ -20,11 +20,12 @@ export function listEmergencies(): Promise<Envelope<EmergencyAppointment[]>> {
 }
 
 export interface EmergencyCreatePayload {
-  /** Omit it and the server dispatches to the nearest free doctor. */
+  /** Omit it and the server dispatches to the nearest doctor. */
   doctor?: number;
-  appointment_date: string;
-  start_time: string;
-  end_time: string;
+  /** All three optional: omit them and the server stamps the current time. */
+  appointment_date?: string;
+  start_time?: string;
+  end_time?: string;
   emergency_reason: EmergencyReason;
   emergency_description?: string;
   emergency_latitude: number;

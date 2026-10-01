@@ -4,7 +4,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { conflict, notFound, badRequest, forbidden, ValidationError } from "@/lib/errors";
-import { normalizeTime } from "@/lib/dates";
+import { isoWeekday, normalizeTime, secondsToTime, timeToSeconds, todayIso } from "@/lib/dates";
 import { appointmentDto, emergencyAppointmentDto } from "@/lib/serializers";
 import { emergencyAppointmentCreateSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
@@ -47,6 +47,9 @@ type NearbyDoctorRow = Prisma.DoctorGetPayload<{
 const EMERGENCY_RADIUS_KM = 5;
 export const MAX_EMERGENCY_RADIUS_KM = 50;
 
+/** Emergency appointments are stamped for now + this window. */
+const EMERGENCY_SLOT_SECONDS = 30 * 60;
+
 /** How many nearby doctors we inspect before giving up on a date/slot. */
 const MAX_SLOT_CANDIDATES = 25;
 /** Stop widening once this many doctors have at least one free slot. */
@@ -81,26 +84,41 @@ const formatClock = (time: string) => time.slice(0, 5);
  * nearby doctor came back with `distance: 0`.
  */
 
-/** One doctor's free slot on a date, in `HH:MM:SS`. */
-async function hasFreeSlot(doctorId: number, date: string, start: string, end: string) {
-  const { availableSlots } = await import("./schedule.service");
-  const slots = await availableSlots(doctorId, true, date);
-  return slots.some((slot) => slot.start_time === start && slot.end_time === end);
+export async function isDoctorAvailableAt(
+  doctorId: number,
+  weekday: number,
+  date: string,
+  seconds: number
+): Promise<boolean> {
+  const windows = await doctors.listActiveWindowsForWeekday(doctorId, weekday);
+  const inWindow = windows.some((window) => {
+    const windowStart = timeToSeconds(window.start_time);
+    const windowEnd = timeToSeconds(window.end_time);
+    if (seconds < windowStart || seconds >= windowEnd) return false;
+    return !window.breaks.some(
+      (item) => seconds >= timeToSeconds(item.start_time) && seconds < timeToSeconds(item.end_time)
+    );
+  });
+  if (!inWindow) return false;
+
+  const exceptions = await doctors.listExceptionsForDate(doctorId, date);
+  if (exceptions.some((item) => item.start_time === null)) return false;
+  return !exceptions.some(
+    (item) =>
+      item.start_time !== null &&
+      item.end_time !== null &&
+      seconds >= timeToSeconds(item.start_time) &&
+      seconds < timeToSeconds(item.end_time)
+  );
 }
 
-/**
- * Auto-dispatch: walk the nearby doctors nearest-first and hand the emergency
- * to the first one who is free at exactly that time. Radius is never a hard
- * limit here — the walk widens on its own, so "no match" only ever means "no
- * doctor anywhere has that slot free".
- */
-async function pickNearestAvailableDoctor(
+async function pickEmergencyDoctor(
   origin: { latitude: number; longitude: number },
   date: string,
-  start: string,
-  end: string,
+  weekday: number,
+  seconds: number,
   specialtyId?: number
-) {
+): Promise<{ doctor: NearbyDoctorRow; distance: number } | null> {
   const candidates = await findNearbyDoctors(
     origin.latitude,
     origin.longitude,
@@ -109,9 +127,18 @@ async function pickNearestAvailableDoctor(
   );
 
   for (const candidate of candidates.slice(0, MAX_SLOT_CANDIDATES)) {
-    if (await hasFreeSlot(candidate.doctor.id, date, start, end)) return candidate;
+    if (await isDoctorAvailableAt(candidate.doctor.id, weekday, date, seconds)) return candidate;
   }
-  return null;
+  if (candidates.length > 0) return candidates[0];
+
+  const widened = await findNearbyDoctors(
+    origin.latitude,
+    origin.longitude,
+    Number.POSITIVE_INFINITY,
+    specialtyId,
+    true
+  );
+  return widened[0] ?? null;
 }
 
 /**
@@ -177,11 +204,13 @@ export async function listAvailableEmergencySlots(
 export async function createEmergencyAppointment(req: Request, user: AuthUser, body: unknown) {
   const input = parse(emergencyAppointmentCreateSchema, body);
 
-  const date = input.appointment_date;
-  // Normalize to HH:MM:SS — availableSlots() emits secondsToTime() format while
-  // clients send the HH:MM slice from the availability API (see appointment.service).
-  const start = normalizeTime(input.start_time);
-  const end = normalizeTime(input.end_time);
+  const date = input.appointment_date ?? todayIso();
+  const start = input.start_time
+    ? normalizeTime(input.start_time)
+    : secondsToTime(Math.floor(Date.now() / 1000) % 86400);
+  const end = input.end_time
+    ? normalizeTime(input.end_time)
+    : secondsToTime(Math.min(timeToSeconds(start) + EMERGENCY_SLOT_SECONDS, 86400));
 
   const origin = {
     latitude: input.emergency_latitude,
@@ -216,37 +245,31 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
         doctor: ["The selected doctor was not found."],
       });
     }
-    if (!selected.is_available) {
-      throw badRequest("The selected doctor is not available for emergency appointments.", {
-        doctor: ["This doctor is not currently available for emergency appointments."],
-      });
-    }
     // The patient's own position travels with this request as a live GPS fix
     // (the schema requires it), but the doctor's practice coordinates must be on
     // file or there is no destination to route the emergency to.
     const { assertDoctorLocation } = await import("@/services/location.service");
     await assertDoctorLocation(selected.id);
 
-    if (!(await hasFreeSlot(selected.id, date, start, end))) {
-      throw badRequest("The selected emergency time slot is not available.", {
-        start_time: ["This emergency time slot is not available."],
-      });
-    }
     target = {
       id: selected.id,
       user_id: selected.user_id,
       name: `${selected.user.first_name} ${selected.user.last_name}`.trim(),
     };
   } else {
-    // No doctor chosen — dispatch to whoever is free and nearest right now.
-    const picked = await pickNearestAvailableDoctor(origin, date, start, end);
+    // No doctor chosen — prefer one who is available right now; if none is,
+    // fall back to the nearest doctor regardless of their availability window
+    // so the emergency is always dispatched and notified.
+    const picked = await pickEmergencyDoctor(
+      origin,
+      date,
+      isoWeekday(date),
+      timeToSeconds(start)
+    );
     if (!picked) {
-      throw badRequest(
-        "No doctor is available at that time. Try another slot, or a different day.",
-        {
-          start_time: ["No nearby doctor has this time slot free."],
-        }
-      );
+      throw badRequest("No doctor could be reached for this emergency.", {
+        doctor: ["No doctor could be reached for this emergency."],
+      });
     }
     target = {
       id: picked.doctor.id,
@@ -276,7 +299,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     emergency_requested_at: new Date(),
   });
 
-  // The doctor is told the slot is theirs; the patient is told who got it.
+  // The doctor is told the emergency is theirs; the patient is told who got it.
   await notify(
     target.user_id,
     emergencyNotificationType("requested"),
@@ -312,14 +335,15 @@ export async function findNearbyDoctors(
   latitude: number,
   longitude: number,
   radiusKm: number = EMERGENCY_RADIUS_KM,
-  specialtyId?: number
+  specialtyId?: number,
+  includeUnavailable: boolean = false
 ): Promise<Array<{ doctor: NearbyDoctorRow; distance: number }>> {
   const { prisma } = await import("@/lib/db");
   const origin = { latitude, longitude };
 
   const doctorsList = await prisma.doctor.findMany({
     where: {
-      is_available: true,
+      ...(includeUnavailable ? {} : { is_available: true }),
       user: {
         is_active: true,
       },

@@ -152,9 +152,9 @@ export const emergencyAppointmentCreateSchema = z
     /** Omit it and the service auto-dispatches to the nearest available doctor. */
     doctor: drfInteger().nullable().optional(),
     hospital: drfInteger().nullable().optional(),
-    appointment_date: drfDate(),
-    start_time: drfTime(),
-    end_time: drfTime(),
+    appointment_date: drfDate().optional(),
+    start_time: drfTime().optional(),
+    end_time: drfTime().optional(),
     reason: z.string().optional(),
     notes: z.string().optional(),
     emergency_reason: z.enum([
@@ -178,7 +178,7 @@ export const emergencyAppointmentCreateSchema = z
       const trimmed = t.trim();
       return (/^\d:\d/.test(trimmed) ? `0${trimmed}` : trimmed);
     };
-    if (norm(data.end_time) <= norm(data.start_time)) {
+    if (data.start_time && data.end_time && norm(data.end_time) <= norm(data.start_time)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["end_time"], message: "End time must be after start time." });
     }
   });

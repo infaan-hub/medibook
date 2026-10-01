@@ -1,12 +1,11 @@
 /**
  * Emergency section (§27) — one file, two role screens:
  *
- *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location + a
- *     merged slot grid for TODAY across the doctors nearby). No date picker: the
- *     appointment starts the moment the emergency happens, so it is always
- *     booked for the current day. No doctor picker either — whoever is free and
- *     nearest at that time is dispatched automatically and the appointment is
- *     accepted on the spot. Plus the live status card.
+ *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location).
+ *     No date picker and no slot grid: the emergency is stamped with the
+ *     current moment, and auto-dispatch hands it to a doctor who is available
+ *     right now — falling back to the nearest nearby doctor when nobody is, so
+ *     the request is always sent and notified. Plus the live status card.
  *   DoctorEmergencyScreen  (/doctor/emergency) — live requests assigned to them
  *     (auto-accepted ones included) with patient contact details, plus the
  *     legacy pending queue with one-tap accept / reject.
@@ -14,14 +13,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  createEmergency,
-  listEmergencies,
-  listEmergencySlots,
-  respondToEmergency,
-} from "../api/emergency";
+import { createEmergency, listEmergencies, respondToEmergency } from "../api/emergency";
 import type { EmergencyAppointment, EmergencyReason } from "../api/types";
-import type { EmergencySlot } from "../api/emergency";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../api/client";
 import {
@@ -73,6 +66,18 @@ function formatDate(d: string): string {
 export function todayStr(now: Date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function nowMoment(now: Date = new Date()): { date: string; start: string; end: string } {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const clock = (total: number) =>
+    `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+  const startSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  return {
+    date: todayStr(now),
+    start: clock(startSec),
+    end: clock(Math.min(startSec + 30 * 60, 24 * 3600)),
+  };
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -167,9 +172,6 @@ export function PatientEmergencyScreen() {
 
   const [reason, setReason] = useState<EmergencyReason | "">("");
   const [description, setDescription] = useState("");
-  const [slot, setSlot] = useState<EmergencySlot | null>(null);
-  const [slots, setSlots] = useState<EmergencySlot[] | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
   const [geo, setGeo] = useState<GeoFix | null>(null);
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -202,37 +204,6 @@ export function PatientEmergencyScreen() {
     events: ["appointment.emergency_accepted", "appointment.emergency_rejected"],
   });
 
-  // The day the appointment starts: the emergency's own day, never a choice.
-  // Declared above the slot effect so its dependency array can read it.
-  const today = todayStr();
-
-  // The merged grid needs the patient's position (for distance). The date is
-  // never asked for — an emergency starts today, so today is what we query.
-  useEffect(() => {
-    if (!geo) {
-      setSlots(null);
-      setSlot(null);
-      return;
-    }
-    let cancelled = false;
-    setSlotsLoading(true);
-    setSlots(null);
-    setSlot(null);
-    listEmergencySlots({ latitude: geo.latitude, longitude: geo.longitude, date: today })
-      .then((response) => {
-        if (!cancelled) setSlots(response.data ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setSlots([]);
-      })
-      .finally(() => {
-        if (!cancelled) setSlotsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [geo, today]);
-
   const shareLocation = async () => {
     setLocating(true);
     try {
@@ -249,8 +220,8 @@ export function PatientEmergencyScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    if (!reason || !slot) {
-      setFormError("Choose an emergency reason and a time slot.");
+    if (!reason) {
+      setFormError("Choose an emergency reason.");
       return;
     }
     setSubmitting(true);
@@ -258,10 +229,11 @@ export function PatientEmergencyScreen() {
       // GPS is required by the API; reuse the shared fix or take one now.
       const fix = geo ?? (await requestGeo());
       if (!geo) setGeo(fix);
+      const moment = nowMoment();
       const response = await createEmergency({
-        appointment_date: today,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
+        appointment_date: moment.date,
+        start_time: moment.start,
+        end_time: moment.end,
         emergency_reason: reason,
         emergency_description: description.trim() || undefined,
         emergency_latitude: fix.latitude,
@@ -269,23 +241,20 @@ export function PatientEmergencyScreen() {
         emergency_location_accuracy: fix.accuracy,
       });
       const assigned = response.data?.doctor_name;
-      const where = formatDistance(slot.distance_km) ?? "nearby";
       notify(
         "success",
         assigned
-          ? `Emergency sent to Dr. ${assigned} — ${where}${slot.area ? ` — ${slot.area}` : ""}.`
-          : "Emergency sent — the nearest available doctor has been assigned."
+          ? `Emergency sent to Dr. ${assigned}.`
+          : "Emergency sent — the nearest doctor has been assigned."
       );
       setReason("");
       setDescription("");
-      setSlot(null);
-      setSlots(null);
       setGeo(null);
       load();
     } catch (reason_) {
       if (reason_ instanceof ApiError && Array.isArray(reason_.errors.location)) {
         setFormError(
-          "A doctor in this area has not set a practice location. Please try another time slot."
+          "A doctor in this area has not set a practice location. Please try again."
         );
       } else {
         setFormError(message(reason_));
@@ -391,7 +360,7 @@ export function PatientEmergencyScreen() {
           )}
           {active.status === "accepted" && (
             <p className="form-note">
-              The nearest available doctor has been assigned — no waiting on an accept.
+              The nearest doctor has been assigned — no waiting on an accept.
             </p>
           )}
           <div className="emergency__actions">
@@ -463,44 +432,10 @@ export function PatientEmergencyScreen() {
               </Button>
             </div>
 
-            {geo && (
-              <div className="field">
-                <span className="field__label">Available time</span>
-                {slotsLoading ? (
-                  <Skeleton lines={2} />
-                ) : !slots || slots.length === 0 ? (
-                  <p className="form-note">
-                    No doctor nearby has a free slot today — try again shortly.
-                  </p>
-                ) : (
-                  <div className="slot-grid">
-                    {slots.map((item) => {
-                      const isSelected =
-                        slot?.start_time === item.start_time &&
-                        slot?.end_time === item.end_time;
-                      return (
-                        <button
-                          key={`${item.start_time}-${item.end_time}`}
-                          type="button"
-                          className={`slot-btn${isSelected ? " slot-btn--selected" : ""}`}
-                          onClick={() => setSlot(item)}
-                        >
-                          {formatTime(item.start_time)} – {formatTime(item.end_time)}
-                          <small>
-                            {formatDistance(item.distance_km) ?? ""}
-                            {item.area ? ` — ${item.area}` : ""}
-                          </small>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {!geo && (
               <p className="form-note">
-                Share your location to see which doctors nearby have free times today.
+                Share your location so the nearest doctor can be dispatched and
+                reach you.
               </p>
             )}
 
