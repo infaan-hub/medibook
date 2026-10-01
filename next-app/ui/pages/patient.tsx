@@ -815,7 +815,7 @@ export function SettingsScreen() {
                 {linkedDoctors.map((doctor) => (
                   <option key={doctor.id} value={String(doctor.id)}>
                     {doctor.first_name || doctor.last_name
-                      ? `${doctor.first_name} ${doctor.last_name}`.trim()
+                      ? `Dr. ${[doctor.first_name, doctor.last_name].filter(Boolean).join(" ")}`
                       : doctor.email}
                     {doctor.specialties.length > 0 ? ` — ${doctor.specialties.join(", ")}` : ""}
                   </option>

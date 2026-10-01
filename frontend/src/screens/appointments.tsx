@@ -94,7 +94,7 @@ function DoctorName({ doctorId }: { doctorId: number | null }) {
   const [name, setName] = useState<string>(`Doctor #${doctorId}`);
   useEffect(() => {
     if (!doctorId) return;
-    getDoctor(doctorId).then((r) => setName(`${r.data.first_name} ${r.data.last_name}`)).catch(() => {});
+    getDoctor(doctorId).then((r) => setName(`Dr. ${r.data.first_name} ${r.data.last_name}`)).catch(() => {});
   }, [doctorId]);
   return <>{name}</>;
 }
@@ -523,7 +523,7 @@ export function BookingScreen() {
         saving={savingLocation}
         onCaptured={savePatientLocation}
         title="Set your location to book"
-        description={`${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
+        description={`Dr. ${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
         actionLabel="Share my location"
         privacyNote="Stored on your profile. Visible only to the doctor you book with."
       />
