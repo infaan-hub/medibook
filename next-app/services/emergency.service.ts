@@ -112,13 +112,27 @@ export async function isDoctorAvailableAt(
   );
 }
 
-async function pickEmergencyDoctor(
+export type EmergencyTarget = {
+  id: number;
+  user_id: number;
+  name: string;
+  distance: number | null;
+};
+
+export async function pickEmergencyDoctor(
   origin: { latitude: number; longitude: number },
   date: string,
   weekday: number,
   seconds: number,
   specialtyId?: number
-): Promise<{ doctor: NearbyDoctorRow; distance: number } | null> {
+): Promise<EmergencyTarget | null> {
+  const asTarget = (candidate: { doctor: NearbyDoctorRow; distance: number }): EmergencyTarget => ({
+    id: candidate.doctor.id,
+    user_id: candidate.doctor.user_id,
+    name: `${candidate.doctor.user.first_name} ${candidate.doctor.user.last_name}`.trim(),
+    distance: candidate.distance,
+  });
+
   const candidates = await findNearbyDoctors(
     origin.latitude,
     origin.longitude,
@@ -127,9 +141,11 @@ async function pickEmergencyDoctor(
   );
 
   for (const candidate of candidates.slice(0, MAX_SLOT_CANDIDATES)) {
-    if (await isDoctorAvailableAt(candidate.doctor.id, weekday, date, seconds)) return candidate;
+    if (await isDoctorAvailableAt(candidate.doctor.id, weekday, date, seconds)) {
+      return asTarget(candidate);
+    }
   }
-  if (candidates.length > 0) return candidates[0];
+  if (candidates.length > 0) return asTarget(candidates[0]);
 
   const widened = await findNearbyDoctors(
     origin.latitude,
@@ -138,7 +154,25 @@ async function pickEmergencyDoctor(
     specialtyId,
     true
   );
-  return widened[0] ?? null;
+  if (widened.length > 0) return asTarget(widened[0]);
+
+  const { prisma } = await import("@/lib/db");
+  const anyone = await prisma.doctor.findFirst({
+    where: { user: { is_active: true } },
+    select: {
+      id: true,
+      user_id: true,
+      user: { select: { first_name: true, last_name: true } },
+    },
+  });
+  return anyone
+    ? {
+        id: anyone.id,
+        user_id: anyone.user_id,
+        name: `${anyone.user.first_name} ${anyone.user.last_name}`.trim(),
+        distance: null,
+      }
+    : null;
 }
 
 /**
@@ -272,9 +306,9 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
       });
     }
     target = {
-      id: picked.doctor.id,
-      user_id: picked.doctor.user_id,
-      name: `${picked.doctor.user.first_name} ${picked.doctor.user.last_name}`.trim(),
+      id: picked.id,
+      user_id: picked.user_id,
+      name: picked.name,
     };
     distance = picked.distance;
   }

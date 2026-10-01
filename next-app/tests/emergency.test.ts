@@ -14,13 +14,26 @@
  * Pure tests (no database), same style as the other suites.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { emergencyNotificationType, isDoctorAvailableAt } from "@/services/emergency.service";
+import {
+  emergencyNotificationType,
+  isDoctorAvailableAt,
+  pickEmergencyDoctor,
+} from "@/services/emergency.service";
 import { emergencyAppointmentCreateSchema } from "@/validators/misc";
 import { adminDoctorCreateSchema } from "@/validators/more";
 import { parse } from "@/validators/base";
 import { ValidationError } from "@/lib/errors";
 
 const state = vi.hoisted(() => ({
+  doctors: [] as {
+    id: number;
+    is_available: boolean;
+    user_active: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    first: string;
+    last: string;
+  }[],
   windows: [] as {
     id: number;
     doctor_id: number;
@@ -40,7 +53,48 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({
   prisma: {
-    doctor: { findMany: async () => [] },
+    doctor: {
+      findMany: async ({ where }: { where?: Record<string, unknown> }) =>
+        state.doctors
+          .filter((row) => row.user_active)
+          .filter((row) =>
+            where?.is_available === undefined ? true : row.is_available
+          )
+          .filter((row) =>
+            where?.latitude === undefined ? true : row.latitude !== null
+          )
+          .filter((row) =>
+            where?.longitude === undefined ? true : row.longitude !== null
+          )
+          .map((row) => ({
+            id: row.id,
+            user_id: 1000 + row.id,
+            is_available: row.is_available,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            user: {
+              id: 1000 + row.id,
+              first_name: row.first,
+              last_name: row.last,
+              email: `dr${row.id}@clinic.test`,
+              phone: "",
+              profile_image_id: null,
+            },
+            specialties: [],
+            hospitals: [],
+          })),
+      findFirst: async ({ where }: { where?: { user?: { is_active?: boolean } } }) => {
+        const mustActive = where?.user?.is_active === true;
+        const row = state.doctors.find((item) => !mustActive || item.user_active);
+        return row
+          ? {
+              id: row.id,
+              user_id: 1000 + row.id,
+              user: { first_name: row.first, last_name: row.last },
+            }
+          : null;
+      },
+    },
     availability: {
       findMany: async ({ where }: { where: Record<string, unknown> }) => {
         const id = where.doctor_id as number;
@@ -296,5 +350,84 @@ describe("adminDoctorCreateSchema phone fields", () => {
     }
     expect(caught).toBeInstanceOf(ValidationError);
     expect(caught?.errors.phone).toBeDefined();
+  });
+});
+
+describe("pickEmergencyDoctor — dispatch is never stuck on availability", () => {
+  const ORIGIN = { latitude: -6.162, longitude: 39.298 };
+  const MONDAY = 0;
+  const DATE = "2026-10-05";
+  const TEN_AM = 10 * 3600;
+
+  const doctorStub = (
+    id: number,
+    opts: { near?: boolean; located?: boolean; available?: boolean; userActive?: boolean } = {}
+  ) => ({
+    id,
+    is_available: opts.available ?? true,
+    user_active: opts.userActive ?? true,
+    latitude: opts.located === false ? null : opts.near === false ? -6.2 : -6.162,
+    longitude: opts.located === false ? null : opts.near === false ? 39.35 : 39.298,
+    first: "Doc",
+    last: `Tor${id}`,
+  });
+
+  beforeEach(() => {
+    state.doctors = [];
+    state.windows = [];
+    state.breaks = [];
+    state.exceptions = [];
+  });
+
+  it("prefers the doctor whose window covers the moment even when another is nearer", async () => {
+    state.doctors = [doctorStub(1, { near: true }), doctorStub(2, { near: false })];
+    state.windows = [
+      { id: 1, doctor_id: 2, weekday: MONDAY, is_active: true, start_time: "09:00:00", end_time: "17:00:00" },
+    ];
+
+    const picked = await pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM);
+
+    expect(picked?.id).toBe(2);
+    expect(picked?.distance).toBeGreaterThan(0);
+  });
+
+  it("falls back to the nearest doctor when nobody is available at that time", async () => {
+    state.doctors = [doctorStub(1, { near: true }), doctorStub(2, { near: false })];
+
+    const picked = await pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM);
+
+    expect(picked?.id).toBe(1);
+    expect(picked?.distance).toBe(0);
+  });
+
+  it("still dispatches to a suspended doctor when no active account is available", async () => {
+    state.doctors = [
+      doctorStub(1, { near: true, available: false }),
+      doctorStub(2, { near: false, available: false }),
+    ];
+
+    const picked = await pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM);
+
+    expect(picked?.id).toBe(1);
+    expect(picked?.distance).toBe(0);
+  });
+
+  it("still dispatches when no doctor has a practice location", async () => {
+    state.doctors = [doctorStub(1, { located: false })];
+
+    const picked = await pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM);
+
+    expect(picked?.id).toBe(1);
+    expect(picked?.user_id).toBe(1001);
+    expect(picked?.distance).toBeNull();
+  });
+
+  it("returns null only when no active doctor exists at all", async () => {
+    state.doctors = [doctorStub(1, { located: true, userActive: false })];
+
+    await expect(pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM)).resolves.toBeNull();
+
+    state.doctors = [];
+    await expect(pickEmergencyDoctor(ORIGIN, DATE, MONDAY, TEN_AM)).resolves.toBeNull();
   });
 });
