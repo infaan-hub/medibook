@@ -86,7 +86,7 @@ const REASON_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-function reasonLabel(reason?: string | null): string {
+export function reasonLabel(reason?: string | null): string {
   if (!reason) return "Emergency";
   return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
 }

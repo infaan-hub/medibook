@@ -146,6 +146,12 @@ export interface Appointment {
   cancel_reason: string;
   /** Present on emergency appointments (emergencyAppointmentDto). */
   appointment_type?: "NORMAL" | "EMERGENCY";
+  emergency_reason?: EmergencyReason;
+  emergency_description?: string;
+  emergency_latitude?: number;
+  emergency_longitude?: number;
+  emergency_location_accuracy?: number;
+  emergency_requested_at?: string | null;
   doctor_phone?: string;
   doctor_phone_secondary?: string;
   /** Waiting-room state (phase 11) — null until the patient checks in. */
@@ -155,12 +161,6 @@ export interface Appointment {
 
 /** POST/GET /api/emergency/ rows (emergencyAppointmentDto). */
 export interface EmergencyAppointment extends Appointment {
-  emergency_reason?: string | null;
-  emergency_description?: string | null;
-  emergency_latitude?: number | null;
-  emergency_longitude?: number | null;
-  emergency_location_accuracy?: number | null;
-  emergency_requested_at?: string | null;
   /** Who is asking — shown on the doctor's emergency queue. */
   patient_name?: string;
   patient_phone?: string;

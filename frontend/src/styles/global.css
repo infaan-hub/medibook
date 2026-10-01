@@ -3176,3 +3176,9 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 /* Emergency appointment card on the patient dashboard (red date instead of green) */
 .home__appointment-datebox--emergency { background: #fef2f2; color: #dc2626; }
 .home__appointment-title--emergency { color: #dc2626; }
+
+/* Emergency clarification on the patient dashboard appointment card */
+.home__appointment-card--emergency { border-left: 4px solid #dc2626; }
+.home__appointment-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge--emergency { background: #dc2626; color: #fff; }
+.home__appointment-info > span.home__appointment-emergency-reason { color: #b91c1c; font-weight: 600; }

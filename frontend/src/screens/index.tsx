@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Image from "next/image";
 import { listMyAppointments } from "../api/appointments";
+import { reasonLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
@@ -210,7 +211,11 @@ function PatientHome({ user }: { user: User }) {
             {upcoming.slice(0, 3).map((appt) => {
               const emergency = appt.appointment_type === "EMERGENCY";
               return (
-                <Link key={appt.id} to={`/appointments/${appt.id}`} className="home__appointment-card">
+                <Link
+                  key={appt.id}
+                  to={`/appointments/${appt.id}`}
+                  className={`home__appointment-card${emergency ? " home__appointment-card--emergency" : ""}`}
+                >
                   <span
                     className={`home__appointment-datebox${emergency ? " home__appointment-datebox--emergency" : ""}`}
                   >
@@ -222,7 +227,15 @@ function PatientHome({ user }: { user: User }) {
                       {emergency ? "Emergency appointment" : "Doctor appointment"}
                     </strong>
                     <span>{formatAppointment(appt)}</span>
-                    <span className={`badge badge--${appt.status}`}>{appt.status}</span>
+                    {emergency && appt.emergency_reason && (
+                      <span className="home__appointment-emergency-reason">
+                        {reasonLabel(appt.emergency_reason)}
+                      </span>
+                    )}
+                    <span className="home__appointment-badges">
+                      {emergency && <span className="badge badge--emergency">Emergency</span>}
+                      <span className={`badge badge--${appt.status}`}>{appt.status}</span>
+                    </span>
                   </span>
                   <ChevronRight size={17} />
                 </Link>

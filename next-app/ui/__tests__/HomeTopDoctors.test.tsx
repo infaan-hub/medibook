@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import "../i18n";
 import { HomeScreen } from "../pages/index";
-import type { DoctorProfile, User } from "../api/types";
+import type { Appointment, DoctorProfile, User } from "../api/types";
 
 const { listDoctors, listMyAppointments, listArticles } = vi.hoisted(() => ({
   listDoctors: vi.fn(),
@@ -162,5 +162,59 @@ describe("patient home — Top Doctors availability chip", () => {
     expect(chip).toHaveTextContent("Not available");
     // The card still links to the profile — no dead card.
     expect(screen.getByRole("link", { name: /dr\. john mrema/i })).toHaveAttribute("href", "/doctors/9");
+  });
+});
+
+function appointment(overrides: Partial<Appointment> = {}): Appointment {
+  return {
+    id: 1,
+    patient: 2,
+    patient_email: "p@x.test",
+    doctor: 4,
+    hospital: null,
+    appointment_date: "2026-10-05",
+    start_time: "09:00:00",
+    end_time: "09:30:00",
+    status: "pending",
+    appointment_type: "NORMAL",
+    reason: "",
+    notes: "",
+    cancel_reason: "",
+    ...overrides,
+  };
+}
+
+describe("patient home — upcoming appointments clarify emergencies", () => {
+  it("marks an emergency request red: date box, title, badge and reason", async () => {
+    listDoctors.mockResolvedValue(envelope([]));
+    listMyAppointments.mockResolvedValue(
+      envelope([appointment({ id: 21, appointment_type: "EMERGENCY", emergency_reason: "accident" })]),
+    );
+
+    const { container } = renderHome();
+
+    expect(await screen.findByText("Emergency appointment")).toBeInTheDocument();
+    expect(container.querySelector(".home__appointment-datebox")?.className).toContain(
+      "home__appointment-datebox--emergency",
+    );
+    expect(container.querySelector(".home__appointment-card")?.className).toContain(
+      "home__appointment-card--emergency",
+    );
+    expect(screen.getByText("Emergency", { selector: ".badge--emergency" })).toBeInTheDocument();
+    expect(screen.getByText("Accident")).toBeInTheDocument();
+    expect(screen.queryByText("Doctor appointment")).not.toBeInTheDocument();
+  });
+
+  it("keeps a normal booking on the green date box with the Doctor appointment title", async () => {
+    listDoctors.mockResolvedValue(envelope([]));
+    listMyAppointments.mockResolvedValue(envelope([appointment({ id: 22 })]));
+
+    const { container } = renderHome();
+
+    expect(await screen.findByText("Doctor appointment")).toBeInTheDocument();
+    expect(container.querySelector(".home__appointment-datebox")?.className).not.toContain(
+      "--emergency",
+    );
+    expect(screen.queryByText("Emergency", { selector: ".badge--emergency" })).not.toBeInTheDocument();
   });
 });

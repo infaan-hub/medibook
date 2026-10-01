@@ -494,6 +494,16 @@ export function appointmentDto(
     /** Waiting-room state (phase 11) — null until the patient checks in. */
     checked_in_at: iso(appointment.checked_in_at),
     consultation_started_at: iso(appointment.consultation_started_at),
+    appointment_type: appointment.appointment_type,
+    ...(appointment.appointment_type === "EMERGENCY"
+      ? {
+          emergency_reason: appointment.emergency_reason,
+          emergency_description: appointment.emergency_description,
+          emergency_requested_at: appointment.emergency_requested_at
+            ? iso(appointment.emergency_requested_at)
+            : null,
+        }
+      : {}),
   };
   return base;
 }
