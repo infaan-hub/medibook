@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/migrate.mjs deploy",
     "db:seed": "node scripts/seed.mjs",
+    "db:seed-tips": "node scripts/seed-health-tips.mjs",
     "db:import": "node scripts/import-sqlite.mjs",
     "reminders": "node scripts/send-reminders.mjs",
     "test": "vitest run --config vitest.ui.config.ts && vitest run",

@@ -236,8 +236,9 @@ describe("mobile bottom navigation — exactly one active item", () => {
     expect(activeHrefs("/admin/appointments", adminBottom, false)).toEqual(["/admin"]);
   });
 
-  it("patient bottom: /blog activates Health Tips", () => {
-    expect(activeHrefs("/blog", patientBottom, false)).toEqual(["/blog"]);
+  it("patient bottom: /profile activates Profile, /blog activates nothing", () => {
+    expect(activeHrefs("/profile", patientBottom, false)).toEqual(["/profile"]);
+    expect(activeHrefs("/blog", patientBottom, false)).toEqual([]);
   });
 
   it("patient bottom: nested /doctors/3 activates Doctors", () => {

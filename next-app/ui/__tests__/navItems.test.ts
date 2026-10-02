@@ -5,8 +5,9 @@
  * The sidebar "Profile" button (generic Lucide `User` icon) was removed for
  * every role (admin, doctor, patient): `/profile` is already the destination of
  * the sidebar footer user card (avatar / initials + name + role), so the extra
- * generic-icon entry was redundant. The mobile bottom bar keeps its Profile
- * slot â€” that is the only place the real `profile_image` is shown.
+ * generic-icon entry was redundant. The mobile bottom bar carries the Profile
+ * slot for every role — the patient bar swapped Health Tips for it, so the
+ * real `profile_image` avatar now shows on all three phone bars.
  */
 import { describe, expect, it } from "vitest";
 import { bottomNavItemsFor, navItemsFor } from "../components/AppShell";
@@ -81,16 +82,27 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
   });
 });
 
-describe("mobile bottom bar â€” Profile slot kept where it existed", () => {
-  it("still exposes /profile for admin and doctor (photo item)", () => {
-    expect(bottomNavItemsFor(admin).map((i) => i.to)).toContain("/profile");
-    expect(bottomNavItemsFor(doctor).map((i) => i.to)).toContain("/profile");
+describe("mobile bottom bar â€” Profile slot for every role (5 slots)", () => {
+  it("exposes /profile for admin, doctor and patient (photo item)", () => {
+    for (const user of [patient, doctor, admin]) {
+      expect(bottomNavItemsFor(user).map((i) => i.to), user.role).toContain("/profile");
+    }
   });
 
-  it("keeps the patient bottom bar profile-free, with 5 slots per role", () => {
-    expect(bottomNavItemsFor(patient).some((i) => i.to === "/profile")).toBe(false);
+  it("patient order: Home, Doctors, Appointments, Emergency, Profile", () => {
+    expect(bottomNavItemsFor(patient).map((i) => i.to)).toEqual([
+      "/dashboard",
+      "/doctors",
+      "/appointments",
+      "/emergency",
+      "/profile",
+    ]);
+  });
+
+  it("keeps 5 slots per role and drops Health Tips (/blog) from the patient bar", () => {
     expect(bottomNavItemsFor(patient)).toHaveLength(5);
     expect(bottomNavItemsFor(doctor)).toHaveLength(5);
     expect(bottomNavItemsFor(admin)).toHaveLength(5);
+    expect(bottomNavItemsFor(patient).some((i) => i.to === "/blog")).toBe(false);
   });
 });

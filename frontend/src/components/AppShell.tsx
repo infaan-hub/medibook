@@ -113,7 +113,7 @@ export function bottomNavItemsFor(user: User | null): NavItem[] {
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
     { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
-    { to: "/blog", label: "Health Tips", icon: <Newspaper size={20} /> },
+    { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
   ];
 }
 
