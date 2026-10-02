@@ -7,6 +7,11 @@
  *   - blocking, once per browser, on first load (NotificationGate)
  *   - right after a booking, when the next event is literally "the doctor
  *     replied" (BookingSuccessScreen)
+ *
+ * The primary action is optional: states where the OS cannot present a prompt
+ * (iOS Safari tab → "Add to Home Screen" instructions, blocked permission)
+ * pass no `onEnable` and the modal explains the situation instead of showing
+ * an "Allow" button the OS would ignore.
  */
 import { useState } from "react";
 import { BellRing, TriangleAlert } from "lucide-react";
@@ -15,13 +20,16 @@ import { Modal } from "./Modal";
 
 export interface NotificationPromptProps {
   open: boolean;
-  /** Runs the permission request + push subscription. */
-  onEnable: () => void | Promise<void>;
+  /** Runs the permission request + push subscription. Omit when the current
+   *  context cannot request permission (iOS install / blocked states). */
+  onEnable?: () => void | Promise<void>;
   onDismiss?: () => void;
   busy?: boolean;
   error?: string | null;
   title?: string;
   description?: string;
+  /** Ordered setup steps (iOS "Add to Home Screen"). */
+  steps?: readonly string[] | null;
   /** Label of the secondary ("skip") action; null to hide it. */
   skipLabel?: string | null;
   /** Label of the primary action. */
@@ -39,6 +47,7 @@ export function NotificationPrompt({
   error,
   title = "Turn on notifications",
   description = DEFAULT_DESCRIPTION,
+  steps,
   skipLabel = "Maybe later",
   enableLabel = "Enable notifications",
 }: NotificationPromptProps) {
@@ -61,9 +70,11 @@ export function NotificationPrompt({
               {skipLabel}
             </Button>
           )}
-          <Button variant="primary" loading={busy} onClick={() => void onEnable()}>
-            {enableLabel}
-          </Button>
+          {onEnable && (
+            <Button variant="primary" loading={busy} onClick={() => void onEnable()}>
+              {enableLabel}
+            </Button>
+          )}
         </>
       }
     >
@@ -72,6 +83,13 @@ export function NotificationPrompt({
           <BellRing size={26} />
         </div>
         <p className="prompt__description">{description}</p>
+        {steps && steps.length > 0 && (
+          <ol className="prompt__steps">
+            {steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        )}
         {error && (
           <p className="prompt__error" role="alert">
             <TriangleAlert size={15} aria-hidden="true" />

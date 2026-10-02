@@ -8,10 +8,14 @@
  * good on that browser; the same prompt is offered again at booking time,
  * where the next event really is "the doctor replied".
  *
- * Permission DENIED is not a special case: the browser will simply not show
- * its native bubble on a repeat request, but the modal stays the same — an
- * "Allow" button that calls `requestPermission()` — instead of dead-end copy
- * telling the user to hunt through browser settings.
+ * Platform-specific, driven by the push state machine:
+ *  - iOS/iPadOS Safari tab → "Install MediBook to enable notifications" with
+ *    the Add-to-Home-Screen steps and NO Allow button (asking iOS there can
+ *    never produce Web Push, so we never call requestPermission() from it).
+ *  - iOS Home Screen PWA / Android / desktop → the normal "Allow" flow, and
+ *    the request runs inside the button's click handler.
+ *  - denied → "Notifications are blocked" with settings guidance and no
+ *    request loop: JavaScript cannot override a system-level denial.
  */
 import { useCallback, useEffect, useState } from "react";
 import { usePushNotifications } from "../push/usePushNotifications";
@@ -37,13 +41,18 @@ function markAnswered(): void {
 }
 
 export function NotificationGate({ userId }: { userId: number | null }) {
-  const { loading, error, subscribe } = usePushNotifications(userId);
+  const { probed, state, message, steps, actionLabel, loading, error, subscribe } =
+    usePushNotifications(userId);
   const [answered, setAnswered] = useState<boolean>(() => readAnswered());
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!userId || answered) return;
-    if (typeof Notification === "undefined") {
+    // Wait for the read-only subscription probe so the modal never flashes a
+    // stale "enable" state at an already-subscribed device.
+    if (!userId || answered || !probed) return;
+    // Nothing this modal could offer: no Notifications API, insecure origin,
+    // or this device is already fully subscribed.
+    if (state === "UNSUPPORTED" || state === "INSECURE" || state === "SUBSCRIBED") {
       markAnswered();
       setAnswered(true);
       return;
@@ -51,7 +60,7 @@ export function NotificationGate({ userId }: { userId: number | null }) {
     // Give the boot (session restore, first paint) a beat before blocking.
     const id = window.setTimeout(() => setVisible(true), 400);
     return () => window.clearTimeout(id);
-  }, [userId, answered]);
+  }, [userId, answered, probed, state]);
 
   const dismiss = useCallback(() => {
     markAnswered();
@@ -60,9 +69,13 @@ export function NotificationGate({ userId }: { userId: number | null }) {
   }, []);
 
   const enable = useCallback(async () => {
-    await subscribe();
-    // Permission resolved either way — never re-block on the same browser.
-    if (Notification.permission !== "default") {
+    const ok = await subscribe();
+    // Stop blocking once the flow can't move forward any further: full
+    // success, or a system-level denial (nothing left to ask). A dismissed
+    // prompt or a subscription/backend failure keeps the modal open so the
+    // message stays visible and the tap can be retried.
+    const denied = typeof Notification !== "undefined" && Notification.permission === "denied";
+    if (ok || denied) {
       markAnswered();
       setAnswered(true);
       setVisible(false);
@@ -71,18 +84,33 @@ export function NotificationGate({ userId }: { userId: number | null }) {
 
   if (!visible || answered) return null;
 
-  // Always the same popup, whatever the browser's current answer: the only
-  // way to get device permission is to ask for it.
+  const installMode = state === "IOS_NOT_INSTALLED";
+  const blockedMode = state === "DENIED";
+
   return (
     <NotificationPrompt
       open
       busy={loading}
       error={error}
-      onEnable={enable}
+      steps={steps}
+      onEnable={actionLabel ? enable : undefined}
       onDismiss={dismiss}
-      title="Turn on notifications"
-      enableLabel="Allow notifications"
-      skipLabel="Maybe later"
+      title={
+        installMode
+          ? "Install MediBook to enable notifications"
+          : blockedMode
+            ? "Notifications are blocked"
+            : "Turn on notifications"
+      }
+      description={
+        installMode
+          ? "iOS delivers notifications from the MediBook app on your Home Screen. Add it once, then open MediBook from there:"
+          : blockedMode
+            ? message
+            : "Get appointment confirmations, rejections and reminders as soon as they happen — even when MediBook is closed."
+      }
+      enableLabel={actionLabel ?? "Allow notifications"}
+      skipLabel={installMode ? "Got it" : "Maybe later"}
     />
   );
 }

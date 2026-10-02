@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { BeforeInstallPromptEvent } from "../types/pwa";
+import { isIOS, isStandalonePWA } from "../lib/platform";
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
@@ -116,24 +117,16 @@ export function whenInstallPromptAvailable(
 
 /** True when the app is running in standalone / installed mode. */
 export function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  if (typeof window.matchMedia !== "function") {
-    return window.navigator.standalone === true;
-  }
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone === true
-  );
+  return isStandalonePWA();
 }
 
 /**
  * iOS / iPadOS: WebKit never fires `beforeinstallprompt`, so the only install
- * path is Share → Add to Home Screen (§22.1).
+ * path is Share → Add to Home Screen (§22.1). The UA sniff itself lives in
+ * `lib/platform.ts` — the single place allowed to branch on the user agent.
  */
 export function isIOSDevice(): boolean {
-  if (typeof window === "undefined") return false;
-  const ua = window.navigator.userAgent;
-  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in window);
+  return isIOS();
 }
 
 export interface InstallAvailability {

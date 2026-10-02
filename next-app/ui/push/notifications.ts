@@ -4,10 +4,18 @@
  *
  * VAPID public key is loaded from the backend (`GET /api/push/vapid-public-key/`)
  * with optional `NEXT_PUBLIC_VAPID_PUBLIC_KEY` override for offline/dev setups.
+ *
+ * Rules encoded here:
+ *  - `Notification.requestPermission()` is only ever reached from a caller's
+ *    user gesture, and never when the recorded answer is already "denied" or
+ *    when the context cannot present Web Push at all (iOS Safari tab).
+ *  - every failure comes back as a TYPED reason, so the UI can say what
+ *    actually happened instead of a blanket "permission was not granted".
  */
 import { API_BASE_URL } from "../api/client";
 import { tokenStore } from "../api/tokens";
 import { ensureServiceWorker, isSecureContextForSw } from "../lib/pwa";
+import { getNotificationCapability } from "../lib/platform";
 import type { PushFailureReason } from "./prompt";
 
 let cachedKey: string | null = null;
@@ -45,15 +53,29 @@ export async function getVapidPublicKey(): Promise<string | null> {
   }
 }
 
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!("Notification" in window)) return "denied";
-  if (Notification.permission === "granted") return "granted";
-  // Ask even when the recorded answer is already "denied": this is the only
-  // call that can ever produce the device permission bubble, so the modal's
-  // Allow button must always reach it. A permission the user reset since it
-  // was refused re-shows the bubble; one still refused resolves immediately
-  // without one — either way the answer comes from the device, never from a
-  // message telling the user to dig through browser settings.
+/** Current permission without ever triggering a prompt. */
+export function readNotificationPermission(): NotificationPermission | "unsupported" {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  return Notification.permission;
+}
+
+/**
+ * Ask the OS for notification permission. MUST be called from inside a user
+ * gesture (button tap) — browsers, and iOS in particular, only associate the
+ * prompt with the request when it originates from one.
+ *
+ * Never loops: a recorded "denied" is returned as-is (the OS will not show its
+ * bubble again), and an iOS Safari tab without the installed Home Screen app
+ * returns "unsupported" instead of firing a request iOS would ignore.
+ */
+export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  const current = Notification.permission;
+  if (current === "granted") return "granted";
+  if (current === "denied") return "denied";
+  const capability = getNotificationCapability();
+  if (capability.iosNeedsHomeScreen) return "unsupported";
+  if (!capability.secureContext) return "unsupported";
   try {
     return await Notification.requestPermission();
   } catch {
@@ -106,29 +128,48 @@ async function activeRegistration(): Promise<RegResult> {
   }
 }
 
+/** Why the permission step could not produce a granted answer. */
+function permissionFailure(
+  answer: NotificationPermission | "unsupported"
+): PushFailureReason {
+  if (answer === "denied") return "permission-denied";
+  if (answer === "default") return "permission-dismissed";
+  const capability = getNotificationCapability();
+  if (capability.iosNeedsHomeScreen) return "not-installed-pwa";
+  if (!capability.secureContext) return "insecure";
+  return "unsupported";
+}
+
 /**
  * Create (or reuse) the browser PushSubscription. Never hangs, never throws:
  * failures come back as a typed reason the UI can show to the user instead of
  * silently pretending the subscription succeeded.
  *
- * Device permission is requested FIRST. It needs a user gesture (the modal's
- * Allow button), which does not survive the awaits below — and a service-worker
- * or VAPID failure must never be able to swallow the permission request, or
- * the popup would have failed at its one job.
+ * The permission request happens FIRST, synchronously from the caller's tap
+ * handler — service-worker/VAPID work follows only after the OS answered, so
+ * no await can steal the user gesture iOS requires for Web Push.
+ *
+ * When permission is already granted this performs no prompt at all, which is
+ * what lets background re-subscription (resync) run without nagging the user.
  */
 export async function subscribeToPush(): Promise<SubscribeResult> {
+  const capability = getNotificationCapability();
+  if (capability.iosNeedsHomeScreen) return { ok: false, reason: "not-installed-pwa" };
+  if (!capability.secureContext) return { ok: false, reason: "insecure" };
+
   const permission = await requestNotificationPermission();
-  if (permission !== "granted") return { ok: false, reason: "permission-denied" };
+  if (permission !== "granted") return { ok: false, reason: permissionFailure(permission) };
 
   const ready = await activeRegistration();
   if (!ready.ok) return ready;
 
+  let existing: PushSubscription | null = null;
   try {
-    const existing = await ready.reg.pushManager.getSubscription();
-    if (existing) return { ok: true, subscription: existing };
+    existing = await ready.reg.pushManager.getSubscription();
   } catch {
-    return { ok: false, reason: "failed" };
+    return { ok: false, reason: "subscription-failed" };
   }
+  if (existing) return { ok: true, subscription: existing };
 
   const key = await getVapidPublicKey();
   if (!key) return { ok: false, reason: "no-vapid-key" };
@@ -140,7 +181,7 @@ export async function subscribeToPush(): Promise<SubscribeResult> {
     });
     return { ok: true, subscription };
   } catch {
-    return { ok: false, reason: "failed" };
+    return { ok: false, reason: "subscription-failed" };
   }
 }
 

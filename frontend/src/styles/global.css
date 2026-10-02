@@ -2858,6 +2858,10 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .home__push-btn:hover { background: #07796f; }
 .home__push-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .home__push-error { padding: 8px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; margin-bottom: var(--space-3); font-size: 12px; color: #b91c1c; }
+/* Failure state of the push banner: same box, red instead of green. */
+.home__push-prompt--error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+/* iOS "Add to Home Screen" steps shown inside the push banner. */
+.home__push-steps { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.65; }
 
 .home__quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: var(--space-3); }
 @media (max-width: 400px) { .home__quick-actions { grid-template-columns: repeat(2, 1fr); } }
@@ -3014,6 +3018,7 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
   color: #09A99E;
 }
 .prompt__description { margin: 0; color: var(--color-text-muted); font-size: var(--text-md, 14px); }
+.prompt__steps { margin: 10px 0 0; padding-left: 20px; color: var(--color-text-muted); font-size: 13px; line-height: 1.7; }
 .prompt__fix,
 .prompt__privacy,
 .prompt__error {

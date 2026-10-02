@@ -21,6 +21,7 @@ import {
 } from "../api/notifications";
 import { tokenStore } from "../api/tokens";
 import { getPushSubscription, subscribeToPush } from "../push/notifications";
+import { getNotificationCapability } from "../lib/platform";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { useInstallAvailability } from "../pwa/installPrompt";
 import { InstallAppButton } from "./InstallAppButton";
@@ -263,6 +264,11 @@ function usePushResync(userId: number | null): void {
     if (!userId || ranFor.current === userId) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
+    // iOS Safari tab / insecure or unsupported context: Web Push only exists
+    // in the installed Home Screen app, so there is nothing to resync there
+    // (and nothing that could ever grant permission).
+    const capability = getNotificationCapability();
+    if (!capability.webPushSupported) return;
     ranFor.current = userId;
     void (async () => {
       try {
@@ -284,7 +290,11 @@ function usePushResync(userId: number | null): void {
           endpoint: p.endpoint,
           p256dh_key: keys.p256dh,
           auth_key: keys.auth,
-          device_info: { userAgent: navigator.userAgent },
+          device_info: {
+            userAgent: navigator.userAgent,
+            platform: capability.platform,
+            standalone: capability.standalone,
+          },
         });
       } catch {
         /* background self-heal â€” never surface into the shell */

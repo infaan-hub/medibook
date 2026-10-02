@@ -29,6 +29,7 @@ import { Modal } from "../components/Modal";
 import { LocationPrompt } from "../components/LocationPrompt";
 import { NotificationPrompt } from "../components/NotificationPrompt";
 import { usePushNotifications } from "../push/usePushNotifications";
+import { pushStateNeedsPrompt } from "../push/prompt";
 import type { CapturedFix } from "../lib/location";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
@@ -567,8 +568,9 @@ export function BookingSuccessScreen() {
   const push = usePushNotifications(userId);
   // Re-prompt at the exact moment a notification will matter: the doctor's
   // reply. Uses the same key as the first-load gate so a user who already
-  // answered is not nagged twice — but permission still unresolved is worth
-  // asking about here, where the payoff is immediate.
+  // answered is not nagged twice — but a state that still has something to
+  // offer (first ask, iOS install steps, finish setup, blocked, failed) is
+  // worth surfacing here, where the payoff is immediate.
   const [asked, setAsked] = useState(() => {
     try {
       return localStorage.getItem("medibook_notifications_prompted") === "1";
@@ -576,10 +578,15 @@ export function BookingSuccessScreen() {
       return true;
     }
   });
-  // Ask whenever permission is not yet granted — "default" pops the native
-  // bubble, and even a previous "denied" gets one more shot at the popup
-  // rather than a message telling the user to open browser settings.
-  const canAsk = typeof Notification !== "undefined" && Notification.permission !== "granted";
+  const canAsk = push.probed && pushStateNeedsPrompt(push.state);
+  const markAsked = () => {
+    try {
+      localStorage.setItem("medibook_notifications_prompted", "1");
+    } catch { /* ignore */ }
+    setAsked(true);
+  };
+  const installMode = push.state === "IOS_NOT_INSTALLED";
+  const blockedMode = push.state === "DENIED";
 
   return (
     <div className="page">
@@ -601,23 +608,36 @@ export function BookingSuccessScreen() {
         open={!asked && canAsk}
         busy={push.loading}
         error={push.error}
-        onEnable={async () => {
-          await push.subscribe();
-          if (typeof Notification !== "undefined" && Notification.permission !== "default") {
-            try {
-              localStorage.setItem("medibook_notifications_prompted", "1");
-            } catch { /* ignore */ }
-            setAsked(true);
-          }
-        }}
-        onDismiss={() => {
-          try {
-            localStorage.setItem("medibook_notifications_prompted", "1");
-          } catch { /* ignore */ }
-          setAsked(true);
-        }}
-        title="Know the moment they reply"
-        description="Turn on notifications and you'll be alerted as soon as this doctor confirms, rejects or reschedules your appointment."
+        steps={push.steps}
+        onEnable={
+          push.actionLabel
+            ? async () => {
+                const ok = await push.subscribe();
+                // Stop asking once the flow is finished: subscribed, or the
+                // system denied it. A dismissed prompt / failed registration
+                // keeps the modal open so the message stays visible.
+                const denied =
+                  typeof Notification !== "undefined" && Notification.permission === "denied";
+                if (ok || denied) markAsked();
+              }
+            : undefined
+        }
+        onDismiss={markAsked}
+        title={
+          installMode
+            ? "Install MediBook to enable notifications"
+            : blockedMode
+              ? "Notifications are blocked"
+              : "Know the moment they reply"
+        }
+        description={
+          installMode
+            ? "iOS delivers notifications from the MediBook app on your Home Screen. Add it once, then open MediBook from there:"
+            : blockedMode
+              ? push.message
+              : "Turn on notifications and you'll be alerted as soon as this doctor confirms, rejects or reschedules your appointment."
+        }
+        enableLabel={push.actionLabel ?? "Allow notifications"}
         skipLabel="Not now"
       />
     </div>

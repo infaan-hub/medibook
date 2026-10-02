@@ -14,7 +14,7 @@ import { nearestAreaName } from "../lib/zanzibar";
 import { useSession } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
-import { pushPromptMode, pushPromptMessage } from "../push/prompt";
+import { pushStateNeedsPrompt } from "../push/prompt";
 import {
   Calendar,
   ChevronRight,
@@ -88,9 +88,7 @@ function PatientHome({ user }: { user: User }) {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { permission, subscribed, toggle: togglePush, loading: pushLoading, error: pushError } =
-    usePushNotifications(user.id);
-  const pushMode = pushPromptMode(permission, subscribed);
+  const push = usePushNotifications(user.id);
 
   const loadAppointments = useCallback(() => {
     listMyAppointments()
@@ -142,20 +140,30 @@ function PatientHome({ user }: { user: User }) {
 
       {error && <ErrorState message={error} />}
 
-      {/* Push notification prompt — enable (first ask), resubscribe (permission
-          granted but no subscription stored) or re-ask (permission denied).
-          Always has a button: the native permission bubble is the only way to
-          get device permission, so we keep offering it instead of printing
-          browser-settings instructions. */}
-      {pushMode !== "hidden" && (
-        <div className="home__push-prompt">
-          <span>{pushPromptMessage(pushMode)}</span>
-          <button type="button" className="home__push-btn" onClick={togglePush} disabled={pushLoading}>
-            {pushLoading ? "Enabling…" : pushMode === "blocked" ? "Allow" : "Enable"}
-          </button>
+      {/* Push notification prompt — one finite state machine, one banner:
+          iOS Safari tab → Add-to-Home-Screen instructions (no Allow button,
+          because iOS ignores a request from a plain tab), ready → Allow,
+          granted → finish setup, denied → settings guidance (never a re-ask
+          loop), failed → the typed failure that actually happened. */}
+      {push.probed && push.message && pushStateNeedsPrompt(push.state) && (
+        <div className={`home__push-prompt${push.error ? " home__push-prompt--error" : ""}`}>
+          <span>
+            {push.message}
+            {push.steps && (
+              <ol className="home__push-steps">
+                {push.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+          </span>
+          {push.actionLabel && (
+            <button type="button" className="home__push-btn" onClick={push.toggle} disabled={push.loading}>
+              {push.loading ? "Enabling…" : push.actionLabel}
+            </button>
+          )}
         </div>
       )}
-      {pushError && <div className="home__push-error">{pushError}</div>}
 
       <section className="home__section">
         <div className="home__section-heading">
