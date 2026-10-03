@@ -206,16 +206,22 @@ function ProfileAvatar({
   size?: number;
   className?: string;
 }) {
+  // Remember a photo whose bytes never arrived (deleted media, an
+  // unreachable optimizer, a dead connection): a broken-image icon is never
+  // an acceptable fallback — the initials are.
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
   if (!user) return null;
-  if (user.profile_image) {
+  const src = user.profile_image && user.profile_image !== brokenSrc ? user.profile_image : null;
+  if (src) {
     return (
       <img
-        src={user.profile_image}
+        src={src}
         alt={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
         className={`profile-avatar ${className}`}
         width={size}
         height={size}
         style={{ width: size, height: size }}
+        onError={() => setBrokenSrc(src)}
       />
     );
   }
@@ -312,6 +318,27 @@ function usePushResync(userId: number | null): void {
  * list and `aria-current` are both derived from that single result â€” no
  * per-item state, no click history.
  */
+/**
+ * Profile photo used as the Profile nav icon. The photo is optional: when it
+ * is missing, or when its bytes fail to load, the normal nav icon shows
+ * instead — never a broken-image glyph.
+ */
+function ProfileNavIcon({ user, icon }: { user?: User | null; icon: ReactNode }) {
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const src = user?.profile_image && user.profile_image !== brokenSrc ? user.profile_image : null;
+  if (!src) return icon;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="nav-item__profile-img"
+      width={22}
+      height={22}
+      onError={() => setBrokenSrc(src)}
+    />
+  );
+}
+
 export function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
   const { pathname } = useLocation();
   const activeTo = findActiveNavItem(pathname, items);
@@ -337,14 +364,8 @@ export function NavLinks({ items, side = false, onNavigate, user }: { items: Nav
             onClick={onNavigate}
           >
             <span className="nav-item__icon" aria-hidden="true">
-              {item.to === "/profile" && user?.profile_image && !side ? (
-                <img
-                  src={user.profile_image}
-                  alt=""
-                  className="nav-item__profile-img"
-                  width={22}
-                  height={22}
-                />
+              {item.to === "/profile" && !side ? (
+                <ProfileNavIcon user={user} icon={item.icon} />
               ) : (
                 item.icon
               )}

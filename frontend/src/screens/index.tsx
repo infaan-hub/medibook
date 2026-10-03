@@ -79,6 +79,22 @@ function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
   );
 }
 
+/**
+ * The signed-in person's photo in the greeting. Deterministic either way:
+ * a photo that loads, the first initial when there is none — and when the
+ * bytes fail, the initial too, never a broken-image icon.
+ */
+function GreetingAvatar({ user }: { user: User }) {
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const src = user.profile_image && user.profile_image !== brokenSrc ? user.profile_image : null;
+  const fallback = ((user.first_name || "")[0] || (user.last_name || "")[0] || "M").toUpperCase();
+  return (
+    <span className="home__avatar">
+      {src ? <img src={src} alt="" onError={() => setBrokenSrc(src)} /> : fallback}
+    </span>
+  );
+}
+
 function PatientHome({ user }: { user: User }) {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
@@ -117,9 +133,7 @@ function PatientHome({ user }: { user: User }) {
     <div className="page home-page">
       <header className="home__topbar">
         <div className="home__greeting">
-          <span className="home__avatar">
-            {user.profile_image ? <img src={user.profile_image} alt="" /> : ((user.first_name || "")[0] || (user.last_name || "")[0] || "M").toUpperCase()}
-          </span>
+          <GreetingAvatar user={user} />
           <span>
             <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
             <span>{user.first_name || user.last_name || "there"}</span>

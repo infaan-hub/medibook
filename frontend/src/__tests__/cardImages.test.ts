@@ -65,6 +65,36 @@ describe("the DoctorImage gate", () => {
   });
 });
 
+/**
+ * Avatar photos are plain <img> tags (shell header avatar, nav-bar profile
+ * icon, home greeting, profile hero) rather than DoctorImage, so each one
+ * carries its own load-failure guard: a deleted media row or an unreachable
+ * optimizer must degrade to initials / the nav icon, never a broken-image
+ * glyph. Bundled asset paths (`/images/…`) are exempt — they cannot 404.
+ */
+const avatarHosts = [
+  ["components/AppShell.tsx", "../components/AppShell.tsx"],
+  ["screens/index.tsx", "../screens/index.tsx"],
+  ["screens/profile.tsx", "../screens/profile.tsx"],
+] as const;
+
+function dynamicImgTags(source: string): string[] {
+  return (source.match(/<img\b[\s\S]*?\/>/g) ?? []).filter((tag) => /src=\{/.test(tag));
+}
+
+describe("avatar photo fallbacks", () => {
+  it("guards every dynamically sourced avatar with onError", () => {
+    for (const [label, path] of avatarHosts) {
+      const source = readFileSync(resolve(__dirname, path), "utf8");
+      const tags = dynamicImgTags(source);
+      expect(tags.length, `${label} should render at least one avatar photo`).toBeGreaterThan(0);
+      for (const tag of tags) {
+        expect(tag, `${label}: ${tag.slice(0, 70)}`).toMatch(/onError=/);
+      }
+    }
+  });
+});
+
 describe("image optimizer configuration", () => {
   it("allowlists no external image host — only same-origin media exists", () => {
     expect(nextConfig).not.toMatch(/images\.unsplash\.com/);

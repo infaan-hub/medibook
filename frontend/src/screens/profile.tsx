@@ -43,6 +43,9 @@ export function ProfileScreen() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // A stored photo whose bytes fail to load (deleted media, offline) must
+  // degrade to initials — a broken-image icon is never the fallback.
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   // Local blob preview: tracked in a ref as well so the object URL is always
   // released (new selection, success, failure, removal, unmount) — a leaked
@@ -237,6 +240,10 @@ export function ProfileScreen() {
       .finally(() => setUploading(false));
   }
 
+  const storedPhoto =
+    user.profile_image && user.profile_image !== brokenSrc ? user.profile_image : null;
+  const shownPhoto = previewUrl || storedPhoto;
+
   return (
     <div className="page">
       <h1 className="page__title">Profile</h1>
@@ -246,11 +253,12 @@ export function ProfileScreen() {
         <div className="profile-hero">
           <div className="profile-hero__avatar-wrap">
             <div className="profile-hero__avatar" onClick={() => !uploading && fileInputRef.current?.click()}>
-              {previewUrl || user.profile_image ? (
+              {shownPhoto ? (
                 <img
-                  src={previewUrl || user.profile_image!}
+                  src={shownPhoto}
                   alt={[user.first_name, user.last_name].filter(Boolean).join(" ")}
                   className="profile-hero__img"
+                  onError={() => setBrokenSrc(shownPhoto)}
                 />
               ) : (
                 <span className="profile-hero__initials">

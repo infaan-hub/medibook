@@ -1,10 +1,10 @@
 {
   "version": 1,
   "functions": {
-    "/api/[...slug]": {
+    "/media/[...slug]": {
       "maxDuration": 60
     },
-    "/media/[...slug]": {
+    "/api/[...slug]": {
       "maxDuration": 60
     }
   }

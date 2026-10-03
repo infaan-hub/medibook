@@ -4,7 +4,7 @@
     "files": [
       "static/chunks/24ace115.cf9bd908095a0625.js",
       "static/chunks/991.f6f2c1c00dd25d86.js",
-      "static/chunks/189.eacd0182dfae532b.js"
+      "static/chunks/189.d2de45652f37ac2f.js"
     ]
   },
   "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
@@ -25,7 +25,7 @@
       "static/chunks/425.38c6e5ddbb5c318e.js",
       "static/chunks/840.633595854ea48a1a.js",
       "static/chunks/167.ba649439395f7e4c.js",
-      "static/chunks/321.f38d95f6cf85ee94.js"
+      "static/chunks/321.9771c69419c504c9.js"
     ]
   },
   "src\\App.tsx -> ./screens/doctor-health-tips": {

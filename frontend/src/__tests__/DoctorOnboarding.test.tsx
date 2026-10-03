@@ -165,7 +165,7 @@ function renderFlow(initialPath = "/doctor/onboarding") {
 }
 
 function stepButtons() {
-  return Array.from(document.querySelectorAll(".onboarding__step-btn"));
+  return Array.from(document.querySelectorAll<HTMLButtonElement>(".onboarding__step-btn"));
 }
 
 beforeEach(() => {
