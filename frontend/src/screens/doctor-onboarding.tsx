@@ -495,8 +495,12 @@ export function DoctorOnboardingScreen() {
                   >
                     <MapPin size={14} /> Use my current location
                   </Button>
-                  <Link to="/doctor/personal" className="onboarding__link">
-                    Choose a specific area instead
+                  {/* Required step — this redirect opens the full location form
+                      (/doctor/personal), where the practice area can be pinned
+                      instead of using GPS. There is no way to skip it: the step
+                      only completes once the server sees valid coordinates. */}
+                  <Link to="/doctor/personal" className="btn btn--secondary">
+                    Go to the location form
                   </Link>
                 </div>
                 <p className="field__hint">

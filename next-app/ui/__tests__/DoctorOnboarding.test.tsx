@@ -216,6 +216,13 @@ describe("doctor onboarding — resume", () => {
       await screen.findByRole("heading", { name: /set your practice location/i })
     ).toBeInTheDocument();
     expect(stepButtons()[1]).toHaveAttribute("aria-current", "step");
+    // Mandatory step: it hands the doctor off to the full location form
+    // through a redirect control, and nothing in the flow can skip it.
+    expect(screen.getByRole("link", { name: /location form/i })).toHaveAttribute(
+      "href",
+      "/doctor/personal"
+    );
+    expect(screen.queryByRole("button", { name: /skip/i })).toBeNull();
   });
 
   it("jumps straight to the final step when every requirement already holds", async () => {
