@@ -18,6 +18,8 @@ import { DoctorOnboardingScreen } from "../pages/doctor-onboarding";
 const mocks = vi.hoisted(() => {
   const push = {
     probed: true,
+    state: "ANDROID_READY" as string,
+    permission: "default" as NotificationPermission | "unsupported",
     message: "",
     error: null as string | null,
     actionLabel: null as string | null,
@@ -171,6 +173,8 @@ function stepButtons() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.push.probed = true;
+  mocks.push.state = "ANDROID_READY";
+  mocks.push.permission = "default";
   mocks.push.message = "";
   mocks.push.error = null;
   mocks.push.actionLabel = null;
@@ -304,6 +308,54 @@ describe("doctor onboarding — notifications step", () => {
     await waitFor(() => expect(mocks.getDoctorOnboarding).toHaveBeenCalledTimes(2));
     // Nothing to click past: the flow waits on the server's answer.
     expect(stepButtons()[0]).toHaveAttribute("aria-current", "step");
+  });
+
+  it("shows the device permission it detected and offers the real action for that state", async () => {
+    mocks.getDoctorOnboarding.mockResolvedValue(
+      status({ location: true, profile_image: true, doctor_profile: true })
+    );
+    // The browser holds a subscription but the server has no row for it yet —
+    // this used to render a bare hint with nothing to tap.
+    mocks.push.state = "SUBSCRIBED";
+    mocks.push.permission = "granted";
+    mocks.push.actionLabel = null;
+    mocks.push.message = "";
+
+    renderFlow();
+
+    expect(
+      await screen.findByText(/Notifications on this device: allowed/)
+    ).toBeInTheDocument();
+    const register = await screen.findByRole("button", {
+      name: /register this device/i,
+    });
+    fireEvent.click(register);
+    await waitFor(() => expect(mocks.push.subscribe).toHaveBeenCalledTimes(1));
+  });
+
+  it("never renders the hint with no action above it when permission is blocked", async () => {
+    mocks.getDoctorOnboarding.mockResolvedValue(
+      status({ location: true, profile_image: true, doctor_profile: true })
+    );
+    mocks.push.state = "DENIED";
+    mocks.push.permission = "denied";
+    mocks.push.actionLabel = null;
+    mocks.push.message =
+      "Notifications are blocked — enable them in your device settings.";
+
+    renderFlow();
+
+    await screen.findByRole("button", { name: /location/i });
+    expect(
+      screen.getByText(/Notifications on this device: blocked/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/enable them in your device settings/i)
+    ).toBeInTheDocument();
+    // Guidance only — no fake button that would do nothing.
+    expect(
+      screen.queryByRole("button", { name: /allow|enable|register/i })
+    ).toBeNull();
   });
 });
 

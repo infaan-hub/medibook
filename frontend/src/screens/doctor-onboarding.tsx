@@ -342,6 +342,30 @@ export function DoctorOnboardingScreen() {
   const activeMeta = STEPS[activeIndex];
   const ActiveIcon = activeMeta.icon;
 
+  /**
+   * Action for the notifications step — derived from the REAL device state
+   * (OS permission + browser subscription + the server row), never from local
+   * UI state:
+   *
+   *   server row exists            → the step is already done (no action);
+   *   OS prompt / flow in flight   → keep the button mounted with its spinner;
+   *   browser sub, no server row   → re-run registration: the tap reuses the
+   *                                   existing subscription and stores it;
+   *   anything else                → the state machine's own label (Allow /
+   *                                   Enable / Try again), or null when no web
+   *                                   prompt can be shown at all (denied, iOS
+   *                                   Safari tab, unsupported, insecure).
+   */
+  const notificationAction = !push.probed
+    ? null
+    : status.steps.notifications
+      ? null
+      : push.state === "REQUESTING"
+        ? "Allow notifications…"
+        : push.state === "SUBSCRIBED"
+          ? "Register this device"
+          : push.actionLabel;
+
   return (
     <div className="page onboarding">
       <h1 className="page__title">Finish setting up your account</h1>
@@ -401,7 +425,24 @@ export function DoctorOnboardingScreen() {
             ) : (
               <>
                 {!push.probed && <Skeleton lines={2} />}
-                {push.probed && push.message && (
+
+                {/* What the DEVICE answers right now — this is what decides
+                    whether a permission popup can even be shown. */}
+                {push.probed && (
+                  <p className="field__hint">
+                    Notifications on this device:{" "}
+                    {push.permission === "granted"
+                      ? "allowed"
+                      : push.permission === "denied"
+                        ? "blocked"
+                        : "not allowed yet"}
+                    {push.permission === "denied"
+                      ? " — enable MediBook notifications in your device settings, then return here; this step re-checks itself."
+                      : "."}
+                  </p>
+                )}
+
+                {push.probed && (push.message || push.steps) && (
                   <div className={`onboarding__push${push.error ? " onboarding__push--error" : ""}`}>
                     <span>
                       {push.message}
@@ -415,15 +456,21 @@ export function DoctorOnboardingScreen() {
                     </span>
                   </div>
                 )}
-                {push.probed && push.actionLabel && (
+
+                {/* The real action: requests permission from this tap, creates
+                    (or reuses) the browser subscription, stores it on the
+                    server, and only then can the step tick. */}
+                {push.probed && notificationAction && (
                   <Button
                     loading={push.loading}
                     onClick={() => void enableNotifications()}
                   >
-                    {push.actionLabel}
+                    {notificationAction}
                   </Button>
                 )}
-                {push.probed && !push.actionLabel && !status.steps.notifications && (
+
+                {/* Shown only when there is genuinely no prompt left to give. */}
+                {push.probed && !notificationAction && !push.message && (
                   <p className="field__hint">
                     Follow the instructions above, then continue — this step is
                     confirmed by the server once your device is registered.
