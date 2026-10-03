@@ -21,7 +21,7 @@
  *  - reuse: the SAME push state machine, location capture, profile upload and
  *    My Doctor save endpoints the rest of the app already uses.
  */
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -33,7 +33,6 @@ import {
   MapPin,
   User,
 } from "lucide-react";
-import { ApiError } from "../api/client";
 import { uploadProfileImage } from "../api/auth";
 import {
   completeDoctorOnboarding,
@@ -41,14 +40,12 @@ import {
   getMyDoctorProfile,
   updateMyDoctorProfile,
 } from "../api/doctors";
-import { listSpecialties } from "../api/specialties";
 import type {
   DoctorOnboardingStatus,
   DoctorOnboardingStep,
   DoctorProfile,
-  Specialty,
 } from "../api/types";
-import { Button, Card, ErrorState, Skeleton, TextField } from "../components/ui";
+import { Button, Card, ErrorState, Skeleton } from "../components/ui";
 import { DoctorImage } from "../components/DoctorImage";
 import { LocationLine } from "../components/Location";
 import { captureFix, LocationError } from "../lib/location";
@@ -124,17 +121,10 @@ export function DoctorOnboardingScreen() {
 
   const [status, setStatus] = useState<DoctorOnboardingStatus | null>(null);
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
-  const [allSpecialties, setAllSpecialties] = useState<Specialty[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const [stepError, setStepError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  // My Doctor information (step 4).
-  const [form, setForm] = useState({ first_name: "", last_name: "" });
-  const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<number[]>([]);
-  const [savingInfo, setSavingInfo] = useState(false);
 
   // Practice location (step 2).
   const [geoBusy, setGeoBusy] = useState(false);
@@ -145,35 +135,45 @@ export function DoctorOnboardingScreen() {
 
   const [finishing, setFinishing] = useState(false);
 
-  /** Adopt a fresh server-side status: session user and active (resume) step. */
+  /**
+   * Adopt a fresh server-side status: session user + which step to show.
+   *
+   * `jump = true` (initial load, refused finish) moves the flow onto the first
+   * outstanding step even if that is *behind* where the doctor currently is —
+   * that is how a refused "Finish setup" lands on the step it failed on.
+   * Completing a step the doctor is standing on only ever moves forward, so
+   * finishing a later task never throws them back to an earlier screen.
+   *
+   * Deliberately does NOT clear `stepError`: a refused completion reloads the
+   * status and must keep the server's reason visible on the step it moved the
+   * flow to. Step changes and new attempts clear it instead.
+   */
   const applyStatus = useCallback(
-    (next: DoctorOnboardingStatus) => {
+    (next: DoctorOnboardingStatus, jump = false) => {
       setStatus(next);
       if (next.user) setUser(next.user);
-      setActiveIndex(firstIncompleteIndex(next));
-      // Deliberately does NOT clear `stepError`: a refused completion reloads
-      // the status and must keep the server's reason visible on the step it
-      // moved the flow to. Step changes and new attempts clear it instead.
+      setActiveIndex((current) => {
+        const target = firstIncompleteIndex(next);
+        return jump || target >= current ? target : current;
+      });
     },
     [setUser]
   );
 
-  const refreshStatus = useCallback(async () => {
-    const response = await getDoctorOnboarding();
-    applyStatus(response.data);
-    return response.data;
-  }, [applyStatus]);
+  const refreshStatus = useCallback(
+    async (jump = false) => {
+      const response = await getDoctorOnboarding();
+      applyStatus(response.data, jump);
+      return response.data;
+    },
+    [applyStatus]
+  );
 
   const loadProfile = useCallback(() => {
     return getMyDoctorProfile()
       .then((response) => {
         const data = response.data;
         setProfile(data);
-        setForm({
-          first_name: data.first_name ?? "",
-          last_name: data.last_name ?? "",
-        });
-        setSelectedSpecialtyIds((data.specialties ?? []).map((specialty) => specialty.id));
         return data;
       })
       .catch((reason: unknown) => {
@@ -183,14 +183,15 @@ export function DoctorOnboardingScreen() {
   }, []);
 
   // Initial load: status is mandatory (the flow cannot run without it), the
-  // profile form and specialty catalog are best-effort so a hiccup there never
-  // hides the flow itself.
+  // My Doctor profile is best-effort so a hiccup there never hides the flow
+  // itself. `jump` lands the doctor on the first outstanding step so a refresh
+  // / re-login resumes the task they were in.
   useEffect(() => {
     let cancelled = false;
     getDoctorOnboarding()
       .then((response) => {
         if (!cancelled) {
-          applyStatus(response.data);
+          applyStatus(response.data, true);
           setLoadError(null);
         }
       })
@@ -198,11 +199,6 @@ export function DoctorOnboardingScreen() {
         if (!cancelled) setLoadError(message(reason));
       });
     void loadProfile();
-    listSpecialties(1, 100)
-      .then((response) => {
-        if (!cancelled) setAllSpecialties(response.data.results);
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -213,12 +209,15 @@ export function DoctorOnboardingScreen() {
     if (status?.completed) navigate("/doctor/dashboard", { replace: true });
   }, [status?.completed, navigate]);
 
-  const maxReachableIndex = status ? firstIncompleteIndex(status) : 0;
-
+  /**
+   * Open a step by tapping it. Every step in the progress list is tappable on
+   * every platform — a first-time doctor can jump straight into the task they
+   * want to do; the server still refuses "Finish setup" until all four are done
+   * and sends them to whatever is missing.
+   */
   function openStep(index: number) {
-    if (!status || index > maxReachableIndex) return;
+    if (!status || index < 0 || index > COMPLETE_INDEX) return;
     setStepError(null);
-    setFieldErrors({});
     setActiveIndex(index);
   }
 
@@ -266,11 +265,14 @@ export function DoctorOnboardingScreen() {
 
   /* ---------------- Step 3 — profile picture --------------------------------- */
 
-  async function onPhoto(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setStepError("Please select an image file.");
-      return;
-    }
+    async function onPhoto(file: File) {
+      // Android/iOS pickers sometimes return a valid picture with an EMPTY
+      // mime type — only reject when the browser positively says it is not an
+      // image. The server validates the real bytes either way.
+      if (file.type && !file.type.startsWith("image/")) {
+        setStepError("Please select an image file.");
+        return;
+      }
     if (file.size > 5 * 1024 * 1024) {
       setStepError("Image must be under 5 MB.");
       return;
@@ -289,45 +291,6 @@ export function DoctorOnboardingScreen() {
     }
   }
 
-  /* ---------------- Step 4 — My Doctor information --------------------------- */
-
-  function toggleSpecialty(id: number) {
-    setSelectedSpecialtyIds((current) =>
-      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
-    );
-  }
-
-  async function saveInfo(event: FormEvent) {
-    event.preventDefault();
-    setStepError(null);
-    setFieldErrors({});
-    setSavingInfo(true);
-    try {
-      const response = await updateMyDoctorProfile({
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        specialties: selectedSpecialtyIds,
-      });
-      setProfile(response.data);
-      await refreshStatus();
-      notify("success", "Your card information has been saved.");
-    } catch (reason) {
-      if (reason instanceof ApiError) {
-        setFieldErrors(
-          Object.fromEntries(
-            Object.entries(reason.errors).map(([field, messages]) => [
-              field,
-              messages[0] ?? "Invalid value.",
-            ])
-          )
-        );
-      }
-      setStepError(message(reason));
-    } finally {
-      setSavingInfo(false);
-    }
-  }
-
   /* ---------------- Step 5 — server-validated completion --------------------- */
 
   async function finish() {
@@ -342,7 +305,7 @@ export function DoctorOnboardingScreen() {
       // The server names the step that is still outstanding; the reload moves
       // the flow onto it and keeps this error visible there.
       setStepError(message(reason));
-      await refreshStatus().catch(() => undefined);
+      await refreshStatus(true).catch(() => undefined);
     } finally {
       setFinishing(false);
     }
@@ -359,7 +322,7 @@ export function DoctorOnboardingScreen() {
           onRetry={() => {
             setLoadError(null);
             getDoctorOnboarding()
-              .then((response) => applyStatus(response.data))
+              .then((response) => applyStatus(response.data, true))
               .catch((reason: unknown) => setLoadError(message(reason)));
           }}
         />
@@ -393,14 +356,12 @@ export function DoctorOnboardingScreen() {
           const done = isDone(index);
           const current = index === activeIndex;
           const state = current ? "current" : done ? "done" : "pending";
-          const reachable = index <= maxReachableIndex;
           return (
             <li key={step.id} className={`onboarding__step onboarding__step--${state}`}>
               <button
                 type="button"
                 className="onboarding__step-btn"
                 aria-current={current ? "step" : undefined}
-                disabled={!reachable}
                 onClick={() => openStep(index)}
               >
                 <span className={`onboarding__marker onboarding__marker--${state}`} aria-hidden="true">
@@ -557,74 +518,35 @@ export function DoctorOnboardingScreen() {
           </div>
         )}
 
-        {/* ---- Step 4: My Doctor information ---- */}
+        {/* ---- Step 4: My Doctor information → the REAL My Doctor page ---- */}
         {activeIndex === 3 && (
-          <form className="form onboarding__body" onSubmit={saveInfo} noValidate>
-            <div className="form__row">
-              <TextField
-                id="onboarding-first"
-                label="First name"
-                value={form.first_name}
-                error={fieldErrors.first_name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, first_name: event.target.value }))
-                }
-              />
-              <TextField
-                id="onboarding-last"
-                label="Last name"
-                value={form.last_name}
-                error={fieldErrors.last_name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, last_name: event.target.value }))
-                }
-              />
-            </div>
-
-            <div className="specialty-picker" role="group" aria-label="Your specialties">
-              <p className="field__label">Your specialties</p>
-              <p className="page__subtitle">
-                Patients search by these — pick at least one.
+          <div className="onboarding__body">
+            {status.steps.doctor_profile ? (
+              <p className="onboarding__confirmed">
+                <Check size={15} aria-hidden="true" />
+                Your My Doctor information is saved — it is what patients see on
+                your card.
               </p>
-              <div className="specialty-picker__grid">
-                {allSpecialties.length === 0 && <Skeleton lines={3} />}
-                {allSpecialties.map((specialty) => {
-                  const active = selectedSpecialtyIds.includes(specialty.id);
-                  return (
-                    <button
-                      key={specialty.id}
-                      type="button"
-                      className={`specialty-picker__item${active ? " specialty-picker__item--active" : ""}`}
-                      aria-pressed={active}
-                      onClick={() => toggleSpecialty(specialty.id)}
-                    >
-                      <span className="specialty-picker__check" aria-hidden="true">
-                        <Check size={12} />
-                      </span>
-                      <span className="specialty-picker__name">{specialty.name}</span>
-                      {specialty.patient_friendly_name && (
-                        <span className="specialty-picker__friendly">
-                          {specialty.patient_friendly_name}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {fieldErrors.specialties && (
-                <p className="field__error">{fieldErrors.specialties}</p>
-              )}
-            </div>
-
-            <div className="onboarding__actions">
-              <Button type="submit" loading={savingInfo}>
-                Save information
-              </Button>
-              <Link to="/doctor/personal" className="onboarding__link">
-                Open the full card editor
-              </Link>
-            </div>
-          </form>
+            ) : (
+              <>
+                <p>
+                  Patients choose you by this information. Opening the My Doctor
+                  page runs the existing editor: fill the required fields and
+                  press its Save button. This step is only ticked once the server
+                  confirms the save.
+                </p>
+                <div className="onboarding__actions">
+                  <Link to="/doctor/personal" className="btn btn--secondary">
+                    Open My Doctor information
+                  </Link>
+                </div>
+                <p className="field__hint">
+                  Save there, then come back — the checklist re-reads your card
+                  from the server, so nothing is lost.
+                </p>
+              </>
+            )}
+          </div>
         )}
 
         {/* ---- Step 5: server-validated completion ---- */}

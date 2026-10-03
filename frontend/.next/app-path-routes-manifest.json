@@ -1,6 +1,6 @@
 {
   "/_not-found/page": "/_not-found",
-  "/api/[...slug]/route": "/api/[...slug]",
   "/media/[...slug]/route": "/media/[...slug]",
+  "/api/[...slug]/route": "/api/[...slug]",
   "/[[...slug]]/page": "/[[...slug]]"
 }

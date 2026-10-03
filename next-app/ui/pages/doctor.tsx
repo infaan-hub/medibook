@@ -29,6 +29,7 @@ import type {
   Specialty,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
+import { doctorOnboardingIncomplete } from "../components/guards";
 import { DoctorImage } from "../components/DoctorImage";
 import { LocationLine } from "../components/Location";
 import { captureFix, LocationError } from "../lib/location";
@@ -234,7 +235,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
  * plus editing for name, experience, fee and card photo.
  */
 export function DoctorPersonalScreen() {
-  const { setUser } = useSession();
+  const { user, setUser } = useSession();
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -409,6 +410,16 @@ export function DoctorPersonalScreen() {
       <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
       <h1 className="page__title">My doctor card</h1>
       <p className="page__subtitle">This is exactly how patients see you on Find a doctor.</p>
+      {/* First-login setup routed this doctor here to complete step 4 — hand
+          control back when the card is saved (and never leave them stranded:
+          the guard only allows this page until setup is finished). */}
+      {user && doctorOnboardingIncomplete(user) && (
+        <p className="onboarding__return">
+          <Link to="/doctor/onboarding" className="btn btn--secondary">
+            Back to setup
+          </Link>
+        </p>
+      )}
       <div className="doctor-card-preview-wrap"><DoctorCardPreview profile={profile} /></div>
       <Card>
         <h2 className="card__title">Edit card details</h2>

@@ -194,10 +194,10 @@ describe("doctor onboarding — resume", () => {
     ).toBeInTheDocument();
     const steps = stepButtons();
     expect(steps).toHaveLength(5);
-    // Nothing may be clicked ahead of the outstanding step.
     expect(steps[0]).toHaveAttribute("aria-current", "step");
-    expect(steps[1]).toBeDisabled();
-    expect(steps[4]).toBeDisabled();
+    // Every step is tappable: the checklist DRIVES the tasks, it is not a
+    // picture. A "not started" item still opens its own screen on tap.
+    expect(steps.every((button) => !button.disabled)).toBe(true);
     expect(steps[0].querySelector(".onboarding__marker--current")).not.toBeNull();
     expect(steps[1].querySelector(".onboarding__marker--done")).not.toBeNull();
     expect(steps[2].querySelector(".onboarding__marker--done")).not.toBeNull();
@@ -245,6 +245,47 @@ describe("doctor onboarding — resume", () => {
     renderFlow();
 
     expect(await screen.findByText("Doctor dashboard")).toBeInTheDocument();
+  });
+});
+
+describe("doctor onboarding — every setup item is a real action", () => {
+  it("runs the task behind each step when its button is tapped", async () => {
+    mocks.push.actionLabel = "Allow";
+    mocks.getDoctorOnboarding.mockResolvedValue(status({}));
+
+    renderFlow();
+
+    expect(
+      await screen.findByRole("heading", { name: /turn on notifications/i })
+    ).toBeInTheDocument();
+
+    // 1 — notifications: the existing permission/subscription machine.
+    expect(screen.getByRole("button", { name: /allow/i })).toBeInTheDocument();
+
+    // 2 — location: GPS capture plus the redirect to the real location form.
+    fireEvent.click(stepButtons()[1]);
+    expect(
+      await screen.findByRole("button", { name: /use my current location/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /location form/i })).toHaveAttribute(
+      "href",
+      "/doctor/personal"
+    );
+
+    // 3 — profile picture: opens the real file picker trigger.
+    fireEvent.click(stepButtons()[2]);
+    expect(await screen.findByRole("button", { name: /upload photo/i })).toBeInTheDocument();
+
+    // 4 — My Doctor: opens the REAL My Doctor page, no duplicate form here.
+    fireEvent.click(stepButtons()[3]);
+    expect(
+      screen.getByRole("link", { name: /open my doctor information/i })
+    ).toHaveAttribute("href", "/doctor/personal");
+    expect(screen.queryByRole("textbox", { name: /first name/i })).toBeNull();
+
+    // 5 — Save and finish: the server-validated completion action.
+    fireEvent.click(stepButtons()[4]);
+    expect(await screen.findByRole("button", { name: /finish setup/i })).toBeInTheDocument();
   });
 });
 

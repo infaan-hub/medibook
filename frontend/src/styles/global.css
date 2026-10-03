@@ -2448,6 +2448,8 @@ a { color: var(--color-primary); }
   align-items: center;
   gap: var(--space-3);
   width: 100%;
+  /* Finger-sized target: every step is a real, tappable action on a phone. */
+  min-height: 44px;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -2457,8 +2459,14 @@ a { color: var(--color-primary); }
   font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
+  -webkit-tap-highlight-color: rgba(9, 169, 158, 0.14);
 }
 .onboarding__step-btn:disabled { cursor: default; opacity: 0.7; }
+/* Press feedback — a tap has to look like it did something on touch. */
+.onboarding__step-btn:active:not(:disabled) {
+  background: var(--color-primary-soft, rgba(9, 169, 158, 0.1));
+  transform: translateY(1px);
+}
 .onboarding__step--current .onboarding__step-btn {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-1);
@@ -2499,6 +2507,12 @@ a { color: var(--color-primary); }
   font-weight: var(--weight-semibold);
   color: var(--color-primary);
 }
+/* "Back to setup" hand-off shown on My Doctor while setup is unfinished. */
+.onboarding__return {
+  margin: 0;
+  display: flex;
+}
+.onboarding__return .btn { min-height: 44px; }
 .onboarding__confirmed {
   display: flex;
   align-items: center;
