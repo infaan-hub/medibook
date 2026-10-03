@@ -122,7 +122,11 @@ async function activeRegistration(): Promise<RegResult> {
   if (!reg) return { ok: false, reason: "no-sw" };
   if (reg.active) return { ok: true, reg };
   try {
-    return { ok: true, reg: await withTimeout(navigator.serviceWorker.ready, 8000) };
+    // First launch on a slow phone: the worker still has to fetch + cache the
+    // app shell before it activates. 8s cut that short on iOS and the tap
+    // failed with `timeout` even though the registration was fine — 15s covers
+    // a cold install without hanging the button.
+    return { ok: true, reg: await withTimeout(navigator.serviceWorker.ready, 15_000) };
   } catch {
     return { ok: false, reason: "timeout" };
   }

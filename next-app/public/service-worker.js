@@ -16,7 +16,7 @@
  * /manifest.json is network-first and never written to a cache: Chrome reads it
  * to decide installability, so it must always reflect the live file.
  */
-const VERSION = "v6";
+const VERSION = "v7";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -131,8 +131,15 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
-// Web Push — show notification when a push event arrives.
+// Web Push — show the notification when a push event arrives.
 // Payload: {title, body, url, tag, appointment_id?, notification_id?}
+//
+// Safari (macOS + iOS Home Screen app) treats a push that does NOT produce a
+// visible notification as a broken `userVisibleOnly: true` promise and
+// revokes the subscription after a few misses. So the display call is the
+// first thing in the handler, is always inside `event.waitUntil`, and has a
+// fallback: a rejected `showNotification` (unsupported option on an older
+// engine, storage pressure) must never stay silent.
 self.addEventListener("push", (event) => {
   let payload = {};
   try {
@@ -150,32 +157,59 @@ self.addEventListener("push", (event) => {
     tag: payload.tag || undefined,
     renotify: false,
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch(() =>
+      self.registration
+        .showNotification(title, { body: options.body, data: options.data })
+        .catch(() => undefined)
+    )
+  );
 });
 
-// Notification click — focus an open client on the target URL, else open it.
+// Notification click — open the URL the notification carries, never just the
+// window that happens to be running.
+//   1. a window already on that URL → focus it;
+//   2. a window elsewhere → focus it and navigate (Chrome/Firefox);
+//   3. otherwise (Safari, app closed, WebKit's empty `matchAll` bug) → open a
+//      new window at the target URL, which is also what launches the iOS Home
+//      Screen app at the right page.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || "/";
+  // `WindowClient.url` is absolute while the payload carries an app path —
+  // compare like with like or an open window never counts as "already there".
+  let absoluteUrl = targetUrl;
+  try {
+    absoluteUrl = new URL(targetUrl, self.location.origin).href;
+  } catch {
+    /* keep the raw value — openWindow still resolves it against our scope */
+  }
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if ("focus" in client) {
-            void client.focus();
-            if ("navigate" in client && client.url) {
-              try {
-                void client.navigate(targetUrl);
-                return;
-              } catch {
-                /* fall through to openWindow */
-              }
-            }
-            return;
-          }
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      const alreadyThere = clientList.find((client) => client.url === absoluteUrl);
+      if (alreadyThere) {
+        try {
+          await alreadyThere.focus();
+          return;
+        } catch {
+          /* fall through to openWindow */
         }
-        return self.clients.openWindow(targetUrl);
-      })
+      }
+      const navigable = clientList.find((client) => typeof client.navigate === "function");
+      if (navigable) {
+        try {
+          await navigable.focus();
+          await navigable.navigate(targetUrl);
+          return;
+        } catch {
+          /* fall through to openWindow */
+        }
+      }
+      await self.clients.openWindow(targetUrl).catch(() => undefined);
+    })()
   );
 });

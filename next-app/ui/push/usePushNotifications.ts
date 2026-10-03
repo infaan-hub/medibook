@@ -30,6 +30,7 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from "./notifications";
+import { ensureServerSubscription } from "./sync";
 import {
   IOS_INSTALL_STEPS,
   pushFailureMessage,
@@ -73,11 +74,14 @@ export function usePushNotifications(userId: number | null) {
   // Read-only re-check when the user comes back: permission can change while
   // the app is in the background (device Settings). Purely a read — it never
   // triggers a prompt, so returning from Settings can only update the state,
-  // never nag.
+  // never nag. It also re-runs the subscription self-heal pass: iOS rotates or
+  // drops endpoints while the app is closed, which is exactly when the server
+  // would otherwise keep pointing at a dead one.
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "hidden") return;
       setPermission(readNotificationPermission());
+      void ensureServerSubscription();
     };
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
@@ -89,6 +93,9 @@ export function usePushNotifications(userId: number | null) {
 
   // Read-only probe: reports the current answer and an existing subscription.
   // It never requests permission — the OS prompt only ever comes from a tap.
+  // While it runs, the server copy of the subscription is compared and
+  // repaired (throttled, never prompting), so `subscribed` reflects what is
+  // actually deliverable rather than a browser state the server never saw.
   useEffect(() => {
     if (!userId) return;
     setPermission(readNotificationPermission());
@@ -97,11 +104,20 @@ export function usePushNotifications(userId: number | null) {
       return;
     }
     let cancelled = false;
-    getPushSubscription().then((sub) => {
-      if (cancelled) return;
-      setSubscribed(!!sub);
-      setProbed(true);
-    });
+    getPushSubscription()
+      .then(async (sub) => {
+        if (cancelled) return;
+        setSubscribed(!!sub);
+        const outcome = await ensureServerSubscription();
+        if (cancelled) return;
+        if (outcome !== "skipped" && outcome !== "failed") {
+          setSubscribed(true);
+        }
+        setProbed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setProbed(true);
+      });
     return () => {
       cancelled = true;
     };

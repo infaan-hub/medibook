@@ -29,8 +29,14 @@ export function deleteNotification(id: number): Promise<void> {
 }
 
 /** GET /api/notifications/push-subscriptions/ — list the caller's push rows. */
-export function listPushSubscriptions(): Promise<Envelope<Paginated<PushSubscription>>> {
-  return apiGet<Paginated<PushSubscription>>("/notifications/push-subscriptions/");
+export function listPushSubscriptions(
+  pageSize = 100
+): Promise<Envelope<Paginated<PushSubscription>>> {
+  // page_size=100 (the server's max): the endpoint match for unsubscribe and
+  // the subscription self-heal pass must see every row, not just page 1.
+  return apiGet<Paginated<PushSubscription>>("/notifications/push-subscriptions/", {
+    page_size: pageSize,
+  });
 }
 
 /** POST /api/notifications/push-subscriptions/ — register a push subscription. */

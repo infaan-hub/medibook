@@ -16,6 +16,18 @@ let configured: boolean | null = null;
 let skipWarned = false;
 const zeroSubsWarned = new Set<number>();
 
+/**
+ * Test-only transport injection. Real sends need a live push service (APNs /
+ * FCM) plus network egress, so the suite installs a fake and asserts on the
+ * request instead of waiting for a phone.
+ */
+let transportOverride: typeof import("web-push") | null = null;
+
+export function __setPushTransport(wp: typeof import("web-push") | null): void {
+  transportOverride = wp;
+  webPushModule = null;
+}
+
 /** Log skip reasons once per process — these used to be completely silent. */
 function warnSkipped(reason: string): void {
   if (skipWarned) return;
@@ -24,6 +36,7 @@ function warnSkipped(reason: string): void {
 }
 
 async function loadWebPush(): Promise<typeof import("web-push") | null> {
+  if (transportOverride) return transportOverride;
   if (webPushModule !== null) return webPushModule;
   try {
     // Deliberately opaque to the bundler: web-push → https-proxy-agent →
@@ -87,6 +100,50 @@ export interface PushPayload {
   tag?: string;
 }
 
+/**
+ * RFC 8030 `Topic`: at most 32 characters from the URL-safe Base64 alphabet,
+ * used by the push service to coalesce (Apple: "Optional identifier that the
+ * push service uses to coalesce notifications"). Same tag → only the newest
+ * message reaches the device, which is what reminders and repeated status
+ * updates need instead of a backlog.
+ */
+export function pushTopic(payload: PushPayload): string | null {
+  const raw =
+    payload.appointment_id != null
+      ? `a${payload.appointment_id}`
+      : payload.notification_id != null
+        ? `n${payload.notification_id}`
+        : (payload.tag ?? null);
+  if (!raw) return null;
+  const safe = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
+  return safe.length > 0 ? safe : null;
+}
+
+/** Apple/FCM put a machine-readable `reason` in the JSON error body. */
+function pushErrorReason(error: unknown): string | null {
+  const body = (error as { body?: unknown })?.body;
+  if (typeof body !== "string" || body.length === 0) return null;
+  try {
+    const parsed = JSON.parse(body) as { reason?: unknown };
+    return typeof parsed.reason === "string" ? parsed.reason : null;
+  } catch {
+    return null;
+  }
+}
+
+const reasonWarned = new Set<string>();
+
+/**
+ * Surface the push service's own diagnosis exactly once per process —
+ * `403 BadJwtToken` (VAPID subject) and `VapidPkHashMismatch` are invisible
+ * from the status code alone and are precisely the iOS-only failure modes.
+ */
+function warnReason(reason: string, detail: string): void {
+  if (reasonWarned.has(reason)) return;
+  reasonWarned.add(reason);
+  console.warn(`[push] ${reason}: ${detail}`);
+}
+
 /** Send a web push to every active subscription for a user. */
 export async function sendWebPushToUser(userId: number, payload: PushPayload): Promise<PushResult> {
   const result: PushResult = { sent: 0, failed: 0, deactivated: 0, skipped: false };
@@ -111,6 +168,7 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
   }
 
   const body = JSON.stringify(payload);
+  const topic = pushTopic(payload);
   for (const sub of subs) {
     if (!sub.endpoint || !sub.p256dh_key || !sub.auth_key) continue;
     try {
@@ -119,7 +177,11 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
         body,
         {
           TTL: 60 * 60 * 24,
-          urgency: "normal",
+          // Apple's web push guide: "To attempt to deliver the notification
+          // immediately, specify `high`." `normal` let actionable messages
+          // sit behind device-power batching on Android too.
+          urgency: "high",
+          ...(topic ? { topic } : {}),
         }
       );
       result.sent += 1;
@@ -129,6 +191,7 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
     } catch (error) {
       result.failed += 1;
       const status = (error as { statusCode?: number }).statusCode;
+      const reason = pushErrorReason(error);
       if (status === 404 || status === 410) {
         // Permanently gone — deactivate so we stop retrying.
         await prisma.pushSubscription
@@ -136,6 +199,8 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
           .catch(() => undefined);
         result.deactivated += 1;
         console.warn(`[push] deactivated invalid subscription id=${sub.id} user=${userId}`);
+      } else if (reason) {
+        warnReason(reason, `HTTP ${status ?? "?"} user=${userId} sub=${sub.id}`);
       } else {
         console.warn(`[push] send failed user=${userId} sub=${sub.id}:`, status ?? error);
       }
