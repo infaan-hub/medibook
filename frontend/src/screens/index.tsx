@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Image from "next/image";
 import { listMyAppointments } from "../api/appointments";
 import { reasonLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
@@ -8,6 +7,7 @@ import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { DistanceBadge } from "../components/Location";
+import { DoctorImage, resolveDoctorImage } from "../components/DoctorImage";
 import { captureFix, directionsUrl, LocationError } from "../lib/location";
 import { nearestAreaName } from "../lib/zanzibar";
 import { useSession } from "../state/app-context";
@@ -33,13 +33,17 @@ interface Origin {
   longitude: number;
 }
 
-/** Photo shown on every doctor card: uploaded picture first, placeholder last. */
-export function doctorCardImage(doctor: DoctorProfile, index = 0): string {
-  if (doctor.profile_image) return doctor.profile_image;
-  return dashboardDoctorImages[index % dashboardDoctorImages.length];
+/**
+ * Photo shown on every doctor card: the doctor's own uploaded picture, or
+ * `null` — which renders the "No image" state. There is no stock/random
+ * fallback: a picture that is not this doctor's must never be shown as them.
+ */
+export function doctorCardImage(doctor: Pick<DoctorProfile, "profile_image">): string | null {
+  return resolveDoctorImage(doctor.profile_image);
 }
 
 export { DoctorAvailabilityScreen, DoctorProfileScreen, DoctorPersonalScreen } from "./doctor";
+export { DoctorOnboardingScreen } from "./doctor-onboarding";
 export { DoctorDashboardScreen, DoctorAppointmentsScreen } from "./doctor-dashboard";
 export { DoctorMedicalTreatmentScreen } from "./doctor-medical-treatment";
 export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
@@ -52,12 +56,6 @@ export { BlogListPage, BlogArticlePage } from "./blog";
 function formatAppointment(appointment: Appointment): string {
   return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
 }
-
-const dashboardDoctorImages = [
-  "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=85",
-  "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=500&q=85",
-  "https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&w=500&q=85",
-];
 
 function formatDoctorName(doctor: DoctorProfile): string {
   return `Dr. ${doctor.first_name} ${doctor.last_name}`.trim();
@@ -173,8 +171,8 @@ function PatientHome({ user }: { user: User }) {
           <div className="home__doctor-list">
             {doctors.map((doctor, index) => (
               <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-                <Image
-                  src={doctorCardImage(doctor, index)}
+                <DoctorImage
+                  src={doctorCardImage(doctor)}
                   alt={formatDoctorName(doctor)}
                   width={500}
                   height={333}
@@ -420,10 +418,10 @@ export function DoctorsPage() {
       )}
       {!loading && !!results?.length && (
         <div className="home__doctor-list doctors__grid">
-          {results.map((doctor, index) => (
+          {results.map((doctor) => (
             <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-              <Image
-                src={doctorCardImage(doctor, index)}
+              <DoctorImage
+                src={doctorCardImage(doctor)}
                 alt={formatDoctorName(doctor)}
                 width={500}
                 height={333}

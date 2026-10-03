@@ -13,6 +13,13 @@ export interface User {
   is_superuser: boolean;
   profile_image: string | null;
   date_joined: string | null;
+  /**
+   * Doctor accounts only. False until the SERVER verified every required
+   * first-login step (notifications, location, profile picture, My Doctor
+   * information) — never written by the client, so it survives refresh,
+   * logout/login and browser restarts.
+   */
+  doctor_onboarding_completed?: boolean;
 }
 
 export interface AuditEvent {
@@ -220,6 +227,26 @@ export interface DoctorProfile extends GeoFields {
   /* DRF DecimalField serializes as a string ("0.00"), so accept both. */
   average_rating: number | string | null;
   total_reviews: number;
+}
+
+/* ---- Doctor first-login onboarding (server-evaluated) ---- */
+
+/** The four required setup steps, in the order the onboarding shows them. */
+export type DoctorOnboardingStep =
+  | "notifications"
+  | "location"
+  | "profile_image"
+  | "doctor_profile";
+
+/** GET/POST /api/doctors/me/onboarding/ — every requirement re-read from the DB. */
+export interface DoctorOnboardingStatus {
+  /** Server-verified flag; false means the doctor may not enter normal routes. */
+  completed: boolean;
+  steps: Record<DoctorOnboardingStep, boolean>;
+  /** First incomplete step, or null when everything required is done. */
+  next_step: DoctorOnboardingStep | null;
+  /** Refreshed session user (carries the up-to-date completion flag). */
+  user: User;
 }
 
 export interface AvailabilitySlot {

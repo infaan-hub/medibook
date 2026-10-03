@@ -1,4 +1,11 @@
 {
   "version": 1,
-  "functions": {}
+  "functions": {
+    "/api/[...slug]": {
+      "maxDuration": 60
+    },
+    "/media/[...slug]": {
+      "maxDuration": 60
+    }
+  }
 }

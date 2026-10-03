@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import Image from "next/image";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -30,6 +29,7 @@ import type {
   Specialty,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
+import { DoctorImage } from "../components/DoctorImage";
 import { LocationLine } from "../components/Location";
 import { captureFix, LocationError } from "../lib/location";
 import { searchZanzibarAreas, type ZanzibarArea } from "../lib/zanzibar";
@@ -71,16 +71,15 @@ export function DoctorProfileScreen() {
     <div className="page">
       <Link to="/doctors"><ArrowLeft size={16} /> Back to doctors</Link>
       <Card className="card--fit">
-        {doctor.profile_image && (
-          <Image
-            src={doctor.profile_image}
-            alt={`Dr. ${doctor.first_name} ${doctor.last_name}`}
-            className="doctor-profile__photo"
-            width={320}
-            height={240}
-            sizes="320px"
-          />
-        )}
+        <DoctorImage
+          src={doctor.profile_image}
+          alt={`Dr. ${doctor.first_name} ${doctor.last_name}`}
+          className="doctor-profile__photo"
+          emptyClassName="doctor-photo-empty--profile"
+          width={320}
+          height={240}
+          sizes="320px"
+        />
         <h1 className="page__title">Dr. {doctor.first_name} {doctor.last_name}</h1>
         <p className="doctor-profile__location">
           <LocationLine point={doctor} accuracy={doctor.location_accuracy} />
@@ -174,10 +173,11 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
   return (
     <Card className="doc-preview-card">
       <div className="doc-preview-card__photo-wrap">
-        <Image
-          src={profile.profile_image || "/images/splash-screen.jpeg"}
+        <DoctorImage
+          src={profile.profile_image}
           alt={`Dr. ${profile.first_name} ${profile.last_name}`}
           className="doc-preview-card__photo"
+          emptyClassName="doc-preview-card__photo-empty"
           width={380}
           height={200}
           sizes="380px"

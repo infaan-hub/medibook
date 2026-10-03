@@ -2404,6 +2404,149 @@ a { color: var(--color-primary); }
   margin: 0 auto var(--space-4);
   display: block;
 }
+/* "No image" — the state shown when a doctor has no uploaded photo (or the
+   file failed to load). Same footprint as the picture it stands in for, honest
+   text instead of a borrowed/random face. Placed after the photo rules so its
+   display/background win at equal specificity. */
+.doctor-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: var(--color-surface-2, rgba(15, 34, 44, 0.06));
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold, 600);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+/* Card grid footprint — mirrors .home__doctor-card > img. */
+.home__doctor-card > .doctor-photo-empty { height: 132px; }
+/* Profile box footprint — pairs with .doctor-profile__photo's auto margins. */
+.doctor-photo-empty--profile {
+  background: var(--color-surface-2, rgba(15, 34, 44, 0.06));
+}
+/* Card preview footprint — mirrors .doc-preview-card__photo inside its wrap. */
+.doc-preview-card__photo-empty {
+  background: var(--color-surface-2, rgba(15, 34, 44, 0.06));
+}
+
+/* ---------------- Doctor first-login setup (/doctor/onboarding) --------------
+   A progress list (✓ done · → current · ○ not started) plus one panel for the
+   step in front of the doctor. No skip control exists anywhere here. */
+.onboarding__steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+.onboarding__step-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.onboarding__step-btn:disabled { cursor: default; opacity: 0.7; }
+.onboarding__step--current .onboarding__step-btn {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-1);
+}
+.onboarding__step-title { flex: 1; min-width: 0; }
+.onboarding__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-muted);
+}
+.onboarding__marker--done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+.onboarding__marker--current {
+  background: var(--color-primary-soft, rgba(15, 34, 44, 0.05));
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.onboarding__panel { display: grid; gap: var(--space-3); }
+.onboarding__panel .card__title { display: flex; align-items: center; gap: var(--space-2); }
+.onboarding__body { display: grid; gap: var(--space-3); }
+.onboarding__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.onboarding__link {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-primary);
+}
+.onboarding__confirmed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.onboarding__push {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2, rgba(15, 34, 44, 0.05));
+  font-size: var(--text-sm);
+}
+.onboarding__push--error { border-color: var(--color-danger, #dc3545); }
+.onboarding__photo { display: flex; align-items: flex-start; gap: var(--space-3); }
+.onboarding__photo-img {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.onboarding__checklist { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.onboarding__checklist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.onboarding__checklist .is-done { color: var(--color-success); }
+.onboarding__checklist .is-missing { color: var(--color-text-muted); }
+.onboarding__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
 .home__appointment-card {
   gap: var(--space-3);
   min-height: 94px;
@@ -2439,6 +2582,7 @@ a { color: var(--color-primary); }
   .home__doctor-list { grid-template-columns: repeat(2, 1fr); }
   .home__doctor-card { flex: none; }
   .home__doctor-card > img { height: 126px; }
+  .home__doctor-card > .doctor-photo-empty { height: 126px; }
   .home__blog-list { grid-template-columns: repeat(2, 1fr); }
   .home__blog-card { flex: none; }
   .home__blog-card > img { height: 126px; }

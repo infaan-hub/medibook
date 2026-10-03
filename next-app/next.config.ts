@@ -10,12 +10,11 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   // Card thumbnails are rendered through next/image so the browser downloads a
   // srcset candidate sized to the card instead of one fixed 500px file.
-  // Uploaded photos (/media/{id}) are same-origin and need no allowlist entry.
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com", pathname: "/**" },
-    ],
-  },
+  //
+  // No `images.remotePatterns`: a doctor photo is ONLY their own uploaded file
+  // (/media/{id}, same origin, allowed by default). There is no external
+  // portrait CDN to allowlist any more — the cards show "No image" instead of
+  // borrowing a stock face, so the optimizer can never fetch a third-party host.
   // Uploaded media is served at runtime from the uploads/ directory through
   // app/media/[...path]/route.ts (Next's build-time public/ snapshot would not
   // see files uploaded after a build).

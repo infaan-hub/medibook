@@ -39,6 +39,14 @@ export function userPayload(user: User, req: Request): Record<string, unknown> {
     first_name: user.first_name,
     last_name: user.last_name,
     role: user.role,
+    /**
+     * Doctor first-login setup — server-verified, so the route guard can make
+     * its decision synchronously from the session payload instead of guessing
+     * or trusting localStorage. Only doctor accounts carry it.
+     */
+    ...(user.role === "doctor"
+      ? { doctor_onboarding_completed: user.doctor_onboarding_completed === true }
+      : {}),
     profile_image: mediaUrl(user.profile_image_id),
     is_superuser: user.is_superuser,
     date_joined: iso(user.created_at),

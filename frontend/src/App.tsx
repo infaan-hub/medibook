@@ -81,6 +81,7 @@ const DoctorAppointmentsScreen = lazyWithRetry(() => import("./screens").then((m
 const DoctorMedicalTreatmentScreen = lazyWithRetry(() => import("./screens/doctor-medical-treatment").then((m) => ({ default: m.DoctorMedicalTreatmentScreen })));
 const DoctorAvailabilityScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorAvailabilityScreen })));
 const DoctorPersonalScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorPersonalScreen })));
+const DoctorOnboardingScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorOnboardingScreen })));
 const NotificationsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
 const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
@@ -260,6 +261,11 @@ export default function App() {
                 <Route path="/appointments" element={<RequirePatient><AppointmentsListScreen /></RequirePatient>} />
                 <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
                 <Route path="/appointments/:id/reschedule" element={<RequirePatient><RescheduleScreen /></RequirePatient>} />
+                {/* First-login setup: gates every other /doctor/* route until
+                    the server has verified notifications, location, photo and
+                    My Doctor information. Reachable while incomplete, and only
+                    from this role. */}
+                <Route path="/doctor/onboarding" element={<RequireRole role="doctor"><DoctorOnboardingScreen /></RequireRole>} />
                 <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />

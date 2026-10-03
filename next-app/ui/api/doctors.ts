@@ -16,6 +16,7 @@ import type {
   DoctorProfile,
   DoctorAvailability,
   DoctorAvailableDays,
+  DoctorOnboardingStatus,
   AvailabilityBreak,
   ScheduleException,
   ScheduleItem,
@@ -85,6 +86,26 @@ export function getMyScheduleItem(id: number): Promise<Envelope<ScheduleItem>> {
 
 export function getMyDoctorProfile(): Promise<Envelope<DoctorProfile>> {
   return apiGet<DoctorProfile>("/doctors/me/profile/");
+}
+
+/**
+ * GET /api/doctors/me/onboarding/ — first-login setup state.
+ * The server evaluates every requirement (notification subscription, practice
+ * location, uploaded profile picture, My Doctor information) and returns the
+ * persistent completion flag plus the first incomplete step, so the flow can
+ * resume exactly where it stopped.
+ */
+export function getDoctorOnboarding(): Promise<Envelope<DoctorOnboardingStatus>> {
+  return apiGet<DoctorOnboardingStatus>("/doctors/me/onboarding/");
+}
+
+/**
+ * POST /api/doctors/me/onboarding/complete/ — takes no payload. The server
+ * re-validates every requirement and only then marks onboarding complete; a
+ * failure comes back as a §28 envelope naming the steps still outstanding.
+ */
+export function completeDoctorOnboarding(): Promise<Envelope<DoctorOnboardingStatus>> {
+  return apiPost<DoctorOnboardingStatus>("/doctors/me/onboarding/", {});
 }
 
 export function updateMyDoctorProfile(

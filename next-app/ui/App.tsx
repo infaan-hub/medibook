@@ -48,6 +48,7 @@ const DoctorAppointmentsScreen = lazy(() => import("./pages").then((m) => ({ def
 const DoctorMedicalTreatmentScreen = lazy(() => import("./pages/doctor-medical-treatment").then((m) => ({ default: m.DoctorMedicalTreatmentScreen })));
 const DoctorAvailabilityScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorAvailabilityScreen })));
 const DoctorPersonalScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorPersonalScreen })));
+const DoctorOnboardingScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorOnboardingScreen })));
 const NotificationsScreen = lazy(() => import("./pages").then((m) => ({ default: m.NotificationsScreen })));
 const PatientEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.PatientEmergencyScreen })));
 const DoctorEmergencyScreen = lazy(() => import("./pages").then((m) => ({ default: m.DoctorEmergencyScreen })));
@@ -228,6 +229,11 @@ export default function App() {
                 <Route path="/emergency" element={<RequirePatient><PatientEmergencyScreen /></RequirePatient>} />
                 <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
                 <Route path="/appointments/:id/reschedule" element={<RequirePatient><RescheduleScreen /></RequirePatient>} />
+                {/* First-login setup: gates every other /doctor/* route until
+                    the server has verified notifications, location, photo and
+                    My Doctor information. Reachable while incomplete, and only
+                    from this role. */}
+                <Route path="/doctor/onboarding" element={<RequireRole role="doctor"><DoctorOnboardingScreen /></RequireRole>} />
                 <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />

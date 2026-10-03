@@ -81,6 +81,13 @@ model User {
   first_name    String   @default("") @db.VarChar(150)
   last_name     String   @default("") @db.VarChar(150)
   role          Role     @default(patient)
+  /// Doctor first-login setup (onboarding). FALSE until the server has
+  /// VERIFIED every required step (notification subscription, valid practice
+  /// location, uploaded profile image, completed My Doctor information) —
+  /// it is never accepted from a client payload. Patients/admins never use it.
+  /// Kept on User (not Doctor) so /auth/me + /auth/login can hand the guard
+  /// its state with no extra join.
+  doctor_onboarding_completed Boolean @default(false)
   /// Centralized profile image: the row's binary lives in MediaFile.data;
   /// only the id is stored here and the public URL is /media/{id}.
   profile_image_id Int?    @unique

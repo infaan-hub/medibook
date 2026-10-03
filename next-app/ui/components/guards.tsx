@@ -6,6 +6,9 @@
  *  - After logout everyone lands on /login — never another role's home.
  *  - Refresh (boot probe) must restore the SAME session/role or drop to guest.
  *  - Wrong role on a path → bounce to THAT user's home, never another role's.
+ *  - A doctor whose server-verified first-login setup is NOT complete may only
+ *    use /doctor/onboarding and the few screens that finish it (it, My Doctor
+ *    information, notifications, profile) until the server marks them complete.
  */
 
 import type { ReactNode } from "react";
@@ -20,6 +23,46 @@ export type Role = "patient" | "doctor" | "admin";
 export interface RoleUser {
   role: Role;
   is_superuser: boolean;
+  /**
+   * Doctor accounts only. `false` (explicitly) means the server has NOT yet
+   * verified every first-login step. `undefined` — patients, older payloads —
+   * is treated as "no unfinished setup", so nothing extra is ever enforced.
+   */
+  doctor_onboarding_completed?: boolean;
+}
+
+/** The mandatory first-login setup route for doctors. */
+export const DOCTOR_ONBOARDING_PATH = "/doctor/onboarding";
+
+/**
+ * Paths an incomplete doctor may open. Everything else stays unreachable so a
+ * half-set-up account can never appear in the directory, take bookings, etc.
+ *  - /doctor/onboarding — the flow itself (its own guard entry point);
+ *  - /doctor/personal    — reaches My Doctor information + profile picture;
+ *  - /notifications      — the notification step, shared screen;
+ *  - /profile            — shared profile, also uploads the profile picture.
+ */
+const DOCTOR_ONBOARDING_ALLOWLIST = [
+  DOCTOR_ONBOARDING_PATH,
+  "/doctor/personal",
+  "/notifications",
+  "/profile",
+];
+
+/**
+ * True only for a doctor whose completion flag is explicitly `false` — i.e.
+ * the server said setup is outstanding. Never true for guests, patients,
+ * admins, or any user payload without the field.
+ */
+export function doctorOnboardingIncomplete(user: RoleUser): boolean {
+  return user.role === "doctor" && user.doctor_onboarding_completed === false;
+}
+
+/** May an incomplete doctor open this path? */
+export function doctorOnboardingAllowed(pathname: string): boolean {
+  return DOCTOR_ONBOARDING_ALLOWLIST.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
 }
 
 /** Centered full-area spinner shown while the session boot probe runs. */
@@ -34,6 +77,8 @@ export function BootScreen() {
 
 /** Where a signed-in user belongs. No cross-role landing without a login. */
 export function homeForRole(user: RoleUser): string {
+  // An unfinished doctor starts — and restarts — at first-login setup.
+  if (doctorOnboardingIncomplete(user)) return DOCTOR_ONBOARDING_PATH;
   if (user.role === "doctor") return "/doctor/dashboard";
   if (user.role === "admin" && user.is_superuser) return "/admin";
   // Admin without superuser (or patient) — shared profile is always safe
@@ -142,6 +187,11 @@ export function RequireRole({
   if (user.role !== role || (role === "admin" && !user.is_superuser)) {
     return <Navigate to={homeForRole(user)} replace />;
   }
+  // Doctor subtree before first-login setup is finished → only the setup
+  // screens listed above are reachable.
+  if (doctorOnboardingIncomplete(user) && !doctorOnboardingAllowed(location.pathname)) {
+    return <Navigate to={DOCTOR_ONBOARDING_PATH} replace />;
+  }
   return children ? <>{children}</> : <Outlet />;
 }
 
@@ -174,6 +224,15 @@ export function RequireSession({ children }: { children?: ReactNode }) {
   }
   if (!roleOwnsPath(location.pathname, user)) {
     return <Navigate to={homeForRole(user)} replace />;
+  }
+  // First-login setup gate: an incomplete doctor is confined to the flow and
+  // the screens that complete it (their home is DOCTOR_ONBOARDING_PATH, so a
+  // deep link to e.g. /doctor/dashboard simply comes back here).
+  if (
+    doctorOnboardingIncomplete(user) &&
+    !doctorOnboardingAllowed(location.pathname)
+  ) {
+    return <Navigate to={DOCTOR_ONBOARDING_PATH} replace />;
   }
   return children ? <>{children}</> : <Outlet />;
 }

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { homeForRole, launchPath, roleOwnsPath } from "../components/guards";
+import {
+  DOCTOR_ONBOARDING_PATH,
+  doctorOnboardingAllowed,
+  doctorOnboardingIncomplete,
+  homeForRole,
+  launchPath,
+  roleOwnsPath,
+} from "../components/guards";
 
 describe("role isolation rules", () => {
   const patient = { role: "patient" as const, is_superuser: false };
@@ -71,5 +78,51 @@ describe("launchPath (root route destination)", () => {
 
   it("sends a returning signed-out visitor to login", () => {
     expect(launchPath("guest", null, true)).toBe("/login");
+  });
+});
+
+describe("doctor first-login setup gate", () => {
+  const incompleteDoctor = {
+    role: "doctor" as const,
+    is_superuser: false,
+    doctor_onboarding_completed: false,
+  };
+  const readyDoctor = {
+    role: "doctor" as const,
+    is_superuser: false,
+    doctor_onboarding_completed: true,
+  };
+  // Patient/legacy payloads carry no flag at all — nothing extra is enforced.
+  const legacyDoctor = { role: "doctor" as const, is_superuser: false };
+  const patient = { role: "patient" as const, is_superuser: false };
+
+  it("treats only an explicit server-side false as unfinished", () => {
+    expect(doctorOnboardingIncomplete(incompleteDoctor)).toBe(true);
+    expect(doctorOnboardingIncomplete(readyDoctor)).toBe(false);
+    expect(doctorOnboardingIncomplete(legacyDoctor)).toBe(false);
+    expect(doctorOnboardingIncomplete(patient)).toBe(false);
+  });
+
+  it("homes an unfinished doctor to the setup flow, a finished one to the dashboard", () => {
+    expect(homeForRole(incompleteDoctor)).toBe(DOCTOR_ONBOARDING_PATH);
+    expect(homeForRole(readyDoctor)).toBe("/doctor/dashboard");
+    expect(homeForRole(legacyDoctor)).toBe("/doctor/dashboard");
+  });
+
+  it("lets an unfinished doctor reach only the flow and its helper screens", () => {
+    expect(doctorOnboardingAllowed(DOCTOR_ONBOARDING_PATH)).toBe(true);
+    expect(doctorOnboardingAllowed("/doctor/personal")).toBe(true);
+    expect(doctorOnboardingAllowed("/notifications")).toBe(true);
+    expect(doctorOnboardingAllowed("/profile")).toBe(true);
+
+    expect(doctorOnboardingAllowed("/doctor/dashboard")).toBe(false);
+    expect(doctorOnboardingAllowed("/doctor/availability")).toBe(false);
+    expect(doctorOnboardingAllowed("/doctors")).toBe(false);
+    expect(doctorOnboardingAllowed("/")).toBe(false);
+  });
+
+  it("keeps role ownership unchanged — the gate never widens access", () => {
+    expect(roleOwnsPath("/doctor/dashboard", incompleteDoctor)).toBe(true);
+    expect(roleOwnsPath("/doctor/dashboard", patient)).toBe(false);
   });
 });

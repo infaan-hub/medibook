@@ -190,8 +190,9 @@ describe("DoctorsPage cards", () => {
     const img = container.querySelector(".home__doctor-card > img") as HTMLImageElement;
     expect(img).not.toBeNull();
     // One fixed 500px file per thumbnail becomes a srcset the browser sizes to
-    // the card, and the upload is transcoded instead of served verbatim.
-    expect(img.getAttribute("src")).toMatch(/^\/_next\/image\?/);
+    // the card, and the upload is transcoded instead of served verbatim. The
+    // optimizer URL may be emitted relative or with the page origin.
+    expect(img.getAttribute("src")).toMatch(/^(https?:\/\/[^/]+)?\/_next\/image\?/);
     expect(decodeURIComponent(img.getAttribute("src") as string)).toContain("/media/123/");
     expect(img.getAttribute("srcset")).toBeTruthy();
     expect(img).toHaveAttribute("sizes", "25vw");
