@@ -8,7 +8,7 @@
  * Every report can be either downloaded (saved to disk) or viewed (opened in a
  * preview tab) — both use the same request, only the final Blob handling differs.
  */
-import { http } from "./client";
+import { ApiError, http } from "./client";
 
 export type ReportPreset = "month" | "week" | "custom";
 
@@ -85,7 +85,21 @@ function showBlob(blob: Blob): boolean {
 type ReportParams = ReportPeriodParams & { patient?: number };
 
 async function fetchReport(url: string, params: ReportParams, fallbackName: string) {
-  const response = await http.get(url, { params, responseType: "blob" });
+  let response;
+  try {
+    response = await http.get(url, { params, responseType: "blob" });
+  } catch (error) {
+    // A 404 here means the DEPLOYED BACKEND has no such route — the report
+    // endpoints were added in a later commit than the running server. That is a
+    // deployment problem, not something the person clicking the button can fix,
+    // so say so plainly instead of the bare "Request failed (404)".
+    if (error instanceof ApiError && error.status === 404) {
+      throw new Error(
+        "Reports are not available on the server yet — the backend needs to be redeployed."
+      );
+    }
+    throw error;
+  }
   const blob = new Blob([response.data], { type: "application/pdf" });
   const filename = filenameFrom(header(response.headers, "content-disposition"), fallbackName);
   return { blob, filename, size: blob.size };
