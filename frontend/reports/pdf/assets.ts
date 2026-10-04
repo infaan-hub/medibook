@@ -22,7 +22,7 @@ function candidateRoots(): string[] {
   const cwd = process.cwd();
   return [
     path.join(cwd, "reports", "assets"),
-    path.join(cwd, "next-app", "reports", "assets"),
+    // Bundled/standalone fallback: assets sit next to this module.
     path.join(__dirname, "..", "assets"),
   ];
 }
