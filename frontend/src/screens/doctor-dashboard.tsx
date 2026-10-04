@@ -697,30 +697,10 @@ export function DoctorDashboardScreen() {
           <p>Here is what is happening in your practice today.</p>
         </div>
         <div className="doctor-header-actions">
-          <Button
-            variant="secondary"
-            loading={summaryBusy === "download"}
-            disabled={summaryBusy !== null}
-            onClick={() => void runSummaryReport("download")}
-          >
-            <FileChartColumn size={16} />
-            {summaryBusy === "download" ? "Generating report..." : "Generate Doctor Report"}
-          </Button>
-          <Button
-            variant="secondary"
-            loading={summaryBusy === "view"}
-            disabled={summaryBusy !== null}
-            onClick={() => void runSummaryReport("view")}
-          >
-            <Eye size={16} />
-            {summaryBusy === "view" ? "Opening report..." : "View Report"}
-          </Button>
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
         </div>
       </div>
-
-      {summaryError && <p className="form-note form-note--error">{summaryError}</p>}
 
       <div className="doctor-metrics">
         <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>Today's visits</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? "Schedule is active" : "No visits scheduled"}</small></Card>
@@ -748,6 +728,31 @@ export function DoctorDashboardScreen() {
       <Card className="doctor-appointments-card">
         <div className="doctor-card-heading"><div><h2>Today's schedule</h2><p>Appointments that need your attention</p></div><Link to="/doctor/appointments"><span>View all</span><ArrowUpRight size={15} /></Link></div>
         {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} doctorId={profile?.id ?? null} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
+      </Card>
+
+      <Card className="doctor-reports-card">
+        <div className="doctor-card-heading"><div><h2>Reports</h2><p>Generate or preview your practice summary</p></div></div>
+        <div className="doctor-report-actions">
+          <Button
+            variant="secondary"
+            loading={summaryBusy === "download"}
+            disabled={summaryBusy !== null}
+            onClick={() => void runSummaryReport("download")}
+          >
+            <FileChartColumn size={16} />
+            {summaryBusy === "download" ? "Generating report..." : "Generate Doctor Report"}
+          </Button>
+          <Button
+            variant="secondary"
+            loading={summaryBusy === "view"}
+            disabled={summaryBusy !== null}
+            onClick={() => void runSummaryReport("view")}
+          >
+            <Eye size={16} />
+            {summaryBusy === "view" ? "Opening report..." : "View Report"}
+          </Button>
+        </div>
+        {summaryError && <p className="form-note form-note--error">{summaryError}</p>}
       </Card>
 
       <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link></div>
