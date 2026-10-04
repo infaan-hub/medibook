@@ -1,14 +1,16 @@
 /**
- * Emergency section ported to the production app (§27):
+ * Emergency section ported to the production app (§27 / §29):
  *
  *  1. Navigation — "Emergency" appears in the sidebar AND bottom bar for both
  *     patient (/emergency) and doctor (/doctor/emergency), and never for admin.
  *  2. PatientEmergencyScreen — renders the SOS request form when nothing is
  *     open (no date picker and no slot grid: the emergency is stamped with the
- *     current moment, and GPS is shared before submitting), and the live
- *     status card when a request is pending.
- *  3. DoctorEmergencyScreen — renders the queue, accepts/rejects with the
- *     shared reason flow, and only offers Accept on still-pending requests.
+ *     current moment, and GPS is shared before submitting), the live status
+ *     card when a request is open, the 30-minute countdown while no doctor has
+ *     started it, and the server's blocked answer when it refuses another one.
+ *  3. DoctorEmergencyScreen — renders the queue and drives it with the server's
+ *     state machine: Accept → Emergency In Progress → Done, Reject while the
+ *     request is still open, and never a button the backend would refuse.
  *  4. Route guards — /doctor/emergency is doctor-only.
  */
 
@@ -24,22 +26,24 @@ import {
   todayStr,
 } from "../screens/emergency";
 import { ToastProvider } from "../state/app-context";
-import type { EmergencyAppointment, User } from "../api/types";
+import { ApiError } from "../api/client";
+import type { EmergencyAppointment, EmergencyEligibility, User } from "../api/types";
 
-const { listEmergencies, createEmergency, respondToEmergency, listEmergencySlots } = vi.hoisted(
-  () => ({
+const { listEmergencies, createEmergency, respondToEmergency, listEmergencySlots, getEmergencyEligibility } =
+  vi.hoisted(() => ({
     listEmergencies: vi.fn(),
     createEmergency: vi.fn(),
     respondToEmergency: vi.fn(),
     listEmergencySlots: vi.fn(),
-  })
-);
+    getEmergencyEligibility: vi.fn(),
+  }));
 
 vi.mock("../api/emergency", () => ({
   listEmergencies,
   createEmergency,
   respondToEmergency,
   listEmergencySlots,
+  getEmergencyEligibility,
   listNearbyDoctors: vi.fn(),
 }));
 
@@ -127,10 +131,24 @@ function stubGeolocation(latitude = -6.162, longitude = 39.298) {
   });
 }
 
+/** GET /api/emergency/eligibility/ answer when nothing blocks the patient. */
+function eligible(overrides: Partial<EmergencyEligibility> = {}): EmergencyEligibility {
+  return {
+    canCreateEmergency: true,
+    reason: null,
+    availableAt: null,
+    status: null,
+    activeEmergencyId: null,
+    message: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   stubGeolocation();
   listEmergencySlots.mockResolvedValue(envelope([]));
+  getEmergencyEligibility.mockResolvedValue(envelope(eligible()));
   createEmergency.mockResolvedValue(
     envelope(pendingRequest({ status: "accepted", doctor_name: "Neema Kimaro" }))
   );
@@ -287,6 +305,118 @@ describe("PatientEmergencyScreen", () => {
       screen.queryByText("Waiting for the doctor to accept your request…")
     ).not.toBeInTheDocument();
   });
+
+  it("counts down the 30 minutes while no doctor has started the request", async () => {
+    // Filed five minutes ago → roughly 25 minutes left before the patient may
+    // re-request (§7). The clock is display-only; the server decides.
+    listEmergencies.mockResolvedValue(
+      envelope([
+        pendingRequest({
+          emergency_requested_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+        }),
+      ])
+    );
+
+    renderPatient();
+
+    expect(
+      await screen.findByText(/you can request help again in \d+:\d\d/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText("Waiting for the doctor to accept your request…")).toBeInTheDocument();
+    expect(screen.queryByLabelText("What is happening?")).not.toBeInTheDocument();
+  });
+
+  it("stops counting down once a doctor is with the patient", async () => {
+    listEmergencies.mockResolvedValue(envelope([pendingRequest({ status: "in_progress" })]));
+
+    renderPatient();
+
+    expect(await screen.findByText(/The doctor is with you now/)).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.queryByText(/you can request help again/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("What is happening?")).not.toBeInTheDocument();
+  });
+
+  it("shows the server's blocked answer instead of the form when it refuses a re-request", async () => {
+    listEmergencies.mockResolvedValue(envelope([]));
+    getEmergencyEligibility.mockResolvedValue(
+      envelope(
+        eligible({
+          canCreateEmergency: false,
+          reason: "EMERGENCY_ACTIVE",
+          availableAt: new Date(Date.now() + 8 * 60_000).toISOString(),
+          status: "pending",
+          activeEmergencyId: 9,
+          message: "You already have an active emergency request.",
+        })
+      )
+    );
+
+    renderPatient();
+
+    expect(
+      await screen.findByText(/You already have an active emergency request/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/you can request help again in \d+:\d\d/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("What is happening?")).not.toBeInTheDocument();
+  });
+
+  it("reconciles from the 409 body when another tab filed the same emergency first", async () => {
+    const who = userEvent.setup();
+    listEmergencies.mockResolvedValue(envelope([]));
+    createEmergency.mockRejectedValue(
+      new ApiError(
+        "You already have an active emergency request.",
+        409,
+        {},
+        {
+          canCreateEmergency: false,
+          reason: "EMERGENCY_ACTIVE",
+          availableAt: new Date(Date.now() + 4 * 60_000).toISOString(),
+          status: "pending",
+          activeEmergencyId: 9,
+          message: "You already have an active emergency request.",
+        }
+      )
+    );
+
+    renderPatient();
+
+    await who.click(await screen.findByRole("button", { name: /share my location/i }));
+    await screen.findByRole("button", { name: /location shared/i });
+    await who.selectOptions(await screen.findByLabelText("What is happening?"), "injury");
+    await who.click(screen.getByRole("button", { name: /request emergency help/i }));
+
+    expect(
+      await screen.findByText(/You already have an active emergency request/)
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("What is happening?")).not.toBeInTheDocument();
+  });
+
+  it("says why the previous emergency is over before showing the form again", async () => {
+    listEmergencies.mockResolvedValue(
+      envelope([pendingRequest({ status: "expired", emergency_expired_at: new Date().toISOString() })])
+    );
+
+    renderPatient();
+
+    expect(await screen.findByText(/expired after 30 minutes/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("What is happening?")).toBeInTheDocument();
+    expect(screen.queryByText(/you can request help again in/i)).not.toBeInTheDocument();
+  });
+
+  it("carries the doctor's reason onto the form when the request was rejected", async () => {
+    listEmergencies.mockResolvedValue(
+      envelope([pendingRequest({ status: "rejected", cancel_reason: "Off duty — call the clinic line" })])
+    );
+
+    renderPatient();
+
+    expect(
+      await screen.findByText(/was rejected: Off duty — call the clinic line/)
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("What is happening?")).toBeInTheDocument();
+  });
 });
 
 describe("DoctorEmergencyScreen", () => {
@@ -368,5 +498,59 @@ describe("DoctorEmergencyScreen", () => {
         cancel_reason: "Off duty - call the clinic line",
       })
     );
+  });
+
+  it("offers Emergency In Progress on an accepted request, never Accept", async () => {
+    listEmergencies.mockResolvedValue(
+      envelope([
+        pendingRequest({
+          status: "accepted",
+          doctor_name: "Neema Kimaro",
+          emergency_latitude: -6.165,
+          emergency_longitude: 39.296,
+        }),
+      ])
+    );
+
+    renderDoctor();
+
+    expect(await screen.findByText("Asha Juma")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /emergency in progress/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument();
+  });
+
+  it("marks an accepted emergency in progress and reloads the queue", async () => {
+    const who = userEvent.setup();
+    listEmergencies.mockResolvedValue(envelope([pendingRequest({ status: "accepted" })]));
+    respondToEmergency.mockResolvedValue(
+      envelope(pendingRequest({ status: "in_progress" }))
+    );
+
+    renderDoctor();
+    await screen.findByText("Asha Juma");
+    await who.click(screen.getByRole("button", { name: /emergency in progress/i }));
+
+    await waitFor(() => expect(respondToEmergency).toHaveBeenCalledWith(9, "in-progress"));
+    expect(listEmergencies).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers Done — and no Reject — while the visit is open", async () => {
+    const who = userEvent.setup();
+    listEmergencies.mockResolvedValue(envelope([pendingRequest({ status: "in_progress" })]));
+    respondToEmergency.mockResolvedValue(envelope(pendingRequest({ status: "done" })));
+
+    renderDoctor();
+    await screen.findByText("Asha Juma");
+
+    expect(screen.getByRole("button", { name: /^done$/i })).toBeInTheDocument();
+    expect(screen.getByText(/Visit open/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
+
+    await who.click(screen.getByRole("button", { name: /^done$/i }));
+    await waitFor(() => expect(respondToEmergency).toHaveBeenCalledWith(9, "done"));
   });
 });

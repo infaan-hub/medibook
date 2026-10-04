@@ -177,9 +177,11 @@ a { color: var(--color-primary); }
 }
 .badge--pending { background: var(--color-status-pending); color: #16191e; }
 .badge--accepted { background: var(--color-status-accepted); color: #fff; }
+.badge--in_progress { background: var(--color-status-in-progress); color: #16191e; }
 .badge--done { background: var(--color-status-done); color: #fff; }
 .badge--cancelled { background: var(--color-status-cancelled); color: #fff; }
 .badge--rejected { background: var(--color-status-rejected); color: #fff; }
+.badge--expired { background: var(--color-status-expired); color: #fff; }
 .badge--no-show { background: var(--color-status-no-show); color: #fff; }
 
 /* ---- Empty / Error / Skeleton (§21 states) ---- */
@@ -1302,6 +1304,8 @@ a { color: var(--color-primary); }
 .appt-card--done { border-left-color: var(--color-status-done); }
 .appt-card--cancelled { border-left-color: var(--color-status-cancelled); }
 .appt-card--rejected { border-left-color: var(--color-status-rejected); }
+.appt-card--in_progress { border-left-color: var(--color-status-in-progress); }
+.appt-card--expired { border-left-color: var(--color-status-expired); }
 
 .appt-card__top {
   display: flex;
@@ -3918,3 +3922,18 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .admin-audit-pager span { display: inline-flex; align-items: center; gap: 14px; }
 .admin-audit-pager button:disabled { opacity: 0.4; cursor: default; }
 .admin-audit-row > span:nth-child(2) small { word-break: break-all; }
+
+/* ---- Admin Reports card (server-generated PDF) ---- */
+.admin-reports-card { display: flex; flex-direction: column; gap: 14px; }
+.admin-reports-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.admin-reports-range { display: flex; gap: 10px; flex-wrap: wrap; }
+.admin-reports-range label { display: flex; flex-direction: column; gap: 5px; font-size: var(--text-xs); color: #82909d; }
+.admin-reports-range input, .admin-reports-range select { min-height: 36px; padding: 0 10px; border: 1px solid #dce5ea; border-radius: 9px; font: inherit; font-size: var(--text-sm); color: #17384a; background: #fff; }
+.admin-reports-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-reports-note { margin: 0; color: #82909d; font-size: 11px; line-height: 1.5; }
+
+/* ---- Medical Details header: report download action ---- */
+.med-page__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.med-page__header > div { min-width: 0; }
+.med-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 600px) { .med-page__header { flex-direction: column; } }

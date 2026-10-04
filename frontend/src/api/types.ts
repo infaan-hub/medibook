@@ -133,9 +133,11 @@ export interface LinkedDoctor {
 export type AppointmentStatus =
   | "pending"
   | "accepted"
+  | "in_progress"
   | "done"
   | "cancelled"
-  | "rejected";
+  | "rejected"
+  | "expired";
 
 export type AppointmentType = "NORMAL" | "EMERGENCY";
 
@@ -186,6 +188,33 @@ export interface EmergencyAppointment extends Appointment {
   doctor_name?: string;
   doctor_latitude?: number | null;
   doctor_longitude?: number | null;
+  /**
+   * Emergency lifecycle stamps (§27) — each one is written exactly once by the
+   * server when the request passes that stage, and stays null until then.
+   */
+  emergency_accepted_at?: string | null;
+  emergency_in_progress_at?: string | null;
+  emergency_completed_at?: string | null;
+  emergency_expired_at?: string | null;
+}
+
+/** Why the server refuses another emergency request right now (§7). */
+export type EmergencyBlockReason = "EMERGENCY_ACTIVE" | "EMERGENCY_IN_PROGRESS";
+
+/**
+ * GET /api/emergency/eligibility/ — the server's own answer to "may this
+ * patient file an emergency right now?" (§7, §30). Read it before showing the
+ * request form; POST /api/emergency/ re-checks the same rules anyway.
+ */
+export interface EmergencyEligibility {
+  canCreateEmergency: boolean;
+  reason: EmergencyBlockReason | null;
+  /** ISO instant the patient may request again, or null when no timer applies. */
+  availableAt: string | null;
+  /** Status of the row currently blocking (null when nothing is active). */
+  status: AppointmentStatus | null;
+  activeEmergencyId: number | null;
+  message: string | null;
 }
 
 /** Â§28 response envelope: success/message/data on success, errors on failure. */
@@ -213,6 +242,8 @@ export interface DoctorProfile extends GeoFields {
   last_name: string;
   /** Contact number on the account â€” shown on the doctor card and to patients. */
   phone: string;
+  /** Optional second contact number stored on the doctor profile row. */
+  phone_secondary?: string;
   profile_image: string | null;
   specialties: Specialty[];
   hospitals: number[];

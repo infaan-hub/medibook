@@ -72,16 +72,16 @@ describe("canTransition", () => {
 });
 
 describe("one open appointment per patient", () => {
-  it("counts pending and accepted as still holding a slot", () => {
-    expect([...OPEN_APPOINTMENT_STATUSES]).toEqual(["pending", "accepted"]);
+  it("counts pending, accepted and in_progress as still holding a slot", () => {
+    expect([...OPEN_APPOINTMENT_STATUSES]).toEqual(["pending", "accepted", "in_progress"]);
     expect(openAppointmentWhere(11)).toEqual({
       patient_id: 11,
-      status: { in: ["pending", "accepted"] },
+      status: { in: ["pending", "accepted", "in_progress"] },
     });
   });
 
-  it("releases the patient once the visit is done, cancelled or rejected", () => {
-    for (const status of ["done", "cancelled", "rejected"]) {
+  it("releases the patient once the visit is done, cancelled, rejected or expired", () => {
+    for (const status of ["done", "cancelled", "rejected", "expired"]) {
       expect(OPEN_APPOINTMENT_STATUSES as readonly string[]).not.toContain(status);
     }
   });
@@ -106,9 +106,13 @@ describe("one open appointment per patient", () => {
       "done",
       "cancelled",
       "rejected",
+      "in_progress",
+      "expired",
     ]);
     expect(isAppointmentStatus("accepted")).toBe(true);
     expect(isAppointmentStatus("done")).toBe(true);
+    expect(isAppointmentStatus("in_progress")).toBe(true);
+    expect(isAppointmentStatus("expired")).toBe(true);
     expect(isAppointmentStatus("confirmed")).toBe(false);
     expect(isAppointmentStatus("completed")).toBe(false);
   });

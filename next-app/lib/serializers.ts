@@ -492,6 +492,18 @@ export function appointmentDto(
           emergency_requested_at: appointment.emergency_requested_at
             ? iso(appointment.emergency_requested_at)
             : null,
+          emergency_accepted_at: appointment.emergency_accepted_at
+            ? iso(appointment.emergency_accepted_at)
+            : null,
+          emergency_in_progress_at: appointment.emergency_in_progress_at
+            ? iso(appointment.emergency_in_progress_at)
+            : null,
+          emergency_completed_at: appointment.emergency_completed_at
+            ? iso(appointment.emergency_completed_at)
+            : null,
+          emergency_expired_at: appointment.emergency_expired_at
+            ? iso(appointment.emergency_expired_at)
+            : null,
         }
       : {}),
   };

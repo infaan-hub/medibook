@@ -30,12 +30,24 @@ export const DEFAULT_MESSAGES: Record<number, string> = {
 export class ApiError extends Error {
   readonly status: number;
   readonly errors: FieldErrors;
+  /**
+   * Optional structured payload (e.g. emergency eligibility on a 409). Included
+   * in the failure envelope only when present, so every existing error response
+   * keeps its exact shape.
+   */
+  readonly data?: Record<string, unknown>;
 
-  constructor(status: number, message?: string, errors: FieldErrors = {}) {
+  constructor(
+    status: number,
+    message?: string,
+    errors: FieldErrors = {},
+    data?: Record<string, unknown>
+  ) {
     super(message ?? DEFAULT_MESSAGES[status] ?? `Request failed with status ${status}.`);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.data = data;
   }
 }
 
@@ -58,8 +70,8 @@ export const notFound = (message?: string) => new ApiError(404, message);
 /** Django REST's "Invalid page." (out-of-range / non-numeric ?page=). */
 export const invalidPage = () => new ApiError(404, "Invalid page.");
 
-export const conflict = (message?: string, errors?: FieldErrors) =>
-  new ApiError(409, message, errors);
+export const conflict = (message?: string, errors?: FieldErrors, data?: Record<string, unknown>) =>
+  new ApiError(409, message, errors, data);
 
 export const throttled = () => new ApiError(429, "Request was throttled.");
 

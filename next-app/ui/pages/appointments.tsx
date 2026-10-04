@@ -79,9 +79,11 @@ function formatDate(d: string): string {
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
   pending: "Pending",
   accepted: "Accepted",
+  in_progress: "In progress",
   done: "Done",
   cancelled: "Cancelled",
   rejected: "Rejected",
+  expired: "Expired",
 };
 
 function StatusBadge({ status }: { status: AppointmentStatus }) {

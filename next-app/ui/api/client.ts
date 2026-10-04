@@ -26,12 +26,24 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 export class ApiError extends Error {
   readonly status: number;
   readonly errors: Record<string, string[]>;
+  /**
+   * Structured `data` the server attached to the failure — the §28 envelope
+   * carries it on conflicts (e.g. the emergency eligibility that is blocking a
+   * re-request), so screens can reconcile instead of only showing a message.
+   */
+  readonly data?: Record<string, unknown>;
 
-  constructor(message: string, status: number, errors: Record<string, string[]> = {}) {
+  constructor(
+    message: string,
+    status: number,
+    errors: Record<string, string[]> = {},
+    data?: Record<string, unknown>
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.data = data;
   }
 }
 
@@ -92,7 +104,19 @@ http.interceptors.response.use(
       tokenStore.clear();
     }
 
-    const payload = error.response?.data;
+    // Binary endpoints (the PDF report routes) answer errors with a JSON body
+    // too — axios hands it over as a Blob, so decode it before reading fields.
+    const raw = error.response?.data as unknown;
+    let payload: (Envelope & Record<string, unknown>) | null = null;
+    if (raw instanceof Blob) {
+      try {
+        payload = JSON.parse(await raw.text()) as Envelope & Record<string, unknown>;
+      } catch {
+        payload = null;
+      }
+    } else if (raw && typeof raw === "object") {
+      payload = raw as Envelope & Record<string, unknown>;
+    }
     // Surface the first field-level reason so validation failures read as
     // "Systolic and diastolic blood pressure are recorded together." instead
     // of the generic envelope message.
@@ -108,7 +132,11 @@ http.interceptors.response.use(
       firstFieldError ??
       (payload && typeof payload === "object" ? payload.message : undefined) ??
       (status ? `Request failed (${status})` : "Network error — check your connection");
-    throw new ApiError(message, status ?? 0, errors ?? {});
+    const data =
+      payload && typeof payload === "object" && payload.data !== null && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : undefined;
+    throw new ApiError(message, status ?? 0, errors ?? {}, data);
   }
 );
 

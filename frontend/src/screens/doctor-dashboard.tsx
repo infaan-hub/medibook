@@ -240,9 +240,11 @@ function AppointmentRow({
   const statusConfig = {
     pending: { icon: <Clock3 size={14} />, label: "Awaiting review", color: "var(--color-status-pending)" },
     accepted: { icon: <CheckCircle2 size={14} />, label: "Accepted", color: "var(--color-status-accepted)" },
+    in_progress: { icon: <Play size={14} />, label: "In progress", color: "var(--color-status-in-progress, #2563eb)" },
     done: { icon: <CheckCircle2 size={14} />, label: "Done", color: "var(--color-status-done)" },
     cancelled: { icon: <Ban size={14} />, label: "Cancelled", color: "var(--color-status-cancelled)" },
     rejected: { icon: <XCircle size={14} />, label: "Rejected", color: "var(--color-status-rejected)" },
+    expired: { icon: <Clock3 size={14} />, label: "Expired", color: "var(--color-status-expired, #6b7280)" },
   };
 
   const currentStatus = statusConfig[appointment.status] || statusConfig.pending;

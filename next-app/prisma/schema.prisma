@@ -34,16 +34,24 @@ enum Role {
 }
 
 /// Appointment lifecycle:
-/// pending  → doctor has not answered the request yet
-/// accepted → doctor accepted the request; the visit is on the calendar
-/// done     → the visit took place and the doctor closed it
+/// pending     → doctor has not answered the request yet
+/// accepted    → doctor accepted the request; the visit is on the calendar
+/// done        → the visit took place and the doctor closed it
 /// cancelled / rejected → the booking is off (terminal)
+/// in_progress → EMERGENCY only: the doctor arrived and is seeing the patient
+///               (the patient stays blocked until it reaches `done`)
+/// expired     → EMERGENCY only: the 30-minute window passed before the doctor
+///               started it (terminal — the patient may request again)
+/// The two emergency values are listed last so this order mirrors the DB enum
+/// exactly (prisma/migrations/20261003010000_emergency_status_enum).
 enum AppointmentStatus {
   pending
   accepted
   done
   cancelled
   rejected
+  in_progress
+  expired
 }
 
 enum AppointmentType {
@@ -330,7 +338,9 @@ model DoctorSpecialty {
 
 /// One booked slot: patient + doctor + date + start/end + lifecycle status.
 /// Double bookings blocked by partial unique index `uniq_live_doctor_slot`
-/// (prisma/migrations/1_constraints).
+/// (prisma/migrations/1_constraints). A patient may hold only ONE active
+/// emergency at a time — partial unique index `uniq_active_patient_emergency`
+/// (prisma/migrations/20261003010200_emergency_active_guard).
 model Appointment {
   id                     Int               @id @default(autoincrement())
   appointment_date       DateTime          @db.Date
@@ -348,6 +358,13 @@ model Appointment {
   emergency_longitude    Float?
   emergency_location_accuracy Float?
   emergency_requested_at DateTime?
+  /// Lifecycle stamps for the emergency workflow (all server time, nullable):
+  /// requested → accepted → in_progress → completed, with expired set when the
+  /// 30-minute window closes before `in_progress`.
+  emergency_accepted_at      DateTime?
+  emergency_in_progress_at   DateTime?
+  emergency_completed_at     DateTime?
+  emergency_expired_at       DateTime?
   // Waiting-room queue (phase 11)
   /// When the patient checked in — entering the waiting line for that day.
   checked_in_at           DateTime?
@@ -373,6 +390,9 @@ model Appointment {
 
   @@index([doctor_id, appointment_date, status])
   @@index([patient_id, appointment_date, status])
+  /// "Does this patient already hold an active emergency?" — read on every
+  /// POST /api/emergency/ (eligibility) and by the expiry sweep.
+  @@index([patient_id, appointment_type, status])
   @@index([appointment_date])
   @@index([status])
   @@index([doctor_id])

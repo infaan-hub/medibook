@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listMyAppointments } from "../api/appointments";
-import { reasonLabel } from "./emergency";
+import { reasonLabel, statusLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
 import { listDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
@@ -253,7 +253,7 @@ function PatientHome({ user }: { user: User }) {
                     )}
                     <span className="home__appointment-badges">
                       {emergency && <span className="badge badge--emergency">Emergency</span>}
-                      <span className={`badge badge--${appt.status}`}>{appt.status}</span>
+                      <span className={`badge badge--${appt.status}`}>{statusLabel(appt.status)}</span>
                     </span>
                   </span>
                   <ChevronRight size={17} />

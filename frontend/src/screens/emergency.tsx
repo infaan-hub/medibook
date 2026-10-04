@@ -1,20 +1,36 @@
 /**
- * Emergency section (§27) — one file, two role screens:
+ * Emergency section (§27 / §29) — one file, two role screens:
  *
  *   PatientEmergencyScreen (/emergency)      — SOS form (reason + location).
  *     No date picker and no slot grid: the emergency is stamped with the
  *     current moment, and auto-dispatch hands it to a doctor who is available
  *     right now — falling back to the nearest nearby doctor when nobody is, so
- *     the request is always sent and notified. Plus the live status card.
+ *     the request is always sent and notified. Plus the live status card, which
+ *     tracks the server's 30-minute re-request window with a countdown and
+ *     silently re-reads the queue the moment it runs out (§30) — the browser
+ *     never reloads, and never decides on its own that the request expired.
  *   DoctorEmergencyScreen  (/doctor/emergency) — live requests assigned to them
- *     (auto-accepted ones included) with patient contact details, plus the
- *     legacy pending queue with one-tap accept / reject.
+ *     (auto-accepted ones included) driven by the server's state machine:
+ *       pending → [Accept] | [Reject]
+ *       accepted → [Emergency In Progress] | [Reject]
+ *       in_progress → [Done]   (the only state that ends a visit the patient
+ *                              can then re-request from)
  */
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { createEmergency, listEmergencies, respondToEmergency } from "../api/emergency";
-import type { EmergencyAppointment, EmergencyReason } from "../api/types";
+import {
+  createEmergency,
+  getEmergencyEligibility,
+  listEmergencies,
+  respondToEmergency,
+} from "../api/emergency";
+import type {
+  AppointmentStatus,
+  EmergencyAppointment,
+  EmergencyEligibility,
+  EmergencyReason,
+} from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../api/client";
 import {
@@ -96,6 +112,75 @@ export function reasonLabel(reason?: string | null): string {
   return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
 }
 
+/** Statuses that still hold the patient's single active emergency (§4). */
+const OPEN_STATUSES: readonly AppointmentStatus[] = ["pending", "accepted", "in_progress"];
+
+/** Human wording for every status the API can return (badge + cards). */
+const STATUS_LABELS: Record<AppointmentStatus, string> = {
+  pending: "Pending",
+  accepted: "Accepted",
+  in_progress: "In progress",
+  done: "Completed",
+  cancelled: "Cancelled",
+  rejected: "Rejected",
+  expired: "Expired",
+};
+
+export function statusLabel(status: AppointmentStatus): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+/** The server's re-request window — mirrored ONLY to render the countdown. */
+const EMERGENCY_WINDOW_MS = 30 * 60 * 1000;
+
+/** mm:ss left, clamped at zero. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * When this patient may file again, as an ISO instant.
+ *
+ * The server owns the arithmetic (§7): its eligibility answer already applied
+ * COALESCE(emergency_requested_at, created_at). The local fallback exists only
+ * so the card still counts down before that first response lands.
+ */
+function deadlineFor(
+  active: EmergencyAppointment | null,
+  eligibility: EmergencyEligibility | null
+): string | null {
+  if (eligibility && eligibility.activeEmergencyId !== null && eligibility.availableAt) {
+    return eligibility.availableAt;
+  }
+  if (!active || active.status === "in_progress" || !active.emergency_requested_at) {
+    return null;
+  }
+  return new Date(
+    Date.parse(active.emergency_requested_at) + EMERGENCY_WINDOW_MS
+  ).toISOString();
+}
+
+/**
+ * Ticks once a second while `iso` is in the future; null when there is no
+ * deadline, zero-or-less once it has passed (the caller then re-reads §30).
+ */
+function useRemainingMs(iso: string | null): number | null {
+  const target = iso ? Date.parse(iso) : Number.NaN;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (Number.isNaN(target) || target <= Date.now()) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [target]);
+
+  if (Number.isNaN(target)) return null;
+  return target - now;
+}
+
 /**
  * Where the patient is: the Zanzibar ward name plus a one-tap maps link. The
  * raw coordinates stay internal — the ward is what a doctor can act on.
@@ -161,6 +246,14 @@ function requestGeo(): Promise<GeoFix> {
   });
 }
 
+/** Pull structured eligibility out of a 409 body, when the server attached one. */
+function eligibilityFromError(error: unknown): EmergencyEligibility | null {
+  if (!(error instanceof ApiError)) return null;
+  const data = error.data;
+  if (!data || typeof data !== "object" || !("canCreateEmergency" in data)) return null;
+  return data as unknown as EmergencyEligibility;
+}
+
 /* =====================================================
    PATIENT — request emergency help + active status
    ===================================================== */
@@ -168,6 +261,7 @@ function requestGeo(): Promise<GeoFix> {
 export function PatientEmergencyScreen() {
   const { notify } = useToast();
   const [emergencies, setEmergencies] = useState<EmergencyAppointment[] | null>(null);
+  const [eligibility, setEligibility] = useState<EmergencyEligibility | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [reason, setReason] = useState<EmergencyReason | "">("");
@@ -179,8 +273,7 @@ export function PatientEmergencyScreen() {
 
   // The screen shows the live request whenever one is open; the form otherwise.
   const active =
-    emergencies?.find((item) => item.status === "pending" || item.status === "accepted") ??
-    null;
+    emergencies?.find((item) => OPEN_STATUSES.includes(item.status)) ?? null;
 
   const load = useCallback(() => {
     listEmergencies()
@@ -194,15 +287,57 @@ export function PatientEmergencyScreen() {
       });
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  /** Server-side answer + its 30-minute sweep (§18). Failures only hide it. */
+  const loadEligibility = useCallback(() => {
+    getEmergencyEligibility()
+      .then((response) => setEligibility(response.data))
+      .catch(() => setEligibility(null));
+  }, []);
 
-  // Doctor accepted / rejected while this screen is open → status updates live.
+  const refresh = useCallback(() => {
+    load();
+    loadEligibility();
+  }, [load, loadEligibility]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // A doctor acts (or the patient files from another tab) → status updates live.
   useRealtimeSync({
-    refresh: load,
-    events: ["appointment.emergency_accepted", "appointment.emergency_rejected"],
+    refresh,
+    events: [
+      "appointment.emergency_created",
+      "appointment.emergency_accepted",
+      "appointment.emergency_rejected",
+      "appointment.emergency_in_progress",
+      "appointment.emergency_completed",
+    ],
   });
+
+  const deadline = useMemo(() => deadlineFor(active, eligibility), [active, eligibility]);
+  const remainingMs = useRemainingMs(deadline);
+
+  // §30: the window closed → re-read silently (the read sweeps server-side),
+  // so the card turns back into the form without any reload.
+  const reconciledDeadline = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deadline || remainingMs === null || remainingMs > 0) return;
+    if (reconciledDeadline.current === deadline) return;
+    reconciledDeadline.current = deadline;
+    refresh();
+  }, [deadline, remainingMs, refresh]);
+
+  // The server blocked us with a row this queue has not shown yet (another tab
+  // filed one first) → pull the queue once so the live card can render.
+  const blockedId =
+    eligibility && !eligibility.canCreateEmergency ? eligibility.activeEmergencyId : null;
+  const fetchedBlockedId = useRef<number | null>(null);
+  useEffect(() => {
+    if (blockedId === null || active !== null || fetchedBlockedId.current === blockedId) return;
+    fetchedBlockedId.current = blockedId;
+    load();
+  }, [blockedId, active, load]);
 
   const shareLocation = async () => {
     setLocating(true);
@@ -250,8 +385,15 @@ export function PatientEmergencyScreen() {
       setReason("");
       setDescription("");
       setGeo(null);
-      load();
+      refresh();
     } catch (reason_) {
+      // A 409 carries the blocking eligibility (§28) — reconcile instead of
+      // only printing the message.
+      const blocked = eligibilityFromError(reason_);
+      if (blocked) {
+        setEligibility(blocked);
+        load();
+      }
       if (reason_ instanceof ApiError && Array.isArray(reason_.errors.location)) {
         setFormError(
           "A doctor in this area has not set a practice location. Please try again."
@@ -287,6 +429,36 @@ export function PatientEmergencyScreen() {
   const doctorMaps = doctorPoint ? directionsUrl(doctorPoint) : null;
   const patientArea = patientPoint ? nearestAreaName(patientPoint) : null;
 
+  const blocked = Boolean(eligibility && !eligibility.canCreateEmergency);
+
+  // Nothing is open any more, but the queue still holds the previous request —
+  // say WHY it ended instead of silently showing an empty form (§25).
+  const lastClosed = useMemo(() => {
+    if (active || !emergencies || emergencies.length === 0) return null;
+    const newest = emergencies[0];
+    return newest && !OPEN_STATUSES.includes(newest.status) ? newest : null;
+  }, [active, emergencies]);
+
+  const closedNote = (() => {
+    if (!lastClosed) return null;
+    switch (lastClosed.status) {
+      case "done":
+        return "Your last emergency was completed by the doctor — you can request help again.";
+      case "expired":
+        return "Your last emergency expired after 30 minutes without a doctor starting it — you can request help again.";
+      case "rejected":
+        return `Your last emergency request was rejected${
+          lastClosed.cancel_reason ? `: ${lastClosed.cancel_reason}` : ""
+        }.`;
+      case "cancelled":
+        return `Your last emergency request was cancelled${
+          lastClosed.cancel_reason ? `: ${lastClosed.cancel_reason}` : ""
+        }.`;
+      default:
+        return null;
+    }
+  })();
+
   return (
     <div className="page emergency-page">
       <header className="emergency__hero">
@@ -309,7 +481,9 @@ export function PatientEmergencyScreen() {
         /* -------- active request: live status -------- */
         <Card className="emergency__status">
           <div className="emergency__status-head">
-            <span className={`badge badge--${active.status}`}>{active.status}</span>
+            <span className={`badge badge--${active.status}`}>
+              {statusLabel(active.status)}
+            </span>
             <span className="emergency__status-reason">
               <ShieldAlert size={15} /> {reasonLabel(active.emergency_reason)}
             </span>
@@ -363,10 +537,54 @@ export function PatientEmergencyScreen() {
               The nearest doctor has been assigned — no waiting on an accept.
             </p>
           )}
+          {active.status === "in_progress" && (
+            <p className="form-note">
+              The doctor is with you now. Your emergency stays open until they
+              complete the visit.
+            </p>
+          )}
+          {active.status !== "in_progress" && remainingMs !== null && remainingMs > 0 && (
+            <p className="form-note">
+              <Clock3 size={14} /> If the doctor does not start the emergency, you
+              can request help again in {formatCountdown(remainingMs)}.
+            </p>
+          )}
           <div className="emergency__actions">
             <Link to={`/appointments/${active.id}`}>
               <Button variant="secondary">View details</Button>
             </Link>
+            <Link to="/appointments">
+              <Button variant="secondary">All appointments</Button>
+            </Link>
+          </div>
+        </Card>
+      ) : blocked && eligibility ? (
+        /* -------- the server says no (§30): show why + the countdown -------- */
+        <Card className="emergency__status">
+          <div className="emergency__status-head">
+            <span className={`badge badge--${eligibility.status ?? "pending"}`}>
+              {eligibility.status ? statusLabel(eligibility.status) : "Active"}
+            </span>
+            <span className="emergency__status-reason">
+              <ShieldAlert size={15} /> Emergency already open
+            </span>
+          </div>
+          <p>{eligibility.message ?? "You already have an active emergency request."}</p>
+          {eligibility.status === "in_progress" ? (
+            <p className="form-note">
+              You cannot file a second one while a doctor is with you — it ends
+              when they mark the visit done.
+            </p>
+          ) : (
+            remainingMs !== null &&
+            remainingMs > 0 && (
+              <p className="form-note">
+                <Clock3 size={14} /> You can request help again in{" "}
+                {formatCountdown(remainingMs)}.
+              </p>
+            )
+          )}
+          <div className="emergency__actions">
             <Link to="/appointments">
               <Button variant="secondary">All appointments</Button>
             </Link>
@@ -378,6 +596,7 @@ export function PatientEmergencyScreen() {
           <h2 className="emergency__form-title">
             <ShieldAlert size={18} /> Request emergency help
           </h2>
+          {closedNote && <p className="form-note">{closedNote}</p>}
           <form className="form" onSubmit={submit}>
             <div className="field">
               <label className="field__label" htmlFor="em-reason">
@@ -451,7 +670,7 @@ export function PatientEmergencyScreen() {
 }
 
 /* =====================================================
-   DOCTOR — pending emergency queue
+   DOCTOR — live queue driven by the server state machine
    ===================================================== */
 
 export function DoctorEmergencyScreen() {
@@ -478,40 +697,58 @@ export function DoctorEmergencyScreen() {
   // A patient files a new emergency while this screen is open → it appears live.
   useRealtimeSync({
     refresh: load,
-    events: ["appointment.emergency_created", "appointment.emergency_accepted"],
+    events: ["appointment.emergency_created", "appointment.emergency_rejected"],
   });
 
-  const accept = async (id: number) => {
+  /** One server-backed transition; the queue reloads from the API after it. */
+  const act = async (
+    id: number,
+    action: "accept" | "reject" | "in-progress" | "done",
+    body?: { cancel_reason?: string },
+    success?: string
+  ) => {
     setActing(id);
     try {
-      await respondToEmergency(id, "accept");
-      notify("success", "Emergency accepted — the patient has been notified.");
-      load();
-    } catch (reason) {
-      notify("error", message(reason));
-    } finally {
-      setActing(null);
-    }
-  };
-
-  const reject = async (id: number) => {
-    setActing(id);
-    try {
-      const cancelReason = rejectReason.trim();
-      await respondToEmergency(
-        id,
-        "reject",
-        cancelReason ? { cancel_reason: cancelReason } : undefined
-      );
-      notify("info", "Emergency request rejected.");
+      if (body) {
+        await respondToEmergency(id, action, body);
+      } else {
+        await respondToEmergency(id, action);
+      }
+      if (success) notify("success", success);
       setRejectingId(null);
       setRejectReason("");
       load();
     } catch (reason) {
       notify("error", message(reason));
+      // The row may have changed in another tab → re-read rather than assume.
+      load();
     } finally {
       setActing(null);
     }
+  };
+
+  const accept = (id: number) =>
+    act(id, "accept", undefined, "Emergency accepted — the patient has been notified.");
+
+  const startInProgress = (id: number) =>
+    act(
+      id,
+      "in-progress",
+      undefined,
+      "Emergency in progress — the patient can see you are on your way."
+    );
+
+  const complete = (id: number) =>
+    act(id, "done", undefined, "Emergency completed. The patient may request help again.");
+
+  const reject = (id: number) => {
+    const cancelReason = rejectReason.trim();
+    return act(
+      id,
+      "reject",
+      cancelReason ? { cancel_reason: cancelReason } : undefined,
+      "Emergency request rejected."
+    );
   };
 
   return (
@@ -523,8 +760,8 @@ export function DoctorEmergencyScreen() {
         <div>
           <h1 className="page__title">Emergency requests</h1>
           <p className="page__subtitle">
-            Urgent requests assigned to you — auto-dispatched ones are already
-            accepted; older pending ones still need accept or reject.
+            Urgent requests assigned to you — accept the new ones, then take them
+            in progress and close them when the visit ends.
           </p>
         </div>
       </header>
@@ -549,7 +786,7 @@ export function DoctorEmergencyScreen() {
                   {request.patient_name || request.patient_email}
                 </span>
                 <span className={`badge badge--${request.status}`}>
-                  {request.status}
+                  {statusLabel(request.status)}
                 </span>
               </div>
 
@@ -618,28 +855,59 @@ export function DoctorEmergencyScreen() {
                 </div>
               ) : (
                 <div className="emergency__actions">
-                  {request.status === "pending" ? (
+                  {request.status === "pending" && (
                     <Button
                       loading={acting === request.id}
                       onClick={() => accept(request.id)}
                     >
                       <Check size={16} /> Accept
                     </Button>
-                  ) : (
-                    <p className="form-note">
-                      Auto-assigned — already accepted for the patient. Reject only if
-                      you cannot attend.
-                    </p>
                   )}
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      setRejectingId(request.id);
-                      setRejectReason("");
-                    }}
-                  >
-                    <X size={16} /> Reject
-                  </Button>
+
+                  {request.status === "accepted" && (
+                    <>
+                      <p className="form-note">
+                        Auto-assigned — accepted for the patient. Mark it in
+                        progress once you are with them.
+                      </p>
+                      <Button
+                        loading={acting === request.id}
+                        onClick={() => startInProgress(request.id)}
+                      >
+                        <ShieldAlert size={16} /> Emergency In Progress
+                      </Button>
+                    </>
+                  )}
+
+                  {request.status === "in_progress" && (
+                    <>
+                      <p className="form-note">
+                        Visit open — close it with Done, which is what lets the
+                        patient request help again later.
+                      </p>
+                      <Button
+                        loading={acting === request.id}
+                        onClick={() => complete(request.id)}
+                      >
+                        <Check size={16} /> Done
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Reject is legal while the request is still open; once the
+                      visit is in progress the server only accepts Done. */}
+                  {request.status !== "in_progress" && (
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        setRejectingId(request.id);
+                        setRejectReason("");
+                      }}
+                    >
+                      <X size={16} /> Reject
+                    </Button>
+                  )}
+
                   <Link to={`/appointments/${request.id}`}>
                     <Button variant="secondary">Details</Button>
                   </Link>

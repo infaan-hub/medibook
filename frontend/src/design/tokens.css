@@ -40,9 +40,11 @@
   /* Appointment status colours (§9 workflow) */
   --color-status-pending: #f1c21b;
   --color-status-accepted: #0f62fe;
+  --color-status-in-progress: #eb6424;
   --color-status-done: #24a148;
   --color-status-cancelled: #8d8d8d;
   --color-status-rejected: #da1e28;
+  --color-status-expired: #525252;
   --color-status-no-show: #a56eff;
 
   /* Typography (§21) */

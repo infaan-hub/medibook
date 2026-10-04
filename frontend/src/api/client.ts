@@ -26,12 +26,24 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 export class ApiError extends Error {
   readonly status: number;
   readonly errors: Record<string, string[]>;
+  /**
+   * Structured `data` the server attached to the failure — the §28 envelope
+   * carries it on conflicts (e.g. the emergency eligibility that is blocking a
+   * re-request), so screens can reconcile instead of only showing a message.
+   */
+  readonly data?: Record<string, unknown>;
 
-  constructor(message: string, status: number, errors: Record<string, string[]> = {}) {
+  constructor(
+    message: string,
+    status: number,
+    errors: Record<string, string[]> = {},
+    data?: Record<string, unknown>
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.data = data;
   }
 }
 
@@ -108,7 +120,11 @@ http.interceptors.response.use(
       firstFieldError ??
       (payload && typeof payload === "object" ? payload.message : undefined) ??
       (status ? `Request failed (${status})` : "Network error — check your connection");
-    throw new ApiError(message, status ?? 0, errors ?? {});
+    const data =
+      payload && typeof payload === "object" && payload.data !== null && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : undefined;
+    throw new ApiError(message, status ?? 0, errors ?? {}, data);
   }
 );
 

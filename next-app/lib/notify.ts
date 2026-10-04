@@ -57,13 +57,15 @@ export async function notify(
   recipientId: number,
   notificationType: NotificationType | string,
   message: string,
-  appointmentId?: number | null
+  appointmentId?: number | null,
+  /** Overrides the default title for this notification type (push + inbox). */
+  title?: string
 ): Promise<Notification> {
   const notification = await prisma.notification.create({
     data: {
       recipient_id: recipientId,
       notification_type: notificationType as NotificationType,
-      title: TITLES[notificationType] ?? "MediBook update",
+      title: title ?? TITLES[notificationType] ?? "MediBook update",
       message,
       ...(appointmentId != null ? { related_appointment_id: appointmentId } : {}),
     },
@@ -106,7 +108,9 @@ export function broadcastAppointmentEvent(
     | "appointment.updated"
     | "appointment.emergency_created"
     | "appointment.emergency_accepted"
-    | "appointment.emergency_rejected",
+    | "appointment.emergency_rejected"
+    | "appointment.emergency_in_progress"
+    | "appointment.emergency_completed",
   recipientIds: Array<number | null | undefined>
 ): void {
   const targets = recipientIds.filter((id): id is number => typeof id === "number");

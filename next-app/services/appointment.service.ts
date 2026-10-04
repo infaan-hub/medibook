@@ -17,6 +17,7 @@ import { appointmentCreateSchema, appointmentPatchSchema } from "@/validators/mi
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
+import { canEmergencyTransition } from "./emergency.service";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, User } from "@prisma/client";
 
@@ -346,8 +347,12 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
 export const canTransition = (from: string, to: string): boolean =>
   (STATUS_TRANSITIONS[from] ?? []).includes(to);
 
-function assertTransition(from: string, to: string): void {
-  if (!canTransition(from, to)) {
+function assertTransition(from: string, to: string, emergency = false): void {
+  // Emergency rows follow the EMERGENCY lifecycle instead: an accepted
+  // emergency has to pass through `in_progress` before it can be closed, so a
+  // generic "done" tap from `accepted` is refused as well (§22).
+  const allowed = emergency ? canEmergencyTransition(from, to) : canTransition(from, to);
+  if (!allowed) {
     throw conflict(
       `Cannot change appointment status from "${from}" to "${to}".`,
       { status: [`Invalid transition ${from} → ${to}.`] }
@@ -398,7 +403,7 @@ export async function runAction(user: AuthUser, id: number, action: string, body
   if (!allowed) throw forbidden("You do not have permission to perform this action.");
 
   // State machine: reject illegal transitions (e.g. confirm a cancelled appointment).
-  assertTransition(appointment.status, config.status);
+  assertTransition(appointment.status, config.status, appointment.appointment_type === "EMERGENCY");
 
   const { appointmentActionSchema } = await import("@/validators/misc");
   const rawBody = (body ?? {}) as Record<string, unknown>;

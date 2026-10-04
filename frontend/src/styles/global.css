@@ -159,9 +159,11 @@ a { color: var(--color-primary); }
 }
 .badge--pending { background: var(--color-status-pending); color: #16191e; }
 .badge--accepted { background: var(--color-status-accepted); color: #fff; }
+.badge--in_progress { background: var(--color-status-in-progress); color: #16191e; }
 .badge--done { background: var(--color-status-done); color: #fff; }
 .badge--cancelled { background: var(--color-status-cancelled); color: #fff; }
 .badge--rejected { background: var(--color-status-rejected); color: #fff; }
+.badge--expired { background: var(--color-status-expired); color: #fff; }
 .badge--no-show { background: var(--color-status-no-show); color: #fff; }
 
 /* ---- Empty / Error / Skeleton (§21 states) ---- */
@@ -1059,6 +1061,8 @@ a { color: var(--color-primary); }
 .appt-card--done { border-left-color: var(--color-status-done); }
 .appt-card--cancelled { border-left-color: var(--color-status-cancelled); }
 .appt-card--rejected { border-left-color: var(--color-status-rejected); }
+.appt-card--in_progress { border-left-color: var(--color-status-in-progress); }
+.appt-card--expired { border-left-color: var(--color-status-expired); }
 
 .appt-card__top {
   display: flex;

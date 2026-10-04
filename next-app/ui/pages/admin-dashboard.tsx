@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FilePlus2, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
+import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, Download, Eye, FilePlus2, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
 import { approveDoctor, createAdminDoctor, createAdminUser, deleteAdminDoctor, deleteAdminUser, getAdminStats, listAdminUsers, listAuditEvents, type AdminStats } from "../api/admin";
 import { deleteAppointment, listAllAppointments } from "../api/appointments";
 import { listDoctors } from "../api/doctors";
+import { downloadAdminReport, viewAdminReport, type ReportPeriodParams, type ReportPreset } from "../api/reports";
 import type { Appointment, AuditEvent, DoctorProfile, User } from "../api/types";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -31,6 +32,138 @@ function MetricCard({ label, value, icon, tone, detail }: { label: string; value
   return <Card className="admin-metric"><span className={`admin-metric__icon ${tone}`}>{icon}</span><span className="admin-metric__label">{label}</span><strong>{value.toLocaleString()}</strong><span className="admin-metric__detail">{detail}</span></Card>;
 }
 
+const REPORT_PRESETS: [ReportPreset, string][] = [
+  ["month", "Month"],
+  ["week", "Week"],
+  ["custom", "Custom"],
+];
+
+const REPORT_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** Default picker values — a UI convenience only; the server resolves the period. */
+function currentMonthParts(): { month: string; year: string } {
+  const today = new Date();
+  return {
+    month: String(today.getMonth() + 1).padStart(2, "0"),
+    year: String(today.getFullYear()),
+  };
+}
+
+/**
+ * Reports card (§34) — period presets (month + year selectors, week, custom
+ * range) with separate View and Download actions, explicit loading copy and
+ * a specific error line when generation fails.
+ */
+function ReportsCard() {
+  const { notify } = useToast();
+  const [preset, setPreset] = useState<ReportPreset>("month");
+  const [month, setMonth] = useState<string>(() => currentMonthParts().month);
+  const [year, setYear] = useState<string>(() => currentMonthParts().year);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState<"generate" | "view" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const years = (() => {
+    const current = Number(currentMonthParts().year);
+    return [current, current - 1, current - 2];
+  })();
+
+  const params = (): ReportPeriodParams => {
+    if (preset === "custom") return { preset, from, to };
+    if (preset === "month") return { preset, month: `${year}-${month}` };
+    return { preset };
+  };
+
+  const validate = (): string | null => {
+    if (preset === "custom" && (!from || !to)) {
+      return "Choose both a start and an end date for a custom range.";
+    }
+    return null;
+  };
+
+  const run = async (action: "generate" | "view") => {
+    const problem = validate();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setBusy(action);
+    setError(null);
+    try {
+      const query = params();
+      const result =
+        action === "view" ? await viewAdminReport(query) : await downloadAdminReport(query);
+      notify(
+        "success",
+        action === "view"
+          ? `Report opened in a new tab — ${result.filename}`
+          : `Report downloaded — ${result.filename}`
+      );
+    } catch (reason) {
+      const text = message(reason);
+      setError(text);
+      notify("error", text);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card className="admin-quick-card admin-reports-card">
+      <div className="admin-card-heading">
+        <div><h2>Reports</h2><p>Generate a server-side administrative report (PDF)</p></div>
+        <span className="admin-chart-caption"><Download size={15} /> PDF</span>
+      </div>
+      <div className="admin-reports-controls">
+        <div className="admin-filter-tabs">
+          {REPORT_PRESETS.map(([key, label]) => (
+            <button key={key} type="button" className={preset === key ? "active" : ""} onClick={() => setPreset(key)}>{label}</button>
+          ))}
+        </div>
+        {preset === "month" && (
+          <div className="admin-reports-range">
+            <label className="admin-field"><span>Month</span>
+              <select value={month} onChange={(event) => setMonth(event.target.value)}>
+                {REPORT_MONTHS.map((name, index) => (
+                  <option key={name} value={String(index + 1).padStart(2, "0")}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-field"><span>Year</span>
+              <select value={year} onChange={(event) => setYear(event.target.value)}>
+                {years.map((value) => <option key={value} value={String(value)}>{value}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
+        {preset === "custom" && (
+          <div className="admin-reports-range">
+            <label className="admin-field"><span>From</span><input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+            <label className="admin-field"><span>To</span><input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+          </div>
+        )}
+        <div className="admin-reports-actions">
+          <button className="admin-primary-button" type="button" onClick={() => run("generate")} disabled={busy !== null}>
+            <Download size={16} /> {busy === "generate" ? "Generating report..." : "Generate Report"}
+          </button>
+          <button className="admin-outline-button" type="button" onClick={() => run("view")} disabled={busy !== null}>
+            <Eye size={16} /> {busy === "view" ? "Opening report..." : "View"}
+          </button>
+        </div>
+      </div>
+      {error && <ErrorState message={error} />}
+      <p className="admin-reports-note">
+        Generated on the server in the application timezone and scoped to your administrator role.
+        Empty sections still appear in the PDF and are labelled, never silently dropped.
+      </p>
+    </Card>
+  );
+}
+
 export function AdminDashboardScreen() {
   const [stats, setStats] = useState<AdminStats | null>(null); const [events, setEvents] = useState<AuditEvent[]>([]); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true);
   const load = useCallback(() => { setLoading(true); setError(null); Promise.all([getAdminStats(), listAuditEvents({ page_size: 5 })]).then(([statsResponse, auditResponse]) => { setStats(statsResponse.data); setEvents(auditResponse.data.results); }).catch((reason) => setError(message(reason))).finally(() => setLoading(false)); }, []);
@@ -44,6 +177,7 @@ export function AdminDashboardScreen() {
     <AdminHeader title="Overview" description="A clear view of your healthcare platform." action={<div className="admin-header-actions"><Link to="/admin/audit" className="admin-outline-button"><Activity size={16} /> Audit log</Link><Link to="/admin/users/new" className="admin-primary-button"><Plus size={16} /> Add user</Link></div>} />
     <div className="admin-metrics"><MetricCard label="Total users" value={stats.users} detail="Across all roles" tone="admin-metric__icon--blue" icon={<Users size={19} />} /><MetricCard label="Patients" value={stats.patients} detail="Registered patients" tone="admin-metric__icon--teal" icon={<ShieldCheck size={19} />} /><MetricCard label="Doctors" value={stats.doctors} detail="Active profiles" tone="admin-metric__icon--violet" icon={<Stethoscope size={19} />} /><MetricCard label="Appointments" value={stats.appointments} detail="All-time bookings" tone="admin-metric__icon--amber" icon={<Clock3 size={19} />} /></div>
     <div className="admin-dashboard-grid"><Card className="admin-chart-card"><div className="admin-card-heading"><div><h2>Appointment activity</h2><p>Distribution by current status</p></div><span className="admin-chart-caption"><Activity size={15} /> Live data</span></div><div className="admin-bar-chart">{statuses.length ? statuses.map(([status, count]) => <div className="admin-bar-row" key={status}><span>{status}</span><div><i style={{ width: `${Math.max((count / maxStatus) * 100, count ? 8 : 0)}%` }} /></div><strong>{count}</strong></div>) : <EmptyState title="No appointment activity" />}</div></Card><Card className="admin-chart-card admin-breakdown"><div className="admin-card-heading"><div><h2>Platform health</h2><p>At-a-glance operating mix</p></div><CircleDollarSign size={19} /></div><div className="admin-donut" style={{ "--donut": `${stats.users ? (stats.patients / stats.users) * 100 : 0}%` } as React.CSSProperties}><span>{stats.users ? Math.round((stats.patients / stats.users) * 100) : 0}%<small>patients</small></span></div><div className="admin-legend"><span><i className="admin-dot admin-dot--teal" /> Patients <b>{stats.patients}</b></span><span><i className="admin-dot admin-dot--violet" /> Doctors <b>{stats.doctors}</b></span></div></Card></div>
+    <ReportsCard />
     <div className="admin-dashboard-grid admin-dashboard-grid--lower"><Card className="admin-quick-card"><div className="admin-card-heading"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div className="admin-action-grid"><Link to="/admin/users/new"><UserPlus size={18} /><span><b>Add a user</b><small>Create a patient or staff account</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors/new"><FilePlus2 size={18} /><span><b>Add a doctor</b><small>Set up a professional profile</small></span><ChevronRight size={15} /></Link><Link to="/admin/users"><Users size={18} /><span><b>Review users</b><small>Search and filter accounts</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors"><Stethoscope size={18} /><span><b>Review doctors</b><small>Approve or suspend profiles</small></span><ChevronRight size={15} /></Link><Link to="/admin/appointments"><Clock3 size={18} /><span><b>Manage appointments</b><small>View, filter, and delete bookings</small></span><ChevronRight size={15} /></Link></div></Card><Card className="admin-activity-card"><div className="admin-card-heading"><div><h2>Recent activity</h2><p>Latest activity across the platform</p></div><Link to="/admin/audit">View all <ArrowUpRight size={15} /></Link></div>{events.length ? <div className="admin-activity-list">{events.slice(0, 5).map((event) => <div key={event.id}><span className="admin-activity-icon"><CheckCircle2 size={15} /></span><span><b>{event.action.replace(/[._]/g, " ")}</b><small>{activityLine(event)} Â· {formatTime(event.created_at)}</small></span></div>)}</div> : <EmptyState title="No activity yet" description="Logins, bookings and admin actions will appear here." />}</Card></div>
   </div>;
 }

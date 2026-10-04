@@ -2,7 +2,7 @@
  * Appointment repository — bookings, lifecycle updates, reminders.
  */
 import { prisma } from "@/lib/db";
-import type { AppointmentStatus, Prisma } from "@prisma/client";
+import type { AppointmentStatus, Prisma, PrismaClient } from "@prisma/client";
 
 export const APPOINTMENT_INCLUDE = {
   patient: true,
@@ -41,14 +41,17 @@ export const APPOINTMENT_STATUSES = [
   "done",
   "cancelled",
   "rejected",
+  "in_progress",
+  "expired",
 ] as const;
 
 /**
  * Statuses that mean the patient still HOLDS the appointment: the doctor has
  * not closed the visit yet. A patient may only have one such appointment at a
  * time — the booking gate in appointment.service reads this list.
+ * `in_progress` counts: the patient is literally being seen right now.
  */
-export const OPEN_APPOINTMENT_STATUSES = ["pending", "accepted"] as const;
+export const OPEN_APPOINTMENT_STATUSES = ["pending", "accepted", "in_progress"] as const;
 
 export const isAppointmentStatus = (value: string): boolean =>
   (APPOINTMENT_STATUSES as readonly string[]).includes(value);
@@ -185,36 +188,106 @@ export const markReminderSent = (id: number) =>
 
 /* ---------------------------- Emergency Appointments -------------------------- */
 
-export const findPatientEmergencyAppointment = (patientId: number) =>
-  prisma.appointment.findFirst({
+/**
+ * Database handle a repository call may run against — either the shared client
+ * or the client Prisma hands to an interactive transaction. Emergency creation
+ * does its eligibility check + insert inside one transaction, so every helper
+ * it calls must accept the transaction handle.
+ */
+export type AppointmentDb = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Statuses that count as an ACTIVE emergency: the patient is still waiting for
+ * (or receiving) care and therefore may not file another request.
+ *
+ *   pending / accepted → blocked only for the first 30 minutes
+ *   in_progress        → blocked until the doctor marks it `done`
+ */
+export const EMERGENCY_ACTIVE_STATUSES = ["pending", "accepted", "in_progress"] as const;
+
+/**
+ * The patient's current emergency, newest first. `null` means they hold no
+ * active emergency and are free to request another.
+ *
+ * `COALESCE(emergency_requested_at, created_at)` rules are applied by the
+ * service — this row carries both stamps so it can decide.
+ */
+export const findPatientEmergencyAppointment = (patientId: number, db: AppointmentDb = prisma) =>
+  db.appointment.findFirst({
     where: {
       patient_id: patientId,
       appointment_type: "EMERGENCY",
+      status: { in: [...EMERGENCY_ACTIVE_STATUSES] },
+    },
+    include: APPOINTMENT_INCLUDE,
+    orderBy: [{ emergency_requested_at: "desc" }, { id: "desc" }],
+  });
+
+/**
+ * Lazily stamp EXPIRED on emergencies whose 30-minute window closed before the
+ * doctor reached `in_progress`. Idempotent, always server-time based, and run
+ * from every eligibility read — so it works even when the patient's browser
+ * was closed the whole time (§18). The rows are kept: only the status changes,
+ * which is what drops them out of `EMERGENCY_ACTIVE_STATUSES` (and out of the
+ * `uniq_active_patient_emergency` predicate) so a new request can be filed.
+ *
+ * `cutoff` is "requested at or before this instant is timed out" — computed by
+ * the service from the 30-minute rule so the business rule stays in one place.
+ * Returns the rows that were just expired.
+ */
+export const expireTimedOutEmergencies = async (
+  cutoff: Date,
+  patientId?: number,
+  db: AppointmentDb = prisma
+) => {
+  const stale = await db.appointment.findMany({
+    where: {
+      ...(patientId !== undefined ? { patient_id: patientId } : {}),
+      appointment_type: "EMERGENCY",
       status: { in: ["pending", "accepted"] },
+      // COALESCE: rows written before emergency_requested_at existed still time out.
+      OR: [
+        { emergency_requested_at: { lte: cutoff } },
+        { emergency_requested_at: null, created_at: { lte: cutoff } },
+      ],
     },
     include: APPOINTMENT_INCLUDE,
   });
+  if (stale.length === 0) return stale;
 
-export const createEmergencyAppointment = (data: {
-  patient_id: number;
-  doctor_id: number;
-  hospital_id: number | null;
-  appointment_date: string;
-  start_time: string;
-  end_time: string;
-  reason?: string;
-  notes?: string;
-  appointment_type: "EMERGENCY";
-  /** Auto-dispatched emergencies start `accepted`; explicit picks stay `pending`. */
-  status?: AppointmentStatus;
-  emergency_reason: string;
-  emergency_description?: string;
-  emergency_latitude: number;
-  emergency_longitude: number;
-  emergency_location_accuracy?: number | null;
-  emergency_requested_at: Date;
-}) =>
-  prisma.appointment.create({
+  await db.appointment.updateMany({
+    where: { id: { in: stale.map((row) => row.id) }, status: { in: ["pending", "accepted"] } },
+    // The window closed AT the cutoff, not whenever this sweep happened to run.
+    data: { status: "expired", emergency_expired_at: cutoff },
+  });
+  return stale;
+};
+
+export const createEmergencyAppointment = (
+  data: {
+    patient_id: number;
+    doctor_id: number;
+    hospital_id: number | null;
+    appointment_date: string;
+    start_time: string;
+    end_time: string;
+    reason?: string;
+    notes?: string;
+    appointment_type: "EMERGENCY";
+    /** Auto-dispatched emergencies start `accepted`; explicit picks stay `pending`. */
+    status?: AppointmentStatus;
+    emergency_reason: string;
+    emergency_description?: string;
+    emergency_latitude: number;
+    emergency_longitude: number;
+    emergency_location_accuracy?: number | null;
+    emergency_requested_at: Date;
+    /** Stamped when the row starts life already `accepted` (auto-dispatch). */
+    emergency_accepted_at?: Date | null;
+  },
+  db: AppointmentDb = prisma
+) =>
+  db.appointment.create({
     data: {
       patient_id: data.patient_id,
       doctor_id: data.doctor_id,
@@ -232,6 +305,7 @@ export const createEmergencyAppointment = (data: {
       emergency_longitude: data.emergency_longitude,
       emergency_location_accuracy: data.emergency_location_accuracy ?? null,
       emergency_requested_at: data.emergency_requested_at,
+      ...(data.emergency_accepted_at ? { emergency_accepted_at: data.emergency_accepted_at } : {}),
     },
     include: APPOINTMENT_INCLUDE,
   });

@@ -22,6 +22,7 @@ import { ApiError } from "../api/client";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { captureFix, LocationError } from "../lib/location";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { downloadPatientReport, viewPatientReport } from "../api/reports";
 import { LocationLine } from "../components/Location";
 import { useToast } from "../state/app-context";
 import {
@@ -43,6 +44,7 @@ import {
   FlaskConical,
   Download,
   ExternalLink,
+  Eye,
   File,
   Upload,
 } from "lucide-react";
@@ -373,6 +375,30 @@ export function SettingsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* ---- Report generation (§34) — always the caller's own chart ---- */
+  const [reportBusy, setReportBusy] = useState<"generate" | "view" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  const runReport = async (action: "generate" | "view") => {
+    setReportBusy(action);
+    setReportError(null);
+    try {
+      const result = action === "view" ? await viewPatientReport() : await downloadPatientReport();
+      notify(
+        "success",
+        action === "view"
+          ? `Report opened in a new tab — ${result.filename}`
+          : `Report downloaded — ${result.filename}`
+      );
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Could not generate your report.";
+      setReportError(text);
+      notify("error", text);
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
   async function handleUploadRecord(e: FormEvent) {
     e.preventDefault();
     setRecordError(null);
@@ -492,7 +518,17 @@ export function SettingsScreen() {
             <Link to="/profile">Profile</Link>.
           </p>
         </div>
+        <div className="med-page__actions">
+          <Button variant="secondary" onClick={() => runReport("generate")} disabled={reportBusy !== null}>
+            <Download size={14} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
+          </Button>
+          <Button variant="secondary" onClick={() => runReport("view")} disabled={reportBusy !== null}>
+            <Eye size={14} /> {reportBusy === "view" ? "Opening report..." : "View"}
+          </Button>
+        </div>
       </div>
+
+      {reportError && <ErrorState message={reportError} />}
 
       <Card className="card--fit">
         <div className="med-detail__header">

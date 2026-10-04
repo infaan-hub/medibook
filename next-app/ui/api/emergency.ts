@@ -6,17 +6,37 @@
  *  - POST /api/emergency/                     — patient requests emergency help
  *       (no doctor in the payload: the server auto-dispatches on the current
  *       time — a doctor available right now, or the nearest one otherwise)
+ *  - GET  /api/emergency/eligibility/         — server-authoritative "may I file
+ *       another emergency right now?" (30-minute re-request gate, §30)
  *  - GET  /api/emergency/available-slots/     — merged slot grid across nearby doctors
  *  - GET  /api/emergency/nearby-doctors/      — doctors near a location
- *  - POST /api/emergency/appointments/{id}/   — doctor accepts / rejects
+ *  - POST /api/emergency/appointments/{id}/   — doctor accepts / rejects /
+ *       marks in progress / completes (the state machine lives on the server)
  */
 
 import { apiGet, apiPost } from "./client";
-import type { DoctorProfile, EmergencyAppointment, EmergencyReason, Envelope } from "./types";
+import type {
+  DoctorProfile,
+  EmergencyAppointment,
+  EmergencyEligibility,
+  EmergencyReason,
+  Envelope,
+} from "./types";
 
 /** GET /api/emergency/ — the signed-in user's emergency queue. */
 export function listEmergencies(): Promise<Envelope<EmergencyAppointment[]>> {
   return apiGet<EmergencyAppointment[]>("/emergency/");
+}
+
+/**
+ * GET /api/emergency/eligibility/ — may this patient file an emergency NOW?
+ *
+ * The server owns the 30-minute re-request window: it sweeps timed-out rows as
+ * a side effect of this read, so the answer is always the real one. Use it to
+ * swap the request form for the live status card without guessing.
+ */
+export function getEmergencyEligibility(): Promise<Envelope<EmergencyEligibility>> {
+  return apiGet<EmergencyEligibility>("/emergency/eligibility/");
 }
 
 export interface EmergencyCreatePayload {
@@ -76,10 +96,19 @@ export function listNearbyDoctors(params: {
   return apiGet<NearbyDoctor[]>("/emergency/nearby-doctors/", params);
 }
 
-/** POST /api/emergency/appointments/{id}/ — accept or reject a pending request. */
+/**
+ * POST /api/emergency/appointments/{id}/ — doctor actions on one request.
+ *
+ * Every value is a real backend transition (§21); the server refuses anything
+ * illegal, so the UI must never offer a button the state machine can't take:
+ *
+ *   pending     → "accept" | "reject"
+ *   accepted    → "in-progress" | "reject"
+ *   in_progress → "done"
+ */
 export function respondToEmergency(
   id: number,
-  action: "accept" | "reject",
+  action: "accept" | "reject" | "in-progress" | "done",
   body?: { cancel_reason?: string }
 ): Promise<Envelope<EmergencyAppointment>> {
   return apiPost<EmergencyAppointment>(`/emergency/appointments/${id}/`, {

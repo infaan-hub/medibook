@@ -90,13 +90,16 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 export type BadgeStatus =
   | "pending"
   | "accepted"
+  | "in_progress"
   | "done"
   | "cancelled"
   | "rejected"
+  | "expired"
   | "no-show";
 
 export function Badge({ status }: { status: BadgeStatus }) {
-  return <span className={`badge badge--${status}`}>{status}</span>;
+  // "in_progress" reads as "in progress" — underscores are a DB artefact.
+  return <span className={`badge badge--${status}`}>{status.replace(/_/g, " ")}</span>;
 }
 
 /* ---------------- EmptyState (§21 empty state) ---------------- */

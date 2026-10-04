@@ -37,6 +37,7 @@ import {
   resultLabel,
 } from "../lib/lab-orders";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { downloadDoctorReport, viewDoctorReport } from "../api/reports";
 import { useToast } from "../state/app-context";
 import {
   ArrowLeft,
@@ -54,6 +55,7 @@ import {
   History,
   Download,
   ExternalLink,
+  Eye,
 } from "lucide-react";
 
 function msg(error: unknown): string {
@@ -989,6 +991,34 @@ export function DoctorMedicalTreatmentScreen() {
   const [labForm, setLabForm] = useState<LabForm>(EMPTY_LAB);
   const [labSaving, setLabSaving] = useState(false);
 
+  /* ---- Report generation (§34) ---- */
+  const [reportBusy, setReportBusy] = useState<"generate" | "view" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  const runReport = async (action: "generate" | "view") => {
+    if (selectedId === null) return;
+    setReportBusy(action);
+    setReportError(null);
+    try {
+      const result =
+        action === "view"
+          ? await viewDoctorReport(selectedId)
+          : await downloadDoctorReport(selectedId);
+      notify(
+        "success",
+        action === "view"
+          ? `Report opened in a new tab — ${result.filename}`
+          : `Report downloaded — ${result.filename}`
+      );
+    } catch (e) {
+      const text = msg(e);
+      setReportError(text);
+      notify("error", text);
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
   const loadPatients = useCallback(() => {
     setPatientsError(null);
     setPatientsLoading(true);
@@ -1313,6 +1343,16 @@ export function DoctorMedicalTreatmentScreen() {
         </div>
         <div className="treat-actions-row">
           {!showForm && (
+            <Button variant="secondary" onClick={() => runReport("generate")} disabled={reportBusy !== null}>
+              <Download size={14} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
+            </Button>
+          )}
+          {!showForm && (
+            <Button variant="secondary" onClick={() => runReport("view")} disabled={reportBusy !== null}>
+              <Eye size={14} /> {reportBusy === "view" ? "Opening report..." : "View"}
+            </Button>
+          )}
+          {!showForm && (
             <Button variant="primary" onClick={handleNew}>
               <Stethoscope size={14} /> New Treatment
             </Button>
@@ -1325,6 +1365,7 @@ export function DoctorMedicalTreatmentScreen() {
         </div>
       </div>
 
+      {reportError && <ErrorState message={reportError} />}
       {detailError && <ErrorState message={detailError} onRetry={() => selectedId && loadPatient(selectedId)} />}
       {detailLoading && <Skeleton lines={4} />}
 

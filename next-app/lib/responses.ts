@@ -24,10 +24,17 @@ export const createdResponse = (data: unknown, message = "") =>
 export function errorResponse(
   message?: string,
   errors?: FieldErrors,
-  status = 400
+  status = 400,
+  /** Structured extras (only set by errors that carry them, e.g. a 409 with eligibility). */
+  data?: Record<string, unknown>
 ): Response {
   return Response.json(
-    { success: false, message: message ?? DEFAULT_MESSAGES[status] ?? `Request failed with status ${status}.`, errors: errors ?? {} },
+    {
+      success: false,
+      message: message ?? DEFAULT_MESSAGES[status] ?? `Request failed with status ${status}.`,
+      errors: errors ?? {},
+      ...(data ? { data } : {}),
+    },
     { status }
   );
 }
@@ -62,7 +69,7 @@ export function applySecurityHeaders(response: Response): Response {
 /** Convert any thrown value into an envelope Response (no stack leakage). */
 export function errorResponseFrom(error: unknown): Response {
   if (error instanceof ApiError) {
-    return errorResponse(error.message, error.errors, error.status);
+    return errorResponse(error.message, error.errors, error.status, error.data);
   }
   // Unexpected failure: log server-side, never expose details (§36).
   console.error("[api] unhandled error:", error);

@@ -1,6 +1,17 @@
 /**
- * Emergency appointment service — handles emergency appointment booking,
- * nearby doctor search, and emergency-specific actions.
+ * Emergency appointment service — emergency booking, nearby doctor search, and
+ * the emergency lifecycle (accept → in progress → done) including the
+ * re-request rules:
+ *
+ *   PENDING / ACCEPTED → blocked for 30 minutes from the request, then the
+ *                        patient may file again (the old row is stamped
+ *                        EXPIRED, never deleted or rewritten to `done`).
+ *   IN_PROGRESS        → the doctor arrived; only DONE releases the patient,
+ *                        no timeout applies.
+ *   DONE / REJECTED / CANCELLED / EXPIRED → the patient may file again.
+ *
+ * Every eligibility decision is made HERE, on the server, from database
+ * timestamps — the client countdown is display-only.
  */
 import { Prisma } from "@prisma/client";
 import { conflict, notFound, badRequest, forbidden, ValidationError } from "@/lib/errors";
@@ -9,13 +20,19 @@ import { appointmentDto, emergencyAppointmentDto } from "@/lib/serializers";
 import { emergencyAppointmentCreateSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
+import {
+  EMERGENCY_ACTIVE_STATUSES,
+  type AppointmentDb,
+} from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import { broadcastAppointmentEvent, notify } from "@/lib/notify";
 import { hasLocation, haversineKm } from "@/lib/geo";
 import type { AuthUser } from "@/lib/auth";
-import type { Appointment, NotificationType, User } from "@prisma/client";
+import type { Appointment, AppointmentStatus, Doctor, NotificationType, User } from "@prisma/client";
 
 type AppointmentWithPatient = Appointment & { patient: User };
+/** An emergency row with the relations every action/serializer needs. */
+export type EmergencyRow = Appointment & { patient: User; doctor: Doctor & { user: User } };
 
 /**
  * Row shape returned by the nearby search — deliberately `select`s only the
@@ -50,6 +67,22 @@ export const MAX_EMERGENCY_RADIUS_KM = 50;
 /** Emergency appointments are stamped for now + this window. */
 const EMERGENCY_SLOT_SECONDS = 30 * 60;
 
+/**
+ * The re-request window (§4): this long after the patient filed the request,
+ * with the doctor still not at IN_PROGRESS, the patient is eligible again.
+ * Purely a server-side timestamp comparison — see `EMERGENCY_TIMEOUT_CUTOFF`.
+ */
+export const EMERGENCY_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * Advisory-lock namespace for `pg_advisory_xact_lock(ns, patient_id)` during
+ * emergency creation: one patient = one lock, so simultaneous requests from
+ * two tabs queue up instead of both reading "no active emergency". Arbitrary
+ * but fixed constant; the partial unique index `uniq_active_patient_emergency`
+ * remains the database-level backstop.
+ */
+const EMERGENCY_CREATE_LOCK_NAMESPACE = 87213401;
+
 /** How many nearby doctors we inspect before giving up on a date/slot. */
 const MAX_SLOT_CANDIDATES = 25;
 /** Stop widening once this many doctors have at least one free slot. */
@@ -59,11 +92,14 @@ const MIN_DOCTORS_WITH_SLOTS = 5;
  * The `NotificationType` DB enum has no emergency_* members — writing one
  * makes Prisma throw a validation error, so the notify() call inside create /
  * accept / reject 500'd the whole emergency flow. Emergency traffic reuses the
- * closest valid member instead; the message body still says "Emergency".
+ * closest valid member instead; the message body (and, for the lifecycle
+ * steps, an explicit title) still says "Emergency".
  */
 const EMERGENCY_NOTIFICATION_TYPES = {
   requested: "appointment_request",
   accepted: "appointment_confirmed",
+  inProgress: "appointment_confirmed",
+  completed: "system",
   rejected: "appointment_rejected",
 } as const;
 
@@ -75,6 +111,188 @@ export const emergencyNotificationType = (
 
 /** "09:00:00" → "09:00" for notification copy. */
 const formatClock = (time: string) => time.slice(0, 5);
+
+/* ==========================================================================
+   Eligibility — the single source of truth for "may this patient request
+   another emergency?" (§7). Everything reads server timestamps only.
+   ========================================================================== */
+
+/** Why the patient is blocked right now. */
+export type EmergencyBlockReason = "EMERGENCY_ACTIVE" | "EMERGENCY_IN_PROGRESS";
+
+export interface EmergencyEligibility {
+  canCreateEmergency: boolean;
+  /** Machine-readable blocker; null when the patient is free to request. */
+  reason: EmergencyBlockReason | null;
+  /** ISO instant the patient becomes eligible again (null = only `done` ends it). */
+  availableAt: string | null;
+  /** Status of the emergency causing the block (null when none). */
+  status: AppointmentStatus | null;
+  activeEmergencyId: number | null;
+  /** Human copy the UI can show verbatim. */
+  message: string;
+}
+
+/** The bits of the active emergency eligibility depends on (pure data). */
+export interface ActiveEmergencyFacts {
+  id: number;
+  status: AppointmentStatus;
+  /** COALESCE(emergency_requested_at, created_at) — always server time. */
+  requestedAt: Date;
+}
+
+const ELIGIBLE: EmergencyEligibility = {
+  canCreateEmergency: true,
+  reason: null,
+  availableAt: null,
+  status: null,
+  activeEmergencyId: null,
+  message: "",
+};
+
+/**
+ * Pure decision table (§33) — kept side-effect free so the 30-minute boundary
+ * is unit-testable without a database or a real clock:
+ *
+ *   none / done / rejected / cancelled / expired → ALLOW
+ *   in_progress                                  → BLOCK forever (until done)
+ *   pending / accepted                           → BLOCK until requested+30min
+ */
+export function evaluateEmergencyEligibility(
+  active: ActiveEmergencyFacts | null,
+  now: Date
+): EmergencyEligibility {
+  if (!active) return ELIGIBLE;
+
+  const base = { status: active.status, activeEmergencyId: active.id };
+
+  if (active.status === "in_progress") {
+    return {
+      ...base,
+      canCreateEmergency: false,
+      reason: "EMERGENCY_IN_PROGRESS",
+      availableAt: null,
+      message: "Your emergency appointment is currently in progress.",
+    };
+  }
+
+  // done / rejected / cancelled / expired — the request is over, the patient
+  // is free straight away regardless of how long ago it was filed (§33).
+  if (active.status !== "pending" && active.status !== "accepted") {
+    return { ...ELIGIBLE, status: active.status, activeEmergencyId: active.id };
+  }
+
+  const availableAt = new Date(active.requestedAt.getTime() + EMERGENCY_TIMEOUT_MS);
+  if (now.getTime() >= availableAt.getTime()) {
+    // Window closed before the doctor arrived — the caller will stamp the old
+    // row EXPIRED, so this is a real ALLOW, not a stale read.
+    return { ...ELIGIBLE, status: active.status, activeEmergencyId: active.id };
+  }
+
+  return {
+    ...base,
+    canCreateEmergency: false,
+    reason: "EMERGENCY_ACTIVE",
+    availableAt: availableAt.toISOString(),
+    message:
+      "You already have an active emergency request. You can request another after 30 minutes if the doctor has not started the appointment.",
+  };
+}
+
+/**
+ * Server-authoritative eligibility for one patient (§7):
+ * expire whatever timed out, then evaluate the remaining active emergency.
+ *
+ * `db` lets the create path run the exact same logic inside its transaction;
+ * `now` exists for tests only — production callers always use server time.
+ */
+export async function getEmergencyEligibility(
+  patientId: number,
+  options: { db?: AppointmentDb; now?: Date } = {}
+): Promise<EmergencyEligibility> {
+  const db = options.db ?? (await import("@/lib/db")).prisma;
+  const now = options.now ?? new Date();
+
+  const cutoff = new Date(now.getTime() - EMERGENCY_TIMEOUT_MS);
+  await appointments.expireTimedOutEmergencies(cutoff, patientId, db);
+
+  const active = await appointments.findPatientEmergencyAppointment(patientId, db);
+  return evaluateEmergencyEligibility(active ? activeEmergencyFacts(active) : null, now);
+}
+
+/** Row → the minimal facts the pure evaluator needs. */
+function activeEmergencyFacts(row: Appointment): ActiveEmergencyFacts {
+  return {
+    id: row.id,
+    status: row.status,
+    requestedAt: row.emergency_requested_at ?? row.created_at,
+  };
+}
+
+/** 409 for a blocked create, carrying the structured eligibility in `data`. */
+function emergencyBlockedConflict(eligibility: EmergencyEligibility) {
+  const message =
+    eligibility.message || "You already have an active emergency request.";
+  return conflict(
+    message,
+    { non_field_errors: [message] },
+    {
+      canCreateEmergency: false,
+      reason: eligibility.reason ?? "EMERGENCY_ACTIVE",
+      availableAt: eligibility.availableAt,
+      status: eligibility.status,
+      activeEmergencyId: eligibility.activeEmergencyId,
+    }
+  );
+}
+
+/* ==========================================================================
+   Status transitions — only the assigned doctor (or an admin) may move an
+   emergency forward, and only along the legal path (§22).
+   ========================================================================== */
+
+export const EMERGENCY_STATUS_TRANSITIONS: Record<string, readonly AppointmentStatus[]> = {
+  pending: ["accepted", "rejected", "cancelled", "expired"],
+  accepted: ["in_progress", "rejected", "cancelled", "expired"],
+  // The doctor is with the patient: nothing but finishing releases it.
+  in_progress: ["done"],
+  done: [],
+  cancelled: [],
+  rejected: [],
+  expired: [],
+};
+
+/** Pure: may `from` move to `to`? (shared with appointment.service's runAction.) */
+export const canEmergencyTransition = (from: string, to: string): boolean =>
+  (EMERGENCY_STATUS_TRANSITIONS[from] ?? []).includes(to as AppointmentStatus);
+
+function assertEmergencyTransition(from: string, to: string): void {
+  if (!canEmergencyTransition(from, to)) {
+    throw conflict(`Cannot change emergency status from "${from}" to "${to}".`, {
+      status: [`Invalid transition ${from} → ${to}.`],
+    });
+  }
+}
+
+/**
+ * Role + ownership gate shared by every doctor-side emergency action: the
+ * assigned doctor or an admin, never the patient and never another doctor (§23).
+ */
+async function assertEmergencyActor(user: AuthUser, doctorId: number, verb: string): Promise<void> {
+  const ownDoctor = await ownDoctorId(user);
+  const isOwnerDoctor = user.role === "doctor" && ownDoctor === doctorId;
+  const isAdmin = user.role === "admin" || user.is_superuser;
+  if (!isOwnerDoctor && !isAdmin) {
+    throw forbidden(`Only the assigned doctor can ${verb} this emergency appointment.`);
+  }
+}
+
+/** The doctor's display name from a row that includes `doctor.user`. */
+function doctorLabel(appointment: Appointment & { doctor?: { user?: Partial<User> } }): string {
+  const user = appointment.doctor?.user;
+  const name = `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim();
+  return name ? `Dr. ${name}` : "your doctor";
+}
 
 
 /**
@@ -251,15 +469,12 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     longitude: input.emergency_longitude,
   };
 
-  // Patient-level guard first: if they already hold a pending/accepted
-  // emergency, say so (409) instead of "slot not available" — the slot is
-  // often taken by their own active emergency.
-  const existingEmergency = await appointments.findPatientEmergencyAppointment(user.id);
-  if (existingEmergency) {
-    throw conflict("You already have a pending emergency appointment.", {
-      non_field_errors: ["You can only have one pending emergency appointment at a time."],
-    });
-  }
+  // Patient-level guard first: if they already hold an active emergency, say
+  // so (409 + structured eligibility) instead of "slot not available" — the
+  // slot is often taken by their own emergency. This is a fast fail only; the
+  // AUTHORITATIVE check runs again inside the create transaction below.
+  const eligibility = await getEmergencyEligibility(user.id);
+  if (!eligibility.canCreateEmergency) throw emergencyBlockedConflict(eligibility);
 
   if (input.hospital !== undefined && input.hospital !== null) {
     const { findHospital } = await import("@/repositories/content.repo");
@@ -313,25 +528,57 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
     distance = picked.distance;
   }
 
-  const appointment = await appointments.createEmergencyAppointment({
-    patient_id: user.id,
-    doctor_id: target.id,
-    hospital_id: input.hospital ?? null,
-    appointment_date: date,
-    start_time: start,
-    end_time: end,
-    reason: input.reason ?? "",
-    notes: input.notes ?? "",
-    appointment_type: "EMERGENCY",
-    // Auto-dispatch books straight into `accepted`: there is no accept step.
-    status: input.doctor !== undefined && input.doctor !== null ? "pending" : "accepted",
-    emergency_reason: input.emergency_reason,
-    emergency_description: input.emergency_description ?? "",
-    emergency_latitude: input.emergency_latitude,
-    emergency_longitude: input.emergency_longitude,
-    emergency_location_accuracy: input.emergency_location_accuracy ?? null,
-    emergency_requested_at: new Date(),
-  });
+  // Auto-dispatch books straight into `accepted` (there is no accept step);
+  // an explicitly chosen doctor stays `pending` until they accept.
+  const autoDispatched = input.doctor === undefined || input.doctor === null;
+  const requestedAt = new Date();
+  const { prisma } = await import("@/lib/db");
+
+  let appointment: EmergencyRow;
+  try {
+    appointment = await prisma.$transaction(async (tx) => {
+      // One patient = one lock. Two simultaneous requests (double tap, two
+      // tabs, network retry) queue here instead of both reading "no active
+      // emergency" and both inserting (§8).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${EMERGENCY_CREATE_LOCK_NAMESPACE}::int, ${user.id}::int)`;
+
+      // Authoritative eligibility re-check with the transaction handle: the
+      // window may have closed while dispatch ran, or a concurrent request may
+      // have won. Server timestamps only — never anything the client sent.
+      const fresh = await getEmergencyEligibility(user.id, { db: tx, now: requestedAt });
+      if (!fresh.canCreateEmergency) throw emergencyBlockedConflict(fresh);
+
+      return appointments.createEmergencyAppointment(
+        {
+          patient_id: user.id,
+          doctor_id: target.id,
+          hospital_id: input.hospital ?? null,
+          appointment_date: date,
+          start_time: start,
+          end_time: end,
+          reason: input.reason ?? "",
+          notes: input.notes ?? "",
+          appointment_type: "EMERGENCY",
+          status: autoDispatched ? "accepted" : "pending",
+          emergency_reason: input.emergency_reason,
+          emergency_description: input.emergency_description ?? "",
+          emergency_latitude: input.emergency_latitude,
+          emergency_longitude: input.emergency_longitude,
+          emergency_location_accuracy: input.emergency_location_accuracy ?? null,
+          emergency_requested_at: requestedAt,
+          emergency_accepted_at: autoDispatched ? requestedAt : null,
+        },
+        tx
+      );
+    });
+  } catch (error) {
+    // Backstop: `uniq_active_patient_emergency` rejected the insert because a
+    // request that did not take the advisory lock still got there first.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw emergencyBlockedConflict(await getEmergencyEligibility(user.id));
+    }
+    throw error;
+  }
 
   // The doctor is told the emergency is theirs; the patient is told who got it.
   await notify(
@@ -415,32 +662,34 @@ export async function findNearbyDoctors(
   return nearby;
 }
 
-/** Doctor accepts emergency appointment. */
-export async function acceptEmergencyAppointment(req: Request, user: AuthUser, id: number) {
+/** Load one emergency row, or fail with the usual 404 / 400. */
+async function loadEmergency(id: number): Promise<EmergencyRow> {
   const appointment = await appointments.findAppointmentById(id);
   if (!appointment) throw notFound();
   if (appointment.appointment_type !== "EMERGENCY") {
     throw badRequest("This is not an emergency appointment.");
   }
+  return appointment;
+}
 
-  const ownDoctor = await ownDoctorId(user);
-  const isOwnerDoctor = user.role === "doctor" && ownDoctor === appointment.doctor_id;
-  const isAdmin = user.role === "admin" || user.is_superuser;
+/** Doctor accepts emergency appointment. */
+export async function acceptEmergencyAppointment(req: Request, user: AuthUser, id: number) {
+  const appointment = await loadEmergency(id);
+  await assertEmergencyActor(user, appointment.doctor_id, "accept");
 
-  if (!isOwnerDoctor && !isAdmin) {
-    throw forbidden("Only the assigned doctor can accept this emergency appointment.");
-  }
-
-  if (appointment.status !== "pending") {
+  if (!canEmergencyTransition(appointment.status, "accepted")) {
     throw conflict("This emergency appointment is no longer pending.");
   }
 
-  const updated = await appointments.updateAppointment(id, { status: "accepted" });
+  const updated = await appointments.updateAppointment(id, {
+    status: "accepted",
+    emergency_accepted_at: new Date(),
+  });
 
   await notify(
     appointment.patient_id,
     emergencyNotificationType("accepted"),
-    `Your emergency appointment has been accepted by Dr. ${updated.doctor?.user?.first_name} ${updated.doctor?.user?.last_name}.`,
+    `Your emergency appointment has been accepted by ${doctorLabel(updated)}.`,
     updated.id
   );
 
@@ -453,25 +702,87 @@ export async function acceptEmergencyAppointment(req: Request, user: AuthUser, i
   return { appointment: updated, message: "Emergency appointment accepted." };
 }
 
+/**
+ * Doctor taps "Emergency In Progress" — they have physically arrived and are
+ * seeing the patient (§9). From here the 30-minute rule no longer applies: the
+ * patient stays blocked until this emergency reaches `done`.
+ */
+export async function startEmergencyInProgress(req: Request, user: AuthUser, id: number) {
+  const appointment = await loadEmergency(id);
+  await assertEmergencyActor(user, appointment.doctor_id, "start");
+
+  if (appointment.status === "pending") {
+    throw conflict("Accept the emergency appointment before marking it in progress.");
+  }
+  if (!canEmergencyTransition(appointment.status, "in_progress")) {
+    throw conflict("This emergency appointment is no longer active.");
+  }
+
+  const updated = await appointments.updateAppointment(id, {
+    status: "in_progress",
+    emergency_in_progress_at: new Date(),
+  });
+
+  await notify(
+    updated.patient_id,
+    emergencyNotificationType("inProgress"),
+    `Your emergency appointment with ${doctorLabel(updated)} is now in progress.`,
+    updated.id,
+    "Emergency in progress"
+  );
+
+  broadcastAppointmentEvent(updated, "appointment.emergency_in_progress", [
+    updated.patient_id,
+    updated.doctor.user_id,
+  ]);
+
+  return { appointment: updated, message: "Emergency appointment in progress." };
+}
+
+/**
+ * Doctor taps "Done" — treatment finished. This is the ONLY state that ends an
+ * IN_PROGRESS emergency, and it releases the patient immediately (§12-14).
+ */
+export async function completeEmergencyAppointment(req: Request, user: AuthUser, id: number) {
+  const appointment = await loadEmergency(id);
+  await assertEmergencyActor(user, appointment.doctor_id, "complete");
+
+  if (appointment.status === "accepted") {
+    throw conflict("Mark the emergency in progress when you reach the patient, then finish it.");
+  }
+  if (!canEmergencyTransition(appointment.status, "done")) {
+    throw conflict("This emergency appointment is no longer in progress.");
+  }
+
+  const updated = await appointments.updateAppointment(id, {
+    status: "done",
+    emergency_completed_at: new Date(),
+  });
+
+  await notify(
+    updated.patient_id,
+    emergencyNotificationType("completed"),
+    `Your emergency appointment with ${doctorLabel(updated)} has been completed.`,
+    updated.id,
+    "Emergency completed"
+  );
+
+  broadcastAppointmentEvent(updated, "appointment.emergency_completed", [
+    updated.patient_id,
+    updated.doctor.user_id,
+  ]);
+
+  return { appointment: updated, message: "Emergency appointment completed." };
+}
+
 /** Doctor rejects emergency appointment. */
 export async function rejectEmergencyAppointment(req: Request, user: AuthUser, id: number, body: unknown) {
-  const appointment = await appointments.findAppointmentById(id);
-  if (!appointment) throw notFound();
-  if (appointment.appointment_type !== "EMERGENCY") {
-    throw badRequest("This is not an emergency appointment.");
-  }
-
-  const ownDoctor = await ownDoctorId(user);
-  const isOwnerDoctor = user.role === "doctor" && ownDoctor === appointment.doctor_id;
-  const isAdmin = user.role === "admin" || user.is_superuser;
-
-  if (!isOwnerDoctor && !isAdmin) {
-    throw forbidden("Only the assigned doctor can reject this emergency appointment.");
-  }
+  const appointment = await loadEmergency(id);
+  await assertEmergencyActor(user, appointment.doctor_id, "reject");
 
   // Auto-dispatched emergencies land on `accepted`, so rejecting has to work
   // there too — the patient still needs a way out if the doctor cannot attend.
-  if (appointment.status !== "pending" && appointment.status !== "accepted") {
+  if (!canEmergencyTransition(appointment.status, "rejected")) {
     throw conflict("This emergency appointment is no longer open.");
   }
 
@@ -505,17 +816,30 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
   return appointments.findPatientEmergencyAppointment(user.id);
 }
 
-/** Get doctor's live (pending + auto-assigned) emergency appointments. */
+/**
+ * Run the 30-minute sweep before anyone reads a queue: a request whose window
+ * closed without the doctor reaching IN_PROGRESS drops out of the live list
+ * (the row itself is kept as history). Server-side, so a closed browser or a
+ * stale tab never keeps a dead request alive (§18).
+ */
+async function sweepTimedOutEmergencies(): Promise<void> {
+  const cutoff = new Date(Date.now() - EMERGENCY_TIMEOUT_MS);
+  await appointments.expireTimedOutEmergencies(cutoff);
+}
+
+/** Get doctor's live (pending + accepted + in-progress) emergency appointments. */
 export async function getDoctorEmergencyAppointments(user: AuthUser) {
   const ownDoctor = await ownDoctorId(user);
   if (ownDoctor === -1) return [];
+
+  await sweepTimedOutEmergencies();
 
   const { prisma } = await import("@/lib/db");
   return prisma.appointment.findMany({
     where: {
       doctor_id: ownDoctor,
       appointment_type: "EMERGENCY",
-      status: { in: ["pending", "accepted"] },
+      status: { in: [...EMERGENCY_ACTIVE_STATUSES] },
     },
     include: {
       patient: true,
@@ -530,16 +854,18 @@ export async function getDoctorEmergencyAppointments(user: AuthUser) {
  * GET /api/emergency/ — role-scoped emergency queue (the UI's sidebar screen
  * loads exactly this):
  *   patient → their own emergency appointments, newest first (0..1 active)
- *   doctor  → live requests assigned to them (pending or auto-accepted)
+ *   doctor  → live requests assigned to them (pending / accepted / in progress)
  *   admin   → every live emergency on the platform
  */
 export async function listEmergencies(user: AuthUser) {
   const { prisma } = await import("@/lib/db");
   const include = { patient: true, doctor: { include: { user: true } } } as const;
 
+  if (user.role !== "doctor") await sweepTimedOutEmergencies();
+
   if (user.role === "admin" || user.is_superuser) {
     return prisma.appointment.findMany({
-      where: { appointment_type: "EMERGENCY", status: { in: ["pending", "accepted"] } },
+      where: { appointment_type: "EMERGENCY", status: { in: [...EMERGENCY_ACTIVE_STATUSES] } },
       include,
       orderBy: { emergency_requested_at: "asc" },
     });
