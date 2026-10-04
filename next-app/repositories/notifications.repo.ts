@@ -69,6 +69,8 @@ export const findPushByEndpoint = (endpoint: string) =>
 export const updatePushSubscription = (
   id: number,
   data: {
+    /** Reassign the endpoint to another account (see `createPush`). */
+    user_id?: number;
     p256dh_key?: string;
     auth_key?: string;
     fcm_token?: string;
@@ -79,6 +81,7 @@ export const updatePushSubscription = (
   prisma.pushSubscription.update({
     where: { id },
     data: {
+      ...(data.user_id !== undefined ? { user_id: data.user_id } : {}),
       ...(data.p256dh_key !== undefined ? { p256dh_key: data.p256dh_key } : {}),
       ...(data.auth_key !== undefined ? { auth_key: data.auth_key } : {}),
       ...(data.fcm_token !== undefined ? { fcm_token: data.fcm_token } : {}),

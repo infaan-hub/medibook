@@ -59,11 +59,13 @@ export async function createPush(user: AuthUser, body: unknown) {
   // and reactivates instead of failing with a unique-constraint error.
   const existing = await notifications.findPushByEndpoint(input.endpoint);
   if (existing) {
-    if (existing.user_id !== user.id) {
-      const { forbidden } = await import("@/lib/errors");
-      throw forbidden("This push endpoint belongs to another account.");
-    }
     const updated = await notifications.updatePushSubscription(existing.id, {
+      // A Web Push endpoint identifies a BROWSER/DEVICE, not a person — one
+      // endpoint can only ever deliver to the account currently using that
+      // device. Handing it over (rather than 403-ing) is what makes push work
+      // after someone signs out and a different account signs in on the same
+      // phone; the previous owner simply stops receiving on that device.
+      user_id: existing.user_id === user.id ? undefined : user.id,
       p256dh_key: input.p256dh_key,
       auth_key: input.auth_key,
       fcm_token: input.fcm_token,
