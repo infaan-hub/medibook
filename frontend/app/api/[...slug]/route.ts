@@ -1,78 +1,22 @@
-import type { NextRequest } from "next/server";
-
 /**
- * Same-origin proxy for /api/* → backend (next-app :8000).
- * Uses a route handler (not rewrites) so the exact path — including the
- * trailing slash the backend treats as canonical — is preserved.
+ * Unknown /api/* paths → §28 JSON 404.
+ *
+ * Without this the optional catch-all page (app/[[...slug]]/page.tsx) answers a
+ * mistyped or not-yet-deployed API path with 200 text/html. The browser client
+ * then receives an HTML document where an envelope was expected and screens
+ * crash with a cryptic "… is not iterable" instead of a clear "Not found".
  */
-const API_PROXY_TARGET =
-  process.env.INTERNAL_API_TARGET ??
-  (process.env.NODE_ENV === "production"
-    ? "https://medibook-backend-jade.vercel.app"
-    : "http://127.0.0.1:8000");
+import { applySecurityHeaders, errorResponse } from "@/lib/responses";
 
-export const maxDuration = 60;
+const notFound = (_request: Request) =>
+  applySecurityHeaders(errorResponse("The requested resource was not found.", {}, 404));
 
-async function proxy(request: NextRequest): Promise<Response> {
-  const url = new URL(request.url);
-  const target = `${API_PROXY_TARGET}${url.pathname}${url.search}`;
-
-  // Hop-by-hop / forbidden request headers must not be forwarded: `fetch`
-  // rejects `expect` outright ("fetch failed" → our 502), and the rest break
-  // framing (content-length/transfer-encoding) or point at the wrong hop.
-  const SKIP_REQUEST_HEADERS = new Set([
-    "host",
-    "connection",
-    "content-length",
-    "accept-encoding",
-    "expect",
-    "transfer-encoding",
-    "keep-alive",
-    "te",
-    "trailer",
-    "upgrade",
-    "proxy-authorization",
-    "proxy-connection",
-  ]);
-
-  const headers = new Headers();
-  request.headers.forEach((value, key) => {
-    if (SKIP_REQUEST_HEADERS.has(key.toLowerCase())) {
-      return;
-    }
-    headers.append(key, value);
-  });
-
-  const method = request.method;
-  const body = method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer();
-
-  try {
-    const upstream = await fetch(target, {
-      method,
-      headers,
-      body,
-      redirect: "manual",
-      cache: "no-store",
-    });
-
-    const resHeaders = new Headers();
-    upstream.headers.forEach((value, key) => {
-      const k = key.toLowerCase();
-      if (k === "content-encoding" || k === "content-length" || k === "transfer-encoding") return;
-      resHeaders.append(key, value);
-    });
-
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: resHeaders,
-    });
-  } catch {
-    return Response.json(
-      { success: false, error: "API proxy cannot reach the backend. Is next-app running on :8000?" },
-      { status: 502 }
-    );
-  }
-}
-
-export { proxy as GET, proxy as POST, proxy as PUT, proxy as PATCH, proxy as DELETE, proxy as HEAD, proxy as OPTIONS };
+export {
+  notFound as GET,
+  notFound as HEAD,
+  notFound as POST,
+  notFound as PUT,
+  notFound as PATCH,
+  notFound as DELETE,
+  notFound as OPTIONS,
+};
