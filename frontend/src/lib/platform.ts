@@ -37,6 +37,33 @@ export function isAndroid(): boolean {
   return /Android/i.test(window.navigator.userAgent);
 }
 
+/**
+ * Desktop/macOS Safari — NOT Chrome/Edge/Opera/Samsung/Firefox.
+ *
+ * Safari is the only browser we target that refuses Web Push from a normal tab
+ * even on a desktop OS: it only exposes PushManager's subscribe path to a site
+ * that has been added to the Dock (its macOS equivalent of "Add to Home
+ * Screen"). A Safari tab advertises `Notification` + `PushManager` and then
+ * fails at subscribe time, which used to surface as an opaque
+ * "couldn't enable notifications".
+ *
+ * Every Chromium browser we support (Chrome, Edge, Samsung Internet) carries
+ * "Chrome" or "Edg" in its UA and is therefore excluded, as is Android, which
+ * `isAndroid()` handles separately. iPhone/iPad Safari is excluded too: it needs
+ * "Add to Home Screen" rather than "Add to Dock", and `iosNeedsHomeScreen`
+ * already covers it. What is left is desktop/macOS Safari.
+ */
+export function isSafari(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent;
+  if (/Android/i.test(ua)) return false;
+  if (/iPad|iPhone|iPod/.test(ua)) return false;
+  return (
+    /Safari/i.test(ua) &&
+    !/Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|SamsungBrowser|FxiOS|Firefox/i.test(ua)
+  );
+}
+
 /** Which permission flow the UI must use. */
 export function getPushPlatform(): PushPlatform {
   if (isIOS()) return "ios";
@@ -73,6 +100,13 @@ export interface NotificationCapability {
    * a Safari tab must never be asked for permission.
    */
   iosNeedsHomeScreen: boolean;
+  /**
+   * Safari on macOS/iPadOS-desktop: Web Push needs the site added to the Dock,
+   * so an ordinary Safari tab cannot subscribe either.
+   */
+  safariNeedsInstall: boolean;
+  /** Either platform can only deliver push from its installed-app context. */
+  needsInstalledPWA: boolean;
   /** A permission prompt can actually be presented right now. */
   canRequestPermission: boolean;
   /** Everything required to create a PushSubscription exists. */
@@ -87,6 +121,10 @@ export function getNotificationCapability(): NotificationCapability {
   const serviceWorker = typeof navigator !== "undefined" && "serviceWorker" in navigator;
   const pushApi = typeof window !== "undefined" && "PushManager" in window;
   const iosNeedsHomeScreen = platform === "ios" && !standalone;
+  // Only Safari gates Web Push this way on a desktop OS; Chrome/Edge/Samsung
+  // subscribe straight from a tab, so they must not be caught by this.
+  const safariNeedsInstall = !standalone && isSafari();
+  const needsInstalledPWA = iosNeedsHomeScreen || safariNeedsInstall;
 
   return {
     platform,
@@ -96,9 +134,11 @@ export function getNotificationCapability(): NotificationCapability {
     serviceWorker,
     pushApi,
     iosNeedsHomeScreen,
-    canRequestPermission: notificationApi && secureContext && !iosNeedsHomeScreen,
+    safariNeedsInstall,
+    needsInstalledPWA,
+    canRequestPermission: notificationApi && secureContext && !needsInstalledPWA,
     webPushSupported:
-      notificationApi && serviceWorker && pushApi && secureContext && !iosNeedsHomeScreen,
+      notificationApi && serviceWorker && pushApi && secureContext && !needsInstalledPWA,
   };
 }
 

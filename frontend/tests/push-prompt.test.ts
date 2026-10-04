@@ -26,6 +26,7 @@ import {
 const base: PushStateInput = {
   platform: "desktop",
   standalone: false,
+  safariNeedsInstall: false,
   secure: true,
   permission: "default",
   subscribed: false,
@@ -159,6 +160,7 @@ describe("pushStateMessage — copy per state", () => {
       "UNSUPPORTED",
       "INSECURE",
       "IOS_NOT_INSTALLED",
+      "SAFARI_NOT_INSTALLED",
       "IOS_READY_TO_REQUEST",
       "ANDROID_READY",
       "DESKTOP_READY",
@@ -197,6 +199,7 @@ describe("pushStateActionLabel — a button only when it can do something", () =
 
   it("offers no button where the OS would ignore the tap", () => {
     expect(pushStateActionLabel("IOS_NOT_INSTALLED")).toBeNull();
+    expect(pushStateActionLabel("SAFARI_NOT_INSTALLED")).toBeNull();
     expect(pushStateActionLabel("DENIED")).toBeNull();
     expect(pushStateActionLabel("UNSUPPORTED")).toBeNull();
     expect(pushStateActionLabel("INSECURE")).toBeNull();
@@ -209,6 +212,7 @@ describe("pushStateNeedsPrompt — which states may open a prompt surface", () =
   it("prompts for install, ready, granted, denied and failed", () => {
     for (const s of [
       "IOS_NOT_INSTALLED",
+      "SAFARI_NOT_INSTALLED",
       "IOS_READY_TO_REQUEST",
       "ANDROID_READY",
       "DESKTOP_READY",

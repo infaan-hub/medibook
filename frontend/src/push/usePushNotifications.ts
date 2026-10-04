@@ -33,6 +33,7 @@ import {
 import { ensureServerSubscription } from "./sync";
 import {
   IOS_INSTALL_STEPS,
+  SAFARI_INSTALL_STEPS,
   pushFailureMessage,
   pushStateActionLabel,
   pushStateMessage,
@@ -126,6 +127,7 @@ export function usePushNotifications(userId: number | null) {
   const state: PushUiState = resolvePushState({
     platform: capability.platform,
     standalone: capability.standalone,
+    safariNeedsInstall: capability.safariNeedsInstall,
     secure: capability.secureContext,
     permission,
     subscribed,
@@ -236,7 +238,12 @@ export function usePushNotifications(userId: number | null) {
     /** Button label for the state, or null when no button can help. */
     actionLabel,
     /** iOS "Add to Home Screen" instructions, when that is the blocker. */
-    steps: state === "IOS_NOT_INSTALLED" ? IOS_INSTALL_STEPS : null,
+    steps:
+      state === "IOS_NOT_INSTALLED"
+        ? IOS_INSTALL_STEPS
+        : state === "SAFARI_NOT_INSTALLED"
+          ? SAFARI_INSTALL_STEPS
+          : null,
     subscribe,
     unsubscribe,
     toggle,

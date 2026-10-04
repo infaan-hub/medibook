@@ -45,12 +45,13 @@ export const POST = handler(async (ctx) => {
   // Emit realtime after the DB write so recipients see it without refresh.
   const { pushEvent } = await import("@/lib/realtime");
   const { notificationPayload } = await import("@/lib/notify");
-  const { sendWebPushSafe } = await import("@/lib/push");
+  const { sendWebPushBounded } = await import("@/lib/push");
   pushEvent([Number(recipient)], "notification.created", notificationPayload(row), {
     version: row.updated_at.getTime(),
     entityId: row.id,
   });
-  sendWebPushSafe(Number(recipient), {
+  // Awaited so the push is not lost when this response ends the serverless instance.
+  await sendWebPushBounded(Number(recipient), {
     title: row.title,
     body: row.message,
     url: "/notifications",

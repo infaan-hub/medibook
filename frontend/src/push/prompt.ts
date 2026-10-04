@@ -45,6 +45,8 @@ export type PushUiState =
   | "INSECURE"
   /** iOS/iPadOS Safari tab: must be installed to the Home Screen first. */
   | "IOS_NOT_INSTALLED"
+  /** Safari (macOS) tab: must be added to the Dock before Web Push exists. */
+  | "SAFARI_NOT_INSTALLED"
   /** iOS Home Screen PWA, permission still askable from a user gesture. */
   | "IOS_READY_TO_REQUEST"
   /** Android browser, permission still askable. */
@@ -66,6 +68,8 @@ export interface PushStateInput {
   platform: PushPlatform;
   /** Running as an installed Home Screen / standalone PWA. */
   standalone: boolean;
+  /** Safari tab that has not been added to the Dock yet. */
+  safariNeedsInstall: boolean;
   /** Secure (HTTPS/localhost) context. */
   secure: boolean;
   permission: NotificationPermission | "unsupported";
@@ -76,7 +80,15 @@ export interface PushStateInput {
 }
 
 export function resolvePushState(input: PushStateInput): PushUiState {
-  const { platform, standalone, secure, permission, subscribed, requesting } = input;
+  const {
+    platform,
+    standalone,
+    safariNeedsInstall,
+    secure,
+    permission,
+    subscribed,
+    requesting,
+  } = input;
   // A stale permission failure must not survive a change of the OS answer:
   // someone who enables notifications in device Settings and comes back goes
   // straight to GRANTED/READY instead of an old "blocked" error.
@@ -94,6 +106,9 @@ export function resolvePushState(input: PushStateInput): PushUiState {
   // iOS can only ever subscribe from the Home Screen app — installing comes
   // before any permission talk, whatever the recorded answer happens to be.
   if (platform === "ios" && !standalone) return "IOS_NOT_INSTALLED";
+  // Safari on macOS has the same hard requirement, so give the same treatment
+  // instead of letting subscribe() fail with no explanation.
+  if (safariNeedsInstall) return "SAFARI_NOT_INSTALLED";
   if (permission === "denied") return "DENIED";
   if (failure) return "FAILED";
   if (permission === "granted") return "GRANTED";
@@ -110,6 +125,8 @@ export function pushStateMessage(
   switch (state) {
     case "IOS_NOT_INSTALLED":
       return "Install MediBook to your Home Screen to enable notifications.";
+    case "SAFARI_NOT_INSTALLED":
+      return "Safari needs MediBook added to your Dock before it can deliver notifications.";
     case "IOS_READY_TO_REQUEST":
       return "Tap Allow to enable MediBook notifications";
     case "ANDROID_READY":
@@ -176,6 +193,17 @@ export const IOS_INSTALL_STEPS = [
   'Return to Notifications and tap "Allow"',
 ] as const;
 
+/**
+ * macOS Safari is the same rule with different words: Safari only exposes Web
+ * Push to a site added to the Dock, so a plain tab can never subscribe.
+ */
+export const SAFARI_INSTALL_STEPS = [
+  "Open the File menu in Safari",
+  'Choose "Add to Dock…"',
+  "Launch MediBook from your Dock",
+  'Return to Notifications and tap "Allow"',
+] as const;
+
 /** User-facing copy for a subscribe/registration failure. */
 export function pushFailureMessage(reason: PushFailureReason): string {
   switch (reason) {
@@ -188,7 +216,7 @@ export function pushFailureMessage(reason: PushFailureReason): string {
     case "no-vapid-key":
       return "The server did not provide its push encryption key. Check that VAPID keys are configured.";
     case "not-installed-pwa":
-      return "Install MediBook to your Home Screen to enable notifications.";
+      return "Install MediBook to your Home Screen (iPhone, iPad) or Dock (Mac) to enable notifications.";
     case "permission-denied":
       return "Notifications are blocked. Enable MediBook notifications in your device settings.";
     case "permission-dismissed":

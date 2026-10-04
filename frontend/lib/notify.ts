@@ -7,7 +7,7 @@
 import { prisma } from "./db";
 import { dateStr } from "./serialize";
 import { pushEvent, pushEventAll } from "./realtime";
-import { sendWebPushSafe } from "./push";
+import { sendWebPushBounded } from "./push";
 import type { Notification, NotificationType, Appointment } from "@prisma/client";
 
 /** Django _TITLES map (helpers.py). */
@@ -77,7 +77,11 @@ export async function notify(
     entityId: notification.id,
   });
 
-  sendWebPushSafe(recipientId, {
+  // Awaited, not fire-and-forget: on Vercel the instance can be frozen the
+  // moment this response returns, which would abort the push to FCM/APNs and
+  // leave the user with an inbox entry and no OS notification. The realtime
+  // event above is already synchronous, so ordering is unaffected.
+  await sendWebPushBounded(recipientId, {
     title: notification.title,
     body: message,
     url: appointmentId != null ? `/appointments/${appointmentId}` : "/notifications",

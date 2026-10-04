@@ -28,7 +28,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { __setPushTransport, pushTopic, sendWebPushToUser } from "@/lib/push";
+import { __setPushTransport, pushTopic, sendWebPushBounded, sendWebPushToUser } from "@/lib/push";
 
 function row(id: number, endpoint: string) {
   return {
@@ -55,7 +55,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Placeholder keypair, NOT the real one: web-push is replaced by the fake
   // transport below, so these only need to be non-empty for vapidConfigured().
-  // A real VAPID_PRIVATE_KEY must never live in the repo — it is the secret that
+// A real VAPID_PRIVATE_KEY must never live in the repo — it is the secret that
   // authorises this server to send pushes to every subscriber.
   process.env.VAPID_PUBLIC_KEY = "TESTONLYpublickey0000000000000000000000000000000000000000000000";
   process.env.VAPID_PRIVATE_KEY = "TESTONLYprivatekey00000000000000000000000000000000";
@@ -69,6 +69,39 @@ beforeEach(() => {
   state.sendNotification.mockResolvedValue({ statusCode: 201 });
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
+});
+
+describe("sendWebPushBounded — the serverless delivery contract", () => {
+  it("waits for the push to actually be sent before resolving", async () => {
+    let settled = false;
+    state.sendNotification.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      settled = true;
+      return { statusCode: 201 };
+    });
+
+    const result = await sendWebPushBounded(7, { title: "Hi", body: "There" });
+
+    // The whole point: fire-and-forget let Vercel freeze the instance with the
+    // FCM/APNs request still in flight, so the caller must not resolve first.
+    expect(settled).toBe(true);
+    expect(result.sent).toBe(1);
+  });
+
+  it("gives up after the timeout instead of hanging the request forever", async () => {
+    state.sendNotification.mockImplementation(() => new Promise(() => undefined));
+
+    const result = await sendWebPushBounded(7, { title: "Hi", body: "There" }, 20);
+
+    expect(result).toEqual({ sent: 0, failed: 0, deactivated: 0, skipped: false });
+  });
+
+  it("never throws back into the request path when the send rejects", async () => {
+    state.sendNotification.mockRejectedValue(new Error("network down"));
+    await expect(
+      sendWebPushBounded(7, { title: "Hi", body: "There" })
+    ).resolves.toBeDefined();
+  });
 });
 
 describe("sendWebPushToUser", () => {

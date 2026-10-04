@@ -30,6 +30,7 @@ import {
   getPushPlatform,
   isAndroid,
   isIOS,
+  isSafari,
   isStandalonePWA,
 } from "../lib/platform";
 import { requestNotificationPermission, subscribeToPush } from "../push/notifications";
@@ -40,6 +41,14 @@ const ANDROID_CHROME =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 const DESKTOP_CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// Safari advertises Notification + PushManager in a plain tab but refuses to
+// subscribe unless the site is in the Dock, so it must be gated like iOS.
+const MAC_SAFARI =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15";
+const DESKTOP_EDGE =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
+const SAMSUNG_INTERNET =
+  "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36";
 
 type W = {
   Notification?: unknown;
@@ -99,6 +108,68 @@ function clearGlobals(): void {
   delete w.Notification;
   delete w.PushManager;
 }
+
+describe("macOS Safari needs the site in the Dock", () => {
+  beforeEach(() => {
+    w.PushManager = class {};
+    setNotification("default");
+    // webPushSupported also requires a service worker, exactly as the existing
+    // capability tests set up.
+    Object.defineProperty(window.navigator, "serviceWorker", {
+      value: {},
+      configurable: true,
+    });
+  });
+  afterEach(() => {
+    delete (window.navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
+    clearGlobals();
+  });
+
+  it("recognises Safari and rejects the Chromium browsers that share its UA", () => {
+    setUA(MAC_SAFARI);
+    expect(isSafari()).toBe(true);
+    setUA(DESKTOP_CHROME);
+    expect(isSafari()).toBe(false);
+    setUA(DESKTOP_EDGE);
+    expect(isSafari()).toBe(false);
+    setUA(SAMSUNG_INTERNET);
+    expect(isSafari()).toBe(false);
+  });
+
+  it("reports safariNeedsInstall in a plain tab and clears it once standalone", () => {
+    setUA(MAC_SAFARI);
+    setDisplayMode(false);
+    expect(getNotificationCapability().safariNeedsInstall).toBe(true);
+    expect(getNotificationCapability().needsInstalledPWA).toBe(true);
+    expect(getNotificationCapability().webPushSupported).toBe(false);
+
+    setDisplayMode(true);
+    expect(getNotificationCapability().safariNeedsInstall).toBe(false);
+    expect(getNotificationCapability().webPushSupported).toBe(true);
+  });
+
+  it("never asks a Safari tab for permission — it would be ignored", async () => {
+    setUA(MAC_SAFARI);
+    setDisplayMode(false);
+    const requestPermission = setNotification("default");
+    await expect(requestNotificationPermission()).resolves.toBe("unsupported");
+    expect(requestPermission).not.toHaveBeenCalled();
+    await expect(subscribeToPush()).resolves.toEqual({
+      ok: false,
+      reason: "not-installed-pwa",
+    });
+  });
+
+  it("leaves Chrome, Edge and Samsung able to subscribe from a normal tab", () => {
+    for (const ua of [DESKTOP_CHROME, DESKTOP_EDGE, SAMSUNG_INTERNET]) {
+      setUA(ua);
+      setDisplayMode(false);
+      const capability = getNotificationCapability();
+      expect(capability.safariNeedsInstall, ua).toBe(false);
+      expect(capability.webPushSupported, ua).toBe(true);
+    }
+  });
+});
 
 beforeEach(clearGlobals);
 afterEach(() => {

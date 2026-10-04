@@ -74,7 +74,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   if (current === "granted") return "granted";
   if (current === "denied") return "denied";
   const capability = getNotificationCapability();
-  if (capability.iosNeedsHomeScreen) return "unsupported";
+  // Safari on macOS and iOS both refuse to subscribe outside an installed app,
+  // so the same check gates them; the UI branches on which one it was.
+  if (capability.needsInstalledPWA) return "unsupported";
   if (!capability.secureContext) return "unsupported";
   try {
     return await Notification.requestPermission();
@@ -139,7 +141,7 @@ function permissionFailure(
   if (answer === "denied") return "permission-denied";
   if (answer === "default") return "permission-dismissed";
   const capability = getNotificationCapability();
-  if (capability.iosNeedsHomeScreen) return "not-installed-pwa";
+  if (capability.needsInstalledPWA) return "not-installed-pwa";
   if (!capability.secureContext) return "insecure";
   return "unsupported";
 }
@@ -158,7 +160,7 @@ function permissionFailure(
  */
 export async function subscribeToPush(): Promise<SubscribeResult> {
   const capability = getNotificationCapability();
-  if (capability.iosNeedsHomeScreen) return { ok: false, reason: "not-installed-pwa" };
+  if (capability.needsInstalledPWA) return { ok: false, reason: "not-installed-pwa" };
   if (!capability.secureContext) return { ok: false, reason: "insecure" };
 
   const permission = await requestNotificationPermission();

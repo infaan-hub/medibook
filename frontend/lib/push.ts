@@ -209,9 +209,54 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
   return result;
 }
 
-/** Fire-and-forget helper used by notify() — never throws into request paths. */
+/** Fire-and-forget helper — never throws, but does NOT wait for delivery. */
 export function sendWebPushSafe(userId: number, payload: PushPayload): void {
   void sendWebPushToUser(userId, payload).catch((error) => {
     console.warn("[push] unexpected error:", error);
   });
+}
+
+const NO_RESULT: PushResult = { sent: 0, failed: 0, deactivated: 0, skipped: false };
+
+/**
+ * Deliver a push and WAIT for the attempt to finish, capped at `timeoutMs`.
+ *
+ * `sendWebPushSafe` is fire-and-forget, which works on a long-lived Node server
+ * but silently drops the notification on serverless: once the HTTP response is
+ * written, Vercel may freeze or tear down the instance, and the in-flight HTTPS
+ * request to FCM/APNs is cut off mid-flight. The inbox row and the realtime
+ * event still land (both are in-process), which is exactly why this looks like
+ * "the app notified me in-app but the phone never buzzed".
+ *
+ * Awaiting keeps the whole delivery on one code path for every browser we
+ * target — Chrome, Edge, Samsung Internet (FCM) and Safari/iOS Home Screen
+ * (APNs) — instead of only the platforms that happen to run a long-lived
+ * server. The timeout is what stops a wedged push service from holding the
+ * caller's request open.
+ */
+export async function sendWebPushBounded(
+  userId: number,
+  payload: PushPayload,
+  timeoutMs = 4000
+): Promise<PushResult> {
+  // Attach the rejection handler up front: if the timeout wins the race, a later
+  // rejection from the real send would otherwise surface as an unhandled rejection.
+  const work = sendWebPushToUser(userId, payload).catch((error) => {
+    console.warn("[push] unexpected error:", error);
+    return NO_RESULT;
+  });
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<PushResult>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[push] delivery still in flight after ${timeoutMs}ms — moving on`);
+      resolve(NO_RESULT);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
