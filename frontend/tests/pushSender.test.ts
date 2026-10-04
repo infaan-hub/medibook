@@ -53,8 +53,12 @@ function pushError(statusCode: number, body?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.VAPID_PUBLIC_KEY = "BD4AjtD88HaZjlceIz7QsYmJYrkC9Y-RJBf5gaPtgxsU0xR6J0K2EY7RNLPqpZY9dSCg4K5ulUabV7aUMHnn1Q8";
-  process.env.VAPID_PRIVATE_KEY = "64P8KTWFC4A9tmr02Lltq0nM6iZfyJ0usmKahIhrQa0";
+  // Placeholder keypair, NOT the real one: web-push is replaced by the fake
+  // transport below, so these only need to be non-empty for vapidConfigured().
+  // A real VAPID_PRIVATE_KEY must never live in the repo — it is the secret that
+  // authorises this server to send pushes to every subscriber.
+  process.env.VAPID_PUBLIC_KEY = "TESTONLYpublickey0000000000000000000000000000000000000000000000";
+  process.env.VAPID_PRIVATE_KEY = "TESTONLYprivatekey00000000000000000000000000000000";
   process.env.VAPID_SUBJECT = "mailto:ops@example.com";
   __setPushTransport({
     setVapidDetails: state.setVapidDetails,
