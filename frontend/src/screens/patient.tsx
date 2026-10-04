@@ -15,7 +15,7 @@ import {
 import { myPrescriptions, type Prescription } from "../api/prescriptions";
 import { myVitals, type Vital } from "../api/vitals";
 import { myLabOrders, type LabOrder } from "../api/lab-orders";
-import { viewPatientReport, type ReportPeriodParams } from "../api/reports";
+import { downloadFullPatientReport, viewFullPatientReport } from "../api/reports";
 import { vitalChips, vitalDate } from "../lib/vitals";
 import { statusLabel, flagLabel, referenceLabel, resultLabel } from "../lib/lab-orders";
 import type { Gender, GeoInput, LinkedDoctor, PatientProfile } from "../api/types";
@@ -49,6 +49,7 @@ import {
   // This lucide-react build ships no `Report` glyph, so the "Report" action uses
   // FileChartColumn — the document-with-chart icon — instead of an undefined one.
   FileChartColumn,
+  Eye,
 } from "lucide-react";
 
 const RECORD_TYPE_OPTIONS = [
@@ -323,6 +324,41 @@ export function SettingsScreen() {
   const [recordSaving, setRecordSaving] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
 
+  /* ---- Full medical report (§34) ---- */
+  const [reportBusy, setReportBusy] = useState<"generate" | "view" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  /**
+   * Generate the patient's COMPLETE chart as a PDF.
+   *
+   * These helpers send NO period parameter, and the server reads an absent period
+   * as "full record" (`fullRecordPeriod()`), so the PDF holds everything since the
+   * patient registered — never just the current calendar month.
+   */
+  const runPatientReport = async (action: "generate" | "view") => {
+    setReportBusy(action);
+    setReportError(null);
+    try {
+      const result =
+        action === "view" ? await viewFullPatientReport() : await downloadFullPatientReport();
+      notify(
+        "success",
+        action === "view"
+          ? `Full report opened in a new tab — ${result.filename}`
+          : `Full report downloaded — ${result.filename}`
+      );
+    } catch (reason_) {
+      const text =
+        reason_ instanceof Error
+          ? reason_.message
+          : "Could not generate your report.";
+      setReportError(text);
+      notify("error", text);
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
   const loadRecords = useCallback(() => {
     setRecordsLoading(true);
     getHealthRecords()
@@ -495,14 +531,6 @@ export function SettingsScreen() {
             Your health profile shared with your doctors during visits. Account info lives in{" "}
             <Link to="/profile">Profile</Link>.
           </p>
-          {profile && (
-            <Button variant="secondary" onClick={() => {
-              const params: ReportPeriodParams = { preset: "month" };
-              viewPatientReport(params).then(() => {}).catch(() => notify("error", "Failed to open report"));
-            }}>
-              <FileChartColumn size={16} /> Report
-            </Button>
-          )}
         </div>
       </div>
 
@@ -968,6 +996,51 @@ export function SettingsScreen() {
             ))}
           </div>
         )}
+      </Card>
+
+      {/* Full medical report — sits below the health records, because it is a
+          summary of everything above it (profile, prescriptions, vitals, labs
+          and the records in this list). */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><FileChartColumn size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Your medical report</h2>
+              <p className="med-detail__subtitle">
+                Everything MediBook holds for you — appointments, treatments,
+                prescriptions, vitals, lab results and health records — as one PDF
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {reportError && (
+          <p className="form-note form-note--error">{reportError}</p>
+        )}
+
+        <div className="med-edit-actions">
+          <Button
+            variant="primary"
+            loading={reportBusy === "generate"}
+            disabled={reportBusy !== null}
+            onClick={() => void runPatientReport("generate")}
+          >
+            <Download size={16} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
+          </Button>
+          <Button
+            variant="secondary"
+            loading={reportBusy === "view"}
+            disabled={reportBusy !== null}
+            onClick={() => void runPatientReport("view")}
+          >
+            <Eye size={16} /> {reportBusy === "view" ? "Opening report..." : "View Report"}
+          </Button>
+        </div>
+        <p className="form-note">
+          Your complete history since registration — not just the current month.
+          Only you can generate this report.
+        </p>
       </Card>
     </div>
   );

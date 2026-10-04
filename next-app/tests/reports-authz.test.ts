@@ -188,6 +188,28 @@ describe("collectPatientReport - always the caller's own chart", () => {
     // Own-record reports are not narrowed to one doctor.
     expect(db.appointment.findMany.mock.calls[0][0].where).not.toHaveProperty("doctor_id");
   });
+
+  it("spans the WHOLE record when no period is requested", async () => {
+    db.user.findUnique.mockResolvedValue(PATIENT);
+
+    const data = await collectPatientReport(7, {});
+
+    // Start = the patient's registration date, not the first of this month, so
+    // the PDF carries every appointment/treatment/vital/lab they have ever had.
+    expect(data.period.start).toBe("2025-11-14");
+    expect(data.period.name).toBe("Full record");
+    // ISO dates sort lexicographically, so this proves the window opens-to-closes.
+    expect(data.period.end >= data.period.start).toBe(true);
+  });
+
+  it("narrows to the requested window only when one is actually asked for", async () => {
+    db.user.findUnique.mockResolvedValue(PATIENT);
+
+    const data = await collectPatientReport(7, { preset: "month", month: "2026-09" });
+
+    expect(data.period.start).toBe("2026-09-01");
+    expect(data.period.end).toBe("2026-09-30");
+  });
 });
 
 /* ============================ admin aggregation =========================== */

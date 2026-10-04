@@ -148,3 +148,21 @@ export function downloadPatientReport(params: ReportPeriodParams = {}): Promise<
 export function viewPatientReport(params: ReportPeriodParams = {}): Promise<ReportResult> {
   return view("/reports/patient/", params, "MediBook-Zanzibar-My-Medical-Report.pdf");
 }
+
+/**
+ * The patient's COMPLETE chart — every appointment, treatment, prescription,
+ * vital, lab order and health record they have ever had — downloaded as a PDF.
+ *
+ * Deliberately sends NO period parameters: the server treats an absent period as
+ * "full record" (`fullRecordPeriod()` in reports/data/period.ts), so the document
+ * can never be silently truncated to the current calendar month the way a
+ * `preset: "month"` request would.
+ */
+export function downloadFullPatientReport(): Promise<ReportResult> {
+  return download("/reports/patient/", {}, "MediBook-My-Full-Medical-Report.pdf");
+}
+
+/** The full patient chart, opened in a preview tab instead of saved. */
+export function viewFullPatientReport(): Promise<ReportResult> {
+  return view("/reports/patient/", {}, "MediBook-My-Full-Medical-Report.pdf");
+}

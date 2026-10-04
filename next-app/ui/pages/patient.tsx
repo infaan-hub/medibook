@@ -22,7 +22,7 @@ import { ApiError } from "../api/client";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { captureFix, LocationError } from "../lib/location";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
-import { downloadPatientReport, viewPatientReport } from "../api/reports";
+import { downloadFullPatientReport, viewFullPatientReport } from "../api/reports";
 import { LocationLine } from "../components/Location";
 import { useToast } from "../state/app-context";
 import {
@@ -45,6 +45,9 @@ import {
   Download,
   ExternalLink,
   Eye,
+  // This lucide-react build ships no `Report` glyph, so the report card uses
+  // FileChartColumn — the document-with-chart icon — instead.
+  FileChartColumn,
   File,
   Upload,
 } from "lucide-react";
@@ -375,20 +378,28 @@ export function SettingsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  /* ---- Report generation (§34) — always the caller's own chart ---- */
+  /* ---- Full medical report (§34) — always the caller's own chart ---- */
   const [reportBusy, setReportBusy] = useState<"generate" | "view" | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  /**
+   * Generate the patient's COMPLETE chart as a PDF.
+   *
+   * These helpers send NO period parameter, and the server reads an absent period
+   * as "full record" (`fullRecordPeriod()`), so the PDF holds everything since the
+   * patient registered — never just the current calendar month.
+   */
   const runReport = async (action: "generate" | "view") => {
     setReportBusy(action);
     setReportError(null);
     try {
-      const result = action === "view" ? await viewPatientReport() : await downloadPatientReport();
+      const result =
+        action === "view" ? await viewFullPatientReport() : await downloadFullPatientReport();
       notify(
         "success",
         action === "view"
-          ? `Report opened in a new tab — ${result.filename}`
-          : `Report downloaded — ${result.filename}`
+          ? `Full report opened in a new tab — ${result.filename}`
+          : `Full report downloaded — ${result.filename}`
       );
     } catch (error) {
       const text = error instanceof Error ? error.message : "Could not generate your report.";
@@ -518,17 +529,7 @@ export function SettingsScreen() {
             <Link to="/profile">Profile</Link>.
           </p>
         </div>
-        <div className="med-page__actions">
-          <Button variant="secondary" onClick={() => runReport("generate")} disabled={reportBusy !== null}>
-            <Download size={14} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
-          </Button>
-          <Button variant="secondary" onClick={() => runReport("view")} disabled={reportBusy !== null}>
-            <Eye size={14} /> {reportBusy === "view" ? "Opening report..." : "View"}
-          </Button>
-        </div>
       </div>
-
-      {reportError && <ErrorState message={reportError} />}
 
       <Card className="card--fit">
         <div className="med-detail__header">
@@ -992,6 +993,51 @@ export function SettingsScreen() {
             ))}
           </div>
         )}
+      </Card>
+
+      {/* Full medical report — deliberately BELOW the health records, because the
+          document summarises everything above it (profile, prescriptions, vitals,
+          lab results and the records listed in this card). */}
+      <Card className="card--fit">
+        <div className="med-detail__header">
+          <div className="med-detail__title-row">
+            <div className="med-detail__avatar"><FileChartColumn size={24} /></div>
+            <div>
+              <h2 className="med-detail__title">Your medical report</h2>
+              <p className="med-detail__subtitle">
+                Everything MediBook holds for you — appointments, treatments,
+                prescriptions, vitals, lab results and health records — in one PDF
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {reportError && (
+          <p className="form-note form-note--error">{reportError}</p>
+        )}
+
+        <div className="med-page__actions">
+          <Button
+            variant="primary"
+            loading={reportBusy === "generate"}
+            disabled={reportBusy !== null}
+            onClick={() => void runReport("generate")}
+          >
+            <Download size={14} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
+          </Button>
+          <Button
+            variant="secondary"
+            loading={reportBusy === "view"}
+            disabled={reportBusy !== null}
+            onClick={() => void runReport("view")}
+          >
+            <Eye size={14} /> {reportBusy === "view" ? "Opening report..." : "View Report"}
+          </Button>
+        </div>
+        <p className="form-note">
+          Your complete history since registration — not just the current month.
+          Only you can generate this report.
+        </p>
       </Card>
     </div>
   );
