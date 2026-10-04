@@ -12,24 +12,31 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@prisma/client": "^6.5.0",
     "axios": "^1.20.0",
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.47.0",
     "next": "^15.5.0",
+    "pdfkit": "^0.15.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-i18next": "^17.0.14",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.5.13",
     "jsdom": "^29.1.1",
+    "prisma": "^6.5.0",
     "typescript": "^5.7.0",
     "vitest": "^5.0.1"
   }
