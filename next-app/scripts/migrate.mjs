@@ -51,18 +51,33 @@ const MAX_ATTEMPTS = 3;
 const STALE_IDLE_SECONDS = 60;
 
 /**
- * Explicit opt-out for build environments that cannot reach the database.
+ * Whether the build is allowed to continue when the database is unreachable.
  *
- * A build that dies here produces NO deployment, so a missing DATABASE_URL (or
- * an unreachable database) silently freezes the project on whatever the last
- * successful build was — which is exactly how this backend went stale and served
- * 404s for routes that exist in the repository. Setting SKIP_MIGRATIONS=1 lets
- * the build produce an artifact anyway; migrations then have to be applied out
- * of band, so it is opt-in and loudly logged rather than the default.
+ * A build that dies here produces NO deployment, so a missing DATABASE_URL (or a
+ * migration that cannot run) silently freezes the project on whatever the last
+ * successful build was. That is exactly how this backend went stale: every route
+ * added since the last good build answered 404 while the repository contained
+ * them the whole time.
+ *
+ * A deployable artifact is worth more than a failed build, so by default we warn
+ * loudly and keep going — schema drift then surfaces as a loud runtime error
+ * rather than as an invisible, permanently frozen deployment. Set
+ * REQUIRE_MIGRATIONS=1 to restore the strict, fail-the-build behaviour.
  */
-function migrationsSkipped() {
+function migrationsRequired() {
   return ["1", "true", "yes"].includes(
-    (process.env.SKIP_MIGRATIONS || "").trim().toLowerCase()
+    (process.env.REQUIRE_MIGRATIONS || "").trim().toLowerCase()
+  );
+}
+
+/** One loud, actionable banner for every "building without migrating" path. */
+function warnContinuing(reason) {
+  console.warn(
+    `\n[migrate] WARNING — the build is continuing WITHOUT applying migrations.\n` +
+      `         Reason: ${reason}\n` +
+      `         The database must already be up to date, or the app will fail at runtime.\n` +
+      `         Apply them manually with: npm run db:deploy\n` +
+      `         Set REQUIRE_MIGRATIONS=1 to make a failed migration fail the build instead.\n`
   );
 }
 
@@ -91,19 +106,13 @@ function resolveDatabaseUrl() {
   const fileEnv = readEnvFile(path.join(APP_ROOT, ".env"));
   const url = process.env.DATABASE_URL || fileEnv.DATABASE_URL;
   if (!url) {
-    if (migrationsSkipped()) {
-      console.warn(
-        "[migrate] DATABASE_URL is not set and SKIP_MIGRATIONS=1 — continuing without applying migrations."
+    if (migrationsRequired()) {
+      console.error(
+        "[migrate] DATABASE_URL is not set and REQUIRE_MIGRATIONS=1 — failing the build."
       );
-      return null;
+      process.exit(1);
     }
-    console.error(
-      "[migrate] DATABASE_URL is not set (environment or next-app/.env).\n" +
-        "         Add DATABASE_URL to the project's environment variables, or set\n" +
-        "         SKIP_MIGRATIONS=1 to build without applying migrations (the\n" +
-        "         database must then already be migrated, or the app will fail at runtime)."
-    );
-    process.exit(1);
+    warnContinuing("DATABASE_URL is not set");
     return null;
   }
   return url;
@@ -195,7 +204,7 @@ async function main() {
   if (args.length === 0) args.push("deploy");
 
   const pooledUrl = resolveDatabaseUrl();
-  if (pooledUrl === null) return; // SKIP_MIGRATIONS=1 and no DATABASE_URL.
+  if (pooledUrl === null) return; // No DATABASE_URL — already warned above.
   const migrateUrl = directUrlFor(pooledUrl);
   process.env.DATABASE_URL = migrateUrl; // seen by the prisma child process
   process.env.__MIGRATE_URL = migrateUrl; // seen by clearStaleMigrationLock
@@ -215,15 +224,20 @@ async function main() {
 
     const lockOrTimeout = /P1002|advisory lock/i.test(output);
     if (!lockOrTimeout || attempt === MAX_ATTEMPTS) {
-      console.error(
-        `[migrate] prisma migrate ${args.join(" ")} failed (exit ${code})` +
-          (lockOrTimeout ? " after retries" : "") +
-          "\n         A failed migration produces NO deployment, so the project keeps" +
-          "\n         serving the last successful build and its routes 404. Check that" +
-          "\n         DATABASE_URL is set and reachable from the build, then redeploy." +
-          "\n         Set SKIP_MIGRATIONS=1 only if the database is already migrated."
+      if (migrationsRequired()) {
+        console.error(
+          `[migrate] prisma migrate ${args.join(" ")} failed (exit ${code})` +
+            (lockOrTimeout ? " after retries" : "") +
+            "\n         REQUIRE_MIGRATIONS=1 is set, so the build fails. Unset it to let" +
+            "\n         the build continue, or fix DATABASE_URL / the database first."
+        );
+        process.exit(code);
+      }
+      warnContinuing(
+        `prisma migrate ${args.join(" ")} exited ${code}` +
+          (lockOrTimeout ? " after retries (advisory lock / timeout)" : "")
       );
-      process.exit(code);
+      return;
     }
 
     const waitMs = attempt * 15_000;
@@ -236,6 +250,12 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[migrate] fatal:", error);
-  process.exit(1);
+  // An environmental failure (unreachable database, missing module) must not
+  // silently freeze the deployment either — same reasoning as above.
+  if (migrationsRequired()) {
+    console.error("[migrate] fatal:", error);
+    process.exit(1);
+  }
+  warnContinuing(`unexpected error: ${String(error)}`);
+  process.exit(0);
 });
