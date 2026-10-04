@@ -24,7 +24,7 @@ const db = vi.hoisted(() => {
     vital: { count: fn(), findMany: fn() },
     labOrder: { count: fn(), findMany: fn() },
     healthRecord: { count: fn(), findMany: fn() },
-    article: { count: fn() },
+    article: { count: fn(), findMany: fn() },
   };
 });
 
@@ -71,6 +71,7 @@ function emptyDb() {
     model.findMany.mockResolvedValue([]);
   }
   db.article.count.mockResolvedValue(0);
+  db.article.findMany.mockResolvedValue([]);
 }
 
 beforeEach(emptyDb);
@@ -134,25 +135,26 @@ describe("collectDoctorReport - who may generate a chart", () => {
     expect(data.patient.reference).toBe("salma");
   });
 
-  it("scopes every clinical query to this doctor and this patient", async () => {
+  it("reads the patient's full chart while the link gate stays doctor-scoped", async () => {
     db.appointment.count.mockResolvedValue(1);
     await collectDoctorReport(3, { patient: 7 });
 
+    // Authorization: the link check is still scoped to this doctor.
+    expect(db.appointment.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ doctor_id: 3, patient_id: 7 }),
+      })
+    );
+    // The chart itself is the patient's whole record — never narrowed to one
+    // clinician, so the printout cannot hide another doctor's entries.
     expect(db.appointment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ patient_id: 7, doctor_id: 3 }),
+        where: expect.objectContaining({ patient_id: 7 }),
       })
     );
-    expect(db.vital.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ patient_id: 7, doctor_id: 3 }),
-      })
-    );
-    expect(db.healthRecord.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ patient_id: 7, doctor_id: 3 }),
-      })
-    );
+    expect(db.appointment.findMany.mock.calls[0][0].where).not.toHaveProperty("doctor_id");
+    expect(db.vital.findMany.mock.calls[0][0].where).not.toHaveProperty("doctor_id");
+    expect(db.healthRecord.findMany.mock.calls[0][0].where).not.toHaveProperty("doctor_id");
   });
 });
 

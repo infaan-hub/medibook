@@ -1,9 +1,9 @@
 /**
- * Report asset loading (fonts + the official MediBook logo).
+ * Report asset loading (fonts from disk + the embedded MediBook logo).
  *
- * Everything is cached in-process: a report request must never re-read the
- * same bytes from disk. Paths are resolved against the project root so the
- * same code works under `node server.js` and in a traced standalone build.
+ * Fonts are resolved against the project root so the same code works under
+ * `node server.js` and in a traced standalone build, and every read is cached
+ * in-process: a report request must never re-read the same bytes from disk.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -85,45 +85,23 @@ export function registerReportFonts(doc: PDFKit.PDFDocument): void {
 }
 
 /**
- * The official MediBook logo already used by the app shell
- * (`/images/logo.jpeg`, rendered at 28–32px in the header/sidebar).
- * Served from the app's own public directory — never a replacement asset.
+ * The official MediBook logo mark, embedded in the bundle as a 128×128 PNG
+ * (square crop of `public/images/logo.jpeg`, the same asset the app shell
+ * renders). Embedding keeps the real mark in production too: the standalone
+ * serverless runtime has no `public/` directory on disk, so a filesystem read
+ * would silently fall back to a flat teal tile.
  */
+import { LOGO_MARK_HEIGHT, LOGO_MARK_PNG_BASE64, LOGO_MARK_WIDTH } from "../assets/logo-mark";
+
+let logoBytes: Buffer | null = null;
+
 export function loadLogo(): Buffer | null {
-  return readAsset(path.join("..", "..", "public", "images", "logo.jpeg"));
+  if (!logoBytes) logoBytes = Buffer.from(LOGO_MARK_PNG_BASE64, "base64");
+  return logoBytes;
 }
 
-/**
- * Natural pixel size of the logo (JPEG SOF marker). Cached after first read so
- * the report can crop the icon tile without ever distorting it.
- */
-let logoSize: { width: number; height: number } | null | undefined;
-
+/** Natural pixel size of the embedded mark (square). */
 export function logoDimensions(): { width: number; height: number } | null {
-  if (logoSize !== undefined) return logoSize;
-  logoSize = null;
-  const bytes = loadLogo();
-  if (!bytes) return logoSize;
-  try {
-    let offset = 2;
-    while (offset + 9 < bytes.length) {
-      if (bytes[offset] !== 0xff) {
-        offset += 1;
-        continue;
-      }
-      const marker = bytes[offset + 1];
-      const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
-      if (isSof) {
-        logoSize = { height: bytes.readUInt16BE(offset + 5), width: bytes.readUInt16BE(offset + 7) };
-        break;
-      }
-      const length = bytes.readUInt16BE(offset + 2);
-      if (length <= 0) break;
-      offset += 2 + length;
-    }
-  } catch {
-    logoSize = null;
-  }
-  return logoSize;
+  return { width: LOGO_MARK_WIDTH, height: LOGO_MARK_HEIGHT };
 }
 

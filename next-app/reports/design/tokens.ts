@@ -99,6 +99,8 @@ export const type = {
   /* Report-only increments that stay on the app's visual rhythm. */
   micro: pxToPt(10),
   label: pxToPt(11),
+  /** `.admin-metric strong { font-size: 1.65rem }` → 26.4px. */
+  metric: pxToPt(26.4),
 } as const;
 
 /** Line height ratio — body copy uses 1.5 (global.css `body`). */
@@ -212,7 +214,6 @@ export function labFlagTone(flag: string | null): Tone {
 /** Report chrome copy — one place to keep the branding identical everywhere. */
 export const branding = {
   organisation: "MediBook Zanzibar",
-  organisationUpper: "MEDIBOOK ZANZIBAR",
   product: "MediBook",
   confidentialMedical: "Confidential Medical Information",
   confidentialAdministrative: "Confidential — Administrative Report",
@@ -259,7 +260,8 @@ export const geometry = {
   cardMinHeight: 62,
   cardGap: space[3],
   summaryColumns: 3,
-  tableCellPaddingX: pxToPt(8),
-  tableCellPaddingY: pxToPt(7),
-  tableHeaderPaddingY: pxToPt(6),
+  /** Table cell insets, in points — the values `pdf/components.ts` draws with. */
+  tableCellPaddingX: 8,
+  tableCellPaddingY: 6,
+  tableHeaderPaddingY: 6,
 } as const;

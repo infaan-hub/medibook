@@ -144,16 +144,14 @@ export function patientInformation(d: ReportDoc, patient: PatientSummary): void 
     { label: "Registered on", value: patient.registeredOn },
   ]);
 
-  if (patient.allergies !== "Not provided") {
-    fieldBlock(d, {
-      label: "Allergies",
-      value: patient.allergies,
-      labelColor: palette.warning,
-    });
-  }
-  if (patient.medicalHistory !== "Not provided") {
-    fieldBlock(d, { label: "Medical history", value: patient.medicalHistory });
-  }
+  // Always shown — a chart that carries nothing still reads as a complete
+  // document; the warning colour is reserved for allergies that exist.
+  fieldBlock(d, {
+    label: "Allergies",
+    value: patient.allergies,
+    labelColor: patient.allergies !== "Not provided" ? palette.warning : undefined,
+  });
+  fieldBlock(d, { label: "Medical history", value: patient.medicalHistory });
   d.moveDown(space[3]);
 }
 
@@ -174,7 +172,8 @@ export interface DoctorSummary {
 export function doctorInformation(d: ReportDoc, doctor: DoctorSummary): void {
   sectionTitle(d, {
     title: "Doctor information",
-    subtitle: "The clinician responsible for the entries in this report.",
+    subtitle:
+      "The clinician who prepared this report; every chart entry keeps its own recorded clinician.",
     eyebrow: "Section 2",
   });
   infoTable(d, [

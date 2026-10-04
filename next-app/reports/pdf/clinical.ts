@@ -43,23 +43,37 @@ export function appointmentsSection(d: ReportDoc, rows: AppointmentEntry[]): voi
     return;
   }
   const columns: TableColumn[] = [
-    { key: "date", label: "Date", weight: 1.5 },
-    { key: "time", label: "Time", weight: 1.2 },
-    { key: "type", label: "Type", weight: 0.9 },
+    { key: "date", label: "Date", weight: 1.35 },
+    { key: "bookedAt", label: "Booked", weight: 1.35 },
+    { key: "time", label: "Time", weight: 1.05 },
+    { key: "type", label: "Type", weight: 0.8 },
     {
       key: "status",
       label: "Status",
-      weight: 1.1,
+      weight: 1.05,
       tone: (_value, row) => statusTone(row.statusKey ?? ""),
     },
-    { key: "reason", label: "Reason", weight: 2.2 },
-    { key: "doctor", label: "Clinician", weight: 2 },
+    { key: "reason", label: "Reason", weight: 1.9 },
+    { key: "doctor", label: "Clinician", weight: 1.7 },
   ];
   dataTable(d, {
     columns,
     rows: rows.map((row) => ({ ...row })),
     emptyText: "No appointments were booked in this period.",
   });
+
+  // Booking/cancellation/emergency context — every extra stamp the database
+  // carries for the rows above, so nothing recorded is left off the printout.
+  const withDetails = rows.filter((row) => row.details);
+  if (withDetails.length > 0) {
+    d.moveDown(space[1]);
+    for (const row of withDetails) {
+      paragraph(d, `${row.date}, ${row.time} — ${row.details}`, {
+        size: typeScale.micro,
+        color: palette.textMuted,
+      });
+    }
+  }
   d.moveDown(space[3]);
 }
 
@@ -112,12 +126,13 @@ export function prescriptionsSection(d: ReportDoc, rows: PrescriptionEntry[]): v
   }
 
   const columns: TableColumn[] = [
-    { key: "medication", label: "Medication", weight: 2, font: "semibold" },
-    { key: "dosage", label: "Dosage", weight: 1 },
-    { key: "frequency", label: "Frequency", weight: 1.2 },
-    { key: "route", label: "Route", weight: 0.9 },
-    { key: "duration", label: "Duration", weight: 1 },
-    { key: "instructions", label: "Instructions", weight: 2 },
+    { key: "medication", label: "Medication", weight: 1.9, font: "semibold" },
+    { key: "dosage", label: "Dosage", weight: 0.95 },
+    { key: "frequency", label: "Frequency", weight: 1.15 },
+    { key: "route", label: "Route", weight: 0.85 },
+    { key: "duration", label: "Duration", weight: 0.95 },
+    { key: "refills", label: "Refills", weight: 0.7 },
+    { key: "instructions", label: "Instructions", weight: 1.9 },
   ];
 
   rows.forEach((row, index) => {
@@ -157,8 +172,10 @@ export function vitalsSection(d: ReportDoc, rows: VitalEntry[]): void {
     { key: "pulse", label: "Pulse", weight: 0.7 },
     { key: "temperature", label: "Temperature", weight: 1.3 },
     { key: "glucose", label: "Glucose", weight: 1.0 },
-    { key: "bmi", label: "BMI", weight: 0.65 },
-    { key: "spo2", label: "SpO\u2082", weight: 0.65 },
+    { key: "weight", label: "Weight", weight: 0.75 },
+    { key: "height", label: "Height", weight: 0.7 },
+    { key: "bmi", label: "BMI", weight: 0.6 },
+    { key: "spo2", label: "SpO\u2082", weight: 0.6 },
     // Per-row clinician: only ever the doctor the database records for that
     // reading (§13) — "Not provided" when the row carries none.
     { key: "doctor", label: "Clinician", weight: 1.45 },
@@ -182,43 +199,33 @@ export function labsSection(d: ReportDoc, rows: LabEntry[]): void {
   }
 
   const columns: TableColumn[] = [
-    { key: "orderedAt", label: "Ordered", weight: 1.4 },
-    { key: "testName", label: "Test", weight: 1.7, font: "semibold" },
+    { key: "orderedAt", label: "Ordered", weight: 1.3 },
+    { key: "testName", label: "Test", weight: 1.6, font: "semibold" },
     {
       key: "status",
       label: "Status",
-      weight: 1.35,
+      weight: 1.15,
       tone: (_value, row) => labStatusTone(row.statusKey ?? ""),
     },
-    { key: "result", label: "Result", weight: 1.1 },
-    { key: "reference", label: "Reference", weight: 1.1 },
+    { key: "result", label: "Result", weight: 1 },
+    { key: "reference", label: "Reference", weight: 1 },
     {
       key: "flag",
       label: "Flag",
-      weight: 1.35,
+      weight: 1,
       tone: (value) => labFlagTone(value.toLowerCase()),
     },
-    { key: "dueDate", label: "Due", weight: 1.1 },
+    { key: "dueDate", label: "Due", weight: 0.9 },
+    { key: "resultedAt", label: "Resulted", weight: 1.35 },
+    // Per-test ordering clinician (§17) — exactly as the database records it.
+    { key: "doctor", label: "Ordered by", weight: 1.4 },
   ];
   dataTable(d, { columns, rows: rows.map((row) => ({ ...row })) });
-
-  // Attribution (§17): the ordering clinician exactly as the database records
-  // it — one line for the section, per-test detail lives in the notes below.
-  const clinicians = [...new Set(rows.map((row) => row.doctor))].filter(
-    (name) => name && name !== "Not provided"
-  );
-  if (clinicians.length > 0) {
-    d.moveDown(space[1]);
-    paragraph(d, `Ordered by: ${clinicians.join(" \u00b7 ")}`, {
-      size: typeScale.micro,
-      color: palette.textMuted,
-    });
-  }
 
   const notes = rows.filter((row) => row.notes);
   if (notes.length > 0) {
     d.moveDown(space[1]);
-    for (const row of notes.slice(0, 5)) {
+    for (const row of notes) {
       paragraph(d, `${row.testName} \u2014 ${row.notes}`, {
         size: typeScale.micro,
         color: palette.textMuted,
@@ -243,11 +250,12 @@ export function recordsSection(d: ReportDoc, rows: RecordEntry[]): void {
   }
 
   const columns: TableColumn[] = [
-    { key: "createdAt", label: "Uploaded", weight: 1.5 },
-    { key: "type", label: "Type", weight: 1 },
-    { key: "title", label: "Title", weight: 1.8, font: "semibold" },
-    { key: "description", label: "Description", weight: 2.4 },
-    { key: "doctor", label: "Uploaded by", weight: 1.7 },
+    { key: "createdAt", label: "Uploaded", weight: 1.45 },
+    { key: "type", label: "Type", weight: 0.9 },
+    { key: "title", label: "Title", weight: 1.6, font: "semibold" },
+    { key: "fileName", label: "File", weight: 1.5 },
+    { key: "description", label: "Description", weight: 2 },
+    { key: "doctor", label: "Uploaded by", weight: 1.55 },
   ];
   dataTable(d, { columns, rows: rows.map((row) => ({ ...row })) });
   d.moveDown(space[3]);

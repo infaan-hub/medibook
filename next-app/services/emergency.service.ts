@@ -101,6 +101,7 @@ const EMERGENCY_NOTIFICATION_TYPES = {
   inProgress: "appointment_confirmed",
   completed: "system",
   rejected: "appointment_rejected",
+  cancelled: "appointment_cancelled",
 } as const;
 
 export type EmergencyNotificationKind = keyof typeof EMERGENCY_NOTIFICATION_TYPES;
@@ -271,6 +272,75 @@ function assertEmergencyTransition(from: string, to: string): void {
     throw conflict(`Cannot change emergency status from "${from}" to "${to}".`, {
       status: [`Invalid transition ${from} → ${to}.`],
     });
+  }
+}
+
+/**
+ * Every action the emergency lifecycle accepts, and the spellings that map onto
+ * it. The UI sends the canonical name; the aliases keep older clients (and the
+ * generic /api/appointments/{id}/{action}/ endpoint) working against the same
+ * state machine instead of failing with an opaque 400.
+ */
+export type EmergencyAction = "accept" | "reject" | "in-progress" | "done" | "cancel";
+
+const EMERGENCY_ACTION_ALIASES: Record<string, EmergencyAction> = {
+  accept: "accept",
+  confirm: "accept",
+  reject: "reject",
+  "in-progress": "in-progress",
+  in_progress: "in-progress",
+  start: "in-progress",
+  arrived: "in-progress",
+  done: "done",
+  complete: "done",
+  completed: "done",
+  finish: "done",
+  cancel: "cancel",
+};
+
+/** The one message every unknown emergency action gets (was a 400 round-trip). */
+export const INVALID_EMERGENCY_ACTION_MESSAGE =
+  "Invalid action. Use 'accept', 'reject', 'in-progress', 'done' or 'cancel'.";
+
+/**
+ * Normalises any accepted spelling to its canonical action, or null when the
+ * value is not an emergency action at all. Trimmed + lower-cased so a padded or
+ * upper-cased value from a client still resolves instead of 400-ing.
+ */
+export function normaliseEmergencyAction(raw: string | null | undefined): EmergencyAction | null {
+  if (raw === null || raw === undefined) return null;
+  const key = raw.trim().toLowerCase();
+  if (!key) return null;
+  return EMERGENCY_ACTION_ALIASES[key] ?? null;
+}
+
+/**
+ * The single entry point every caller uses to move an emergency forward: the
+ * dedicated /api/emergency/appointments/{id}/ route AND the generic
+ * /api/appointments/{id}/{action}/ route (the doctor dashboard uses the latter).
+ * Both therefore enforce the same transitions, stamps, notifications and
+ * realtime events — there is no second, weaker path to the statuses.
+ */
+export async function runEmergencyAction(
+  req: Request,
+  user: AuthUser,
+  id: number,
+  action: string | null | undefined,
+  body: unknown = {}
+) {
+  const normalised = normaliseEmergencyAction(action);
+  if (!normalised) throw badRequest(INVALID_EMERGENCY_ACTION_MESSAGE);
+  switch (normalised) {
+    case "accept":
+      return acceptEmergencyAppointment(req, user, id);
+    case "reject":
+      return rejectEmergencyAppointment(req, user, id, body);
+    case "in-progress":
+      return startEmergencyInProgress(req, user, id);
+    case "done":
+      return completeEmergencyAppointment(req, user, id);
+    case "cancel":
+      return cancelEmergencyAppointment(req, user, id, body);
   }
 }
 
@@ -811,6 +881,52 @@ export async function rejectEmergencyAppointment(req: Request, user: AuthUser, i
   return { appointment: updated, message: "Emergency appointment rejected." };
 }
 
+/**
+ * Cancel an emergency that has not started yet. Legal from `pending` / `accepted`
+ * only — once the doctor is `in_progress` the visit can only end as `done`, so a
+ * cancel there would silently drop the treatment record (§22).
+ *
+ * The patient may cancel their OWN request (they filed it, they can withdraw it);
+ * everyone else still has to be the assigned doctor or an admin.
+ */
+export async function cancelEmergencyAppointment(
+  req: Request,
+  user: AuthUser,
+  id: number,
+  body: unknown
+) {
+  const appointment = await loadEmergency(id);
+  const isOwnPatient = appointment.patient_id === user.id;
+  if (!isOwnPatient) await assertEmergencyActor(user, appointment.doctor_id, "cancel");
+
+  if (!canEmergencyTransition(appointment.status, "cancelled")) {
+    throw conflict("This emergency appointment is no longer open.");
+  }
+
+  const { appointmentActionSchema } = await import("@/validators/misc");
+  const rawBody = (body ?? {}) as Record<string, unknown>;
+  const payload = parse(appointmentActionSchema, { ...rawBody, status: "cancelled" });
+
+  const updated = await appointments.updateAppointment(id, {
+    status: "cancelled",
+    cancel_reason: payload.cancel_reason ?? "Emergency appointment cancelled",
+  });
+
+  await notify(
+    appointment.patient_id,
+    emergencyNotificationType("cancelled"),
+    `Your emergency appointment with ${doctorLabel(updated)} was cancelled.`,
+    updated.id
+  );
+
+  broadcastAppointmentEvent(updated, "appointment.emergency_rejected", [
+    updated.patient_id,
+    updated.doctor.user_id,
+  ]);
+
+  return { appointment: updated, message: "Emergency appointment cancelled." };
+}
+
 /** Get patient's active emergency appointment. */
 export async function getPatientEmergencyAppointment(user: AuthUser) {
   return appointments.findPatientEmergencyAppointment(user.id);
@@ -821,8 +937,12 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
  * closed without the doctor reaching IN_PROGRESS drops out of the live list
  * (the row itself is kept as history). Server-side, so a closed browser or a
  * stale tab never keeps a dead request alive (§18).
+ *
+ * Exported because EVERY surface that can show an emergency queue has to sweep
+ * first — the emergency screens do, and so does the doctor's appointments list,
+ * which otherwise kept showing timed-out requests as still `accepted`.
  */
-async function sweepTimedOutEmergencies(): Promise<void> {
+export async function sweepTimedOutEmergencies(): Promise<void> {
   const cutoff = new Date(Date.now() - EMERGENCY_TIMEOUT_MS);
   await appointments.expireTimedOutEmergencies(cutoff);
 }

@@ -304,7 +304,7 @@ export interface SummaryCard {
 
 function summaryCardHeight(d: ReportDoc, card: SummaryCard, inner: number): number {
   const labelH = d.measure(card.label, { size: typeScale.micro, width: inner });
-  const valueH = d.measure(card.value, { font: "bold", size: 19.8, width: inner });
+  const valueH = d.measure(card.value, { font: "bold", size: typeScale.metric, width: inner });
   const detailH = card.detail ? d.measure(card.detail, { size: typeScale.micro, width: inner }) : 0;
   return geometry.cardPadding * 2 + labelH + valueH + detailH + 6;
 }
@@ -353,8 +353,8 @@ export function summaryCards(
         width: inner,
       });
       cursor += d.measure(card.label, { size: typeScale.micro, width: inner }) + 2;
-      d.textAt(textX, cursor, card.value, { font: "bold", size: 19.8, color: palette.text, width: inner });
-      cursor += d.measure(card.value, { font: "bold", size: 19.8, width: inner }) + 2;
+      d.textAt(textX, cursor, card.value, { font: "bold", size: typeScale.metric, color: palette.text, width: inner });
+      cursor += d.measure(card.value, { font: "bold", size: typeScale.metric, width: inner }) + 2;
       if (card.detail) {
         d.textAt(textX, cursor, card.detail, { size: typeScale.micro, color: palette.textMuted, width: inner });
       }
@@ -639,8 +639,8 @@ export interface DataTableOptions {
   rowMinHeight?: number;
 }
 
-const CELL_PAD_X = 8;
-const CELL_PAD_Y = 6;
+const CELL_PAD_X = geometry.tableCellPaddingX;
+const CELL_PAD_Y = geometry.tableCellPaddingY;
 
 /** Width of every column, in points, left to right. */
 function columnWidths(d: ReportDoc, columns: TableColumn[]): number[] {

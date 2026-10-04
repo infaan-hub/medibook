@@ -4,7 +4,7 @@
  * JSON preview read exactly the same numbers.
  */
 import { prisma } from "@/lib/db";
-import { formatCount, formatTimestampDate, isoDayInTimezone, statusLabel } from "./format";
+import { formatCount, formatDateTime, isoDayInTimezone, statusLabel } from "./format";
 import {
   dateColumnRange,
   resolvePeriod,
@@ -15,6 +15,8 @@ import {
 
 const TOP_DOCTORS = 10;
 const REGISTRATION_ROWS = 40;
+/** Health-tip rows listed in the admin PDF before a disclosure note takes over. */
+const HEALTH_TIP_ROWS = 40;
 /** Beyond this span a per-day table stops being readable on paper. */
 const MAX_DAILY_DAYS = 92;
 /** Emergency lifecycle, in the order an administrator reads it. */
@@ -74,7 +76,21 @@ export interface RoleBreakdownRow {
   share: string;
 }
 
+/** One health tip (blog article) created inside the reporting period. */
+export interface HealthTipRow {
+  title: string;
+  category: string;
+  /** Display label, e.g. "Published". */
+  status: string;
+  /** Raw value, used for the pill tone. */
+  statusKey: string;
+  publishedAt: string;
+  createdAt: string;
+  author: string;
+}
+
 export interface RegistrationRow {
+  /** Full local timestamp — the printout must never hide the time. */
   date: string;
   name: string;
   role: string;
@@ -115,6 +131,10 @@ export interface AdminReportData {
   dailyRegistrations: DailyAccountRow[];
   newAccountsByRole: RoleBreakdownRow[];
   registrations: RegistrationRow[];
+  /** Health tips created in the period, newest first (capped at 40 rows). */
+  healthTipsPeriod: HealthTipRow[];
+  /** True when the health-tip list hit the row cap (the totals still count every tip). */
+  healthTipsTruncated: boolean;
   /** True when the period was too long for a per-day table. */
   dailyVolumeTruncated: boolean;
   /** True when the registration list hit the row cap (the totals still count every account). */
@@ -156,6 +176,7 @@ export async function collectAdminReport(query: PeriodQuery = {}): Promise<Admin
     healthTips,
     publishedHealthTips,
     periodHealthTips,
+    periodTipRows,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { role: "patient" } }),
@@ -197,6 +218,20 @@ export async function collectAdminReport(query: PeriodQuery = {}): Promise<Admin
     prisma.article.count(),
     prisma.article.count({ where: { published: true } }),
     prisma.article.count({ where: { created_at: accountRange } }),
+    // Capped detail rows for the health-tip table (the count above stays exact).
+    prisma.article.findMany({
+      where: { created_at: accountRange },
+      orderBy: { created_at: "desc" },
+      take: HEALTH_TIP_ROWS,
+      select: {
+        title: true,
+        category: true,
+        published: true,
+        published_at: true,
+        created_at: true,
+        author: { select: { first_name: true, last_name: true, username: true, email: true } },
+      },
+    }),
   ]);
 
   /* --------------------------- status breakdown -------------------------- */
@@ -327,7 +362,7 @@ export async function collectAdminReport(query: PeriodQuery = {}): Promise<Admin
 
   /* ----------------------------- registrations --------------------------- */
   const registrations: RegistrationRow[] = recentUsers.map((user) => ({
-    date: formatTimestampDate(user.created_at),
+    date: formatDateTime(user.created_at),
     name:
       [user.first_name, user.last_name].filter(Boolean).join(" ") ||
       user.username ||
@@ -336,6 +371,22 @@ export async function collectAdminReport(query: PeriodQuery = {}): Promise<Admin
     email: user.email,
   }));
   const registrationsTruncated = recentUsers.length < accountRows.length;
+
+  /* ------------------------------ health tips ---------------------------- */
+  const healthTipsPeriod: HealthTipRow[] = periodTipRows.map((tip) => ({
+    title: tip.title,
+    category: statusLabel(tip.category),
+    status: tip.published ? "Published" : "Draft",
+    statusKey: tip.published ? "published" : "draft",
+    publishedAt: tip.published_at ? formatDateTime(tip.published_at) : "Not published",
+    createdAt: formatDateTime(tip.created_at),
+    author: tip.author
+      ? [tip.author.first_name, tip.author.last_name].filter(Boolean).join(" ") ||
+        tip.author.username ||
+        tip.author.email
+      : "Not provided",
+  }));
+  const healthTipsTruncated = periodTipRows.length < periodHealthTips;
 
   const byRole = new Map<string, number>();
   const byAccountDay = new Map<string, number>();
@@ -391,6 +442,8 @@ export async function collectAdminReport(query: PeriodQuery = {}): Promise<Admin
     dailyRegistrations,
     newAccountsByRole,
     registrations,
+    healthTipsPeriod,
+    healthTipsTruncated,
     dailyVolumeTruncated,
     registrationsTruncated,
   };

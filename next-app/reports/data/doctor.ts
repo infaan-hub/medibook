@@ -1,6 +1,6 @@
 /**
  * Doctor medical report data (§34 family 2) — a clinician's report on ONE of
- * their patients.
+ * their patients, containing the patient's full information.
  *
  * Authorization is enforced here, not in the route: the doctor must be the
  * signed-in doctor AND must actually be linked to the requested patient
@@ -93,10 +93,13 @@ export async function collectDoctorReport(
     ? resolvePeriod(query)
     : fullRecordPeriod(isoDayInTimezone(patient.created_at));
 
+  // The doctor must be linked to the patient (checked above), but the report
+  // itself is the patient's FULL chart — every clinician's entries, exactly as
+  // the patient's own report shows them — so a printed copy never hides part
+  // of the record.
   const history = await collectClinicalHistory({
     period,
     patientId: patient.id,
-    doctorId: doctor.id,
   });
 
   return {

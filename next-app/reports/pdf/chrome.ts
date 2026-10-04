@@ -6,9 +6,9 @@
  * logo asset (never a replacement). The footer carries the confidentiality
  * language, the server-side generation timestamp and "Page X of Y".
  */
-import { branding, fontFamily, page, palette, space, type as typeScale } from "../design/tokens";
+import { branding, borderWidth, fontFamily, page, palette, radius, space, type as typeScale } from "../design/tokens";
 import type { ReportDoc, ReportChrome } from "./doc";
-import { loadLogo, logoDimensions } from "./assets";
+import { loadLogo } from "./assets";
 import { formatDateTime } from "../../reports/data/format";
 
 /** Logo tile edge length, in points (the app header renders the mark at 28px). */
@@ -17,28 +17,21 @@ export const LOGO_SIZE = 24;
 /**
  * Draw the MediBook mark as a crisp square tile.
  *
- * The asset is a portrait JPEG (teal tile + wordmark). We clip a centred
- * square of the source, so the mark keeps its real aspect ratio and is never
- * stretched or distorted.
+ * The embedded PNG is already a square crop of the official asset, so the
+ * mark keeps its real aspect ratio and is never stretched or distorted.
  */
 export function drawLogo(target: ReportDoc, x: number, y: number, size: number = LOGO_SIZE): void {
   const doc = target.doc;
   const bytes = loadLogo();
-  const dims = logoDimensions();
-  if (!bytes || !dims || dims.width <= 0 || dims.height <= 0) {
+  if (!bytes) {
     // Extremely defensive: a flat brand tile still keeps the report branded.
-    target.rect(x, y, size, size, { fill: palette.primary, radius: 5 });
+    target.rect(x, y, size, size, { fill: palette.primary, radius: radius.sm });
     return;
   }
-  const square = dims.width;
-  const cropY = Math.max(0, Math.round((dims.height - square) * 0.1));
-  const scale = size / square;
-  const drawWidth = dims.width * scale;
-  const drawHeight = dims.height * scale;
 
   doc.save();
-  doc.roundedRect(x, y, size, size, 5).clip();
-  doc.image(bytes, x, y - cropY * scale, { width: drawWidth, height: drawHeight });
+  doc.roundedRect(x, y, size, size, radius.sm).clip();
+  doc.image(bytes, x, y, { width: size, height: size });
   doc.restore();
 }
 
@@ -51,9 +44,9 @@ export function drawHeader(target: ReportDoc, chrome: ReportChrome): void {
 
   drawLogo(target, left, 18, LOGO_SIZE);
 
-  target.textAt(left + LOGO_SIZE + space[2], 19, branding.organisationUpper, {
+  target.textAt(left + LOGO_SIZE + space[2], 19, branding.organisation, {
     font: "semibold",
-    size: 10.5,
+    size: typeScale.sm,
     color: palette.primary,
   });
 
@@ -82,8 +75,8 @@ export function drawHeader(target: ReportDoc, chrome: ReportChrome): void {
   }
 
   // Shell-header hairline + the MediBook teal brand accent.
-  target.rule(topRule, { color: palette.border, lineWidth: 0.75 });
-  target.rule(topRule, { color: palette.primary, lineWidth: 1.13, width: 54 });
+  target.rule(topRule, { color: palette.border, lineWidth: borderWidth.hairline });
+  target.rule(topRule, { color: palette.primary, lineWidth: borderWidth.emphasis, width: 54 });
   doc.y = page.headerHeight;
 }
 
@@ -99,7 +92,7 @@ export function drawFooter(
   const line2 = line1 + 10;
   const left = target.left;
 
-  target.rule(ruleY, { color: palette.border, lineWidth: 0.75 });
+  target.rule(ruleY, { color: palette.border, lineWidth: borderWidth.hairline });
 
   target.textAt(left, line1, branding.organisation, {
     font: "semibold",

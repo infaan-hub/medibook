@@ -1,28 +1,24 @@
 /**
  * Emergency appointment actions (POST /api/emergency/appointments/{id}/).
- * `action` = accept | reject | in-progress | done, taken from the query string
- * or the JSON body — every one of them is a real backend transition:
+ * `action` = accept | reject | in-progress | done | cancel, taken from the JSON
+ * body or the query string — every one of them is a real backend transition:
  *
  *   pending     → [Accept] → accepted
  *   accepted    → [Emergency In Progress] → in_progress
  *   in_progress → [Done] → done (the only state that releases the patient)
  *
+ * A request whose 30-minute window closed without the doctor arriving is swept
+ * to `expired` by the reads, which releases the patient to request again.
+ *
  * Role and ownership are enforced in the service: only the assigned doctor
- * (or an admin) may act, and only along a legal transition.
+ * (or an admin) may act, and only along a legal transition. The generic
+ * /api/appointments/{id}/{action}/ route funnels into the SAME dispatcher, so
+ * there is no second, weaker way to reach these statuses.
  */
-import { handler, ok, badRequest, readJson, intParam } from "@/lib/route";
+import { handler, ok, readJson, intParam, badRequest } from "@/lib/route";
 import { requireAuth } from "@/lib/auth";
 import { emergencyAppointmentDto } from "@/lib/serializers";
-import {
-  acceptEmergencyAppointment,
-  completeEmergencyAppointment,
-  rejectEmergencyAppointment,
-  startEmergencyInProgress,
-} from "@/services/emergency.service";
-
-/** Accepted spellings — the UI sends the first, the rest are for older clients. */
-const START_ACTIONS = new Set(["in-progress", "in_progress", "start", "arrived"]);
-const DONE_ACTIONS = new Set(["done", "complete", "completed", "finish"]);
+import { runEmergencyAction } from "@/services/emergency.service";
 
 export const POST = handler(async (ctx) => {
   const user = await requireAuth(ctx.req);
@@ -32,28 +28,14 @@ export const POST = handler(async (ctx) => {
   if (id === null) throw badRequest("Missing appointment id.");
 
   const body = (await readJson(ctx.req)) as Record<string, unknown>;
-  const action =
-    qs.get("action") ?? (typeof body.action === "string" ? body.action : null);
 
-  if (action === "accept") {
-    const result = await acceptEmergencyAppointment(ctx.req, user, id);
-    return ok(emergencyAppointmentDto(result.appointment), result.message);
-  }
+  // The query string wins when it carries something; otherwise the body's
+  // `action` is used. An empty/absent value falls through to the service,
+  // which answers with the single, accurate "Invalid action" message.
+  const fromQuery = qs.get("action");
+  const fromBody = typeof body.action === "string" ? body.action : null;
+  const action = fromQuery !== null && fromQuery.trim() !== "" ? fromQuery : fromBody;
 
-  if (action === "reject") {
-    const result = await rejectEmergencyAppointment(ctx.req, user, id, body);
-    return ok(emergencyAppointmentDto(result.appointment), result.message);
-  }
-
-  if (action !== null && START_ACTIONS.has(action)) {
-    const result = await startEmergencyInProgress(ctx.req, user, id);
-    return ok(emergencyAppointmentDto(result.appointment), result.message);
-  }
-
-  if (action !== null && DONE_ACTIONS.has(action)) {
-    const result = await completeEmergencyAppointment(ctx.req, user, id);
-    return ok(emergencyAppointmentDto(result.appointment), result.message);
-  }
-
-  throw badRequest("Invalid action. Use 'accept', 'reject', 'in-progress' or 'done'.");
+  const result = await runEmergencyAction(ctx.req, user, id, action, body);
+  return ok(emergencyAppointmentDto(result.appointment), result.message);
 });

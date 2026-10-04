@@ -60,7 +60,7 @@ function summaryCardsFor(data: AdminReportData): SummaryCard[] {
   return [
     { label: "Total accounts", value: data.totals.users, detail: "All roles, all time", tone: "primary" },
     { label: "Patients", value: data.totals.patients, detail: "Registered patients", tone: "info" },
-    { label: "Doctors", value: data.totals.doctors, detail: "Approved clinicians", tone: "primary" },
+    { label: "Doctors", value: data.totals.doctors, detail: "Clinician profiles", tone: "primary" },
     { label: "Appointments", value: data.totals.appointments, detail: "All time", tone: "neutral" },
     {
       label: "Appointments in period",
@@ -241,6 +241,35 @@ function drawAdminBody(d: ReportDoc, data: AdminReportData, id: string): void {
   ]);
   d.moveDown(space[3]);
 
+  subsectionTitle(d, "Health tips created in this period");
+  const tipColumns: TableColumn[] = [
+    { key: "title", label: "Title", weight: 2.2, font: "semibold" },
+    { key: "category", label: "Category", weight: 1 },
+    {
+      key: "status",
+      label: "Status",
+      weight: 1,
+      tone: (_value, row) => (row.statusKey === "published" ? "success" : "neutral"),
+    },
+    { key: "createdAt", label: "Created", weight: 1.5 },
+    { key: "publishedAt", label: "Published", weight: 1.5 },
+    { key: "author", label: "Author", weight: 1.5 },
+  ];
+  dataTable(d, {
+    columns: tipColumns,
+    rows: data.healthTipsPeriod.map((row) => ({ ...row })),
+    emptyText: "No health tips were created during this period.",
+  });
+  if (data.healthTipsTruncated) {
+    d.moveDown(space[2]);
+    paragraph(
+      d,
+      `This list shows the ${data.healthTipsPeriod.length} most recent health tips. The counts above still include every tip created in the period (${data.totals.periodHealthTips}).`,
+      { size: typeScale.micro, color: palette.textMuted, accent: true, background: palette.surfaceAlt }
+    );
+  }
+  d.moveDown(space[3]);
+
   sectionTitle(d, {
     title: "New accounts by role",
     eyebrow: "Section 7",
@@ -278,10 +307,10 @@ function drawAdminBody(d: ReportDoc, data: AdminReportData, id: string): void {
     subtitle: "Accounts created during the reporting period (most recent first).",
   });
   const registrationColumns: TableColumn[] = [
-    { key: "date", label: "Date", weight: 1.4 },
-    { key: "name", label: "Name", weight: 2, font: "semibold" },
+    { key: "date", label: "Registered", weight: 1.7 },
+    { key: "name", label: "Name", weight: 1.9, font: "semibold" },
     { key: "role", label: "Role", weight: 1 },
-    { key: "email", label: "Email", weight: 2.4 },
+    { key: "email", label: "Email", weight: 2.2 },
   ];
   dataTable(d, {
     columns: registrationColumns,

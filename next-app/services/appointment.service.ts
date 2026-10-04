@@ -17,7 +17,7 @@ import { appointmentCreateSchema, appointmentPatchSchema } from "@/validators/mi
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
-import { canEmergencyTransition } from "./emergency.service";
+import { canEmergencyTransition, runEmergencyAction } from "./emergency.service";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, User } from "@prisma/client";
 
@@ -347,12 +347,11 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
 export const canTransition = (from: string, to: string): boolean =>
   (STATUS_TRANSITIONS[from] ?? []).includes(to);
 
-function assertTransition(from: string, to: string, emergency = false): void {
-  // Emergency rows follow the EMERGENCY lifecycle instead: an accepted
-  // emergency has to pass through `in_progress` before it can be closed, so a
-  // generic "done" tap from `accepted` is refused as well (§22).
-  const allowed = emergency ? canEmergencyTransition(from, to) : canTransition(from, to);
-  if (!allowed) {
+function assertTransition(from: string, to: string): void {
+  // Emergency rows never reach here — runAction hands them to the emergency
+  // dispatcher, which enforces EMERGENCY_STATUS_TRANSITIONS (accept → in
+  // progress → done) plus their lifecycle stamps.
+  if (!canTransition(from, to)) {
     throw conflict(
       `Cannot change appointment status from "${from}" to "${to}".`,
       { status: [`Invalid transition ${from} → ${to}.`] }
@@ -380,12 +379,33 @@ export const isKnownAction = (action: string): boolean => action in ACTION_MAP;
  * POST /api/appointments/{id}/{confirm,complete,cancel,reject}/ —
  * role matrix and side effects ported from AppointmentActionView.
  */
-export async function runAction(user: AuthUser, id: number, action: string, body: unknown) {
+/**
+ * POST /api/appointments/{id}/{confirm,complete,cancel,reject}/ — role matrix and
+ * side effects ported from AppointmentActionView.
+ *
+ * EMERGENCY rows are handed straight to `runEmergencyAction`, the same dispatcher
+ * the dedicated emergency endpoint uses. They have their own lifecycle
+ * (accept → in progress → done) with their own timestamps, notifications and
+ * realtime events; pushing them through the generic path refused the legal
+ * `in_progress → done` tap and left `accepted` emergencies with no way forward.
+ */
+export async function runAction(
+  req: Request,
+  user: AuthUser,
+  id: number,
+  action: string,
+  body: unknown
+) {
   const config = ACTION_MAP[action];
   if (!config) throw notFound();
 
   const appointment = await appointments.findAppointmentById(id);
   if (!appointment) throw notFound();
+
+  // One state machine for emergencies, whichever endpoint the client used.
+  if (appointment.appointment_type === "EMERGENCY") {
+    return runEmergencyAction(req, user, id, action, body);
+  }
 
   const role = user.role;
   const isAdmin = role === "admin" || user.is_superuser;
@@ -403,7 +423,7 @@ export async function runAction(user: AuthUser, id: number, action: string, body
   if (!allowed) throw forbidden("You do not have permission to perform this action.");
 
   // State machine: reject illegal transitions (e.g. confirm a cancelled appointment).
-  assertTransition(appointment.status, config.status, appointment.appointment_type === "EMERGENCY");
+  assertTransition(appointment.status, config.status);
 
   const { appointmentActionSchema } = await import("@/validators/misc");
   const rawBody = (body ?? {}) as Record<string, unknown>;

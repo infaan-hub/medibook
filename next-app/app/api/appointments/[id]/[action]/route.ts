@@ -10,6 +10,6 @@ export const POST = handler(async (ctx) => {
   const action = ctx.params.action;
   if (id === null || !action || !isKnownAction(action)) throw notFound();
   const body = await readJson(ctx.req);
-  const result = await runAction(user, id, action, body);
+  const result = await runAction(ctx.req, user, id, action, body);
   return ok(appointmentDto(result.appointment), result.message);
 });
