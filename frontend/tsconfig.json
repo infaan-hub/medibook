@@ -22,7 +22,8 @@
     "allowJs": true,
     "esModuleInterop": true,
     "types": ["vitest/globals"],
-    "baseUrl": ".",
+    // No "baseUrl": it is deprecated in TypeScript 7. "paths" entries are
+    // resolved relative to this file, so "@/*" still maps to the project root.
     "paths": {
       "@/*": ["./*"]
     }
