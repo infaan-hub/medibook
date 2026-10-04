@@ -21,8 +21,26 @@
     "plugins": [{ "name": "next" }],
     "allowJs": true,
     "esModuleInterop": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
-  "include": ["next-env.d.ts", "app", "src", "next.config.ts", "vitest.config.ts", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "app",
+    "src",
+    "next.config.ts",
+    "vitest.config.ts",
+    ".next/types/**/*.ts",
+    "lib",
+    "services",
+    "repositories",
+    "validators",
+    "reports",
+    "prisma",
+    "tests"
+  ],
   "exclude": ["node_modules"]
 }
