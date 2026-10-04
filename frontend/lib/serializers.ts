@@ -1,0 +1,565 @@
+﻿/**
+ * DTO serializers â€” the TypeScript port of the Django REST Framework
+ * serializers. Field names, shapes and value formats match exactly:
+ *
+ *   datetime â†’ ISO-8601 string, date â†’ "YYYY-MM-DD", time â†’ "HH:MM:SS",
+ *   Decimal  â†’ fixed 2-decimal string, media files â†’ URL, FKs â†’ integer ids.
+ */
+import type {
+  Appointment,
+  Article,
+  AuditEvent,
+  Availability,
+  AvailabilityBreak,
+  Doctor,
+  HealthRecord,
+  Hospital,
+  LabOrder,
+  MedicalTreatment,
+  Notification,
+  Patient,
+  Prescription,
+  PrescriptionItem,
+  PushSubscription,
+  ScheduleException,
+  Specialty,
+  User,
+  Vital,
+} from "@prisma/client";
+import { dateStr, dec2, iso, mediaUrl } from "./serialize";
+import { hasLocation, haversineKm, type GeoPoint } from "./geo";
+
+/** accounts.serializers.user_payload / UserSerializer. */
+export function userPayload(user: User, req: Request): Record<string, unknown> {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    phone: user.phone,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    role: user.role,
+    /**
+     * Doctor first-login setup — server-verified, so the route guard can make
+     * its decision synchronously from the session payload instead of guessing
+     * or trusting localStorage. Only doctor accounts carry it.
+     */
+    ...(user.role === "doctor"
+      ? { doctor_onboarding_completed: user.doctor_onboarding_completed === true }
+      : {}),
+    profile_image: mediaUrl(user.profile_image_id),
+    is_superuser: user.is_superuser,
+    date_joined: iso(user.created_at),
+  };
+}
+
+/**
+ * patients.serializers.PatientSerializer.
+ *
+ * `id` is the patient's **user** id, not the `Patient` profile row id: every
+ * clinical foreign key (Appointment.patient, MedicalTreatment.patient,
+ * HealthRecord.patient) points at User.id, and `/api/patients/{id}/` takes a
+ * user id too. Emitting the profile id here made the doctor's patient list
+ * hand out ids that matched no appointment, so the whole medical-treatment
+ * screen looked empty.
+ */
+export function patientDto(patient: Patient & { user: User }): Record<string, unknown> {
+  return {
+    id: patient.user_id,
+    email: patient.user.email,
+    first_name: patient.user.first_name,
+    last_name: patient.user.last_name,
+    date_of_birth: dateStr(patient.date_of_birth),
+    gender: patient.gender,
+    /** REAL geolocation (the free-text address/city fields were dropped). */
+    latitude: patient.latitude,
+    longitude: patient.longitude,
+    location_accuracy: patient.location_accuracy,
+    location_captured_at: iso(patient.location_captured_at),
+    /** False → the client must prompt for a location before booking. */
+    has_location: hasLocation(patient),
+    emergency_contact_name: patient.emergency_contact_name,
+    emergency_contact_phone: patient.emergency_contact_phone,
+    blood_group: patient.blood_group,
+    allergies: patient.allergies,
+    medical_history: patient.medical_history,
+    reminder_preferences: patient.reminder_preferences,
+    timezone: patient.timezone ?? "UTC",
+  };
+}
+
+type SpecialtyRow = {
+  id: number;
+  name: string;
+  patient_friendly_name: string;
+  description: string;
+  what_to_expect: string;
+};
+
+/**
+ * The subset of `User` a doctor DTO actually reads. Declaring it structurally
+ * (instead of the whole `User`) lets callers that intentionally `select` only
+ * these columns — e.g. the emergency nearby search, which must not pull
+ * `password` — satisfy the signature without a cast.
+ */
+type DoctorDtoUser = Pick<User, "email" | "first_name" | "last_name" | "phone" | "profile_image_id">;
+
+/**
+ * doctors.serializers.DoctorSerializer.
+ *
+ * `origin` is optional: when the caller knows where the viewer is (the
+ * directory was asked for "near me"), each DTO carries a real `distance_km`.
+ * Without an origin the field is `null` rather than a misleading `0`.
+ */
+export function doctorDto(
+  doctor: Doctor & {
+    user: DoctorDtoUser;
+    specialties: Array<{ specialty: SpecialtyRow }>;
+    hospitals: Array<{ hospital_id: number }>;
+  },
+  req: Request,
+  origin?: GeoPoint | null
+): Record<string, unknown> {
+  return {
+    id: doctor.id,
+    email: doctor.user.email,
+    first_name: doctor.user.first_name,
+    last_name: doctor.user.last_name,
+    /** Contact number on the account — shown on the doctor card + to patients. */
+    phone: doctor.user.phone ?? "",
+    /** Doctor's personal phone numbers — shown on doctor card. */
+    phone_secondary: doctor.phone_secondary ?? "",
+    profile_image: mediaUrl(doctor.user.profile_image_id),
+    specialties: doctor.specialties.map(({ specialty }) => ({
+      id: specialty.id,
+      name: specialty.name,
+      patient_friendly_name: specialty.patient_friendly_name,
+      description: specialty.description,
+      what_to_expect: specialty.what_to_expect,
+    })),
+    hospitals: doctor.hospitals.map((row) => row.hospital_id),
+    qualifications: doctor.qualifications,
+    experience_years: doctor.experience_years,
+    consultation_fee: dec2(doctor.consultation_fee),
+    bio: doctor.bio,
+    /** REAL practice coordinates (city/office_address strings were dropped). */
+    latitude: doctor.latitude,
+    longitude: doctor.longitude,
+    location_accuracy: doctor.location_accuracy,
+    location_captured_at: iso(doctor.location_captured_at),
+    /** False → patients are prompted to nudge this doctor; booking is blocked. */
+    has_location: hasLocation(doctor),
+    /** Kilometres from `origin`, or null when no origin was supplied. */
+    distance_km: origin ? haversineKm(origin, doctor) : null,
+    is_available: doctor.is_available,
+    average_rating: dec2(doctor.average_rating),
+    total_reviews: doctor.total_reviews,
+  };
+}
+
+/** doctors.serializers.AvailabilitySerializer. */
+export function availabilityDto(availability: Availability): Record<string, unknown> {
+  return {
+    id: availability.id,
+    weekday: availability.weekday,
+    start_time: availability.start_time,
+    end_time: availability.end_time,
+    slot_duration_minutes: availability.slot_duration_minutes,
+    is_active: availability.is_active,
+  };
+}
+
+/** doctors.serializers.AvailabilityBreakSerializer. */
+export function breakDto(item: AvailabilityBreak): Record<string, unknown> {
+  return { id: item.id, start_time: item.start_time, end_time: item.end_time };
+}
+
+/** doctors.serializers.ScheduleExceptionSerializer. */
+export function exceptionDto(item: ScheduleException): Record<string, unknown> {
+  return {
+    id: item.id,
+    date: dateStr(item.date),
+    start_time: item.start_time,
+    end_time: item.end_time,
+    reason: item.reason,
+  };
+}
+
+/** notifications.serializers.NotificationSerializer. */
+export function notificationDto(notification: Notification): Record<string, unknown> {
+  return {
+    id: notification.id,
+    notification_type: notification.notification_type,
+    title: notification.title,
+    message: notification.message,
+    related_appointment: notification.related_appointment_id,
+    is_read: notification.is_read,
+    created_at: iso(notification.created_at),
+  };
+}
+
+/** notifications.serializers.PushSubscriptionSerializer. */
+export function pushSubscriptionDto(sub: PushSubscription): Record<string, unknown> {
+  return {
+    id: sub.id,
+    endpoint: sub.endpoint,
+    p256dh_key: sub.p256dh_key,
+    auth_key: sub.auth_key,
+    fcm_token: sub.fcm_token,
+    device_info: sub.device_info,
+    is_active: sub.is_active,
+  };
+}
+
+/** blog.serializers.ArticleListSerializer. */
+export function articleListDto(
+  article: Article & { author?: User | null },
+  req: Request
+): Record<string, unknown> {
+  const author = article.author ?? null;
+  const authorName = author
+    ? `${author.first_name} ${author.last_name}`.trim() || author.email
+    : "";
+  return {
+    id: article.id,
+    title: article.title,
+    slug: article.slug,
+    excerpt: article.excerpt,
+    image: mediaUrl(article.image_id),
+    category: article.category,
+    author_name: authorName,
+    author_role: author?.role ?? "",
+    published_at: iso(article.published_at),
+    created_at: iso(article.created_at),
+  };
+}
+
+/** blog.serializers.ArticleDetailSerializer. */
+export function articleDetailDto(
+  article: Article & { author: User | null },
+  req: Request
+): Record<string, unknown> {
+  const author = article.author;
+  const fullName = author ? `${author.first_name} ${author.last_name}`.trim() : "";
+  return {
+    ...articleListDto(article, req),
+    content: article.content,
+    published: article.published,
+    author: article.author_id,
+    author_name: author ? fullName || author.email : "",
+    updated_at: iso(article.updated_at),
+  };
+}
+
+/** treatments.serializers.HealthRecordSerializer. */
+export function healthRecordDto(
+  record: HealthRecord & {
+    doctor?: { user: User };
+    file?: { filename: string; contentType: string | null } | null;
+  },
+  req: Request
+): Record<string, unknown> {
+  const doctorUser = record.doctor?.user;
+  const doctorName = doctorUser
+    ? `${doctorUser.first_name} ${doctorUser.last_name}`.trim() || doctorUser.email
+    : "";
+  return {
+    id: record.id,
+    patient: record.patient_id,
+    doctor: record.doctor_id,
+    doctor_name: doctorName,
+    appointment: record.appointment_id,
+    file: mediaUrl(record.file_id),
+    // Original filename + content type so clients can offer a real
+    // "Open"/"Download" action (the file bytes live behind /media/{id},
+    // which requires an Authorization header).
+    file_name: record.file?.filename ?? null,
+    file_content_type: record.file?.contentType ?? null,
+    record_type: record.record_type,
+    title: record.title,
+    description: record.description,
+    created_at: iso(record.created_at),
+  };
+}
+
+/** treatments.serializers.MedicalTreatmentSerializer. */
+export function treatmentDto(
+  treatment: MedicalTreatment & {
+    prescriptions?: (Prescription & { items?: PrescriptionItem[] })[];
+  }
+): Record<string, unknown> {
+  // The structured prescription issued alongside this treatment (phase 1):
+  // rows always carry the include, so `prescription_items` is authoritative
+  // and the legacy `prescription` string is only its plain-text rendering.
+  const prescription = treatment.prescriptions?.[0] ?? null;
+  return {
+    id: treatment.id,
+    doctor: treatment.doctor_id,
+    patient: treatment.patient_id,
+    appointment: treatment.appointment_id,
+    diagnosis: treatment.diagnosis,
+    treatment_notes: treatment.treatment_notes,
+    prescription: treatment.prescription,
+    prescription_id: prescription?.id ?? null,
+    prescription_notes: prescription?.notes ?? "",
+    prescription_items: prescription?.items ? prescription.items.map(prescriptionItemDto) : [],
+    follow_up_date: dateStr(treatment.follow_up_date),
+    follow_up_notes: treatment.follow_up_notes,
+    created_at: iso(treatment.created_at),
+    updated_at: iso(treatment.updated_at),
+  };
+}
+
+/** prescriptions.PrescriptionItemSerializer (one medication line). */
+export function prescriptionItemDto(item: PrescriptionItem): Record<string, unknown> {
+  return {
+    id: item.id,
+    medication: item.medication,
+    dosage: item.dosage,
+    frequency: item.frequency,
+    route: item.route,
+    duration_days: item.duration_days,
+    refills: item.refills,
+    instructions: item.instructions,
+    sort_order: item.sort_order,
+  };
+}
+
+/** prescriptions.PrescriptionSerializer. */
+export function prescriptionDto(
+  prescription: Prescription & { items?: PrescriptionItem[] }
+): Record<string, unknown> {
+  return {
+    id: prescription.id,
+    patient: prescription.patient_id,
+    doctor: prescription.doctor_id,
+    appointment: prescription.appointment_id,
+    treatment: prescription.treatment_id,
+    notes: prescription.notes,
+    items: (prescription.items ?? []).map(prescriptionItemDto),
+    created_at: iso(prescription.created_at),
+    updated_at: iso(prescription.updated_at),
+  };
+}
+
+/** vitals.VitalSerializer — one reading, plus who took it (phase 2). */
+export function vitalDto(
+  vital: Vital & { doctor?: (Doctor & { user: User }) | null }
+): Record<string, unknown> {
+  const recorder = vital.doctor?.user;
+  const fullName = recorder ? `${recorder.first_name} ${recorder.last_name}`.trim() : "";
+  return {
+    id: vital.id,
+    patient: vital.patient_id,
+    doctor: vital.doctor_id,
+    appointment: vital.appointment_id,
+    recorded_at: iso(vital.recorded_at),
+    systolic_bp: vital.systolic_bp,
+    diastolic_bp: vital.diastolic_bp,
+    pulse_bpm: vital.pulse_bpm,
+    temperature_c: vital.temperature_c,
+    glucose_mg_dl: vital.glucose_mg_dl,
+    weight_kg: vital.weight_kg,
+    height_cm: vital.height_cm,
+    bmi: vital.bmi,
+    spo2_percent: vital.spo2_percent,
+    notes: vital.notes,
+    recorded_by: fullName || null,
+    created_at: iso(vital.created_at),
+    updated_at: iso(vital.updated_at),
+  };
+}
+
+/**
+ * Where a reported result falls against the order's own reference range
+ * (phase 3). `"13.8 g/dL"` parses as 13.8; anything unparsable is "unknown";
+ * a blank result is `null` (nothing reported yet).
+ */
+export function labResultFlag(
+  resultValue: string | null | undefined,
+  min: number | null | undefined,
+  max: number | null | undefined
+): "low" | "normal" | "high" | "unknown" | null {
+  if (resultValue === null || resultValue === undefined || resultValue.trim() === "") {
+    return null;
+  }
+  const parsed = Number.parseFloat(resultValue);
+  if (Number.isNaN(parsed)) return "unknown";
+  const hasMin = min !== null && min !== undefined;
+  const hasMax = max !== null && max !== undefined;
+  if (hasMin && parsed < min) return "low";
+  if (hasMax && parsed > max) return "high";
+  if (!hasMin && !hasMax) return "unknown";
+  return "normal";
+}
+
+/** labs.LabOrderSerializer — one ordered test plus its result (phase 3). */
+export function labOrderDto(
+  order: LabOrder & { doctor?: (Doctor & { user: User }) | null }
+): Record<string, unknown> {
+  const by = order.doctor?.user;
+  const fullName = by ? `${by.first_name} ${by.last_name}`.trim() : "";
+  return {
+    id: order.id,
+    patient: order.patient_id,
+    doctor: order.doctor_id,
+    appointment: order.appointment_id,
+    status: order.status,
+    test_name: order.test_name,
+    result_due_date: dateStr(order.result_due_date),
+    unit: order.unit,
+    reference_min: order.reference_min,
+    reference_max: order.reference_max,
+    result_value: order.result_value,
+    result_notes: order.result_notes,
+    notes: order.notes,
+    flag: labResultFlag(order.result_value, order.reference_min, order.reference_max),
+    ordered_by: fullName || null,
+    resulted_at: iso(order.resulted_at),
+    ordered_at: iso(order.ordered_at),
+    created_at: iso(order.created_at),
+    updated_at: iso(order.updated_at),
+  };
+}
+
+/** reports/views.AdminAuditView entry shape. */
+export function auditDto(event: AuditEvent & { actor: User | null }): Record<string, unknown> {
+  const actor = event.actor;
+  const fullName = actor ? `${actor.first_name} ${actor.last_name}`.trim() : "";
+  return {
+    id: event.id,
+    action: event.action,
+    target: event.target,
+    detail: event.detail,
+    actor: actor ? fullName || event.actor_id : "System",
+    created_at: iso(event.created_at),
+  };
+}
+
+/** specialties.serializers.SpecialtySerializer. */
+export function specialtyDto(specialty: Specialty): Record<string, unknown> {
+  return {
+    id: specialty.id,
+    name: specialty.name,
+    patient_friendly_name: specialty.patient_friendly_name,
+    description: specialty.description,
+    what_to_expect: specialty.what_to_expect,
+    icon_url: specialty.icon_url,
+  };
+}
+
+/** hospitals.serializers.HospitalSerializer. */
+export function hospitalDto(hospital: Hospital): Record<string, unknown> {
+  return {
+    id: hospital.id,
+    name: hospital.name,
+    city: hospital.city,
+    address: hospital.address,
+    phone: hospital.phone,
+    email: hospital.email,
+    location_details: hospital.location_details,
+  };
+}
+
+/** appointments.serializers.AppointmentSerializer. */
+export function appointmentDto(
+  appointment: Appointment & { patient: User; doctor: { user: User } }
+): Record<string, unknown> {
+  const base = {
+    id: appointment.id,
+    patient: appointment.patient_id,
+    patient_email: appointment.patient.email,
+    doctor: appointment.doctor_id,
+    hospital: appointment.hospital_id,
+    appointment_date: dateStr(appointment.appointment_date),
+    start_time: appointment.start_time,
+    end_time: appointment.end_time,
+    status: appointment.status,
+    reason: appointment.reason,
+    notes: appointment.notes,
+    cancel_reason: appointment.cancel_reason,
+    /** Doctor's phone numbers shown in appointment booking. */
+    doctor_phone: appointment.doctor.user.phone ?? "",
+    doctor_phone_secondary: (appointment.doctor as { phone_secondary?: string }).phone_secondary ?? "",
+    /** Waiting-room state (phase 11) — null until the patient checks in. */
+    checked_in_at: iso(appointment.checked_in_at),
+    consultation_started_at: iso(appointment.consultation_started_at),
+    appointment_type: appointment.appointment_type,
+    ...(appointment.appointment_type === "EMERGENCY"
+      ? {
+          emergency_reason: appointment.emergency_reason,
+          emergency_description: appointment.emergency_description,
+          emergency_requested_at: appointment.emergency_requested_at
+            ? iso(appointment.emergency_requested_at)
+            : null,
+          emergency_accepted_at: appointment.emergency_accepted_at
+            ? iso(appointment.emergency_accepted_at)
+            : null,
+          emergency_in_progress_at: appointment.emergency_in_progress_at
+            ? iso(appointment.emergency_in_progress_at)
+            : null,
+          emergency_completed_at: appointment.emergency_completed_at
+            ? iso(appointment.emergency_completed_at)
+            : null,
+          emergency_expired_at: appointment.emergency_expired_at
+            ? iso(appointment.emergency_expired_at)
+            : null,
+        }
+      : {}),
+  };
+  return base;
+}
+
+/**
+ * One appointment's place in the waiting line (phase 11).
+ *
+ * `position` is 1-based among the checked-in, not-yet-seen patients of that
+ * doctor/day; `null` means "not waiting" (never checked in, or already being
+ * seen). `waiting_count` is the size of that line, so a patient can render
+ * "2 ahead of you" without a second request.
+ */
+export function queueSlotDto(slot: {
+  appointment: number;
+  position: number | null;
+  being_seen: boolean;
+  checked_in: boolean;
+  waited_minutes: number | null;
+  waiting_count: number;
+}): Record<string, unknown> {
+  return {
+    appointment: slot.appointment,
+    position: slot.position,
+    being_seen: slot.being_seen,
+    checked_in: slot.checked_in,
+    waited_minutes: slot.waited_minutes,
+    waiting_count: slot.waiting_count,
+  };
+}
+
+/**
+ * Emergency appointment serializer — adds the emergency_* fields plus the
+ * requester's contact details (the doctor decides whether to accept, so the
+ * patient's name/phone travel with the request; `base` already carries
+ * doctor_phone / doctor_phone_secondary).
+ */
+export function emergencyAppointmentDto(
+  appointment: Appointment & { patient: User; doctor: Doctor & { user: User } }
+): Record<string, unknown> {
+  const base = appointmentDto(appointment);
+  return {
+    ...base,
+    patient_name: `${appointment.patient.first_name} ${appointment.patient.last_name}`.trim(),
+    patient_phone: appointment.patient.phone ?? "",
+    appointment_type: appointment.appointment_type,
+    /** Auto-dispatch hands these to the patient so it can label who came. */
+    doctor_name: `${appointment.doctor.user.first_name} ${appointment.doctor.user.last_name}`.trim(),
+    doctor_latitude: appointment.doctor.latitude,
+    doctor_longitude: appointment.doctor.longitude,
+    emergency_reason: appointment.emergency_reason,
+    emergency_description: appointment.emergency_description,
+    emergency_latitude: appointment.emergency_latitude,
+    emergency_longitude: appointment.emergency_longitude,
+    emergency_location_accuracy: appointment.emergency_location_accuracy,
+    emergency_requested_at: appointment.emergency_requested_at ? iso(appointment.emergency_requested_at) : null,
+  };
+}
