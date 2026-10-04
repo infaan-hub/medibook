@@ -35,6 +35,28 @@ export const nullableInt = (min: number, max: number) =>
       return parsed;
     });
 
+/**
+ * Free-form measurement: any integer the doctor types, stored exactly as it
+ * was typed. Unlike `nullableInt` there is no clinical range and no clamping —
+ * a reading is the doctor's observation, not a value the API second-guesses.
+ * Systolic, diastolic and pulse are recorded this way.
+ */
+export const recordedInt = () =>
+  z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined || value === null || String(value).trim() === "") return null;
+      const parsed = Number(value);
+      // The columns are integers, so a fractional reading has nowhere to land.
+      if (!Number.isInteger(parsed)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A valid integer is required." });
+        return z.NEVER;
+      }
+      return parsed;
+    });
+
 /** One medication line: the drug name is the only required field. */
 export const prescriptionItemSchema = z
   .object({
@@ -109,9 +131,10 @@ export const vitalsCreateSchema = z
   .object({
     patient: drfInteger().optional(),
     appointment: drfInteger().nullable().optional(),
-    systolic_bp: nullableInt(20, 300),
-    diastolic_bp: nullableInt(10, 200),
-    pulse_bpm: nullableInt(20, 300),
+    // Recorded as entered — no range check and no cross-field rule below.
+    systolic_bp: recordedInt(),
+    diastolic_bp: recordedInt(),
+    pulse_bpm: recordedInt(),
     temperature_c: z
       .union([z.string(), z.number()])
       .nullable()
@@ -186,22 +209,8 @@ export const vitalsCreateSchema = z
         message: "Record at least one measurement.",
       });
     }
-    const hasSystolic = data.systolic_bp !== null && data.systolic_bp !== undefined;
-    const hasDiastolic = data.diastolic_bp !== null && data.diastolic_bp !== undefined;
-    if (hasSystolic !== hasDiastolic) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["systolic_bp"],
-        message: "Systolic and diastolic blood pressure are recorded together.",
-      });
-    }
-    if (hasSystolic && (data.systolic_bp as number) <= (data.diastolic_bp as number)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["systolic_bp"],
-        message: "Systolic pressure must be higher than diastolic.",
-      });
-    }
+    // No rule couples systolic, diastolic and pulse to each other: each half of
+    // a reading is stored exactly as the doctor typed it.
   });
 
 /* -------------------------------- Lab orders ------------------------------- */

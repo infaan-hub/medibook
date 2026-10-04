@@ -311,10 +311,16 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
 
   const vitalRows: VitalEntry[] = vitals.map((vital) => ({
     recordedAt: formatDateTime(vital.recorded_at),
+    // Each half prints on its own so a reading recorded without the other half
+    // still shows the value the doctor entered.
     bloodPressure:
       vital.systolic_bp !== null && vital.diastolic_bp !== null
         ? `${vital.systolic_bp}/${vital.diastolic_bp} mmHg`
-        : notProvided(null),
+        : vital.systolic_bp !== null
+          ? `${vital.systolic_bp} mmHg (systolic)`
+          : vital.diastolic_bp !== null
+            ? `${vital.diastolic_bp} mmHg (diastolic)`
+            : notProvided(null),
     pulse: vital.pulse_bpm !== null ? `${vital.pulse_bpm} bpm` : notProvided(null),
     temperature: vital.temperature_c !== null ? `${vital.temperature_c} °C` : notProvided(null),
     glucose: vital.glucose_mg_dl !== null ? `${vital.glucose_mg_dl} mg/dL` : notProvided(null),

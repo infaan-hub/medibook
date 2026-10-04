@@ -247,13 +247,21 @@ function vitalFormIsEmpty(form: VitalForm): boolean {
   ].every((value) => value.trim() === "");
 }
 
-/** Integer measurement ranges — mirrors vitalsCreateSchema on the server. */
+/**
+ * Integer measurement ranges — mirrors vitalsCreateSchema on the server.
+ * Systolic, diastolic and pulse are deliberately absent: those are stored as
+ * the doctor typed them, with no range and no rule tying them to each other.
+ */
 const VITAL_INT_RULES: { key: keyof VitalForm; min: number; max: number }[] = [
-  { key: "systolic_bp", min: 20, max: 300 },
-  { key: "diastolic_bp", min: 10, max: 200 },
-  { key: "pulse_bpm", min: 20, max: 300 },
   { key: "glucose_mg_dl", min: 10, max: 1000 },
   { key: "spo2_percent", min: 40, max: 100 },
+];
+
+/** Stored verbatim, but the columns are integers so a fraction can't be saved. */
+const VITAL_RECORDED_INT: (keyof VitalForm)[] = [
+  "systolic_bp",
+  "diastolic_bp",
+  "pulse_bpm",
 ];
 
 /**
@@ -292,18 +300,14 @@ function vitalValidationError(form: VitalForm): string | null {
       return "Enter a height between 30 and 250 cm.";
     }
   }
-  const hasSystolic = form.systolic_bp.trim() !== "";
-  const hasDiastolic = form.diastolic_bp.trim() !== "";
-  if (hasSystolic !== hasDiastolic) {
-    return "Systolic and diastolic blood pressure are recorded together.";
+  for (const key of VITAL_RECORDED_INT) {
+    const raw = form[key].trim();
+    if (raw === "") continue;
+    const parsed = numOrNull(raw);
+    if (parsed === null || !Number.isInteger(parsed)) return "A valid integer is required.";
   }
-  if (hasSystolic) {
-    const systolic = numOrNull(form.systolic_bp);
-    const diastolic = numOrNull(form.diastolic_bp);
-    if (systolic !== null && diastolic !== null && systolic <= diastolic) {
-      return "Systolic pressure must be higher than diastolic.";
-    }
-  }
+  // Systolic, diastolic and pulse are saved exactly as entered — they are not
+  // required to arrive as a pair and are not compared against each other.
   return null;
 }
 

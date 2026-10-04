@@ -106,8 +106,8 @@ http.interceptors.response.use(
 
     const payload = error.response?.data;
     // Surface the first field-level reason so validation failures read as
-    // "Systolic and diastolic blood pressure are recorded together." instead
-    // of the generic envelope message.
+    // "Enter a temperature between 25 and 45 °C." instead of the generic
+    // envelope message.
     const errors =
       payload && typeof payload === "object" ? payload.errors : undefined;
     const firstFieldError =

@@ -124,28 +124,33 @@ describe("vitalsCreateSchema", () => {
     expect(caught?.errors.non_field_errors).toBeDefined();
   });
 
-  it("requires systolic and diastolic together", () => {
-    expect(() => parse(vitalsCreateSchema, { patient: 7, systolic_bp: 120 })).toThrow(
-      ValidationError
-    );
-    expect(() => parse(vitalsCreateSchema, { patient: 7, diastolic_bp: 80 })).toThrow(
-      ValidationError
-    );
+  it("stores systolic, diastolic and pulse exactly as entered", () => {
+    // Each half stands on its own: no pairing rule, no ordering rule, no range.
+    expect(() => parse(vitalsCreateSchema, { patient: 7, systolic_bp: 120 })).not.toThrow();
+    expect(() => parse(vitalsCreateSchema, { patient: 7, diastolic_bp: 80 })).not.toThrow();
     expect(() =>
       parse(vitalsCreateSchema, { patient: 7, systolic_bp: 120, diastolic_bp: 80 })
     ).not.toThrow();
+    // systolic <= diastolic is the doctor's call, not an error
+    expect(parse(vitalsCreateSchema, { patient: 7, systolic_bp: 80, diastolic_bp: 90 })
+      .systolic_bp).toBe(80);
+    expect(parse(vitalsCreateSchema, { patient: 7, systolic_bp: 80, diastolic_bp: 90 })
+      .diastolic_bp).toBe(90);
+    // out of any previously enforced range
+    expect(parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 500 }).pulse_bpm).toBe(500);
+    expect(parse(vitalsCreateSchema, { patient: 7, systolic_bp: 4 }).systolic_bp).toBe(4);
   });
 
-  it("rejects blood pressure where systolic <= diastolic", () => {
-    expect(() =>
-      parse(vitalsCreateSchema, { patient: 7, systolic_bp: 80, diastolic_bp: 90 })
-    ).toThrow(ValidationError);
-    expect(() =>
-      parse(vitalsCreateSchema, { patient: 7, systolic_bp: 80, diastolic_bp: 80 })
-    ).toThrow(ValidationError);
+  it("still requires the recorded integers to be whole numbers", () => {
+    expect(() => parse(vitalsCreateSchema, { patient: 7, systolic_bp: 120.5 })).toThrow(
+      ValidationError
+    );
+    expect(() => parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 70.4 })).toThrow(
+      ValidationError
+    );
   });
 
-  it("enforces measurement ranges", () => {
+  it("enforces measurement ranges on the remaining vitals", () => {
     expect(() =>
       parse(vitalsCreateSchema, { patient: 7, temperature_c: 20 })
     ).toThrow(ValidationError);
@@ -155,7 +160,7 @@ describe("vitalsCreateSchema", () => {
     expect(() => parse(vitalsCreateSchema, { patient: 7, spo2_percent: 30 })).toThrow(
       ValidationError
     );
-    expect(() => parse(vitalsCreateSchema, { patient: 7, pulse_bpm: 500 })).toThrow(
+    expect(() => parse(vitalsCreateSchema, { patient: 7, glucose_mg_dl: 5000 })).toThrow(
       ValidationError
     );
   });

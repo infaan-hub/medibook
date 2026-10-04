@@ -9,11 +9,20 @@ export interface VitalChip {
   value: string;
 }
 
-/** "BP 120/80 mmHg", "Temp 37.2 °C", "BMI 22.4" — only what was measured. */
+/**
+ * "BP 120/80 mmHg", "Temp 37.2 °C", "BMI 22.4" — only what was measured.
+ *
+ * Systolic and diastolic are shown separately when only one was recorded, so a
+ * half-entry the doctor typed is never hidden by the display layer.
+ */
 export function vitalChips(vital: Vital): VitalChip[] {
   const chips: VitalChip[] = [];
   if (vital.systolic_bp !== null && vital.diastolic_bp !== null) {
     chips.push({ label: "BP", value: `${vital.systolic_bp}/${vital.diastolic_bp} mmHg` });
+  } else if (vital.systolic_bp !== null) {
+    chips.push({ label: "Systolic", value: `${vital.systolic_bp} mmHg` });
+  } else if (vital.diastolic_bp !== null) {
+    chips.push({ label: "Diastolic", value: `${vital.diastolic_bp} mmHg` });
   }
   if (vital.pulse_bpm !== null) chips.push({ label: "Pulse", value: `${vital.pulse_bpm} bpm` });
   if (vital.temperature_c !== null) {
