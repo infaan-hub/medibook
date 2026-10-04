@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
-// Next.js keeps tsconfig `jsx: "preserve"`, so tell Vite 8's oxc transform
-// to compile JSX for tests (@vitejs/plugin-react is intentionally not used).
+// UI test suite (jsdom). The API suite lives in vitest.api.config.ts because
+// it needs a node environment and the `@` alias rather than jsdom.
 export default defineConfig({
   oxc: {
     jsx: {
@@ -11,6 +11,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    include: ["src/__tests__/**/*.test.{ts,tsx}"],
     setupFiles: "./src/test/setup.ts",
     css: true,
   },
