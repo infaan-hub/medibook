@@ -17,7 +17,11 @@ import { appointmentCreateSchema, appointmentPatchSchema } from "@/validators/mi
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
-import { canEmergencyTransition, runEmergencyAction } from "./emergency.service";
+import {
+  canEmergencyTransition,
+  deleteEmergencyAppointment,
+  runEmergencyAction,
+} from "./emergency.service";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, User } from "@prisma/client";
 
@@ -300,10 +304,23 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
   };
 }
 
-/** DELETE /api/appointments/{id}/ — 204 + realtime appointment.deleted. */
-export async function destroyAppointment(id: number): Promise<void> {
+/**
+ * DELETE /api/appointments/{id}/ — 204 + realtime appointment.deleted.
+ *
+ * EMERGENCY rows go through the emergency service, which allows the delete only
+ * once the visit is `done` and only for the assigned doctor or an admin. The
+ * generic path would otherwise let a patient (or a doctor acting mid-visit)
+ * delete an emergency and erase the record of the request and the treatment.
+ */
+export async function destroyAppointment(user: AuthUser, id: number): Promise<void> {
   const appointment = await appointments.findAppointmentById(id);
   if (!appointment) throw notFound();
+
+  if (appointment.appointment_type === "EMERGENCY") {
+    await deleteEmergencyAppointment(user, id);
+    return;
+  }
+
   const doctor = await doctors.findDoctorById(appointment.doctor_id);
   await appointments.deleteAppointment(id);
   pushRaw("appointment.deleted", { id }, [appointment.patient_id, doctor?.user_id]);
@@ -320,10 +337,18 @@ export async function destroyAppointment(id: number): Promise<void> {
  * the visit once the patient has been seen. Both spellings are accepted
  * (`confirm`/`accept` and `complete`/`done`) so older clients and the clearer
  * new wording keep working against the same endpoints.
+ *
+ * `in-progress` is the EMERGENCY-only step between the two ("the doctor has
+ * arrived and is with the patient"). It is listed so the generic route accepts
+ * it instead of 404-ing; `runAction` hands every emergency row to the emergency
+ * dispatcher, and a NORMAL appointment has no such state — `assertTransition`
+ * rejects it with the usual "invalid transition" conflict.
  */
 const ACTION_MAP: Record<string, { status: string; roles: string[] }> = {
   accept: { status: "accepted", roles: ["doctor", "admin"] },
   confirm: { status: "accepted", roles: ["doctor", "admin"] },
+  "in-progress": { status: "in_progress", roles: ["doctor", "admin"] },
+  in_progress: { status: "in_progress", roles: ["doctor", "admin"] },
   done: { status: "done", roles: ["doctor", "admin"] },
   complete: { status: "done", roles: ["doctor", "admin"] },
   cancel: { status: "cancelled", roles: ["patient", "doctor", "admin"] },

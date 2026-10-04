@@ -26,6 +26,6 @@ export const DELETE = handler(async (ctx) => {
   const id = intParam(ctx.params.id);
   if (id === null) throw notFound();
   await appointments.assertCanAccess(user, id);
-  await appointments.destroyAppointment(id);
+  await appointments.destroyAppointment(user, id);
   return noContent();
 });

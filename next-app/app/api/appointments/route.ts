@@ -69,6 +69,6 @@ export const DELETE = handler(async (ctx) => {
   const id = intParam(qs.get("id") ?? qs.get("appointment"));
   if (id === null) throw badRequest("Missing appointment id.");
   await appointments.assertCanAccess(user, id);
-  await appointments.destroyAppointment(id);
+  await appointments.destroyAppointment(user, id);
   return noContent();
 });

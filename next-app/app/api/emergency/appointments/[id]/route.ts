@@ -15,10 +15,10 @@
  * /api/appointments/{id}/{action}/ route funnels into the SAME dispatcher, so
  * there is no second, weaker way to reach these statuses.
  */
-import { handler, ok, readJson, intParam, badRequest } from "@/lib/route";
+import { handler, ok, readJson, intParam, badRequest, noContent } from "@/lib/route";
 import { requireAuth } from "@/lib/auth";
 import { emergencyAppointmentDto } from "@/lib/serializers";
-import { runEmergencyAction } from "@/services/emergency.service";
+import { deleteEmergencyAppointment, runEmergencyAction } from "@/services/emergency.service";
 
 export const POST = handler(async (ctx) => {
   const user = await requireAuth(ctx.req);
@@ -38,4 +38,17 @@ export const POST = handler(async (ctx) => {
 
   const result = await runEmergencyAction(ctx.req, user, id, action, body);
   return ok(emergencyAppointmentDto(result.appointment), result.message);
+});
+
+/**
+ * DELETE /api/emergency/appointments/{id}/ — the assigned doctor (or an admin)
+ * may remove an emergency once it is `done`; anything earlier is refused by the
+ * service, so the patient's record of the request and the treatment stays whole.
+ */
+export const DELETE = handler(async (ctx) => {
+  const user = await requireAuth(ctx.req);
+  const id = intParam(ctx.params.id);
+  if (id === null) throw badRequest("Missing appointment id.");
+  await deleteEmergencyAppointment(user, id);
+  return noContent();
 });

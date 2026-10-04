@@ -120,12 +120,20 @@ export const listAppointments = (where: Prisma.AppointmentWhereInput, skip: numb
     take,
   });
 
+/**
+ * Full (unpaginated) appointment list. `opts.status` is applied — it used to be
+ * accepted and then dropped, so `?status=` on both /api/appointments/ (fetch_all)
+ * and /api/doctor/appointments/ silently returned every status instead.
+ */
 export const listAppointmentsUnpaginated = (
   where: Prisma.AppointmentWhereInput,
   opts?: { status?: string }
 ) =>
   prisma.appointment.findMany({
-    where,
+    where: {
+      ...where,
+      ...(opts?.status ? { status: opts.status as AppointmentStatus } : {}),
+    },
     include: APPOINTMENT_INCLUDE,
     orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
   });

@@ -100,51 +100,16 @@ export function deleteAppointment(id: number) {
 }
 
 /* ---- EMERGENCY APPOINTMENTS ---- */
-
-/** POST /api/emergency/ — create an emergency appointment. */
-export function createEmergencyAppointment(payload: {
-  doctor: number;
-  hospital?: number | null;
-  appointment_date: string;
-  start_time: string;
-  end_time: string;
-  reason?: string;
-  notes?: string;
-  emergency_reason: string;
-  emergency_description?: string;
-  emergency_latitude: number;
-  emergency_longitude: number;
-  emergency_location_accuracy?: number | null;
-}): Promise<any> {
-  return apiPost<any>("/emergency/", payload);
-}
-
-/** GET /api/emergency/nearby-doctors/ — find nearby available doctors for emergency. */
-export function getNearbyDoctors(payload: {
-  latitude: number;
-  longitude: number;
-  radius?: number;
-  specialty?: number;
-}): Promise<any> {
-  const params = new URLSearchParams();
-  params.set("latitude", String(payload.latitude));
-  params.set("longitude", String(payload.longitude));
-  if (payload.radius) params.set("radius", String(payload.radius));
-  if (payload.specialty) params.set("specialty", String(payload.specialty));
-  return apiGet<any>(`/emergency/nearby-doctors/?${params.toString()}`);
-}
-
-/** POST /api/emergency/appointments/:id/accept/ — doctor accepts emergency appointment. */
-export function acceptEmergencyAppointment(id: number): Promise<any> {
-  return apiPost<any>(`/emergency/appointments/${id}/accept/`, {});
-}
-
-/** POST /api/emergency/appointments/:id/reject/ — doctor rejects emergency appointment. */
-export function rejectEmergencyAppointment(id: number, cancel_reason?: string): Promise<any> {
-  return apiPost<any>(`/emergency/appointments/${id}/reject/`, { cancel_reason });
-}
-
-/** GET /api/emergency/my/ — get current patient's emergency appointment. */
-export function getMyEmergencyAppointment(): Promise<any> {
-  return apiGet<any>("/emergency/my/");
-}
+/*
+ * The emergency API lives in ./emergency.ts — that is the single client for
+ * /api/emergency/*, and it mirrors the server's state machine:
+ *
+ *   pending     → respondToEmergency(id, "accept") | "reject"
+ *   accepted    → respondToEmergency(id, "in-progress") | "reject"
+ *   in_progress → respondToEmergency(id, "done")
+ *   done        → deleteEmergency(id)          (doctor/admin only)
+ *
+ * The old helpers that lived here (POST /emergency/appointments/{id}/accept/,
+ * /reject/ and GET /emergency/my/) were removed: no such routes exist on the
+ * server, so every call to them 404'd. Use ./emergency.ts instead.
+ */

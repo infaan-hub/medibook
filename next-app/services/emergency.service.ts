@@ -25,7 +25,7 @@ import {
   type AppointmentDb,
 } from "@/repositories/appointments.repo";
 import * as doctors from "@/repositories/doctors.repo";
-import { broadcastAppointmentEvent, notify } from "@/lib/notify";
+import { broadcastAppointmentEvent, notify, pushRaw } from "@/lib/notify";
 import { hasLocation, haversineKm } from "@/lib/geo";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, AppointmentStatus, Doctor, NotificationType, User } from "@prisma/client";
@@ -925,6 +925,32 @@ export async function cancelEmergencyAppointment(
   ]);
 
   return { appointment: updated, message: "Emergency appointment cancelled." };
+}
+
+/**
+ * Delete a finished emergency (DELETE /api/emergency/appointments/{id}/).
+ *
+ * Only legal once the visit is `done` — an emergency is the patient's record of
+ * a live request and of the treatment they received, so it cannot be deleted
+ * while it is pending, accepted, in progress, or merely timed out. Only the
+ * assigned doctor or an admin may delete it; the patient cannot erase their own
+ * history even though they can cancel a request that has not started.
+ */
+export async function deleteEmergencyAppointment(user: AuthUser, id: number) {
+  const appointment = await loadEmergency(id);
+  await assertEmergencyActor(user, appointment.doctor_id, "delete");
+
+  if (appointment.status !== "done") {
+    throw conflict(
+      "An emergency can only be deleted after it is done. Finish the visit first."
+    );
+  }
+
+  await appointments.deleteAppointment(id);
+
+  // Same realtime contract as a normal appointment delete, so every open screen
+  // (doctor queue, patient card) drops the row without a reload.
+  pushRaw("appointment.deleted", { id }, [appointment.patient_id, appointment.doctor.user_id]);
 }
 
 /** Get patient's active emergency appointment. */

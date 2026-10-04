@@ -14,7 +14,7 @@
  *       marks in progress / completes (the state machine lives on the server)
  */
 
-import { apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPost } from "./client";
 import type {
   DoctorProfile,
   EmergencyAppointment,
@@ -115,4 +115,16 @@ export function respondToEmergency(
     action,
     ...(body ?? {}),
   });
+}
+
+/**
+ * DELETE /api/emergency/appointments/{id}/ — remove a finished emergency.
+ *
+ * Doctor (or admin) only, and only once the visit is `done`: the server refuses
+ * to delete a request that is still pending, accepted, in progress or merely
+ * timed out, so the patient's record of the request and the treatment stays
+ * whole. Resolves to undefined on success (HTTP 204).
+ */
+export function deleteEmergency(id: number): Promise<Envelope<void> | undefined> {
+  return apiDelete<void>(`/emergency/appointments/${id}/`);
 }

@@ -695,9 +695,17 @@ export function DoctorEmergencyScreen() {
   }, [load]);
 
   // A patient files a new emergency while this screen is open → it appears live.
+  // The lifecycle events are subscribed too, so an action taken from another
+  // screen (or the dashboard) refreshes this queue instead of leaving a stale row.
   useRealtimeSync({
     refresh: load,
-    events: ["appointment.emergency_created", "appointment.emergency_rejected"],
+    events: [
+      "appointment.emergency_created",
+      "appointment.emergency_accepted",
+      "appointment.emergency_rejected",
+      "appointment.emergency_in_progress",
+      "appointment.emergency_completed",
+    ],
   });
 
   /** One server-backed transition; the queue reloads from the API after it. */
@@ -894,9 +902,10 @@ export function DoctorEmergencyScreen() {
                     </>
                   )}
 
-                  {/* Reject is legal while the request is still open; once the
-                      visit is in progress the server only accepts Done. */}
-                  {request.status !== "in_progress" && (
+                  {/* Reject is legal only while the request is still open. Once the
+                      doctor is `in_progress` the server accepts Done alone, and a
+                      `done` visit is history — so neither offers Reject. */}
+                  {(request.status === "pending" || request.status === "accepted") && (
                     <Button
                       variant="danger"
                       onClick={() => {

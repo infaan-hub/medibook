@@ -98,3 +98,18 @@ export function listDoctorAppointments(
 export function deleteAppointment(id: number) {
   return apiDelete(`/appointments/${id}/`);
 }
+
+/* ---- EMERGENCY APPOINTMENTS ---- */
+/*
+ * The emergency API lives in ./emergency.ts — that is the single client for
+ * /api/emergency/*, and it mirrors the server's state machine:
+ *
+ *   pending     → respondToEmergency(id, "accept") | "reject"
+ *   accepted    → respondToEmergency(id, "in-progress") | "reject"
+ *   in_progress → respondToEmergency(id, "done")
+ *   done        → deleteEmergency(id)          (doctor/admin only)
+ *
+ * The old helpers that used to live here (POST /emergency/appointments/{id}/accept/,
+ * /reject/ and GET /emergency/my/) were removed: no such routes exist on the
+ * server, so every call to them 404'd. Use ./emergency.ts instead.
+ */

@@ -16,10 +16,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EMERGENCY_STATUS_TRANSITIONS,
   canEmergencyTransition,
+  cancelEmergencyAppointment,
   completeEmergencyAppointment,
+  deleteEmergencyAppointment,
   emergencyNotificationType,
   evaluateEmergencyEligibility,
   getEmergencyEligibility,
+  normaliseEmergencyAction,
+  runEmergencyAction,
   startEmergencyInProgress,
   type EmergencyEligibility,
 } from "@/services/emergency.service";
@@ -34,6 +38,7 @@ const repo = vi.hoisted(() => ({
   findPatientEmergencyAppointment: vi.fn(),
   expireTimedOutEmergencies: vi.fn(),
   createEmergencyAppointment: vi.fn(),
+  deleteAppointment: vi.fn(),
 }));
 
 const doctorsRepo = vi.hoisted(() => ({
@@ -42,6 +47,7 @@ const doctorsRepo = vi.hoisted(() => ({
 
 const broadcastAppointmentEvent = vi.hoisted(() => vi.fn());
 const notify = vi.hoisted(() => vi.fn());
+const pushRaw = vi.hoisted(() => vi.fn());
 
 vi.mock("@/repositories/appointments.repo", () => ({
   ...repo,
@@ -50,7 +56,7 @@ vi.mock("@/repositories/appointments.repo", () => ({
 
 vi.mock("@/repositories/doctors.repo", () => doctorsRepo);
 
-vi.mock("@/lib/notify", () => ({ notify, broadcastAppointmentEvent }));
+vi.mock("@/lib/notify", () => ({ notify, broadcastAppointmentEvent, pushRaw }));
 
 // Never touched by these tests, but the service lazily imports it — stub it so
 // no Prisma client is ever constructed in a unit test.
@@ -446,7 +452,157 @@ describe("getEmergencyEligibility", () => {
   });
 });
 
-/* ============== 5. notification kinds stay inside the DB enum =============== */
+/* ============ 4. one dispatcher for every spelling and every endpoint ============ */
+
+describe("normaliseEmergencyAction", () => {
+  it("maps every accepted spelling onto its canonical action", () => {
+    expect(normaliseEmergencyAction("accept")).toBe("accept");
+    expect(normaliseEmergencyAction("confirm")).toBe("accept");
+    expect(normaliseEmergencyAction("reject")).toBe("reject");
+    expect(normaliseEmergencyAction("in-progress")).toBe("in-progress");
+    expect(normaliseEmergencyAction("in_progress")).toBe("in-progress");
+    expect(normaliseEmergencyAction("start")).toBe("in-progress");
+    expect(normaliseEmergencyAction("arrived")).toBe("in-progress");
+    expect(normaliseEmergencyAction("done")).toBe("done");
+    expect(normaliseEmergencyAction("complete")).toBe("done");
+    expect(normaliseEmergencyAction("finish")).toBe("done");
+    expect(normaliseEmergencyAction("cancel")).toBe("cancel");
+  });
+
+  it("tolerates padding and casing from a sloppy client", () => {
+    expect(normaliseEmergencyAction("  In-Progress ")).toBe("in-progress");
+    expect(normaliseEmergencyAction("DONE")).toBe("done");
+  });
+
+  it("returns null for anything else, including an empty value", () => {
+    for (const value of ["", "   ", null, undefined, "delete", "start_visit"]) {
+      expect(normaliseEmergencyAction(value), String(value)).toBeNull();
+    }
+  });
+});
+
+describe("runEmergencyAction", () => {
+  it("drives the lifecycle through the generic /appointments/{id}/{action}/ names", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("accepted"));
+    repo.updateAppointment.mockResolvedValue(emergencyRow("in_progress"));
+
+    await runEmergencyAction(REQUEST(), account(12, "doctor"), 9, "in-progress");
+
+    expect(repo.updateAppointment).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({ status: "in_progress" })
+    );
+  });
+
+  it("completes an in-progress emergency via the generic `complete` spelling", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("in_progress"));
+    repo.updateAppointment.mockResolvedValue(emergencyRow("done"));
+
+    await runEmergencyAction(REQUEST(), account(12, "doctor"), 9, "complete");
+
+    expect(repo.updateAppointment).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({ status: "done", emergency_completed_at: expect.any(Date) })
+    );
+  });
+
+  it("rejects an unknown action with a 400 and changes nothing", async () => {
+    await expect(
+      runEmergencyAction(REQUEST(), account(12, "doctor"), 9, "definitely-not-an-action")
+    ).rejects.toMatchObject({ status: 400 });
+    expect(repo.updateAppointment).not.toHaveBeenCalled();
+  });
+});
+
+/* ============================ 5. cancel an open request ============================ */
+
+describe("cancelEmergencyAppointment", () => {
+  it("cancels a pending request and records the reason", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("pending"));
+    repo.updateAppointment.mockResolvedValue(emergencyRow("cancelled"));
+
+    await cancelEmergencyAppointment(REQUEST(), account(12, "doctor"), 9, {
+      cancel_reason: "Wrong patient",
+    });
+
+    expect(repo.updateAppointment).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({ status: "cancelled", cancel_reason: "Wrong patient" })
+    );
+  });
+
+  it("lets the patient withdraw their own request", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("pending"));
+    repo.updateAppointment.mockResolvedValue(emergencyRow("cancelled"));
+
+    await expect(
+      cancelEmergencyAppointment(REQUEST(), account(7, "patient"), 9, {})
+    ).resolves.toMatchObject({ appointment: expect.objectContaining({ status: "cancelled" }) });
+  });
+
+  it("refuses once in progress — the visit may only end as done", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("in_progress"));
+
+    await expect(
+      cancelEmergencyAppointment(REQUEST(), account(12, "doctor"), 9, {})
+    ).rejects.toMatchObject({ status: 409 });
+    expect(repo.updateAppointment).not.toHaveBeenCalled();
+  });
+});
+
+/* ======================= 6. delete a finished emergency ======================= */
+
+describe("deleteEmergencyAppointment", () => {
+  it("deletes a DONE emergency and tells patient + doctor over the socket", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("done"));
+
+    await deleteEmergencyAppointment(account(12, "doctor"), 9);
+
+    expect(repo.deleteAppointment).toHaveBeenCalledWith(9);
+    expect(pushRaw).toHaveBeenCalledWith("appointment.deleted", { id: 9 }, [7, 12]);
+  });
+
+  it("refuses while the request is still live, and deletes nothing", async () => {
+    for (const status of ["pending", "accepted", "in_progress"] as const) {
+      vi.clearAllMocks();
+      doctorsRepo.findDoctorByUserId.mockResolvedValue({ id: 4, user_id: 12 });
+      repo.findAppointmentById.mockResolvedValue(emergencyRow(status));
+
+      await expect(
+        deleteEmergencyAppointment(account(12, "doctor"), 9)
+      ).rejects.toMatchObject({ status: 409 });
+      expect(repo.deleteAppointment).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps a timed-out emergency as history rather than letting it be erased", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("expired"));
+
+    await expect(deleteEmergencyAppointment(account(12, "doctor"), 9)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(repo.deleteAppointment).not.toHaveBeenCalled();
+  });
+
+  it("refuses a doctor who is not the assigned one", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("done"));
+    doctorsRepo.findDoctorByUserId.mockResolvedValue({ id: 99, user_id: 12 });
+
+    await expect(deleteEmergencyAppointment(account(12, "doctor"), 9)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(repo.deleteAppointment).not.toHaveBeenCalled();
+  });
+
+  it("refuses the patient even though they own the row", async () => {
+    repo.findAppointmentById.mockResolvedValue(emergencyRow("done"));
+
+    await expect(deleteEmergencyAppointment(account(7, "patient"), 9)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(repo.deleteAppointment).not.toHaveBeenCalled();
+  });
+});
 
 describe("emergencyNotificationType", () => {
   const VALID = [
@@ -458,15 +614,23 @@ describe("emergencyNotificationType", () => {
     "review",
     "system",
   ];
+  const KINDS = [
+    "requested",
+    "accepted",
+    "inProgress",
+    "completed",
+    "rejected",
+    "cancelled",
+  ] as const;
 
   it("maps every lifecycle event onto a member of the NotificationType enum", () => {
-    for (const kind of ["requested", "accepted", "inProgress", "completed", "rejected"] as const) {
+    for (const kind of KINDS) {
       expect(VALID).toContain(emergencyNotificationType(kind));
     }
   });
 
   it("never returns an emergency_* name the DB enum lacks", () => {
-    for (const kind of ["requested", "accepted", "inProgress", "completed", "rejected"] as const) {
+    for (const kind of KINDS) {
       expect(emergencyNotificationType(kind)).not.toMatch(/^emergency_/);
     }
   });

@@ -15,6 +15,7 @@ import {
 import { myPrescriptions, type Prescription } from "../api/prescriptions";
 import { myVitals, type Vital } from "../api/vitals";
 import { myLabOrders, type LabOrder } from "../api/lab-orders";
+import { viewPatientReport, type ReportPeriodParams } from "../api/reports";
 import { vitalChips, vitalDate } from "../lib/vitals";
 import { statusLabel, flagLabel, referenceLabel, resultLabel } from "../lib/lab-orders";
 import type { Gender, GeoInput, LinkedDoctor, PatientProfile } from "../api/types";
@@ -491,6 +492,14 @@ export function SettingsScreen() {
             Your health profile shared with your doctors during visits. Account info lives in{" "}
             <Link to="/profile">Profile</Link>.
           </p>
+          {profile && (
+            <Button variant="secondary" onClick={() => {
+              const params: ReportPeriodParams = { preset: "month" };
+              viewPatientReport(params).then(() => {}).catch(() => notify("error", "Failed to open report"));
+            }}>
+              <Report size={16} /> Report
+            </Button>
+          )}
         </div>
       </div>
 

@@ -237,6 +237,12 @@ function AppointmentRow({
   const canReschedule =
     appointment.status === "pending" || appointment.status === "accepted";
 
+  /* Emergency rows follow their own lifecycle: the generic Done tap is refused
+     by the server (it must pass through in_progress first), and the record can
+     only be deleted once the visit is `done`. */
+  const isEmergency = appointment.appointment_type === "EMERGENCY";
+  const canDelete = !isEmergency || appointment.status === "done";
+
   const statusConfig = {
     pending: { icon: <Clock3 size={14} />, label: "Awaiting review", color: "var(--color-status-pending)" },
     accepted: { icon: <CheckCircle2 size={14} />, label: "Accepted", color: "var(--color-status-accepted)" },
@@ -401,13 +407,13 @@ function AppointmentRow({
             </Button>
           </Link>
         )}
-        {!showDeleteConfirm ? (
-          <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-            Delete
-          </Button>
-        ) : (
+        {canDelete && (showDeleteConfirm ? (
           <div className="appt-delete-confirm">
-            <span>Delete this appointment?</span>
+            <span>
+              {isEmergency
+                ? "Delete this finished emergency? This cannot be undone."
+                : "Delete this appointment?"}
+            </span>
             <Button variant="danger" loading={acting} onClick={() => handleAction("delete")}>
               Yes
             </Button>
@@ -415,7 +421,11 @@ function AppointmentRow({
               No
             </Button>
           </div>
-        )}
+        ) : (
+          <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+            Delete
+          </Button>
+        ))}
       </div>
 
       {showNotes && (
