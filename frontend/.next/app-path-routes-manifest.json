@@ -1,6 +1,0 @@
-{
-  "/_not-found/page": "/_not-found",
-  "/media/[...slug]/route": "/media/[...slug]",
-  "/api/[...slug]/route": "/api/[...slug]",
-  "/[[...slug]]/page": "/[[...slug]]"
-}

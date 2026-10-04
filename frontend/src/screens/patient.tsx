@@ -46,6 +46,9 @@ import {
   ExternalLink,
   File,
   Upload,
+  // This lucide-react build ships no `Report` glyph, so the "Report" action uses
+  // FileChartColumn — the document-with-chart icon — instead of an undefined one.
+  FileChartColumn,
 } from "lucide-react";
 
 const RECORD_TYPE_OPTIONS = [
@@ -497,7 +500,7 @@ export function SettingsScreen() {
               const params: ReportPeriodParams = { preset: "month" };
               viewPatientReport(params).then(() => {}).catch(() => notify("error", "Failed to open report"));
             }}>
-              <Report size={16} /> Report
+              <FileChartColumn size={16} /> Report
             </Button>
           )}
         </div>
