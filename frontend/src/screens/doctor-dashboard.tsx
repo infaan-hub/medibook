@@ -19,6 +19,11 @@ import { apiGet } from "../api/client";
 import { getQueue, startConsultation, checkIn, type QueueSlot } from "../api/queue";
 import { getDoctorAvailability, getMyDoctorProfile } from "../api/doctors";
 import { getPatientProfileById } from "../api/patients";
+import {
+  downloadDoctorSummaryReport,
+  viewDoctorSummaryReport,
+  type ReportPeriodParams,
+} from "../api/reports";
 import type { Appointment, DoctorAvailability, DoctorProfile, PatientProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -44,6 +49,10 @@ import {
   AlertTriangle,
   UserCheck,
   Play,
+  Eye,
+  // This lucide-react build ships no `Report` glyph; FileChartColumn is the
+  // document-with-chart icon used for every report action in the app.
+  FileChartColumn,
 } from "lucide-react";
 
 function message(error: unknown): string {
@@ -530,6 +539,39 @@ export function DoctorDashboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /* ---- Practice summary report (§34) ---- */
+  const [summaryBusy, setSummaryBusy] = useState<"download" | "view" | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  /**
+   * Generate the doctor's own practice summary — patient, appointment and
+   * emergency counts. The scope is always the signed-in doctor: the request
+   * carries no doctor id, so nobody can read another doctor's numbers.
+   */
+  const runSummaryReport = async (action: "download" | "view") => {
+    setSummaryBusy(action);
+    setSummaryError(null);
+    try {
+      const params: ReportPeriodParams = { preset: "month" };
+      const result =
+        action === "view"
+          ? await viewDoctorSummaryReport(params)
+          : await downloadDoctorSummaryReport(params);
+      notify(
+        "success",
+        action === "view"
+          ? `Practice report opened — ${result.filename}`
+          : `Practice report downloaded — ${result.filename}`
+      );
+    } catch (e) {
+      const text = message(e);
+      setSummaryError(text);
+      notify("error", text);
+    } finally {
+      setSummaryBusy(null);
+    }
+  };
+
   const loadQueue = useCallback(() => {
     getQueue(utcToday())
       .then((r) => setQueueByAppointment(queueMap(r.data)))
@@ -655,10 +697,30 @@ export function DoctorDashboardScreen() {
           <p>Here is what is happening in your practice today.</p>
         </div>
         <div className="doctor-header-actions">
+          <Button
+            variant="secondary"
+            loading={summaryBusy === "download"}
+            disabled={summaryBusy !== null}
+            onClick={() => void runSummaryReport("download")}
+          >
+            <FileChartColumn size={16} />
+            {summaryBusy === "download" ? "Generating report..." : "Generate Doctor Report"}
+          </Button>
+          <Button
+            variant="secondary"
+            loading={summaryBusy === "view"}
+            disabled={summaryBusy !== null}
+            onClick={() => void runSummaryReport("view")}
+          >
+            <Eye size={16} />
+            {summaryBusy === "view" ? "Opening report..." : "View Report"}
+          </Button>
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
         </div>
       </div>
+
+      {summaryError && <p className="form-note form-note--error">{summaryError}</p>}
 
       <div className="doctor-metrics">
         <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>Today's visits</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? "Schedule is active" : "No visits scheduled"}</small></Card>

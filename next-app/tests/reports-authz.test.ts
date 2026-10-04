@@ -12,13 +12,14 @@ import { ApiError } from "@/lib/errors";
 import { collectAdminReport } from "@/reports/data/admin";
 import { collectDoctorReport } from "@/reports/data/doctor";
 import { collectPatientReport } from "@/reports/data/patient";
+import { collectDoctorSummaryReport } from "@/reports/data/doctorSummary";
 
 const db = vi.hoisted(() => {
   const fn = () => vi.fn();
   return {
     user: { count: fn(), findUnique: fn(), findMany: fn() },
     doctor: { count: fn(), findUnique: fn(), findMany: fn() },
-    appointment: { count: fn(), findMany: fn() },
+    appointment: { count: fn(), findMany: fn(), groupBy: fn() },
     medicalTreatment: { count: fn(), findMany: fn() },
     prescription: { count: fn(), findMany: fn() },
     vital: { count: fn(), findMany: fn() },
@@ -60,6 +61,7 @@ function emptyDb() {
   db.doctor.findMany.mockResolvedValue([]);
   db.appointment.count.mockResolvedValue(0);
   db.appointment.findMany.mockResolvedValue([]);
+  db.appointment.groupBy.mockResolvedValue([]);
   for (const model of [
     db.medicalTreatment,
     db.prescription,
@@ -209,6 +211,64 @@ describe("collectPatientReport - always the caller's own chart", () => {
 
     expect(data.period.start).toBe("2026-09-01");
     expect(data.period.end).toBe("2026-09-30");
+  });
+});
+
+/* ==================== doctor practice summary authorization ==================== */
+
+describe("collectDoctorSummaryReport - only ever the caller's own practice", () => {
+  beforeEach(() => {
+    db.doctor.findUnique.mockResolvedValue(DOCTOR);
+  });
+
+  it("404s a caller with no doctor profile", async () => {
+    db.doctor.findUnique.mockResolvedValue(null);
+    await expectStatus(collectDoctorSummaryReport(3), 404);
+    // Nothing is read when the caller is not a doctor at all.
+    expect(db.appointment.count).not.toHaveBeenCalled();
+  });
+
+  it("scopes every figure to the signed-in doctor's own profile", async () => {
+    const data = await collectDoctorSummaryReport(3);
+
+    expect(db.doctor.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { user_id: 3 } })
+    );
+    // No query string can widen the scope — every read carries doctor_id 3.
+    for (const call of db.appointment.count.mock.calls) {
+      expect(call[0].where).toMatchObject({ doctor_id: 3 });
+    }
+    for (const call of db.appointment.findMany.mock.calls) {
+      expect(call[0].where).toMatchObject({ doctor_id: 3 });
+    }
+    for (const call of db.appointment.groupBy.mock.calls) {
+      expect(call[0].where).toMatchObject({ doctor_id: 3 });
+    }
+    expect(data.doctor.reference).toBe("amina");
+  });
+
+  it("ignores a doctor id smuggled in through the query string", async () => {
+    await collectDoctorSummaryReport(3, { doctor: "999" } as never);
+
+    for (const call of db.appointment.count.mock.calls) {
+      expect(call[0].where).toMatchObject({ doctor_id: 3 });
+      expect(call[0].where.doctor_id).not.toBe(999);
+    }
+    expect(db.doctor.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { user_id: 3 } })
+    );
+  });
+
+  it("counts emergency rows separately from ordinary appointments", async () => {
+    db.appointment.count.mockResolvedValue(5);
+
+    await collectDoctorSummaryReport(3);
+
+    const wheres = db.appointment.count.mock.calls.map((call) => call[0].where);
+    // At least one read must be narrowed to EMERGENCY so the two never blur.
+    expect(wheres.some((where) => where.appointment_type === "EMERGENCY")).toBe(true);
+    // And at least one must be the plain all-appointments total.
+    expect(wheres.some((where) => where.appointment_type === undefined)).toBe(true);
   });
 });
 

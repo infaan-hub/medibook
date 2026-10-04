@@ -1343,16 +1343,6 @@ export function DoctorMedicalTreatmentScreen() {
         </div>
         <div className="treat-actions-row">
           {!showForm && (
-            <Button variant="secondary" onClick={() => runReport("generate")} disabled={reportBusy !== null}>
-              <Download size={14} /> {reportBusy === "generate" ? "Generating report..." : "Generate Report"}
-            </Button>
-          )}
-          {!showForm && (
-            <Button variant="secondary" onClick={() => runReport("view")} disabled={reportBusy !== null}>
-              <Eye size={14} /> {reportBusy === "view" ? "Opening report..." : "View"}
-            </Button>
-          )}
-          {!showForm && (
             <Button variant="primary" onClick={handleNew}>
               <Stethoscope size={14} /> New Treatment
             </Button>
@@ -1433,6 +1423,50 @@ export function DoctorMedicalTreatmentScreen() {
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Full patient report — deliberately BELOW the health records, because
+              the PDF summarises everything above it (profile, treatments,
+              prescriptions, vitals, labs and these documents). */}
+          <Card className="visit-records-card">
+            <div className="visit-card-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: 15 }}>Patient medical report</h3>
+                <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+                  This patient&rsquo;s complete MediBook record — appointments, treatments,
+                  prescriptions, vitals, lab results and health records — in one PDF
+                </p>
+              </div>
+            </div>
+
+            {reportError && (
+              <p className="form-note form-note--error">{reportError}</p>
+            )}
+
+            <div className="treat-actions-row">
+              <Button
+                variant="primary"
+                loading={reportBusy === "generate"}
+                disabled={reportBusy !== null}
+                onClick={() => void runReport("generate")}
+              >
+                <Download size={14} />
+                {reportBusy === "generate" ? "Generating report..." : "Generate Patient Report"}
+              </Button>
+              <Button
+                variant="secondary"
+                loading={reportBusy === "view"}
+                disabled={reportBusy !== null}
+                onClick={() => void runReport("view")}
+              >
+                <Eye size={14} />
+                {reportBusy === "view" ? "Opening report..." : "View Report"}
+              </Button>
+            </div>
+            <p className="form-note">
+              The patient&rsquo;s complete history since registration — not just the current
+              month. You can generate this because you are linked to the patient.
+            </p>
           </Card>
 
           {showForm && (

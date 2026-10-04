@@ -22,6 +22,8 @@ import { pdfFilename, periodToken } from "@/reports/http";
 import { reportId } from "@/reports/pdf/render";
 import { renderAdminReport } from "@/reports/pdf/admin";
 import { renderDoctorReport } from "@/reports/pdf/doctor";
+import { renderDoctorSummaryReport } from "@/reports/pdf/doctorSummary";
+import type { DoctorSummaryData } from "@/reports/data/doctorSummary";
 import { renderPatientReport } from "@/reports/pdf/patient";
 import { ReportDoc } from "@/reports/pdf/doc";
 import { dataTable } from "@/reports/pdf/components";
@@ -284,6 +286,57 @@ const doctorFixture = (): DoctorReportData => ({
   counts: COUNTS,
 });
 
+const doctorSummaryFixture = (
+  overrides: Partial<DoctorSummaryData> = {}
+): DoctorSummaryData => ({
+  period: PERIOD,
+  doctor: buildDoctorSummary(DOCTOR_ROW),
+  totals: {
+    patients: "42",
+    periodPatients: "11",
+    appointments: "318",
+    periodAppointments: "64",
+    completed: "250",
+    emergencies: "37",
+    periodEmergencies: "9",
+    emergenciesCompleted: "8",
+    treatments: "180",
+    prescriptions: "96",
+    vitals: "140",
+    labs: "72",
+    records: "31",
+  },
+  appointmentBreakdown: [
+    { status: "pending", label: "Pending", count: "6", share: "9.4%" },
+    { status: "accepted", label: "Accepted", count: "10", share: "15.6%" },
+    { status: "done", label: "Done", count: "44", share: "68.8%" },
+    { status: "cancelled", label: "Cancelled", count: "4", share: "6.2%" },
+  ],
+  emergencyBreakdown: [
+    { status: "pending", label: "Pending", count: "1", share: "11.1%" },
+    { status: "in_progress", label: "In Progress", count: "1", share: "11.1%" },
+    { status: "done", label: "Done", count: "7", share: "77.8%" },
+  ],
+  patients: [
+    {
+      name: "Asha Juma",
+      reference: "salma",
+      appointments: "18",
+      emergencies: "4",
+      lastSeen: "2026-10-02",
+    },
+    {
+      name: "Bakari Said",
+      reference: "bakari",
+      appointments: "12",
+      emergencies: "1",
+      lastSeen: "2026-09-28",
+    },
+  ],
+  patientsTruncated: false,
+  ...overrides,
+});
+
 /* --------------------------------- tests --------------------------------- */
 
 describe("resolvePeriod", () => {
@@ -513,6 +566,33 @@ describe("clinical report renderers", () => {
     const buffer = await renderDoctorReport(doctorFixture(), GENERATED_AT);
     expect(isPdf(buffer)).toBe(true);
     expect(buffer.byteLength).toBeGreaterThan(5_000);
+  });
+
+  it("renders the doctor's practice summary with the dashboard numbers", async () => {
+    const buffer = await renderDoctorSummaryReport(doctorSummaryFixture(), GENERATED_AT);
+    expect(isPdf(buffer)).toBe(true);
+    expect(buffer.byteLength).toBeGreaterThan(5_000);
+  });
+
+  it("renders a practice summary with no patients as a document, not a failure", async () => {
+    const buffer = await renderDoctorSummaryReport(
+      doctorSummaryFixture({
+        patients: [],
+        patientsTruncated: false,
+        appointmentBreakdown: [],
+        emergencyBreakdown: [],
+      }),
+      GENERATED_AT
+    );
+    expect(isPdf(buffer)).toBe(true);
+  });
+
+  it("says so when the patient table was capped", async () => {
+    const buffer = await renderDoctorSummaryReport(
+      doctorSummaryFixture({ patientsTruncated: true }),
+      GENERATED_AT
+    );
+    expect(isPdf(buffer)).toBe(true);
   });
 
   it("renders the patient's own report", async () => {

@@ -139,6 +139,26 @@ export function viewDoctorReport(
   return view("/reports/doctor/", { ...params, patient: patientId }, "MediBook-Zanzibar-Medical-Report.pdf");
 }
 
+/**
+ * GET /api/reports/doctor/summary/ — the doctor's PRACTICE summary: how many
+ * patients, appointments and emergency requests they handled.
+ *
+ * No doctor id is ever sent — the server always reports on the signed-in doctor,
+ * so one doctor can never read another's numbers.
+ */
+export function downloadDoctorSummaryReport(
+  params: ReportPeriodParams = {}
+): Promise<ReportResult> {
+  return download("/reports/doctor/summary/", params, "MediBook-Practice-Summary.pdf");
+}
+
+/** Same practice summary, opened in a preview tab instead of saved. */
+export function viewDoctorSummaryReport(
+  params: ReportPeriodParams = {}
+): Promise<ReportResult> {
+  return view("/reports/doctor/summary/", params, "MediBook-Practice-Summary.pdf");
+}
+
 /** GET /api/reports/patient/ — the signed-in patient's own record. */
 export function downloadPatientReport(params: ReportPeriodParams = {}): Promise<ReportResult> {
   return download("/reports/patient/", params, "MediBook-Zanzibar-My-Medical-Report.pdf");

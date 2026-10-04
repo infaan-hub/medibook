@@ -69,8 +69,7 @@ function saveBlob(blob: Blob, filename: string): void {
   }
 }
 
-/**
- * Show a Blob in a new tab. The tab is opened synchronously (so popup blockers
+/** Show a Blob in a new tab. The tab is opened synchronously (so popup blockers
  * see it inside the click gesture) and pointed at the object URL afterwards.
  */
 function showBlob(blob: Blob): boolean {
@@ -92,7 +91,8 @@ async function fetchReport(url: string, params: ReportParams, fallbackName: stri
   return { blob, filename, size: blob.size };
 }
 
-async function download(
+/** Save a Blob as a file download. */
+export async function download(
   url: string,
   params: ReportParams,
   fallbackName: string
@@ -102,7 +102,12 @@ async function download(
   return { filename, size };
 }
 
-async function view(url: string, params: ReportParams, fallbackName: string): Promise<ReportResult> {
+/** Show a Blob in a preview tab. */
+export async function view(
+  url: string,
+  params: ReportParams,
+  fallbackName: string
+): Promise<ReportResult> {
   const { blob, filename, size } = await fetchReport(url, params, fallbackName);
   if (!showBlob(blob)) throw new Error("Your browser blocked the report preview tab.");
   return { filename, size };
@@ -132,6 +137,26 @@ export function viewDoctorReport(
   params: ReportPeriodParams = {}
 ): Promise<ReportResult> {
   return view("/reports/doctor/", { ...params, patient: patientId }, "MediBook-Zanzibar-Medical-Report.pdf");
+}
+
+/**
+ * GET /api/reports/doctor/summary/ — the doctor's PRACTICE summary: how many
+ * patients, appointments and emergency requests they handled.
+ *
+ * No doctor id is ever sent — the server always reports on the signed-in doctor,
+ * so one doctor can never read another's numbers.
+ */
+export function downloadDoctorSummaryReport(
+  params: ReportPeriodParams = {}
+): Promise<ReportResult> {
+  return download("/reports/doctor/summary/", params, "MediBook-Practice-Summary.pdf");
+}
+
+/** Same practice summary, opened in a preview tab instead of saved. */
+export function viewDoctorSummaryReport(
+  params: ReportPeriodParams = {}
+): Promise<ReportResult> {
+  return view("/reports/doctor/summary/", params, "MediBook-Practice-Summary.pdf");
 }
 
 /** GET /api/reports/patient/ — the signed-in patient's own record. */
