@@ -56,7 +56,7 @@ describe("smoke artifacts", () => {
       },
       counts: { appointments: "14", treatments: "5", prescriptions: "3", vitals: "10", labs: "8", records: "6" },
     };
-    const doctor = { ...patient, doctor: { reference: "amina", name: "Dr. Amina Hassan", specialties: "Cardiology", qualifications: "MBChB, MMed", experience: "9 years", hospital: "Mnazi Mmoja Hospital, Zanzibar", phone: "+255712000333", email: "amina@example.com", rating: "4.7 / 5 from 34 reviews", joinedOn: "1 February 2024" } };
+    const doctor = { ...patient, doctor: { reference: "amina", name: "Dr. Amina Hassan", specialties: "Cardiology", qualifications: "MBChB, MMed", experience: "9 years", hospital: "Mnazi Mmoja Hospital, Zanzibar", phone: "+255712000333", email: "amina@example.com", joinedOn: "1 February 2024" } };
 
     const files: [string, Buffer][] = [
       ["_smoke-admin.pdf", admin],

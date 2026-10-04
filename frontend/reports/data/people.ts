@@ -70,8 +70,6 @@ export interface DoctorProfileRow extends DoctorRelationsRow {
   id: number;
   qualifications?: string | null;
   experience_years?: number | null;
-  average_rating?: unknown;
-  total_reviews?: number | null;
   phone?: string | null;
   created_at?: Date | null;
   user?: {
@@ -90,8 +88,6 @@ const listOr = (values: string[]): string => {
 
 export function buildDoctorSummary(row: DoctorProfileRow): DoctorSummary {
   const user = row.user ?? null;
-  const rating = Number(row.average_rating ?? 0);
-  const reviews = Number(row.total_reviews ?? 0);
 
   return {
     reference: (user?.username ?? "").trim() || `Doctor #${row.id}`,
@@ -109,8 +105,6 @@ export function buildDoctorSummary(row: DoctorProfileRow): DoctorSummary {
     ),
     phone: (row.phone ?? "").trim() || (user?.phone ?? "").trim() || notProvided(null),
     email: (user?.email ?? "").trim() || notProvided(null),
-    rating:
-      reviews > 0 ? `${rating.toFixed(1)} / 5 from ${reviews} review${reviews === 1 ? "" : "s"}` : notProvided(null),
     joinedOn: row.created_at ? formatTimestampDate(row.created_at) : notProvided(null),
   };
 }

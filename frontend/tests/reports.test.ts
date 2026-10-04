@@ -256,8 +256,6 @@ const DOCTOR_ROW = {
   id: 3,
   qualifications: "MBChB, MMed (Internal Medicine)",
   experience_years: 9,
-  average_rating: "4.70",
-  total_reviews: 34,
   phone: "+255712000333",
   created_at: new Date("2024-02-01T08:00:00.000Z"),
   user: {
@@ -469,13 +467,12 @@ describe("person summaries", () => {
     expect(summary.age).toMatch(/^\d+ years$/);
   });
 
-  it("maps a doctor row with specialty and rating context", () => {
+  it("maps a doctor row with specialty and hospital context", () => {
     const summary = buildDoctorSummary(DOCTOR_ROW);
     expect(summary.name).toBe("Dr. Amina Hassan");
     expect(summary.specialties).toBe("Cardiology");
     expect(summary.hospital).toBe("Mnazi Mmoja Hospital, Zanzibar");
     expect(summary.experience).toBe("9 years");
-    expect(summary.rating).toBe("4.7 / 5 from 34 reviews");
   });
 
   it("falls back to \"Not provided\" rather than inventing values", () => {
@@ -489,7 +486,6 @@ describe("person summaries", () => {
     expect(summary.specialties).toBe("Not provided");
     expect(summary.hospital).toBe("Not provided");
     expect(summary.qualifications).toBe("Not provided");
-    expect(summary.rating).toBe("Not provided");
   });
 });
 

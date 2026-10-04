@@ -164,7 +164,6 @@ export interface DoctorSummary {
   hospital: string;
   phone: string;
   email: string;
-  rating: string;
   joinedOn: string;
 }
 
@@ -185,7 +184,6 @@ export function doctorInformation(d: ReportDoc, doctor: DoctorSummary): void {
     { label: "Practising at", value: doctor.hospital },
     { label: "Phone", value: doctor.phone },
     { label: "Email", value: doctor.email },
-    { label: "Rating", value: doctor.rating },
     { label: "Registered on", value: doctor.joinedOn },
   ]);
   d.moveDown(space[3]);

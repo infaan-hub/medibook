@@ -179,8 +179,6 @@ const DOCTOR_ROW = {
   id: 3,
   qualifications: "MBChB, MMed",
   experience_years: 9,
-  average_rating: "4.70",
-  total_reviews: 34,
   phone: "+255712000333",
   created_at: new Date("2024-02-01T08:00:00.000Z"),
   user: {
@@ -297,6 +295,16 @@ describe("medical report content", () => {
       // Missing values are labelled, never blank.
       "Not provided",
     ]);
+  });
+
+  it("keeps the doctor's rating out of the printed document", async () => {
+    const copy = await text(await renderDoctorReport(fixture(), GENERATED_AT));
+
+    // Star ratings are a public-listing concern, not part of a clinical record,
+    // so the clinician block must not carry them. Compare on letters only,
+    // because the renderer letterspaces headings ("Rat ing").
+    expect(compact(copy)).not.toContain("rating");
+    expect(compact(copy)).not.toContain("reviews");
   });
 
   it("renders the patient's own report with the same honesty", async () => {
