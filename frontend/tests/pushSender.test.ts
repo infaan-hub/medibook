@@ -171,6 +171,41 @@ describe("sendWebPushToUser", () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("BadJwtToken"));
   });
 
+  it("deactivates a subscription created under a different VAPID key (Apple)", async () => {
+    // Apple: the endpoint is bound to the applicationServerKey it was created
+    // with, so a server key rotation makes it permanently undeliverable.
+    state.sendNotification.mockRejectedValueOnce(
+      pushError(400, '{"reason":"VapidPkHashMismatch"}')
+    );
+
+    const result = await sendWebPushToUser(7, { title: "Hi", body: "there" });
+
+    expect(result.deactivated).toBe(1);
+    expect(state.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { is_active: false },
+    });
+  });
+
+  it("deactivates on Google's prose 403 (not machine-readable JSON)", async () => {
+    // Google answers a rotated-key rejection with a plain-text body, so
+    // pushErrorReason() cannot parse it — the sender must still recognise it.
+    state.sendNotification.mockRejectedValueOnce(
+      pushError(
+        403,
+        "the VAPID credentials in the authorization header do not correspond to the credentials used to create the subscriptions.\n"
+      )
+    );
+
+    const result = await sendWebPushToUser(7, { title: "Hi", body: "there" });
+
+    expect(result.deactivated).toBe(1);
+    expect(state.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { is_active: false },
+    });
+  });
+
   it("reports 'nothing to send to' instead of pretending success", async () => {
     state.findMany.mockResolvedValue([]);
 

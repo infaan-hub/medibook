@@ -185,6 +185,9 @@ export async function subscribeToPush(): Promise<SubscribeResult> {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(key).buffer as ArrayBuffer,
     });
+    // Bind this subscription to the key it was created with, so a later server
+    // rotation can be detected and repaired instead of silently 403ing forever.
+    writeVapidBinding(key);
     return { ok: true, subscription };
   } catch {
     return { ok: false, reason: "subscription-failed" };
@@ -194,6 +197,7 @@ export async function subscribeToPush(): Promise<SubscribeResult> {
 export async function unsubscribeFromPush(): Promise<boolean> {
   const ready = await activeRegistration();
   if (!ready.ok) return false;
+  clearVapidBinding();
   try {
     const subscription = await ready.reg.pushManager.getSubscription();
     if (!subscription) return false;
@@ -222,4 +226,64 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+/* ------------------------------------------------------------------------- *
+ * VAPID key binding
+ *
+ * A PushSubscription is cryptographically bound to the applicationServerKey it
+ * was created with. When the server rotates its VAPID keypair, every existing
+ * subscription becomes permanently undeliverable (Google 403, Apple
+ * VapidPkHashMismatch) — but `pushManager.getSubscription()` still hands back the
+ * old, useless subscription, and it compares equal to the server row, so the
+ * ordinary sync sees "in sync" and repairs nothing. The user then has to clear
+ * site data by hand.
+ *
+ * Recording the key the subscription was created with turns that invisible
+ * failure into a detectable one: on the next open we compare it against the
+ * server's current key and re-subscribe. Kept in localStorage because the fact
+ * is browser-side and this needs no database migration.
+ * ------------------------------------------------------------------------- */
+
+const BINDING_STORAGE_KEY = "medibook.vapidBinding";
+
+/** localStorage throws in some private-browsing modes; never let that break sync. */
+function safeStorage(): Storage | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const store = window.localStorage;
+    const probe = "__medibook_probe__";
+    store.setItem(probe, "1");
+    store.removeItem(probe);
+    return store;
+  } catch {
+    return null;
+  }
+}
+
+/** The VAPID public key the current browser subscription was created with. */
+export function readVapidBinding(): string | null {
+  try {
+    return safeStorage()?.getItem(BINDING_STORAGE_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Remember the key this device's subscription is bound to. */
+export function writeVapidBinding(publicKey: string): void {
+  try {
+    safeStorage()?.setItem(BINDING_STORAGE_KEY, publicKey);
+  } catch {
+    /* non-persistent is acceptable — we simply re-check next open */
+  }
+}
+
+/** Forget the binding (unsubscribe path). */
+export function clearVapidBinding(): void {
+  try {
+    safeStorage()?.removeItem(BINDING_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }

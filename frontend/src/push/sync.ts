@@ -21,7 +21,13 @@
  */
 import { listPushSubscriptions, registerPushSubscription } from "../api/notifications";
 import { getNotificationCapability } from "../lib/platform";
-import { getPushSubscription, readNotificationPermission, subscribeToPush } from "./notifications";
+import {
+  getPushSubscription,
+  getVapidPublicKey,
+  readNotificationPermission,
+  readVapidBinding,
+  subscribeToPush,
+} from "./notifications";
 
 export type SyncOutcome =
   /** Nothing this pass may do: unsupported context, iOS Safari tab, or no permission. */
@@ -32,6 +38,9 @@ export type SyncOutcome =
   | "registered"
   /** Permission was granted but the browser subscription was gone → recreated + stored. */
   | "recreated"
+  /** The server rotated its VAPID key: the old subscription can never deliver
+   *  again, so it was destroyed and recreated with the current key + stored. */
+  | "rekeyed"
   /** Network/API failure — retried on the next open. */
   | "failed";
 
@@ -60,6 +69,26 @@ async function run(): Promise<SyncOutcome> {
   try {
     let sub = await getPushSubscription();
     let recreated = false;
+    let rekeyed = false;
+
+    // The server may have rotated its VAPID keypair since this device
+    // subscribed. The old subscription is then permanently undeliverable, yet
+    // getSubscription() still returns it and it still matches the server row —
+    // so nothing else here would notice. Destroy it and build a fresh one bound
+    // to the current key. Only unsubscribe() can break that binding.
+    if (sub) {
+      const [currentKey, boundKey] = await Promise.all([
+        getVapidPublicKey(),
+        Promise.resolve(readVapidBinding()),
+      ]);
+      if (currentKey && boundKey && boundKey !== currentKey) {
+        await sub.unsubscribe().catch(() => undefined);
+        const rebuilt = await subscribeToPush();
+        if (!rebuilt.ok) return "failed";
+        sub = rebuilt.subscription;
+        rekeyed = true;
+      }
+    }
 
     // Permission is granted but the subscription is gone (rotated/expired
     // endpoint, cleared storage, iOS re-grant). `subscribeToPush()` reuses the
@@ -76,7 +105,7 @@ async function run(): Promise<SyncOutcome> {
     const endpoint = json.endpoint;
     if (!endpoint || !keys.p256dh || !keys.auth) return "failed";
 
-    if (!recreated && lastOk && lastOk.endpoint === endpoint) {
+    if (!recreated && !rekeyed && lastOk && lastOk.endpoint === endpoint) {
       if (Date.now() - lastOk.at < FOCUS_THROTTLE_MS) return "up-to-date";
     }
 
@@ -84,6 +113,7 @@ async function run(): Promise<SyncOutcome> {
     const row = list.data.results.find((candidate) => candidate.endpoint === endpoint);
     if (row && row.is_active !== false) {
       lastOk = { endpoint, at: Date.now() };
+      if (rekeyed) return "rekeyed";
       return recreated ? "recreated" : "up-to-date";
     }
 
@@ -97,9 +127,11 @@ async function run(): Promise<SyncOutcome> {
         standalone: capability.standalone,
         registered_at: new Date().toISOString(),
         resynced: true,
+        ...(rekeyed ? { rekeyed: true } : {}),
       },
     });
     lastOk = { endpoint, at: Date.now() };
+    if (rekeyed) return "rekeyed";
     return recreated ? "recreated" : "registered";
   } catch {
     return "failed";

@@ -21,6 +21,8 @@ const browser = vi.hoisted(() => ({
   readNotificationPermission: vi.fn(),
   subscribeToPush: vi.fn(),
   unsubscribeFromPush: vi.fn(),
+  getVapidPublicKey: vi.fn(async (): Promise<string | null> => "CURRENT-VAPID-KEY"),
+  readVapidBinding: vi.fn((): string | null => "CURRENT-VAPID-KEY"),
 }));
 
 vi.mock("../api/notifications", () => api);
@@ -98,6 +100,9 @@ function clearGlobals(): void {
 function sub(endpoint: string) {
   return {
     toJSON: () => ({ endpoint, keys: { p256dh: "p256dh-value", auth: "auth-value" } }),
+    // Real PushSubscription has this; the rekey path calls it to break the
+    // binding to the previous VAPID applicationServerKey.
+    unsubscribe: vi.fn(async () => true),
   };
 }
 
@@ -120,6 +125,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   browser.readNotificationPermission.mockReturnValue("granted");
   browser.getPushSubscription.mockResolvedValue(null);
+  // Default: this device is bound to the CURRENT key, so no rekey is needed.
+  browser.getVapidPublicKey.mockResolvedValue("CURRENT-VAPID-KEY");
+  browser.readVapidBinding.mockReturnValue("CURRENT-VAPID-KEY");
   browser.subscribeToPush.mockResolvedValue({ ok: false, reason: "failed" });
   api.listPushSubscriptions.mockResolvedValue(rows([]));
   api.registerPushSubscription.mockResolvedValue({ success: true, message: "", data: {} });
@@ -157,6 +165,65 @@ describe("ensureServerSubscription — iOS/Android/desktop delivery self-heal", 
 
     await expect(ensureServerSubscription()).resolves.toBe("up-to-date");
     expect(api.registerPushSubscription).not.toHaveBeenCalled();
+    expect(browser.subscribeToPush).not.toHaveBeenCalled();
+  });
+
+  it("re-subscribes when the server rotated its VAPID key", async () => {
+    setUA(DESKTOP_CHROME);
+    setWebPushSurface("granted");
+    // This device subscribed under the OLD key; the browser still hands back
+    // that dead subscription and the server row matches it, so without the
+    // binding check this pass would report "up-to-date" and delivery would
+    // 403 on every single notification, forever.
+    browser.readVapidBinding.mockReturnValue("OLD-VAPID-KEY");
+    browser.getVapidPublicKey.mockResolvedValue("NEW-VAPID-KEY");
+    const stale = sub("https://push.example/old-key");
+    browser.getPushSubscription.mockResolvedValue(stale);
+    browser.subscribeToPush.mockResolvedValue({
+      ok: true,
+      subscription: sub("https://push.example/new-key"),
+    });
+    api.listPushSubscriptions.mockResolvedValue(
+      rows([{ endpoint: "https://push.example/old-key" }])
+    );
+
+    await expect(ensureServerSubscription()).resolves.toBe("rekeyed");
+    // The old subscription must be destroyed — only unsubscribe() breaks the
+    // binding to the previous applicationServerKey.
+    expect(stale.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(browser.subscribeToPush).toHaveBeenCalledTimes(1);
+    expect(api.registerPushSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "https://push.example/new-key",
+        device_info: expect.objectContaining({ resynced: true, rekeyed: true }),
+      })
+    );
+  });
+
+  it("never asks the server key when nothing is subscribed yet", async () => {
+    setUA(DESKTOP_CHROME);
+    setWebPushSurface("granted");
+    browser.getPushSubscription.mockResolvedValue(null);
+
+    // A missing subscription must NOT trigger the key comparison: there is
+    // nothing bound, so fetching the key would be a pointless request.
+    await expect(ensureServerSubscription()).resolves.toBe("failed");
+    expect(browser.getVapidPublicKey).not.toHaveBeenCalled();
+  });
+
+  it("leaves a healthy subscription alone when the server key cannot be read", async () => {
+    setUA(DESKTOP_CHROME);
+    setWebPushSurface("granted");
+    browser.getPushSubscription.mockResolvedValue(sub("https://push.example/live"));
+    // VAPID unconfigured / offline: never destroy a working subscription on a
+    // guess, because we cannot prove it is stale.
+    browser.getVapidPublicKey.mockResolvedValue(null);
+    browser.readVapidBinding.mockReturnValue("SOMETHING");
+    api.listPushSubscriptions.mockResolvedValue(
+      rows([{ endpoint: "https://push.example/live" }])
+    );
+
+    await expect(ensureServerSubscription()).resolves.toBe("up-to-date");
     expect(browser.subscribeToPush).not.toHaveBeenCalled();
   });
 

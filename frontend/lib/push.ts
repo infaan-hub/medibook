@@ -134,6 +134,29 @@ function pushErrorReason(error: unknown): string | null {
 const reasonWarned = new Set<string>();
 
 /**
+ * A VAPID mismatch is permanent for that subscription: the endpoint is
+ * cryptographically bound to the applicationServerKey it was created with, so
+ * rotating the VAPID keypair makes every pre-existing subscription undeliverable.
+ *
+ * Google (FCM) answers 403 with a prose body — "the VAPID credentials in the
+ * authorization header do not correspond to the credentials used to create the
+ * subscriptions" — which pushErrorReason() cannot parse (it only reads a JSON
+ * `reason` field). Apple answers 400 with {"reason":"VapidPkHashMismatch"}.
+ * Both are matched here so the sender treats them like a dead endpoint instead
+ * of retrying the same doomed subscription on every notification forever.
+ *
+ * Deliberately NOT matched: "BadJwtToken". That one means the VAPID JWT we
+ * signed is malformed or the SUBJECT is rejected — a server-side fault that
+ * affects every device equally. Deactivating the whole fleet over a bad
+ * VAPID_SUBJECT would be the wrong cure; it stays a logged warning instead.
+ */
+function isVapidMismatch(status: number | undefined, reason: string | null, body: unknown): boolean {
+  if (status !== 400 && status !== 403) return false;
+  const text = `${reason ?? ""} ${typeof body === "string" ? body : JSON.stringify(body ?? "")}`;
+  return /VapidPkHashMismatch|VAPID credentials in the authorization header/i.test(text);
+}
+
+/**
  * Surface the push service's own diagnosis exactly once per process —
  * `403 BadJwtToken` (VAPID subject) and `VapidPkHashMismatch` are invisible
  * from the status code alone and are precisely the iOS-only failure modes.
@@ -192,13 +215,19 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
       result.failed += 1;
       const status = (error as { statusCode?: number }).statusCode;
       const reason = pushErrorReason(error);
-      if (status === 404 || status === 410) {
-        // Permanently gone — deactivate so we stop retrying.
+      const body = (error as { body?: unknown }).body;
+      if (status === 404 || status === 410 || isVapidMismatch(status, reason, body)) {
+        // Permanently undeliverable — deactivate so we stop retrying. For a
+        // VAPID mismatch the client's next sync sees an inactive row and
+        // re-subscribes with the current key.
         await prisma.pushSubscription
           .update({ where: { id: sub.id }, data: { is_active: false } })
           .catch(() => undefined);
         result.deactivated += 1;
-        console.warn(`[push] deactivated invalid subscription id=${sub.id} user=${userId}`);
+        const cause = isVapidMismatch(status, reason, body) ? "vapid key rotated" : "endpoint gone";
+        console.warn(
+          `[push] deactivated subscription id=${sub.id} user=${userId} (${cause}, HTTP ${status})`
+        );
       } else if (reason) {
         warnReason(reason, `HTTP ${status ?? "?"} user=${userId} sub=${sub.id}`);
       } else {

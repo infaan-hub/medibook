@@ -19,6 +19,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // tests/probe/** talks to real push services over the network and sends real
+    // payloads to enrolled devices. It runs only via `npm run probe:push`
+    // (vitest.probe.config.ts) and must never be picked up here or in CI.
+    exclude: ["tests/probe/**", "**/node_modules/**"],
     globalSetup: ["tests/global-setup.ts"],
     testTimeout: 30_000,
     hookTimeout: 180_000,
