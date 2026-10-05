@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:api": "vitest run --config vitest.api.config.ts",
-    "probe:push": "vitest run --config vitest.probe.config.ts",
+    "probe:push": "vitest run --config vitest.probe.config.ts --disable-console-intercept",
+    "smoke:notifications": "node scripts/smoke-notifications.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

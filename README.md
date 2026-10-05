@@ -68,3 +68,5 @@ Run from `frontend/`:
 | `npm run test:api` | API route tests (vitest) |
 | `npm run build` | `prisma generate && next build` |
 | `npm run dev` / `npm start` | Custom server with WebSocket (dev / production) |
+| `npm run smoke:notifications` | Notification pipeline smoke: create → inbox row → realtime frame → real push dispatch, printing **why** delivery fails (stale VAPID / no subscription / config) |
+| `npm run probe:push` | Live web-push probe against every enrolled subscription (sends real pushes) |
