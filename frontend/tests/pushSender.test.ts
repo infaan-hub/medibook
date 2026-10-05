@@ -8,7 +8,7 @@
  *    notification immediately, specify `high`");
  *  - an RFC 8030 `Topic` so repeats for the same appointment coalesce instead
  *    of stacking on the lock screen;
- *  - a dead endpoint (404/410) is deactivated so sends stop wasting attempts;
+ *  - a dead endpoint (404/410) is PURGED so sends stop wasting attempts on it;
  *  - the push service's own `reason` (e.g. 403 BadJwtToken — an iOS-only
  *    VAPID failure) is surfaced instead of a bare status code.
  */
@@ -17,13 +17,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   findMany: vi.fn(),
   update: vi.fn(),
+  delete: vi.fn(),
   sendNotification: vi.fn(),
   setVapidDetails: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
-    pushSubscription: { findMany: state.findMany, update: state.update },
+    pushSubscription: {
+      findMany: state.findMany,
+      update: state.update,
+      delete: state.delete,
+    },
     user: { findUnique: vi.fn(async () => null) },
   },
 }));
@@ -66,6 +71,7 @@ beforeEach(() => {
   } as unknown as typeof import("web-push"));
   state.findMany.mockResolvedValue([row(1, "https://fcm.googleapis.com/fcm/send/abc")]);
   state.update.mockResolvedValue({});
+  state.delete.mockResolvedValue({});
   state.sendNotification.mockResolvedValue({ statusCode: 201 });
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -143,7 +149,7 @@ describe("sendWebPushToUser", () => {
     expect(options.topic).toBeUndefined();
   });
 
-  it("deactivates a subscription the push service reports as gone (410)", async () => {
+  it("purges a subscription the push service reports as gone (410)", async () => {
     state.sendNotification.mockRejectedValueOnce(pushError(410, '{"reason":"ExpiredToken"}'));
 
     const result = await sendWebPushToUser(7, {
@@ -151,12 +157,23 @@ describe("sendWebPushToUser", () => {
       body: "In one hour",
     });
 
+    // The endpoint can NEVER deliver again — the row must be deleted, not just
+    // flagged, so later sends stop paying round-trips for it.
     expect(result.deactivated).toBe(1);
     expect(result.failed).toBe(1);
-    expect(state.update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: { is_active: false },
-    });
+    expect(state.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(state.update).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("purged subscription"));
+  });
+
+  it("purges a subscription the push service reports as unknown (404)", async () => {
+    state.sendNotification.mockRejectedValueOnce(pushError(404));
+
+    const result = await sendWebPushToUser(7, { title: "Hi", body: "there" });
+
+    expect(result.deactivated).toBe(1);
+    expect(state.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(state.update).not.toHaveBeenCalled();
   });
 
   it("surfaces the push service's own reason for an auth failure instead of hiding it", async () => {

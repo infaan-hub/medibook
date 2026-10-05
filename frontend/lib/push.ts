@@ -7,6 +7,7 @@ import { prisma } from "./db";
 type PushResult = {
   sent: number;
   failed: number;
+  /** Rows removed from rotation this send — purged (endpoint gone) or deactivated (VAPID rotated). */
   deactivated: number;
   skipped: boolean;
 };
@@ -216,17 +217,28 @@ export async function sendWebPushToUser(userId: number, payload: PushPayload): P
       const status = (error as { statusCode?: number }).statusCode;
       const reason = pushErrorReason(error);
       const body = (error as { body?: unknown }).body;
-      if (status === 404 || status === 410 || isVapidMismatch(status, reason, body)) {
-        // Permanently undeliverable — deactivate so we stop retrying. For a
-        // VAPID mismatch the client's next sync sees an inactive row and
-        // re-subscribes with the current key.
+      if (status === 404 || status === 410) {
+        // Endpoint gone for good (browser wiped/blocked the subscription):
+        // PURGE the row so later sends stop spending round-trips on it. The
+        // fresh endpoint arrives via the SW's `pushsubscriptionchange` →
+        // POST /api/push/update, not from a re-read of this dead row.
+        await prisma.pushSubscription
+          .delete({ where: { id: sub.id } })
+          .catch(() => undefined);
+        result.deactivated += 1;
+        console.warn(
+          `[push] purged subscription id=${sub.id} user=${userId} (endpoint gone, HTTP ${status})`
+        );
+      } else if (isVapidMismatch(status, reason, body)) {
+        // Bound to a previous VAPID key: tombstone (is_active=false) instead of
+        // deleting — the client's next sync sees the inactive row and
+        // re-subscribes with the current key. Nothing recoverable lives here.
         await prisma.pushSubscription
           .update({ where: { id: sub.id }, data: { is_active: false } })
           .catch(() => undefined);
         result.deactivated += 1;
-        const cause = isVapidMismatch(status, reason, body) ? "vapid key rotated" : "endpoint gone";
         console.warn(
-          `[push] deactivated subscription id=${sub.id} user=${userId} (${cause}, HTTP ${status})`
+          `[push] deactivated subscription id=${sub.id} user=${userId} (vapid key rotated, HTTP ${status})`
         );
       } else if (reason) {
         warnReason(reason, `HTTP ${status ?? "?"} user=${userId} sub=${sub.id}`);

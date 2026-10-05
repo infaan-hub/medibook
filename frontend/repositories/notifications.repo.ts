@@ -69,6 +69,8 @@ export const findPushByEndpoint = (endpoint: string) =>
 export const updatePushSubscription = (
   id: number,
   data: {
+    /** Replace the endpoint (SW `pushsubscriptionchange` rotation). Unique — caller must not collide with another row. */
+    endpoint?: string;
     /** Reassign the endpoint to another account (see `createPush`). */
     user_id?: number;
     p256dh_key?: string;
@@ -81,6 +83,7 @@ export const updatePushSubscription = (
   prisma.pushSubscription.update({
     where: { id },
     data: {
+      ...(data.endpoint !== undefined ? { endpoint: data.endpoint } : {}),
       ...(data.user_id !== undefined ? { user_id: data.user_id } : {}),
       ...(data.p256dh_key !== undefined ? { p256dh_key: data.p256dh_key } : {}),
       ...(data.auth_key !== undefined ? { auth_key: data.auth_key } : {}),

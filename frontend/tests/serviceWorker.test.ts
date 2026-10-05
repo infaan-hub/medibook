@@ -7,7 +7,10 @@
  *    subscription after silent pushes), always inside `event.waitUntil`, even
  *    when the payload is not JSON or `showNotification` rejects;
  *  - a `notificationclick` opens the URL the notification carries, whether or
- *    not a window is already running (WebKit's `matchAll` can return empty).
+ *    not a window is already running (WebKit's `matchAll` can return empty);
+ *  - a `pushsubscriptionchange` re-subscribes with the old options (or the
+ *    server's current VAPID key) and posts old → new to /api/push/update, so a
+ *    rotated endpoint is swapped server-side while the page is closed.
  *
  * The worker is executed from source in a `node:vm` sandbox, so the test runs
  * the exact file that gets deployed.
@@ -43,13 +46,17 @@ function loadServiceWorker() {
     return {};
   });
   const matchAll = vi.fn(async () => [] as unknown[]);
+  const subscribe = vi.fn(async (_options?: unknown) => ({}));
+  const fetchMock = vi.fn(
+    async (_input?: unknown, _init?: unknown): Promise<unknown> => new Response("")
+  );
 
   const self = {
     addEventListener(type: string, fn: Listener) {
       listeners[type] = fn;
     },
     location: { origin: "https://medibook.test" },
-    registration: { showNotification },
+    registration: { showNotification, pushManager: { subscribe } },
     clients: {
       claim: vi.fn(async () => undefined),
       matchAll,
@@ -70,19 +77,32 @@ function loadServiceWorker() {
       delete: vi.fn(async () => true),
       match: vi.fn(async () => undefined),
     },
-    fetch: vi.fn(async () => new Response("")),
+    fetch: fetchMock,
     Response,
     URL,
     console,
     Promise,
     setTimeout,
     clearTimeout,
+    // A fresh vm realm has no host globals: `atob` must be provided or the
+    // base64url → Uint8Array VAPID decode in the SW cannot run here.
+    atob: (input: string) => Buffer.from(input, "base64").toString("binary"),
   };
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(SW_PATH, "utf8"), sandbox);
 
-  return { listeners, showNotification, openWindow, focus, navigate, matchAll, self };
+  return {
+    listeners,
+    showNotification,
+    openWindow,
+    focus,
+    navigate,
+    matchAll,
+    self,
+    subscribe,
+    fetchMock,
+  };
 }
 
 /** Dispatch an event and resolve with whatever was passed to `waitUntil`. */
@@ -228,5 +248,88 @@ describe("service worker — notificationclick", () => {
 
     expect(closed).toHaveBeenCalled();
     expect(sw.openWindow).toHaveBeenCalledWith("/");
+  });
+});
+
+describe("service worker — pushsubscriptionchange", () => {
+  function freshSubscription() {
+    return {
+      toJSON: () => ({
+        endpoint: "https://fcm.googleapis.com/fcm/send/FRESH",
+        keys: { p256dh: "fresh-p256dh", auth: "fresh-auth" },
+      }),
+    };
+  }
+
+  it("re-subscribes with the OLD options and posts old → new to /api/push/update", async () => {
+    const sw = loadServiceWorker();
+    const options = { userVisibleOnly: true, applicationServerKey: new Uint8Array([1, 2, 3]) };
+    sw.subscribe.mockResolvedValueOnce(freshSubscription());
+
+    const waited = dispatch(sw.listeners, "pushsubscriptionchange", {
+      oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD", options },
+    });
+    await expect(waited).resolves.toBeUndefined();
+
+    // The old options already carry the applicationServerKey — no VAPID re-fetch.
+    expect(sw.subscribe).toHaveBeenCalledWith(options);
+    expect(sw.fetchMock).not.toHaveBeenCalledWith("/api/push/vapid-public-key/");
+
+    const updateCall = sw.fetchMock.mock.calls.find((call) => call[0] === "/api/push/update");
+    expect(updateCall).toBeDefined();
+    const init = updateCall![1] as { method: string; body: string };
+    expect(init.method).toBe("POST");
+    const payload = JSON.parse(init.body) as {
+      oldEndpoint: string;
+      newSubscription: { endpoint: string; keys: Record<string, string>; device_info: { source: string } };
+    };
+    // The backend swaps by matching the OLD endpoint — both must travel together.
+    expect(payload.oldEndpoint).toBe("https://fcm.googleapis.com/fcm/send/OLD");
+    expect(payload.newSubscription.endpoint).toBe("https://fcm.googleapis.com/fcm/send/FRESH");
+    expect(payload.newSubscription.keys).toEqual({ p256dh: "fresh-p256dh", auth: "fresh-auth" });
+    expect(payload.newSubscription.device_info.source).toBe("pushsubscriptionchange");
+  });
+
+  it("fetches the server's VAPID key when the old subscription carries no options", async () => {
+    const sw = loadServiceWorker();
+    const publicKey = Buffer.from("server-vapid-public-key-bytes").toString("base64url");
+    sw.fetchMock.mockResolvedValueOnce({ json: async () => ({ data: { publicKey } }) });
+    sw.subscribe.mockResolvedValueOnce(freshSubscription());
+
+    await dispatch(sw.listeners, "pushsubscriptionchange", {
+      oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD" },
+    });
+
+    expect(sw.fetchMock.mock.calls[0][0]).toBe("/api/push/vapid-public-key/");
+    expect(sw.subscribe).toHaveBeenCalledTimes(1);
+    const subOptions = sw.subscribe.mock.calls[0][0] as {
+      userVisibleOnly: boolean;
+      applicationServerKey: Uint8Array;
+    };
+    expect(subOptions.userVisibleOnly).toBe(true);
+    // Byte-for-byte: a wrong base64url decode produces a key nothing accepts.
+    expect(Array.from(subOptions.applicationServerKey)).toEqual(
+      Array.from(Buffer.from(publicKey, "base64url"))
+    );
+  });
+
+  it("still resolves waitUntil when the browser refuses to re-subscribe", async () => {
+    const sw = loadServiceWorker();
+    sw.subscribe.mockRejectedValueOnce(new Error("denied"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const waited = dispatch(sw.listeners, "pushsubscriptionchange", {
+      oldSubscription: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/OLD",
+        options: { applicationServerKey: new Uint8Array([9]) },
+      },
+    });
+
+    await expect(waited).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("auto-refresh failed"),
+      expect.any(Error)
+    );
+    errorSpy.mockRestore();
   });
 });

@@ -16,7 +16,7 @@
  * /manifest.json is network-first and never written to a cache: Chrome reads it
  * to decide installability, so it must always reflect the live file.
  */
-const VERSION = "v7";
+const VERSION = "v8";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -169,6 +169,69 @@ self.addEventListener("push", (event) => {
     )
   );
 });
+
+// Web Push — automatic subscription refresh.
+//
+// The browser fires `pushsubscriptionchange` when a subscription goes stale
+// (iOS rotates endpoints, Chrome after site-data clears, VAPID key rotation).
+// The page is often closed, so re-subscribe here and hand the FRESH endpoint
+// to the backend with the OLD one attached — the server swaps the row in place,
+// so sends never keep targeting a dead endpoint while nobody is logged in.
+// The server treats possession of the old endpoint as proof (no auth token
+// available in this context) and never reassigns the subscription's owner.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const old = event.oldSubscription || null;
+        const fresh = await self.registration.pushManager.subscribe(
+          await subscribeOptions(old)
+        );
+        if (!fresh) return;
+        const json = fresh.toJSON();
+        await fetch("/api/push/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            oldEndpoint: old ? old.endpoint || null : null,
+            newSubscription: {
+              endpoint: json.endpoint,
+              keys: json.keys || {},
+              device_info: {
+                source: "pushsubscriptionchange",
+                userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+                rotated_at: new Date().toISOString(),
+              },
+            },
+          }),
+        });
+      } catch (err) {
+        console.error("pushsubscriptionchange: auto-refresh failed", err);
+      }
+    })()
+  );
+});
+
+// Reuse the old subscription's options when the browser provides them (they
+// carry the `applicationServerKey` it was created with); otherwise fetch the
+// server's current VAPID public key so a rotation is picked up here too.
+async function subscribeOptions(old) {
+  if (old && old.options && old.options.applicationServerKey) return old.options;
+  const res = await fetch("/api/push/vapid-public-key/");
+  const body = await res.json();
+  const publicKey = body && body.data ? body.data.publicKey : body && body.publicKey;
+  if (!publicKey) throw new Error("VAPID public key unavailable");
+  return { userVisibleOnly: true, applicationServerKey: base64UrlToUint8Array(publicKey) };
+}
+
+function base64UrlToUint8Array(b64) {
+  const padding = "=".repeat((4 - (b64.length % 4)) % 4);
+  const base64 = (b64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
 
 // Notification click — open the URL the notification carries, never just the
 // window that happens to be running.
