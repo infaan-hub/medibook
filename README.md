@@ -1,6 +1,13 @@
 # MediBook
 
-Healthcare doctor-appointment booking system: Next.js PWA frontend + Next.js App Router API + custom Node WebSocket server + PostgreSQL (Neon/Prisma).
+Healthcare doctor-appointment booking system: one Next.js 15 app (PWA UI + App Router API) served by a custom Node server that adds WebSocket/SSE realtime, PostgreSQL (Neon/Prisma), web push, PDF reports and scheduled reminders.
+
+## Repository layout
+
+| Directory | What it is |
+| --- | --- |
+| `frontend/` | **The app.** UI, `/api/**`, `/media/**`, realtime (`server.js`), PWA — this is what deploys. |
+| `next-app/` | Legacy parallel variant of the same product (port 8000). Not deployed. |
 
 ## Development
 
@@ -8,55 +15,56 @@ Healthcare doctor-appointment booking system: Next.js PWA frontend + Next.js App
 start-dev.bat
 ```
 
-- Backend (API + WebSocket): `next-app` → `npm run dev` (port **8000**, `server.js`)
-- Frontend: `frontend` → `npm run dev` (port **5173**, Next.js; rewrites `/api`, `/media` to :8000)
+or manually:
 
-## Production architecture (required)
+```bat
+cd frontend
+npm install
+npm run dev        # node server.js → http://localhost:3000 (UI + API + WS + SSE)
+```
+
+- `npm run dev:next` runs plain `next dev` (UI + API + SSE route, no raw WebSocket).
+- Override the port with `PORT=8000 npm run dev`.
+
+## Production
 
 | Piece | Host | Notes |
 | --- | --- | --- |
-| Full app (UI + API) | Vercel — root directory `next-app` | Same-origin UI + `/api` |
-| Or split: Frontend | Vercel — root directory `frontend` | `NEXT_PUBLIC_API_BASE_URL`, optional `NEXT_PUBLIC_WS_URL` |
-| HTTP API + WebSocket + reminder process | Long-running Node (`node server.js production`) | **Not** Vercel serverless — needs a persistent process for `/ws/notifications/` |
+| Full app | Vercel — root directory `frontend` (`zan-medibook`) | Same-origin UI + `/api` + SSE fallback route |
+| WebSocket `/ws/notifications/` | Long-running Node (`npm run build && npm start`) | Vercel cannot host raw WS upgrades — the client detects a serverless host and uses SSE instead |
 | PostgreSQL | Neon (or any Postgres) | `DATABASE_URL` |
-| Web Push | VAPID keys in backend env only | Public key via `GET /api/push/vapid-public-key/` |
-| Scheduled reminders | Platform cron → `POST /api/cron/reminders/` | Header `x-cron-secret: $CRON_SECRET`. In-process interval only on the long-running Node host (`REMINDERS_INTERVAL_MINUTES`). Set to `0` on serverless. |
+| Web Push | VAPID keys in server env only | Public key via `GET /api/push/vapid-public-key` |
+| Reminder cron | Vercel Cron → `GET/POST /api/cron/reminders` (daily `0 3 * * *`, Hobby plan limit) + in-process interval on long-running hosts | Header `x-cron-secret: $CRON_SECRET` (or `Authorization: Bearer`) |
 
-If the UI is deployed separately from the API:
-
-1. Proxy `/ws` to the dedicated Node host, or  
-2. Set `NEXT_PUBLIC_WS_URL=wss://your-ws-host` (client opens `/ws/notifications/` on that origin).
-
-HTTP API must remain reachable at `NEXT_PUBLIC_API_BASE_URL` (same origin path `/api` if reverse-proxied).
+A daily cron can deliver a `1h`-before reminder up to 24h late; on a long-running host set `REMINDERS_INTERVAL_MINUTES=15` for ~15-minute accuracy (`0` disables).
 
 ### Environment variables
 
-**Backend (`next-app/.env`)**  
-`DATABASE_URL`, `AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `REMINDERS_INTERVAL_MINUTES`, `PORT`, …
-
-**Frontend (`frontend/.env`)**  
-`NEXT_PUBLIC_API_BASE_URL` (required), `NEXT_PUBLIC_WS_URL` (optional absolute WS base), `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (optional offline override).
+All in `frontend/.env` — copy `frontend/.env.example` and fill in at least `DATABASE_URL`, `AUTH_SECRET`, `CRON_SECRET`, `VAPID_*`. Optional: `NEXT_PUBLIC_WS_URL` only when realtime is **not** same-origin (it accepts `ws://`, `wss://`, `http://`, `https://` or a bare host — never produces `wss://https//host`).
 
 Never expose `VAPID_PRIVATE_KEY` or `AUTH_SECRET` to the client.
 
 ## Realtime (no chat)
 
-- One WebSocket per signed-in session: `/ws/notifications/?token=…`
-- Envelopes: `{ id, type, event, timestamp, version, entity_id, payload }`
-- Client: `src/realtime/socket.ts` (dedup + stale-version drop) + `RealtimeProvider`
-- Polling is **fallback only** while the socket is down
-- Events: appointments, availability, notifications, users/doctors — **no chat / message events**
+- `GET /ws/notifications/?token=…` upgrades to a WebSocket (frames `{event, payload}`, `{"type":"ping"}` → `{event:"pong"}`, close `4001` = refresh your token).
+- SSE fallback at `/ws/notifications/sse?token=…` — served by `server.js` on a long-running host and by `app/ws/notifications/[...path]/route.ts` on Vercel (401s are plain text, never an HTML page).
+- Both transports share `lib/realtime-hub.js`; the client (`src/realtime/socket.ts` + `RealtimeProvider`) dedups, drops stale versions and falls back to polling only while the transport is down.
+- Events: appointments, availability, notifications, users/doctors — **no chat / message events**.
 
 ## Reminders
 
-- Atomic claim on `AppointmentReminder.sent` (idempotent)
-- Preferences: `Patient.reminder_preferences` (`1h` / `24h` / `1w`, missing = on)
-- Timezone: `Patient.timezone` (IANA, default UTC)
-- Triggers: in-process interval (long-running host) + `POST /api/cron/reminders/` + `npm run reminders`
+- Atomic claim on `AppointmentReminder.sent` (idempotent, safe to run concurrently).
+- Preferences: `Patient.reminder_preferences` (`1h` / `24h` / `1w`, missing = on); timezone: `Patient.timezone` (IANA, default UTC).
+- Triggers: daily Vercel cron → `/api/cron/reminders`, in-process interval via `instrumentation.ts` (long-running host only).
 
 ## Commands
 
-| Where | Command |
+Run from `frontend/`:
+
+| Command | What it does |
 | --- | --- |
-| `next-app` | `npm run typecheck`, `npm test`, `npm run build`, `npm run dev`, `npm run reminders` |
-| `frontend` | `npm run typecheck`, `npm test`, `npm run build`, `npm run dev` |
+| `npm run typecheck` | TypeScript (`tsc --noEmit`) |
+| `npm test` | Unit/component tests (vitest, jsdom) |
+| `npm run test:api` | API route tests (vitest) |
+| `npm run build` | `prisma generate && next build` |
+| `npm run dev` / `npm start` | Custom server with WebSocket (dev / production) |
