@@ -174,6 +174,27 @@ function serveSse(req, res) {
 // ---------------------------------------------------------------------------
 async function main() {
   await app.prepare();
+
+  // Next's custom server (NextCustomServer.setupWebSocketHandler) lazily
+  // attaches ITS OWN 'upgrade' listener to this very server on the first
+  // HTTP request. Node then emits 'upgrade' to both listeners: ours handles
+  // the WebSocket handshake, and Next's handler — seeing a route its router
+  // matches (app/ws/notifications/[...path]) — calls socket.end(), killing
+  // the fresh socket (close 1006 within milliseconds of 'open'). We own the
+  // upgrade event and delegate to Next ourselves below, so disable the
+  // auto-attach and guard the handler as defence in depth.
+  app.setupWebSocketHandler = () => {};
+  const nextUpgradeHandler = app.upgradeHandler;
+  Object.defineProperty(app, "upgradeHandler", {
+    configurable: true,
+    get:
+      () =>
+      (request, socket, head) => {
+        if (socket.__medibookRealtime || socket.destroyed || !socket.writable) return;
+        return nextUpgradeHandler(request, socket, head);
+      },
+  });
+
   const upgradeHandler = app.getUpgradeHandler();
 
   const server = createServer((req, res) => {
@@ -270,6 +291,9 @@ async function main() {
     const { pathname, query } = parse(request.url || "", true);
     if (pathname === "/ws/notifications" || pathname === "/ws/notifications/") {
       if (debugRealtime) console.log("[rt] upgrade · /ws/notifications/");
+      // Claim the socket before handing it to ws so Next's upgrade handler
+      // (if it ever runs for this socket) leaves it alone.
+      socket.__medibookRealtime = true;
       socket.on("error", (error) => {
         if (debugRealtime) console.log(`[rt] upgrade socket error · ${error && error.message}`);
       });
