@@ -73,6 +73,10 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) return;
   // Hashed, immutable build assets — let the CDN answer, never cache them.
   if (url.pathname.startsWith("/_next/static/")) return;
+  // Realtime transports are never cached: an SSE response is an open stream
+  // that must not be parked in the HTTP cache (the SWR branch below would
+  // clone and hold it forever). WebSocket upgrades never reach this handler.
+  if (url.pathname.startsWith("/ws/")) return;
 
   // Manifest: network-first, never cached. Chrome re-reads it to decide
   // installability; serving a cached copy hides manifest updates from it.

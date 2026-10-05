@@ -70,6 +70,56 @@ export const FALLBACK_POLL_INTERVAL_MS = 12_000;
 type ConnectionListener = (connected: boolean) => void;
 type StatusListener = (status: RealtimeStatus) => void;
 
+interface RealtimeOrigin {
+  /** Bare host, lowercased, no scheme and no path. */
+  host: string;
+  /** Whether the origin is TLS-backed (wss:// or https://). */
+  secure: boolean;
+}
+
+/**
+ * Parse `NEXT_PUBLIC_WS_URL` into a bare host + TLS flag.
+ *
+ * Accepts ws://, wss://, http://, https:// or a bare host. The previous code
+ * stripped only `ws://` / `wss://`, so an `https://` value was split on "/"
+ * into the literal string "https:" — which then failed the `.vercel.app`
+ * check (so the "no realtime here, use polling" guard never fired) and got
+ * double-prefixed into `wss://https//host`, which fails DNS.
+ *
+ * Returns null when nothing is configured, so callers fall back to the page's
+ * own origin.
+ */
+function parseRealtimeOrigin(configured: string | undefined): RealtimeOrigin | null {
+  const raw = configured?.trim();
+  if (!raw) return null;
+  const match = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
+  const scheme = match ? match[1].toLowerCase() : null;
+  const rest = (match ? raw.slice(match[0].length) : raw).replace(/^\/+/, "");
+  const host = rest.split("/")[0].toLowerCase();
+  if (!host) return null;
+  return { host, secure: scheme === "wss" || scheme === "https" };
+}
+
+/** Origin to use for realtime: configured host, else the page's own host. */
+function resolveOrigin(configured: string | undefined): { host: string; secure: boolean } {
+  const parsed = parseRealtimeOrigin(configured);
+  if (parsed) return parsed;
+  return {
+    host: window.location.host,
+    secure: window.location.protocol === "https:",
+  };
+}
+
+/**
+ * Hosts that cannot terminate a WebSocket upgrade (serverless platforms keep
+ * the HTTP request in a function, the `101 Switching Protocols` answer never
+ * comes back). Realtime there rides the SSE route — app/ws/notifications/… —
+ * with API polling underneath.
+ */
+function isServerlessHost(host: string): boolean {
+  return host.endsWith(".vercel.app");
+}
+
 function entityKey(event: string, entityId: string | number | null | undefined): string | null {
   if (entityId === null || entityId === undefined || entityId === "") return null;
   // Event shapes: appointment.updated → appointment; doctor.availability.updated → doctor
@@ -90,6 +140,12 @@ class RealtimeClient {
   private reconnectTimer: number | null = null;
   private pingTimer: number | null = null;
   private gaveUp = false;
+  /**
+   * Set once a WebSocket transport attempt fails (blocked upgrade, proxy that
+   * drops 101s): every later reconnect then goes straight to SSE instead of
+   * flip-flopping between two transports that both fail on a timer.
+   */
+  private preferSse = false;
   private _connected = false;
   private _status: RealtimeStatus = "disconnected";
   private closing = false;
@@ -143,6 +199,7 @@ class RealtimeClient {
     this.attempts = 0;
     this.tokenRefreshAttempts = 0;
     this.gaveUp = false;
+    this.preferSse = false;
     this.seenIds.clear();
     this.seenOrder = [];
     this.versions.clear();
@@ -178,6 +235,7 @@ class RealtimeClient {
     this.attempts = 0;
     this.tokenRefreshAttempts = 0;
     this.gaveUp = false;
+    this.preferSse = false;
     this.open();
   }
 
@@ -235,6 +293,14 @@ class RealtimeClient {
   private openSSE(): void {
     if (this.userId === null || this.eventSource) return;
 
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      this.setStatus("offline");
+      return;
+    }
+
+    const sseConfigured = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
+    const { host: sseHost, secure: sseSecure } = resolveOrigin(sseConfigured);
+
     this.setStatus(this.attempts > 0 ? "reconnecting" : "connecting");
     const token = tokenStore.getAccess();
     if (!token) {
@@ -245,11 +311,9 @@ class RealtimeClient {
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "https" : "http";
-    const base = process.env.NEXT_PUBLIC_WS_URL 
-      ? process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, "").replace(/^wss?:/, protocol)
-      : `${protocol}://${window.location.host}`;
-    const url = `${base}/ws/notifications/sse/?token=${encodeURIComponent(token)}`;
+    // No trailing slash: app/ws/notifications/[...path] matches the segment
+    // list exactly the same on every platform (server.js accepts both).
+    const url = `${sseSecure ? "https" : "http"}://${sseHost}/ws/notifications/sse?token=${encodeURIComponent(token)}`;
 
     try {
       this.eventSource = new EventSource(url);
@@ -295,22 +359,25 @@ class RealtimeClient {
   private open(): void {
     if (this.userId === null || this.socket) return;
 
-    // Vercel serves this UI as serverless functions; server.js is not running
-    // there, so neither its WebSocket upgrade nor its SSE endpoint can answer.
-    // Stop retrying and let useRealtimeSync's authenticated API polling work.
-    const configuredWs = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
-    const realtimeHost = configuredWs
-      ? configuredWs.replace(/^wss?:\/\//, "").split("/")[0]
-      : window.location.host;
-    if (realtimeHost.endsWith(".vercel.app")) {
-      this.gaveUp = true;
-      this.setConnected(false);
-      this.setStatus("disconnected");
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      this.setStatus("offline");
       return;
     }
 
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      this.setStatus("offline");
+    // Production may host the persistent WS on another origin (Vercel HTTP
+    // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set;
+    // otherwise same-origin /ws/notifications/. The origin is already
+    // normalised (bare host, no scheme, no path — see parseRealtimeOrigin), so
+    // the scheme is applied exactly once: prefixing a value that still carried
+    // "https://" produced "wss://https//host", which cannot resolve.
+    const configuredWs = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
+    const { host: realtimeHost, secure } = resolveOrigin(configuredWs);
+
+    // A serverless host never completes the upgrade, and after a failed WS
+    // transport every retry goes straight to SSE instead of flip-flopping.
+    // useRealtimeSync's API polling backs both.
+    if (this.preferSse || isServerlessHost(realtimeHost)) {
+      this.openSSE();
       return;
     }
 
@@ -325,24 +392,13 @@ class RealtimeClient {
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // Production may host the persistent WS on another origin (Vercel HTTP API
-    // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set; otherwise
-    // same-origin /ws/notifications/.
-    const configured = configuredWs;
-    let base = configured?.replace(/\/+$/, "");
-    if (!base) {
-      base = `${protocol}://${window.location.host}`;
-    } else if (base.startsWith("ws://") || base.startsWith("wss://")) {
-      // keep as-is
-    } else {
-      base = `${protocol}://${base}`;
-    }
-    const url = `${base}/ws/notifications/?token=${encodeURIComponent(token)}`;
+    // Scheme applied once to the already-normalised host (see open() above).
+    const url = `${secure ? "wss" : "ws"}://${realtimeHost}/ws/notifications/?token=${encodeURIComponent(token)}`;
 
     try {
       this.socket = new WebSocket(url);
     } catch {
+      this.preferSse = true;
       this.openSSE();
       return;
     }
@@ -394,13 +450,14 @@ class RealtimeClient {
         });
         return;
       }
-      // Fallback to SSE on unexpected close
+      // Transport failure: fall back to SSE and stay there on later retries.
+      this.preferSse = true;
       this.openSSE();
     };
 
     this.socket.onerror = () => {
       this.socket?.close();
-      // Fallback to SSE on error
+      this.preferSse = true;
       this.openSSE();
     };
   }
@@ -603,4 +660,4 @@ export function useRealtimeSync({
 }
 
 /** Exported for unit tests: entity version key + stale-version rule. */
-export const __test = { entityKey, RealtimeClient };
+export const __test = { entityKey, RealtimeClient, parseRealtimeOrigin, resolveOrigin };

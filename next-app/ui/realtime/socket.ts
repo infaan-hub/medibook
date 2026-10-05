@@ -78,6 +78,45 @@ function entityKey(event: string, entityId: string | number | null | undefined):
   return `${prefix}:${String(entityId)}`;
 }
 
+interface RealtimeOrigin {
+  /** Bare host, lowercased, no scheme and no path. */
+  host: string;
+  /** Whether the origin is TLS-backed (wss:// or https://). */
+  secure: boolean;
+}
+
+/**
+ * Parse `NEXT_PUBLIC_WS_URL` into a bare host + TLS flag.
+ *
+ * Accepts ws://, wss://, http://, https:// or a bare host. Stripping only
+ * `ws://` / `wss://` left an `https://` value intact, and re-prefixing that
+ * produced `wss://https//host` — an unresolvable name that killed the
+ * connection with ERR_NAME_NOT_RESOLVED before the handshake could start.
+ *
+ * Returns null when nothing is configured, so callers fall back to the page's
+ * own origin.
+ */
+function parseRealtimeOrigin(configured: string | undefined): RealtimeOrigin | null {
+  const raw = configured?.trim();
+  if (!raw) return null;
+  const match = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
+  const scheme = match ? match[1].toLowerCase() : null;
+  const rest = (match ? raw.slice(match[0].length) : raw).replace(/^\/+/, "");
+  const host = rest.split("/")[0].toLowerCase();
+  if (!host) return null;
+  return { host, secure: scheme === "wss" || scheme === "https" };
+}
+
+/** Origin to use for realtime: configured host, else the page's own host. */
+function resolveOrigin(configured: string | undefined): { host: string; secure: boolean } {
+  const parsed = parseRealtimeOrigin(configured);
+  if (parsed) return parsed;
+  return {
+    host: window.location.host,
+    secure: window.location.protocol === "https:",
+  };
+}
+
 class RealtimeClient {
   private userId: number | null = null;
   private socket: WebSocket | null = null;
@@ -237,9 +276,7 @@ class RealtimeClient {
     // there, so its WebSocket upgrade cannot answer. Stop retrying and let
     // useRealtimeSync's authenticated API polling work.
     const configuredWs = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
-    const realtimeHost = configuredWs
-      ? configuredWs.replace(/^wss?:\/\//, "").split("/")[0]
-      : window.location.host;
+    const { host: realtimeHost, secure } = resolveOrigin(configuredWs);
     if (realtimeHost.endsWith(".vercel.app")) {
       this.gaveUp = true;
       this.setConnected(false);
@@ -263,20 +300,10 @@ class RealtimeClient {
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // Production may host the persistent WS on another origin (Vercel HTTP API
-    // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set; otherwise
-    // same-origin /ws/notifications/.
-    const configured = configuredWs;
-    let base = configured?.replace(/\/+$/, "");
-    if (!base) {
-      base = `${protocol}://${window.location.host}`;
-    } else if (base.startsWith("ws://") || base.startsWith("wss://")) {
-      // keep as-is
-    } else {
-      base = `${protocol}://${base}`;
-    }
-    const url = `${base}/ws/notifications/?token=${encodeURIComponent(token)}`;
+    // The origin is already normalised (bare host, no scheme, no path), so the
+    // scheme is applied exactly once — prefixing a value that still carried
+    // "https://" produced "wss://https//host", which cannot resolve.
+    const url = `${secure ? "wss" : "ws"}://${realtimeHost}/ws/notifications/?token=${encodeURIComponent(token)}`;
 
     try {
       this.socket = new WebSocket(url);

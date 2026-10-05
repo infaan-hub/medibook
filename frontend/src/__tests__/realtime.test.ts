@@ -100,3 +100,56 @@ describe("fallback polling interval", () => {
     expect(FALLBACK_POLL_INTERVAL_MS).toBeGreaterThanOrEqual(10_000);
   });
 });
+
+describe("realtime origin parsing", () => {
+  const { parseRealtimeOrigin } = __test;
+
+  it("strips every accepted scheme, not just ws(s)", () => {
+    // Regression: the old regex only removed ws:// / wss://, so an https://
+    // value split on "/" into the literal "https:" — which defeated the
+    // .vercel.app check and produced "wss://https//host" (ERR_NAME_NOT_RESOLVED).
+    for (const scheme of ["https", "http", "wss", "ws"]) {
+      expect(parseRealtimeOrigin(`${scheme}://ws.example.com`)).toEqual({
+        host: "ws.example.com",
+        secure: scheme === "https" || scheme === "wss",
+      });
+    }
+  });
+
+  it("accepts a bare host and a trailing path without leaking them into the URL", () => {
+    expect(parseRealtimeOrigin("ws.example.com")).toEqual({
+      host: "ws.example.com",
+      secure: false,
+    });
+    expect(parseRealtimeOrigin("https://ws.example.com/some/path")).toEqual({
+      host: "ws.example.com",
+      secure: true,
+    });
+  });
+
+  it("recognises a Vercel host so realtime can bow out to polling", () => {
+    expect(parseRealtimeOrigin("https://zan-medibook.vercel.app")?.host).toBe(
+      "zan-medibook.vercel.app"
+    );
+    expect(parseRealtimeOrigin("wss://app.vercel.app")?.host).toBe("app.vercel.app");
+  });
+
+  it("returns null when unset so callers fall back to the page origin", () => {
+    expect(parseRealtimeOrigin(undefined)).toBeNull();
+    expect(parseRealtimeOrigin("")).toBeNull();
+    expect(parseRealtimeOrigin("   ")).toBeNull();
+  });
+
+  it("never yields a host containing a scheme, so no URL can be double-prefixed", () => {
+    for (const value of [
+      "https://zan-medibook.vercel.app",
+      "wss://realtime.example.com/",
+      "realtime.example.com",
+      "HTTP://Realtime.Example.COM",
+    ]) {
+      const host = parseRealtimeOrigin(value)?.host ?? "";
+      expect(host, value).not.toContain("://");
+      expect(host, value).not.toContain(":");
+    }
+  });
+});
