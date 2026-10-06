@@ -2,8 +2,13 @@
  * Push Notification Manager — request permission, subscribe/unsubscribe
  * to browser push via the Service Worker Push API.
  *
- * VAPID public key is loaded from the backend (`GET /api/push/vapid-public-key/`)
- * with optional `NEXT_PUBLIC_VAPID_PUBLIC_KEY` override for offline/dev setups.
+ * VAPID public key is ALWAYS loaded from the backend
+ * (`GET /api/push/vapid-public-key/`). There is deliberately no
+ * `NEXT_PUBLIC_VAPID_PUBLIC_KEY` build-time override: a key baked into a
+ * bundle cannot follow a server rotation, and that is exactly how every
+ * subscription once ended up bound to a rotated-out key — each send was
+ * rejected while nothing on screen explained why. The server is the single
+ * source of truth; this fetch is cheap and always current.
  *
  * Rules encoded here:
  *  - `Notification.requestPermission()` is only ever reached from a caller's
@@ -18,13 +23,14 @@ import { ensureServiceWorker, isSecureContextForSw } from "../lib/pwa";
 import { getNotificationCapability } from "../lib/platform";
 import type { PushFailureReason } from "./prompt";
 
-let cachedKey: string | null = null;
+// In-flight request coalescing only — deliberately NO long-lived result cache.
+// A page that lives across a server VAPID rotation must see the NEW key: a
+// value cached at first use would keep every later subscribe/rekey decision
+// on the rotated-out key, and every send would then be rejected (403/VapidPk
+// mismatch) while nothing on screen explains why.
 let keyPromise: Promise<string | null> | null = null;
 
 export async function getVapidPublicKey(): Promise<string | null> {
-  const fromEnv = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY as string | undefined;
-  if (fromEnv) return fromEnv;
-  if (cachedKey) return cachedKey;
   if (keyPromise) return keyPromise;
 
   keyPromise = (async () => {
@@ -39,8 +45,7 @@ export async function getVapidPublicKey(): Promise<string | null> {
       if (!res.ok) return null;
       const body = (await res.json()) as { success?: boolean; data?: { publicKey?: string } };
       if (!body?.success || !body.data?.publicKey) return null;
-      cachedKey = body.data.publicKey;
-      return cachedKey;
+      return body.data.publicKey;
     } catch {
       return null;
     }
@@ -175,19 +180,32 @@ export async function subscribeToPush(): Promise<SubscribeResult> {
   } catch {
     return { ok: false, reason: "subscription-failed" };
   }
+
+  // An existing subscription is only reusable if it is bound to the server's
+  // CURRENT key. One that spans a VAPID rotation can never deliver again, yet
+  // getSubscription() keeps returning it happily — so verify before trusting.
+  // The browser's own options are authoritative; the localStorage binding is
+  // the fallback for engines that do not expose applicationServerKey.
+  const serverKey = await getVapidPublicKey();
+  if (existing && serverKey) {
+    const bound = subscriptionBoundKey(existing) ?? readVapidBinding();
+    if (bound && bound !== serverKey) {
+      await existing.unsubscribe().catch(() => undefined);
+      existing = null;
+    }
+  }
   if (existing) return { ok: true, subscription: existing };
 
-  const key = await getVapidPublicKey();
-  if (!key) return { ok: false, reason: "no-vapid-key" };
+  if (!serverKey) return { ok: false, reason: "no-vapid-key" };
 
   try {
     const subscription = await ready.reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key).buffer as ArrayBuffer,
+      applicationServerKey: urlBase64ToUint8Array(serverKey).buffer as ArrayBuffer,
     });
     // Bind this subscription to the key it was created with, so a later server
     // rotation can be detected and repaired instead of silently 403ing forever.
-    writeVapidBinding(key);
+    writeVapidBinding(serverKey);
     return { ok: true, subscription };
   } catch {
     return { ok: false, reason: "subscription-failed" };
@@ -226,6 +244,21 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+/** base64url of the applicationServerKey the subscription was created with, or null
+ *  when the engine does not expose it (then the localStorage binding is the source). */
+function subscriptionBoundKey(sub: PushSubscription): string | null {
+  try {
+    const raw = sub.options?.applicationServerKey as ArrayBuffer | null | undefined;
+    if (!raw) return null;
+    const bytes = new Uint8Array(raw);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------------- *

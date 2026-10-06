@@ -16,7 +16,7 @@
  * /manifest.json is network-first and never written to a cache: Chrome reads it
  * to decide installability, so it must always reflect the live file.
  */
-const VERSION = "v8";
+const VERSION = "v9";
 const SHELL_CACHE = `medibook-shell-${VERSION}`;
 const RUNTIME_CACHE = `medibook-runtime-${VERSION}`;
 
@@ -212,16 +212,25 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   );
 });
 
-// Reuse the old subscription's options when the browser provides them (they
-// carry the `applicationServerKey` it was created with); otherwise fetch the
-// server's current VAPID public key so a rotation is picked up here too.
+// ALWAYS try the server's current VAPID key first: a subscription is bound to
+// the applicationServerKey it was created with, and reusing the old options
+// here would rebuild the subscription under a rotated-out key — the send would
+// then be rejected forever. The old options are only a fallback for when the
+// key cannot be fetched (offline). Picking up a rotation here is exactly what
+// the endpoint swap in /api/push/update exists for.
 async function subscribeOptions(old) {
+  try {
+    const res = await fetch("/api/push/vapid-public-key/");
+    const body = await res.json();
+    const publicKey = body && body.data ? body.data.publicKey : body && body.publicKey;
+    if (publicKey) {
+      return { userVisibleOnly: true, applicationServerKey: base64UrlToUint8Array(publicKey) };
+    }
+  } catch (err) {
+    // Network/parse failure — fall back to the old subscription's options.
+  }
   if (old && old.options && old.options.applicationServerKey) return old.options;
-  const res = await fetch("/api/push/vapid-public-key/");
-  const body = await res.json();
-  const publicKey = body && body.data ? body.data.publicKey : body && body.publicKey;
-  if (!publicKey) throw new Error("VAPID public key unavailable");
-  return { userVisibleOnly: true, applicationServerKey: base64UrlToUint8Array(publicKey) };
+  throw new Error("VAPID public key unavailable");
 }
 
 function base64UrlToUint8Array(b64) {

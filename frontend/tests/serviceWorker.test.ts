@@ -8,9 +8,10 @@
  *    when the payload is not JSON or `showNotification` rejects;
  *  - a `notificationclick` opens the URL the notification carries, whether or
  *    not a window is already running (WebKit's `matchAll` can return empty);
- *  - a `pushsubscriptionchange` re-subscribes with the old options (or the
- *    server's current VAPID key) and posts old → new to /api/push/update, so a
- *    rotated endpoint is swapped server-side while the page is closed.
+ *  - a `pushsubscriptionchange` re-subscribes with the SERVER's current VAPID
+ *    key (old options only as an offline fallback) and posts old → new to
+ *    /api/push/update, so a rotated endpoint or key is swapped server-side
+ *    while the page is closed.
  *
  * The worker is executed from source in a `node:vm` sandbox, so the test runs
  * the exact file that gets deployed.
@@ -261,19 +262,30 @@ describe("service worker — pushsubscriptionchange", () => {
     };
   }
 
-  it("re-subscribes with the OLD options and posts old → new to /api/push/update", async () => {
+  it("re-subscribes with the SERVER's current VAPID key and posts old → new to /api/push/update", async () => {
     const sw = loadServiceWorker();
-    const options = { userVisibleOnly: true, applicationServerKey: new Uint8Array([1, 2, 3]) };
+    const publicKey = Buffer.from("server-vapid-public-key-bytes").toString("base64url");
+    sw.fetchMock.mockResolvedValueOnce({ json: async () => ({ data: { publicKey } }) });
     sw.subscribe.mockResolvedValueOnce(freshSubscription());
 
+    const options = { userVisibleOnly: true, applicationServerKey: new Uint8Array([1, 2, 3]) };
     const waited = dispatch(sw.listeners, "pushsubscriptionchange", {
       oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD", options },
     });
     await expect(waited).resolves.toBeUndefined();
 
-    // The old options already carry the applicationServerKey — no VAPID re-fetch.
-    expect(sw.subscribe).toHaveBeenCalledWith(options);
-    expect(sw.fetchMock).not.toHaveBeenCalledWith("/api/push/vapid-public-key/");
+    // The server's key WINS over the old options: reusing them after a VAPID
+    // rotation would rebuild the subscription under a dead key and every
+    // later send would be rejected (VapidPkHashMismatch).
+    expect(sw.fetchMock.mock.calls[0][0]).toBe("/api/push/vapid-public-key/");
+    const subOptions = sw.subscribe.mock.calls[0][0] as {
+      userVisibleOnly: boolean;
+      applicationServerKey: Uint8Array;
+    };
+    expect(subOptions.userVisibleOnly).toBe(true);
+    expect(Array.from(subOptions.applicationServerKey)).toEqual(
+      Array.from(Buffer.from(publicKey, "base64url"))
+    );
 
     const updateCall = sw.fetchMock.mock.calls.find((call) => call[0] === "/api/push/update");
     expect(updateCall).toBeDefined();
@@ -290,27 +302,30 @@ describe("service worker — pushsubscriptionchange", () => {
     expect(payload.newSubscription.device_info.source).toBe("pushsubscriptionchange");
   });
 
-  it("fetches the server's VAPID key when the old subscription carries no options", async () => {
+  it("falls back to the OLD options when the server key cannot be fetched", async () => {
     const sw = loadServiceWorker();
-    const publicKey = Buffer.from("server-vapid-public-key-bytes").toString("base64url");
-    sw.fetchMock.mockResolvedValueOnce({ json: async () => ({ data: { publicKey } }) });
+    sw.fetchMock.mockRejectedValueOnce(new Error("offline"));
     sw.subscribe.mockResolvedValueOnce(freshSubscription());
+    const options = { userVisibleOnly: true, applicationServerKey: new Uint8Array([7, 7, 7]) };
 
     await dispatch(sw.listeners, "pushsubscriptionchange", {
-      oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD" },
+      oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD", options },
     });
 
-    expect(sw.fetchMock.mock.calls[0][0]).toBe("/api/push/vapid-public-key/");
-    expect(sw.subscribe).toHaveBeenCalledTimes(1);
-    const subOptions = sw.subscribe.mock.calls[0][0] as {
-      userVisibleOnly: boolean;
-      applicationServerKey: Uint8Array;
-    };
-    expect(subOptions.userVisibleOnly).toBe(true);
-    // Byte-for-byte: a wrong base64url decode produces a key nothing accepts.
-    expect(Array.from(subOptions.applicationServerKey)).toEqual(
-      Array.from(Buffer.from(publicKey, "base64url"))
-    );
+    expect(sw.subscribe).toHaveBeenCalledWith(options);
+  });
+
+  it("falls back to the OLD options when the key response carries no publicKey", async () => {
+    const sw = loadServiceWorker();
+    sw.fetchMock.mockResolvedValueOnce({ json: async () => ({ data: {} }) });
+    sw.subscribe.mockResolvedValueOnce(freshSubscription());
+    const options = { userVisibleOnly: true, applicationServerKey: new Uint8Array([8]) };
+
+    await dispatch(sw.listeners, "pushsubscriptionchange", {
+      oldSubscription: { endpoint: "https://fcm.googleapis.com/fcm/send/OLD", options },
+    });
+
+    expect(sw.subscribe).toHaveBeenCalledWith(options);
   });
 
   it("still resolves waitUntil when the browser refuses to re-subscribe", async () => {
