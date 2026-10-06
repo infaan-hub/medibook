@@ -10,6 +10,7 @@
  */
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { appointmentDto, queueSlotDto } from "@/lib/serializers";
+import { broadcastAppointmentEvent, notify } from "@/lib/notify";
 import { queueCheckInSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
@@ -229,5 +230,16 @@ export async function startConsultation(user: AuthUser, id: number) {
   const updated = await appointments.updateAppointment(id, {
     consultation_started_at: new Date(),
   });
+  await notify(
+    updated.patient_id,
+    "system",
+    `Your consultation has started: ${updated.appointment_date.toISOString().slice(0, 10)} ${updated.start_time}.`,
+    updated.id,
+    "Consultation started"
+  );
+  broadcastAppointmentEvent(updated, "appointment.updated", [
+    updated.patient_id,
+    doctor.user_id,
+  ]);
   return { data: appointmentDto(updated), message: "Consultation started." };
 }

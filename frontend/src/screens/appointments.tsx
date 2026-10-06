@@ -723,6 +723,7 @@ export function RescheduleScreen() {
         start_time: booked.start_time,
         end_time: booked.end_time,
         reason: appointment.reason,
+        rescheduled_from: Number(id),
       });
       notify("success", "Appointment rescheduled. The new request is pending doctor confirmation.");
       navigate("/appointments");

@@ -16,6 +16,10 @@ export const appointmentCreateSchema = z
     end_time: drfTime(),
     reason: z.string().optional(),
     notes: z.string().optional(),
+    /** Set by the patient's reschedule flow (cancel + rebook): the appointment
+     *  being replaced, so the doctor's notification can say "rescheduled"
+     *  instead of looking like a brand-new request. */
+    rescheduled_from: drfInteger().optional(),
   })
   .passthrough()
   .superRefine((data, ctx) => {

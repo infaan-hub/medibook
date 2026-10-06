@@ -43,6 +43,8 @@ export function createAppointment(
     end_time: string;
     reason?: string;
     hospital?: number;
+    /** Patient reschedule flow (cancel + rebook): the appointment being replaced. */
+    rescheduled_from?: number;
   }
 ): Promise<Envelope<Appointment>> {
   return apiPost<Appointment>("/appointments/", payload);

@@ -141,10 +141,26 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     })
   );
 
+  // A patient "reschedule" is cancel + rebook on the client. When the client
+  // tells us which appointment it replaced, the doctor is notified that this
+  // is a reschedule needing confirmation — not a brand-new request. Anything
+  // else (missing row, another patient's row, not actually cancelled) falls
+  // back to the generic wording, so a stale id can never break a booking.
+  const rescheduledFrom =
+    input.rescheduled_from !== undefined
+      ? await appointments.findAppointmentById(input.rescheduled_from)
+      : null;
+  const isReschedule =
+    rescheduledFrom !== null &&
+    rescheduledFrom.patient_id === user.id &&
+    rescheduledFrom.status === "cancelled";
+
   await notify(
     doctor.user_id,
     "appointment_request",
-    `New appointment request from ${user.email}.`,
+    isReschedule
+      ? `Appointment rescheduled by ${user.email} to ${date} at ${start.slice(0, 5)}–${end.slice(0, 5)}. Confirm the new time.`
+      : `New appointment request from ${user.email}.`,
     appointment.id
   );
   broadcastAppointmentEvent(appointment, "appointment.created", [
@@ -465,12 +481,14 @@ export async function runAction(
   const doctor = await doctors.findDoctorById(updated.doctor_id);
   const other =
     isOwnerDoctor || (isAdmin && !isOwnerPatient) ? updated.patient_id : doctor?.user_id;
-  await notify(
-    other as number,
-    NOTIFY_TYPE[config.status],
-    `${NOTIFY_MESSAGE[config.status]}: ${updated.appointment_date.toISOString().slice(0, 10)} ${updated.start_time}.`,
-    updated.id
-  );
+  const stamp = `${NOTIFY_MESSAGE[config.status]}: ${updated.appointment_date.toISOString().slice(0, 10)} ${updated.start_time}.`;
+  await notify(other as number, NOTIFY_TYPE[config.status], stamp, updated.id);
+  // Closing a visit must reach BOTH sides: the doctor who completes it already
+  // knows, but when an admin closes it the owning doctor did nothing and would
+  // otherwise hear nothing.
+  if (config.status === "done" && !isOwnerDoctor && doctor && doctor.user_id !== other) {
+    await notify(doctor.user_id, NOTIFY_TYPE.done, stamp, updated.id);
+  }
   broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, doctor?.user_id]);
   return { appointment: updated, message: `Appointment ${config.status}.` };
 }
