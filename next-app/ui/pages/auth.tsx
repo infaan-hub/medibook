@@ -22,14 +22,24 @@ import { InstallAppButton } from "../components/InstallAppButton";
 
 /* ---------------- shared helpers ---------------- */
 
-/** Flatten DRF field errors ({email: ["…"]}) to per-field first messages. */
+/**
+ * Flatten DRF field errors ({email: ["…"]}) to per-field first messages.
+ *
+ * `non_field_errors` is deliberately excluded: it has no input to render
+ * under (wrong credentials, deactivated account, …). Keeping it in this map
+ * used to suppress the top-level banner (the caller only shows it when the
+ * map is empty) while nothing rendered the key — the message was silently
+ * dropped. Callers therefore see it via `errorMessage(error)` in the banner.
+ */
 function fieldErrors(error: unknown): Record<string, string> {
   if (error instanceof ApiError) {
     return Object.fromEntries(
-      Object.entries(error.errors).map(([field, messages]) => [
-        field,
-        messages[0] ?? "Invalid value.",
-      ])
+      Object.entries(error.errors)
+        .filter(([field]) => field !== "non_field_errors")
+        .map(([field, messages]) => [
+          field,
+          messages[0] ?? "Invalid value.",
+        ])
     );
   }
   return {};
