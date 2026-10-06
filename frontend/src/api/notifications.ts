@@ -55,9 +55,7 @@ export function deletePushSubscription(id: number): Promise<void> {
   return apiDelete(`/notifications/push-subscriptions/${id}/`).then(() => undefined);
 }
 
-/** POST /api/notifications/test/ — send a test notification to the caller. */
-export function sendTestNotification(): Promise<
-  Envelope<{ notification: Notification; push_subscriptions: number }>
-> {
+/** POST /api/notifications/test/ — ADMIN ONLY: fan out to every registered device. */
+export function sendTestNotification(): Promise<Envelope<{ users: number; push_subscriptions: number }>> {
   return apiPost("/notifications/test/", {});
 }

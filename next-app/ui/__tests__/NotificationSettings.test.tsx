@@ -9,8 +9,9 @@
  *     the OS would ignore is exactly what made "tap Allow, nothing happens"
  *     unfixable;
  *  2. the enable action runs the same subscribe() flow as the first-load gate;
- *  3. "Send test notification" drives the real delivery path and its toast
- *     adapts to whether THIS device is registered for push.
+ *  3. role split: "Send test notification" is ADMIN-ONLY (platform-wide
+ *     fan-out) — doctors and patients never see it, while their own-device
+ *     turn-on/turn-off controls stay available to every role.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,7 +32,8 @@ const mocks = vi.hoisted(() => {
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
   };
-  return { push, notify: vi.fn(), sendTestNotification: vi.fn() };
+  const user = { id: 7, role: "patient", is_superuser: false };
+  return { push, user, notify: vi.fn(), sendTestNotification: vi.fn() };
 });
 
 vi.mock("../push/usePushNotifications", () => ({
@@ -45,6 +47,7 @@ vi.mock("../api/notifications", async (importOriginal) => ({
 
 vi.mock("../state/app-context", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/app-context")>()),
+  useSession: () => ({ status: "authed", user: mocks.user }),
   useToast: () => ({ notify: mocks.notify, toasts: [], dismiss: vi.fn() }),
 }));
 
@@ -67,12 +70,19 @@ function setPush(overrides: PushState = {}) {
   });
 }
 
+function setUser(role: "patient" | "doctor" | "admin", is_superuser = false) {
+  mocks.user.id = 7;
+  mocks.user.role = role;
+  mocks.user.is_superuser = is_superuser;
+}
+
 beforeEach(() => {
   mocks.notify.mockReset();
   mocks.sendTestNotification.mockReset();
   mocks.push.subscribe.mockReset();
   mocks.push.unsubscribe.mockReset();
   setPush();
+  setUser("patient");
 });
 
 function renderSection() {
@@ -98,13 +108,22 @@ describe("NotificationSettings — Safari / install contexts", () => {
   });
 });
 
-describe("NotificationSettings — enable flow", () => {
+describe("NotificationSettings — own-device controls (all roles)", () => {
   it("runs the permission + subscribe flow from the Allow tap", () => {
     renderSection();
 
     fireEvent.click(screen.getByRole("button", { name: /allow/i }));
 
     expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a Turn off action once the device is registered", () => {
+    setPush({ state: "SUBSCRIBED", subscribed: true, permission: "granted", actionLabel: null });
+
+    renderSection();
+
+    fireEvent.click(screen.getByRole("button", { name: /turn off/i }));
+    expect(mocks.push.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it("offers no request loop once the permission is blocked", () => {
@@ -123,16 +142,21 @@ describe("NotificationSettings — enable flow", () => {
   });
 });
 
-describe("NotificationSettings — test notification", () => {
-  it("sends the real delivery test and confirms it on a registered device", async () => {
-    setPush({
-      state: "SUBSCRIBED",
-      subscribed: true,
-      permission: "granted",
-      actionLabel: null,
-    });
+describe("NotificationSettings — platform test (admin only)", () => {
+  it("hides the test button for patients and doctors (turn on/off stays)", () => {
+    for (const role of ["patient", "doctor"] as const) {
+      setUser(role);
+      const { unmount } = renderSection();
+      expect(screen.queryByRole("button", { name: /send test notification/i })).toBeNull();
+      expect(screen.getByRole("button", { name: /allow/i })).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("lets an admin fan out and reports the reach", async () => {
+    setUser("admin");
     mocks.sendTestNotification.mockResolvedValue({
-      data: { notification: { id: 1 }, push_subscriptions: 1 },
+      data: { users: 3, push_subscriptions: 5 },
     });
 
     renderSection();
@@ -142,15 +166,15 @@ describe("NotificationSettings — test notification", () => {
     await waitFor(() =>
       expect(mocks.notify).toHaveBeenCalledWith(
         "success",
-        expect.stringContaining("Test notification sent")
+        expect.stringContaining("5 devices across 3 accounts")
       )
     );
   });
 
-  it("warns when no device is registered for push instead of claiming success", async () => {
-    setPush({ actionLabel: "Allow" });
+  it("reports when nothing is registered anywhere instead of claiming success", async () => {
+    setUser("admin", true); // superuser counts as admin too
     mocks.sendTestNotification.mockResolvedValue({
-      data: { notification: { id: 1 }, push_subscriptions: 0 },
+      data: { users: 0, push_subscriptions: 0 },
     });
 
     renderSection();
@@ -159,7 +183,7 @@ describe("NotificationSettings — test notification", () => {
     await waitFor(() =>
       expect(mocks.notify).toHaveBeenCalledWith(
         "info",
-        expect.stringContaining("no device is registered")
+        expect.stringContaining("no devices are registered")
       )
     );
   });

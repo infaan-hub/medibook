@@ -16,16 +16,17 @@
  *  3. Blocked permission — guidance only; JavaScript cannot override a
  *     system-level denial, so there is deliberately no request loop.
  *
- * "Send test notification" then proves the pipeline end to end: the server
- * runs the real path (inbox → realtime → web push) and reports how many
- * ACTIVE device registrations the push half could target, so the user learns
- * whether the browser is the problem or the registration is.
+ * "Send test notification" is ADMIN-ONLY and platform-wide: it fans the real
+ * delivery path (inbox → realtime → web push) out to every ACTIVE device
+ * registration on the platform and reports the reach. Doctors and patients
+ * never see it — their section only offers turn-on/turn-off for their own
+ * device (the server enforces the same rule with a 403).
  */
 import { useState } from "react";
 import { BellRing, Check, TriangleAlert } from "lucide-react";
 import { sendTestNotification } from "../api/notifications";
 import { usePushNotifications } from "../push/usePushNotifications";
-import { useToast } from "../state/app-context";
+import { useSession, useToast } from "../state/app-context";
 import { Button, Card } from "./ui";
 
 /** Human wording for the OS permission — the raw enum means nothing to users. */
@@ -43,6 +44,9 @@ function isInstallState(state: string): boolean {
 
 export function NotificationSettings({ userId }: { userId: number | null }) {
   const { notify } = useToast();
+  // The platform test is admin-only; everyone else gets turn-on/turn-off only.
+  const { user } = useSession();
+  const isAdmin = user?.role === "admin" || user?.is_superuser === true;
   const {
     probed,
     state,
@@ -73,26 +77,21 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
           ? "Notifications are delivered by the installed MediBook app — a plain browser tab cannot receive them."
           : message || "Notifications are not enabled on this device yet.";
 
-  /** End-to-end check; the toast adapts to whether THIS device is registered. */
+  /** ADMIN-ONLY platform fan-out; the toast reports the reach. */
   async function onTest() {
     setTesting(true);
     try {
       const envelope = await sendTestNotification();
-      const others = envelope.data.push_subscriptions;
-      if (others > 0 && subscribed && permission === "granted") {
+      const { users, push_subscriptions } = envelope.data;
+      if (push_subscriptions > 0) {
         notify(
           "success",
-          "Test notification sent — it should appear on this device in a moment. It is also in your inbox."
-        );
-      } else if (others > 0) {
-        notify(
-          "info",
-          "Test notification sent to your inbox and other registered devices. This device is not registered — tap Allow/Enable above to fix it."
+          `Test notification sent to ${push_subscriptions} device${push_subscriptions === 1 ? "" : "s"} across ${users} account${users === 1 ? "" : "s"}.`
         );
       } else {
         notify(
           "info",
-          "Test notification saved to your inbox, but no device is registered for push. Tap Allow/Enable above to register this one."
+          "Test notification ran, but no devices are registered for push anywhere — nothing arrived. Ask users to enable notifications from their Profile."
         );
       }
     } catch (e) {
@@ -150,15 +149,17 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
             Turn off
           </Button>
         )}
-        <Button
-          type="button"
-          variant="secondary"
-          loading={testing}
-          disabled={!probed}
-          onClick={() => void onTest()}
-        >
-          Send test notification
-        </Button>
+        {isAdmin && (
+          <Button
+            type="button"
+            variant="secondary"
+            loading={testing}
+            disabled={!probed}
+            onClick={() => void onTest()}
+          >
+            Send test notification
+          </Button>
+        )}
       </div>
     </Card>
   );

@@ -2,7 +2,7 @@
  * Notification service — inbox CRUD + push subscriptions
  * (port of notifications/views.py).
  */
-import { notFound } from "@/lib/errors";
+import { forbidden, notFound } from "@/lib/errors";
 import { notificationDto, pushSubscriptionDto } from "@/lib/serializers";
 import { notificationPatchSchema, pushSubscriptionSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
@@ -99,29 +99,38 @@ export async function destroyPush(user: AuthUser, id: number): Promise<void> {
   console.log(`[push] subscription removed user=${user.id} id=${id}`);
 }
 
-/* ------------------------------ Delivery test ------------------------------ */
+/* --------------------------- Platform test fan-out -------------------------- */
+
+const TEST_NOTIFICATION_MESSAGE =
+  "This is a test notification from MediBook. If you can see it, delivery to this account works.";
 
 /**
- * POST /api/notifications/test/ — send a test notification to the CALLER.
+ * POST /api/notifications/test/ — ADMIN ONLY: fan a test notification out to
+ * EVERY device registered for push on the platform.
  *
- * The diagnostic behind "my browser stopped receiving notifications": it runs
- * the exact path a real system notification takes (inbox row → realtime frame
- * → web push), so the answer is end-to-end rather than a guess.
+ * The diagnostic behind "are our notifications broken?": each recipient goes
+ * through the exact path a real system notification takes (inbox row →
+ * realtime frame → web push), so the admin verifies the pipeline end to end
+ * instead of guessing. Doctors and patients never reach this — their /profile
+ * section only offers turn-on/turn-off for their own device — and the role
+ * gate lives HERE, not in the UI, so a hand-crafted request cannot fan out.
  *
- * `push_subscriptions` is the number of ACTIVE device registrations the push
- * half could target. Zero (or a browser with no local subscription) is the
- * usual reason nothing arrives — the repair lives on /profile: re-run the
- * permission + subscribe flow from the "Allow"/"Enable" action there.
+ * `users` / `push_subscriptions` report the reach: how many accounts were
+ * notified and how many ACTIVE device registrations the push half targeted.
+ * Zero devices means nobody can receive push anywhere — the fix is asking
+ * users to re-enable notifications from their own Profile.
  */
-export async function sendTestNotification(user: AuthUser) {
-  const push_subscriptions = await notifications.countActivePushSubscriptions(user.id);
-  const row = await notify(
-    user.id,
-    "system",
-    "This is a test notification from MediBook. If you can see it, delivery to this account works.",
-    null,
-    "MediBook test notification"
+export async function sendTestNotificationToAllDevices(actor: AuthUser) {
+  if (actor.role !== "admin" && !actor.is_superuser) {
+    throw forbidden("Only administrators can send platform-wide test notifications.");
+  }
+  const userIds = await notifications.listUserIdsWithActivePush();
+  const push_subscriptions = await notifications.countAllActivePushSubscriptions();
+  for (const userId of userIds) {
+    await notify(userId, "system", TEST_NOTIFICATION_MESSAGE, null, "MediBook test notification");
+  }
+  console.log(
+    `[notifications] platform test sent by=${actor.id} users=${userIds.length} active_push_subs=${push_subscriptions}`
   );
-  console.log(`[notifications] test sent user=${user.id} active_push_subs=${push_subscriptions}`);
-  return { notification: notificationDto(row), push_subscriptions };
+  return { users: userIds.length, push_subscriptions };
 }

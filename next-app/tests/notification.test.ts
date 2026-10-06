@@ -1,22 +1,24 @@
 /**
- * sendTestNotification — the delivery diagnostic behind /profile's
- * "Send test notification" (POST /api/notifications/test/).
+ * sendTestNotificationToAllDevices — the ADMIN-ONLY platform fan-out behind
+ * /profile's "Send test notification" (POST /api/notifications/test/).
  *
  * Pins the contract the UI depends on:
- *  1. the test goes to the CALLER through the same notify() path real system
- *     notifications take (inbox row → realtime frame → web push);
- *  2. `push_subscriptions` counts ACTIVE device registrations — a deactivated
- *     row can never deliver, and reporting it would tell the user "you're
- *     fine" while push is actually dead;
- *  3. zero registered devices is still a successful send (the inbox row is
- *     real) so the UI can advise re-enabling instead of showing an error.
+ *  1. non-admins (doctors, patients) are refused with a 403 — the gate lives
+ *     in the service, not just in the UI, so a hand-crafted request cannot
+ *     fan out to every device;
+ *  2. each user with an ACTIVE registration is notified through the same
+ *     notify() path real system notifications take (inbox → realtime → web
+ *     push);
+ *  3. the reach (users + ACTIVE devices) is reported so the admin toast can
+ *     say exactly what happened; zero devices is still a successful run.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendTestNotification } from "@/services/notification.service";
+import { sendTestNotificationToAllDevices } from "@/services/notification.service";
 import type { AuthUser } from "@/lib/auth";
 
 const repo = vi.hoisted(() => ({
-  countActivePushSubscriptions: vi.fn(),
+  listUserIdsWithActivePush: vi.fn(),
+  countAllActivePushSubscriptions: vi.fn(),
 }));
 
 const notify = vi.hoisted(() => vi.fn());
@@ -36,57 +38,51 @@ vi.mock("@/lib/notify", () => ({
 // Never touched — stubbed so no Prisma client is constructed in a unit test.
 vi.mock("@/lib/db", () => ({ prisma: {} }));
 
-const USER = { id: 7, role: "patient" } as AuthUser;
-
-function row() {
-  return {
-    id: 42,
-    recipient_id: 7,
-    notification_type: "system",
-    title: "MediBook test notification",
-    message: "This is a test notification from MediBook. If you can see it, delivery to this account works.",
-    related_appointment_id: null,
-    is_read: false,
-    created_at: new Date("2026-10-06T10:00:00Z"),
-  };
-}
+const ADMIN = { id: 1, role: "admin", is_superuser: false } as AuthUser;
+const PATIENT = { id: 7, role: "patient", is_superuser: false } as AuthUser;
+const DOCTOR = { id: 8, role: "doctor", is_superuser: false } as AuthUser;
 
 beforeEach(() => {
-  repo.countActivePushSubscriptions.mockReset();
+  repo.listUserIdsWithActivePush.mockReset();
+  repo.countAllActivePushSubscriptions.mockReset();
   notify.mockReset();
-  notify.mockResolvedValue(row());
 });
 
-describe("sendTestNotification", () => {
-  it("sends through notify() to the caller and reports the ACTIVE push registrations", async () => {
-    repo.countActivePushSubscriptions.mockResolvedValue(2);
+describe("sendTestNotificationToAllDevices", () => {
+  it("refuses doctors and patients with a 403 and notifies nobody", async () => {
+    for (const actor of [PATIENT, DOCTOR]) {
+      await expect(sendTestNotificationToAllDevices(actor)).rejects.toMatchObject({
+        status: 403,
+      });
+    }
+    expect(notify).not.toHaveBeenCalled();
+    expect(repo.listUserIdsWithActivePush).not.toHaveBeenCalled();
+  });
 
-    const result = await sendTestNotification(USER);
+  it("fans out to every user with an active device and reports the reach", async () => {
+    repo.listUserIdsWithActivePush.mockResolvedValue([3, 4, 9]);
+    repo.countAllActivePushSubscriptions.mockResolvedValue(5);
 
-    expect(notify).toHaveBeenCalledTimes(1);
+    const result = await sendTestNotificationToAllDevices(ADMIN);
+
+    expect(notify).toHaveBeenCalledTimes(3);
     expect(notify).toHaveBeenCalledWith(
-      7,
+      3,
       "system",
       expect.stringContaining("test notification"),
       null,
       "MediBook test notification"
     );
-    expect(result.push_subscriptions).toBe(2);
-    expect(result.notification).toMatchObject({
-      id: 42,
-      notification_type: "system",
-      title: "MediBook test notification",
-      is_read: false,
-    });
+    expect(result).toEqual({ users: 3, push_subscriptions: 5 });
   });
 
-  it("still succeeds with zero devices so the UI can advise re-enabling", async () => {
-    repo.countActivePushSubscriptions.mockResolvedValue(0);
+  it("succeeds with an empty platform so the admin sees a truthful zero", async () => {
+    repo.listUserIdsWithActivePush.mockResolvedValue([]);
+    repo.countAllActivePushSubscriptions.mockResolvedValue(0);
 
-    const result = await sendTestNotification(USER);
+    const result = await sendTestNotificationToAllDevices(ADMIN);
 
-    expect(repo.countActivePushSubscriptions).toHaveBeenCalledWith(7);
-    expect(result.push_subscriptions).toBe(0);
-    expect(notify).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ users: 0, push_subscriptions: 0 });
+    expect(notify).not.toHaveBeenCalled();
   });
 });

@@ -57,13 +57,21 @@ export const listPushSubscriptions = (userId: number, skip: number, take: number
 export const countPushSubscriptions = (userId: number) =>
   prisma.pushSubscription.count({ where: { user_id: userId } });
 
+/* --------------------------- Platform test fan-out -------------------------- */
+
 /**
- * ACTIVE registrations only — a deactivated row (VAPID rotation, purged
- * endpoint) can never deliver a push, so diagnostics based on this count must
- * not treat it as a reachable device.
+ * Every user with at least one ACTIVE push registration. ACTIVE only — a
+ * deactivated row (VAPID rotation, purged endpoint) can never deliver, so it
+ * must not count as a reachable device in the platform-wide test.
  */
-export const countActivePushSubscriptions = (userId: number) =>
-  prisma.pushSubscription.count({ where: { user_id: userId, is_active: true } });
+export const listUserIdsWithActivePush = () =>
+  prisma.pushSubscription
+    .findMany({ where: { is_active: true }, distinct: ["user_id"], select: { user_id: true } })
+    .then((rows) => rows.map((row) => row.user_id));
+
+/** Platform-wide ACTIVE registrations — how many devices a fan-out can reach. */
+export const countAllActivePushSubscriptions = () =>
+  prisma.pushSubscription.count({ where: { is_active: true } });
 
 export const findPushSubscriptionOwned = (id: number, userId: number) =>
   prisma.pushSubscription.findFirst({ where: { id, user_id: userId } });
