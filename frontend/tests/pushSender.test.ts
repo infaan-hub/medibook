@@ -62,8 +62,8 @@ beforeEach(() => {
   // transport below, so these only need to be non-empty for vapidConfigured().
 // A real VAPID_PRIVATE_KEY must never live in the repo — it is the secret that
   // authorises this server to send pushes to every subscriber.
-  process.env.VAPID_PUBLIC_KEY = "TESTONLYpublickey0000000000000000000000000000000000000000000000";
-  process.env.VAPID_PRIVATE_KEY = "TESTONLYprivatekey00000000000000000000000000000000";
+  process.env.VAPID_PUBLIC_KEY = "TESTONLY-pub";
+  process.env.VAPID_PRIVATE_KEY = "TESTONLY-priv";
   process.env.VAPID_SUBJECT = "mailto:ops@example.com";
   __setPushTransport({
     setVapidDetails: state.setVapidDetails,
