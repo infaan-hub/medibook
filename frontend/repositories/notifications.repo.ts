@@ -57,6 +57,14 @@ export const listPushSubscriptions = (userId: number, skip: number, take: number
 export const countPushSubscriptions = (userId: number) =>
   prisma.pushSubscription.count({ where: { user_id: userId } });
 
+/**
+ * ACTIVE registrations only — a deactivated row (VAPID rotation, purged
+ * endpoint) can never deliver a push, so diagnostics based on this count must
+ * not treat it as a reachable device.
+ */
+export const countActivePushSubscriptions = (userId: number) =>
+  prisma.pushSubscription.count({ where: { user_id: userId, is_active: true } });
+
 export const findPushSubscriptionOwned = (id: number, userId: number) =>
   prisma.pushSubscription.findFirst({ where: { id, user_id: userId } });
 

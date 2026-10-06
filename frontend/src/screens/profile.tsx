@@ -14,6 +14,7 @@ import { captureFix, LocationError, type CapturedFix } from "../lib/location";
 import { useSession, useToast } from "../state/app-context";
 import { Button, Card, TextField } from "../components/ui";
 import { LocationLine } from "../components/Location";
+import { NotificationSettings } from "../components/NotificationSettings";
 import { Crosshair } from "lucide-react";
 
 function fieldErrors(error: unknown): Record<string, string> {
@@ -365,6 +366,8 @@ export function ProfileScreen() {
           </form>
         </Card>
       )}
+
+      <NotificationSettings userId={user.id} />
 
       <Card>
         <h2 className="card__title">Change password</h2>

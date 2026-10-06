@@ -7,7 +7,7 @@ import { notificationDto, pushSubscriptionDto } from "@/lib/serializers";
 import { notificationPatchSchema, pushSubscriptionSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as notifications from "@/repositories/notifications.repo";
-import { broadcastNotificationUpdated } from "@/lib/notify";
+import { broadcastNotificationUpdated, notify } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
 
 const isUnreadOnly = (req: Request): boolean => {
@@ -176,4 +176,31 @@ export async function rotatePushSubscription(
     `[push] subscription rotated id=${updated.id} user=${updated.user_id}${user ? "" : " (endpoint possession)"}`
   );
   return pushSubscriptionDto(updated);
+}
+
+/* ------------------------------ Delivery test ------------------------------ */
+
+/**
+ * POST /api/notifications/test/ — send a test notification to the CALLER.
+ *
+ * The diagnostic behind "my browser stopped receiving notifications": it runs
+ * the exact path a real system notification takes (inbox row → realtime frame
+ * → web push), so the answer is end-to-end rather than a guess.
+ *
+ * `push_subscriptions` is the number of ACTIVE device registrations the push
+ * half could target. Zero (or a browser with no local subscription) is the
+ * usual reason nothing arrives — the repair lives on /profile: re-run the
+ * permission + subscribe flow from the "Allow"/"Enable" action there.
+ */
+export async function sendTestNotification(user: AuthUser) {
+  const push_subscriptions = await notifications.countActivePushSubscriptions(user.id);
+  const row = await notify(
+    user.id,
+    "system",
+    "This is a test notification from MediBook. If you can see it, delivery to this account works.",
+    null,
+    "MediBook test notification"
+  );
+  console.log(`[notifications] test sent user=${user.id} active_push_subs=${push_subscriptions}`);
+  return { notification: notificationDto(row), push_subscriptions };
 }

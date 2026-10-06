@@ -59,3 +59,10 @@ export function registerPushSubscription(payload: {
 export function deletePushSubscription(id: number): Promise<void> {
   return apiDelete(`/notifications/push-subscriptions/${id}/`).then(() => undefined);
 }
+
+/** POST /api/notifications/test/ — send a test notification to the caller. */
+export function sendTestNotification(): Promise<
+  Envelope<{ notification: Notification; push_subscriptions: number }>
+> {
+  return apiPost("/notifications/test/", {});
+}
