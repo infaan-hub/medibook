@@ -133,16 +133,27 @@ export async function passwordChange(user: AuthUser, body: unknown): Promise<voi
   await users.updateUser(user.id, { password: hashPassword(input.new_password) });
 }
 
-/** POST /api/auth/password-reset/ — always the neutral §36 message. */
+/** POST /api/auth/password-reset/ — issues a code for a known active account. */
 export async function passwordResetRequest(body: unknown): Promise<void> {
   const input = parse(passwordResetRequestSchema, body);
   const email = input.email.trim().toLowerCase(); // normalize_email(strip().lower())
-  const user = await users.findUserByEmailExact(email).catch(() => null);
-  if (!user) return; // never reveal whether the email exists (§36)
+  const user = await users.findUserByEmailIexact(email); // Django's email__iexact
+  if (!user || !user.is_active) {
+    // Explicit account-state error (replaces the old §36 neutral answer; the
+    // request endpoint stays behind the 5/min password_reset throttle).
+    throw new ValidationError({ email: ["No account with this email address."] });
+  }
   const token = randomBytes(48).toString("base64url"); // secrets.token_urlsafe(48)
   await users.createPasswordResetToken(user.id, token);
   await users.expireLiveResetTokens(user.id, token); // older live tokens → used
   await sendMail(passwordResetMail(user, token));
+}
+
+/** PASSWORD_RESET_TOKEN_HOURS — hours; invalid/≤0 config falls back to 2 so a
+ *  bad env value can never make reset tokens live forever. */
+function resetTokenLifetimeHours(): number {
+  const parsed = Number.parseFloat(process.env.PASSWORD_RESET_TOKEN_HOURS ?? "");
+  return Number.isNaN(parsed) || parsed <= 0 ? 2 : parsed;
 }
 
 /** POST /api/auth/password-reset-confirm/ — consume the single-use token. */
@@ -155,18 +166,29 @@ export async function passwordResetConfirm(body: unknown): Promise<void> {
       "The reset token is invalid or has expired."
     );
   if (!row) throw invalid();
-  const hours = Number(process.env.PASSWORD_RESET_TOKEN_HOURS ?? 2);
-  if (row.created_at.getTime() + hours * 3_600_000 < Date.now()) {
+  if (!row.user.is_active) throw nonFieldError("This account has been deactivated.");
+  if (row.created_at.getTime() + resetTokenLifetimeHours() * 3_600_000 < Date.now()) {
     await users.markResetTokenUsed(row.id);
     throw invalid();
   }
   if (input.new_password !== input.new_password_confirm) {
     throw new ValidationError({ new_password_confirm: ["The two passwords do not match."] });
   }
-  const errors = validateNewPassword(input.new_password);
+  const errors = validateNewPassword(input.new_password, {
+    username: row.user.username,
+    email: row.user.email,
+    first_name: row.user.first_name,
+    last_name: row.user.last_name,
+  });
   if (errors.length > 0) throw new ValidationError({ new_password: errors });
-  await users.updateUser(row.user_id, { password: hashPassword(input.new_password) });
-  await users.markResetTokenUsed(row.id);
+  // Atomic tail: either the new password lands WITH every live session revoked
+  // and the token consumed, or nothing at all is committed.
+  const { prisma } = await import("@/lib/db");
+  await prisma.$transaction(async (tx) => {
+    await users.updateUser(row.user_id, { password: hashPassword(input.new_password) }, tx);
+    await users.revokeAllRefreshJtis(row.user_id, tx);
+    await users.markResetTokenUsed(row.id, tx);
+  });
 }
 
 /** PATCH /api/auth/me/ — profile fields + optional avatar upload/removal. */

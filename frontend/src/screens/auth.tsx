@@ -1157,12 +1157,12 @@ export function ForgotPasswordScreen() {
   return (
     <AuthLayout
       title="Forgot Password"
-      subtitle={"Enter your email address and we'll send\nyou a reset link."}
+      subtitle={"Enter your email address and we'll send\nyou a reset code."}
       footer={<span><Link to="/login">Back to Login</Link></span>}
     >
       {sent ? (
         <>
-          <SuccessNote message="If an account exists for this email, a reset code has been sent. The code expires after a short time." />
+          <SuccessNote message="A reset code has been sent to this email address. The code expires after a short time." />
           <button className="ab-btn ab-btn--primary ab-btn--full" type="button" onClick={() => navigate("/reset-password")}>
             Enter reset code
           </button>
@@ -1184,7 +1184,7 @@ export function ForgotPasswordScreen() {
             {formErrors.email && <span className="ab-field__error">{formErrors.email}</span>}
           </div>
           <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
-            {submitting ? "Sending…" : "Send Link"}
+            {submitting ? "Sending…" : "Send Code"}
           </button>
         </form>
       )}
@@ -1196,6 +1196,7 @@ export function ForgotPasswordScreen() {
 
 export function ResetPasswordScreen() {
   const navigate = useNavigate();
+  const { notify } = useToast();
   const [searchParams] = useSearchParams();
   const [token, setToken] = useState(searchParams.get("token") ?? "");
   const [newPassword, setNewPassword] = useState("");
@@ -1219,6 +1220,7 @@ export function ResetPasswordScreen() {
         new_password: newPassword,
         new_password_confirm: confirm,
       });
+      notify("success", "Password updated. Sign in with your new password.");
       navigate("/login", { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);

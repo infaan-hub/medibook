@@ -34,6 +34,14 @@ export const usernameExistsExact = (username: string) =>
 export const findUserByEmailExact = (email: string) =>
   prisma.user.findUnique({ where: { email } });
 
+/**
+ * Case-insensitive account lookup (`WHERE lower(email) = lower($1) LIMIT 1` —
+ * Django's `email__iexact`, used by the password-reset request so a stored
+ * `John@Example.com` still matches what the user typed).
+ */
+export const findUserByEmailIexact = (email: string) =>
+  prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
+
 export interface CreateUserInput {
   username: string;
   email: string;
@@ -61,8 +69,8 @@ export const createUser = (data: CreateUserInput) =>
     },
   });
 
-export const updateUser = (id: number, data: Prisma.UserUpdateInput) =>
-  prisma.user.update({ where: { id }, data });
+export const updateUser = (id: number, data: Prisma.UserUpdateInput, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).user.update({ where: { id }, data });
 
 export const deleteUser = (id: number) => prisma.user.delete({ where: { id } });
 
@@ -137,8 +145,8 @@ export const findLiveResetToken = (token: string) =>
     include: { user: true },
   });
 
-export const markResetTokenUsed = (id: number) =>
-  prisma.passwordResetToken.update({ where: { id }, data: { used_at: new Date() } });
+export const markResetTokenUsed = (id: number, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).passwordResetToken.update({ where: { id }, data: { used_at: new Date() } });
 
 export const createRefreshJti = (userId: number, jti: string, expiresAt: Date) =>
   prisma.refreshToken.create({ data: { user_id: userId, jti, expires_at: expiresAt } });
@@ -147,3 +155,14 @@ export const findRefreshJti = (jti: string) => prisma.refreshToken.findUnique({ 
 
 export const revokeRefreshJti = (jti: string) =>
   prisma.refreshToken.update({ where: { jti }, data: { revoked_at: new Date() } });
+
+/**
+ * Invalidate every still-live refresh JTI owned by one user
+ * (`UPDATE … SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`).
+ * Only that user's rows are touched — never anyone else's sessions.
+ */
+export const revokeAllRefreshJtis = (userId: number, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).refreshToken.updateMany({
+    where: { user_id: userId, revoked_at: null },
+    data: { revoked_at: new Date() },
+  });
