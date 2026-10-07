@@ -10,7 +10,7 @@
  * real `profile_image` avatar now shows on all three phone bars.
  */
 import { describe, expect, it } from "vitest";
-import { bottomNavItemsFor, navItemsFor } from "../components/AppShell";
+import { activeNavTo, bottomNavItemsFor, navItemsFor } from "../components/AppShell";
 import type { User } from "../api/types";
 
 const base: User = {
@@ -104,5 +104,52 @@ describe("mobile bottom bar â€” Profile slot for every role (5 slots)", () 
     expect(bottomNavItemsFor(doctor)).toHaveLength(5);
     expect(bottomNavItemsFor(admin)).toHaveLength(5);
     expect(bottomNavItemsFor(patient).some((i) => i.to === "/blog")).toBe(false);
+  });
+});
+
+describe("activeNavTo — exactly one active item per route", () => {
+  const adminSidebar = navItemsFor(admin);
+  const adminBottom = bottomNavItemsFor(admin);
+
+  it("admin nested routes resolve to the deepest item, never a parent", () => {
+    expect(activeNavTo(adminSidebar, "/admin")).toBe("/admin");
+    expect(activeNavTo(adminSidebar, "/admin/users")).toBe("/admin/users");
+    expect(activeNavTo(adminSidebar, "/admin/users/new")).toBe("/admin/users/new");
+    expect(activeNavTo(adminSidebar, "/admin/doctors")).toBe("/admin/doctors");
+    expect(activeNavTo(adminSidebar, "/admin/doctors/new")).toBe("/admin/doctors/new");
+    expect(activeNavTo(adminSidebar, "/admin/audit")).toBe("/admin/audit");
+  });
+
+  it("resolves every admin route to a single item (no stacked highlights)", () => {
+    const paths = [
+      "/admin",
+      "/admin/users",
+      "/admin/users/new",
+      "/admin/doctors",
+      "/admin/doctors/new",
+      "/admin/appointments",
+      "/admin/audit",
+      "/notifications",
+    ];
+    for (const path of paths) {
+      const active = adminSidebar.filter((i) => activeNavTo(adminSidebar, path) === i.to);
+      expect(active, path).toHaveLength(1);
+    }
+  });
+
+  it("segment-safe: /admin/users does not claim an unrelated path", () => {
+    expect(activeNavTo(adminSidebar, "/administrator")).toBeNull();
+    expect(activeNavTo(adminSidebar, "/adminish")).toBeNull();
+  });
+
+  it("bottom bar keeps a single active slot on nested admin routes", () => {
+    expect(activeNavTo(adminBottom, "/admin/users/new")).toBe("/admin/users");
+    expect(activeNavTo(adminBottom, "/admin/audit")).toBe("/admin/audit");
+  });
+
+  it("patient and doctor detail routes keep their parent item active", () => {
+    expect(activeNavTo(navItemsFor(patient), "/doctors/42")).toBe("/doctors");
+    expect(activeNavTo(navItemsFor(doctor), "/doctor/visit-history/7")).toBeNull();
+    expect(activeNavTo(navItemsFor(patient), "/appointments/9")).toBe("/appointments");
   });
 });

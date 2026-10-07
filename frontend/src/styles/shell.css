@@ -490,13 +490,6 @@
   background: #fff;
   font-weight: var(--weight-semibold);
 }
-/* Ensure only one nav item can be active at a time */
-.shell__nav--side .nav-item--side {
-  &:hover ~ .nav-item--side.nav-item--active,
-  &:focus ~ .nav-item--side.nav-item--active {
-    /* Prevent double-active visual conflicts */
-  }
-}
   .shell__nav--side .nav-item--side.nav-item--active::before {
     content: "";
     position: absolute;
@@ -943,11 +936,8 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   .shell--admin .shell__nav--side:not(.shell__nav--side--open) { width: 64px; min-width: 64px; }
   .shell--admin .sidebar__title { color: #fff; }
   .shell--admin .sidebar__divider { background: rgba(255,255,255,.15); }
-  .shell--admin .nav-item--side { color: rgba(255,255,255,.8); margin: 2px 12px; padding: 12px 14px; border-radius: 10px; }
-  .shell--admin .nav-item--side:hover { color: #fff; background: rgba(255,255,255,.15); }
-  .shell--admin .nav-item--side.nav-item--active { color: #09A99E; background: #fff; }
-  .shell--admin .nav-item--side.nav-item--active::before { display: none; }
-  .shell--admin .nav-item--side.nav-item--active .nav-item__chevron { color: #09A99E; }
+  /* Nav items intentionally inherit the shared .nav-item--side rules so the
+     admin active pill matches the doctor/patient sidebar at every size. */
   .shell--admin .sidebar__user { color: #fff; background: rgba(255,255,255,.12); }
   .shell--admin .sidebar__user:hover { background: rgba(255,255,255,.2); }
   .shell--admin .sidebar__user-name { color: #fff; }

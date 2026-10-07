@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
 import {
@@ -330,32 +330,59 @@ function ProfileNavIcon({ user, icon }: { user?: User | null; icon: ReactNode })
   );
 }
 
+/**
+ * Which nav item owns the current pathname: the LONGEST segment-safe prefix,
+ * so nested admin routes highlight exactly ONE item instead of stacking every
+ * parent (`/admin` + `/admin/users` + `/admin/users/new` all used to render as
+ * active because NavLink prefix-matches each of them independently).
+ */
+export function activeNavTo(items: NavItem[], pathname: string): string | null {
+  let best: string | null = null;
+  for (const item of items) {
+    const matched =
+      item.to === "/"
+        ? pathname === "/"
+        : pathname === item.to || pathname.startsWith(`${item.to}/`);
+    if (matched && (best === null || item.to.length > best.length)) best = item.to;
+  }
+  return best;
+}
+
 function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
+  const { pathname } = useLocation();
+  const activeTo = activeNavTo(items, pathname);
   return (
     <>
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.to === "/"}
-          className={({ isActive }) =>
-            ["nav-item", side ? "nav-item--side" : "", isActive ? "nav-item--active" : "", side && isActive ? "nav-item--side--active" : ""]
-              .filter(Boolean)
-              .join(" ")
-          }
-          onClick={onNavigate}
-        >
-          <span className="nav-item__icon" aria-hidden="true">
-            {item.to === "/profile" && !side ? (
-              <ProfileNavIcon user={user} icon={item.icon} />
-            ) : (
-              item.icon
-            )}
-          </span>
-          <span className="nav-item__label">{item.label}</span>
-          {!side && <span className="nav-item__bar" aria-hidden="true" />}
-        </NavLink>
-      ))}
+      {items.map((item) => {
+        const isActive = activeTo === item.to;
+        const className = [
+          "nav-item",
+          side ? "nav-item--side" : "",
+          isActive ? "nav-item--active" : "",
+          side && isActive ? "nav-item--side--active" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={className}
+            aria-current={isActive ? "page" : undefined}
+            onClick={onNavigate}
+          >
+            <span className="nav-item__icon" aria-hidden="true">
+              {item.to === "/profile" && !side ? (
+                <ProfileNavIcon user={user} icon={item.icon} />
+              ) : (
+                item.icon
+              )}
+            </span>
+            <span className="nav-item__label">{item.label}</span>
+            {!side && <span className="nav-item__bar" aria-hidden="true" />}
+          </Link>
+        );
+      })}
     </>
   );
 }
