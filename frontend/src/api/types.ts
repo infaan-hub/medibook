@@ -20,6 +20,16 @@ export interface User {
    * logout/login and browser restarts.
    */
   doctor_onboarding_completed?: boolean;
+  /**
+   * Brute-force state (admin users directory only — never part of the session
+   * payload). `account_locked` drives the lock badge + Unlock button,
+   * `failed_login_attempts` the "N failed attempts" hint, `lock_reason` the
+   * admin-only vs auto-unlock distinction.
+   */
+  account_locked?: boolean;
+  locked_until?: string | null;
+  lock_reason?: string;
+  failed_login_attempts?: number;
 }
 
 export interface AuditEvent {

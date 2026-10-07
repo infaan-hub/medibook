@@ -4,6 +4,7 @@
  * up case-insensitively by email and created on first sign-in.
  */
 import { ApiError, ValidationError, unauthorized } from "@/lib/errors";
+import { enforceLock } from "@/lib/account-lock";
 import { hashPassword } from "@/lib/password";
 import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
@@ -135,6 +136,12 @@ export async function socialLogin(
     await saveProfileImage(user.id, identity.picture);
     user = (await users.findUserById(user.id)) ?? user;
   }
+
+  // Social sign-in is a sign-in too: a locked account is rejected (423) so
+  // Google cannot be used to sidestep the password-lock policy, and a
+  // successful authentication starts the attempt budget over.
+  user = await enforceLock(user);
+  await users.resetFailedLogins(user.id);
 
   return { user, pair: await issuePair(user.id) };
 }

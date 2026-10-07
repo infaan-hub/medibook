@@ -3,7 +3,14 @@
  * (port of accounts/views.py + serializers.py).
  */
 import { randomBytes } from "node:crypto";
-import { ValidationError, nonFieldError, unauthorized } from "@/lib/errors";
+import { ApiError, ValidationError, nonFieldError, unauthorized } from "@/lib/errors";
+import {
+  enforceLock,
+  hasExpiredLock,
+  invalidCredentialsError,
+  lockedError,
+  registerFailedAttempt,
+} from "@/lib/account-lock";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
 import { passwordResetMail, sendMail } from "@/lib/mail";
@@ -75,15 +82,26 @@ export async function register(body: unknown): Promise<{ user: AuthUser; pair: {
 /** POST /api/auth/login/ — username + password → JWT pair. */
 export async function login(body: unknown): Promise<{ user: AuthUser; pair: { access: string; refresh: string } }> {
   const input = parse(loginSchema, body) as LoginInput;
-  const user = await users.findUserByUsername(input.username); // exact match (ModelBackend)
-  if (!user || !verifyPassword(input.password, user.password)) {
-    throw nonFieldError("The username or password is incorrect.");
+  const found = await users.findUserByUsername(input.username); // exact match (ModelBackend)
+  // Unknown account: same message as a wrong password, no lock data — never
+  // confirm whether the username exists.
+  if (!found) throw invalidCredentialsError();
+  // Lock first: a locked account rejects even a correct password (423), and an
+  // expired temporary lock is cleared here before the attempt counts.
+  const user = await enforceLock(found);
+  if (!verifyPassword(input.password, user.password)) {
+    const failed = await registerFailedAttempt(user);
+    if (failed.account_locked && !hasExpiredLock(failed)) throw lockedError(failed);
+    throw invalidCredentialsError(failed);
   }
   if (!user.is_active) throw nonFieldError("This account has been deactivated.");
   // Progressive hash upgrade: Django PBKDF2 rows → scrypt after a valid login.
   if (isDjangoHash(user.password)) {
     await users.updateUser(user.id, { password: hashPassword(input.password) });
   }
+  // A successful authentication starts the attempt budget over; the lock
+  // fields themselves are already clear (enforceLock threw otherwise).
+  await users.resetFailedLogins(user.id);
   return { user, pair: await issuePair(user.id) };
 }
 
@@ -94,8 +112,12 @@ export async function refresh(body: unknown): Promise<{ access: string; refresh:
   const row = claims.jti ? await users.findRefreshJti(claims.jti) : null;
   if (!row || row.revoked_at) throw unauthorized("Token is invalid or expired");
   if (row.expires_at.getTime() < Date.now()) throw unauthorized("Token is expired");
+  const user = await users.findUserById(Number(claims.sub));
+  if (!user) throw unauthorized("Token is invalid or expired");
+  // A lock must not be bypassable by an already-issued refresh token.
+  await enforceLock(user);
   await users.revokeRefreshJti(row.jti); // BLACKLIST_AFTER_ROTATION
-  return issuePair(Number(claims.sub));
+  return issuePair(user.id);
 }
 
 /** POST /api/auth/logout/ — blacklist the given refresh token (LogoutView). */
@@ -133,8 +155,17 @@ export async function passwordChange(user: AuthUser, body: unknown): Promise<voi
   await users.updateUser(user.id, { password: hashPassword(input.new_password) });
 }
 
-/** POST /api/auth/password-reset/ — issues a code for a known active account. */
-export async function passwordResetRequest(body: unknown): Promise<void> {
+/**
+ * POST /api/auth/password-reset/ — issues a code for a known active account.
+ *
+ * Returns the single-use handle so the API can hand the forgot-password UI
+ * everything it needs to continue (email → new password, with no visible
+ * "enter the code" step). The handle is useless without this response or the
+ * emailed link, and the endpoint stays behind the 5/min password_reset
+ * throttle. TRADE-OFF: anyone who knows an active account's email can obtain
+ * the handle straight from the API — see the flow notes in the final report.
+ */
+export async function passwordResetRequest(body: unknown): Promise<{ reset_handle: string }> {
   const input = parse(passwordResetRequestSchema, body);
   const email = input.email.trim().toLowerCase(); // normalize_email(strip().lower())
   const user = await users.findUserByEmailIexact(email); // Django's email__iexact
@@ -147,6 +178,7 @@ export async function passwordResetRequest(body: unknown): Promise<void> {
   await users.createPasswordResetToken(user.id, token);
   await users.expireLiveResetTokens(user.id, token); // older live tokens → used
   await sendMail(passwordResetMail(user, token));
+  return { reset_handle: token };
 }
 
 /** PASSWORD_RESET_TOKEN_HOURS — hours; invalid/≤0 config falls back to 2 so a
@@ -156,7 +188,15 @@ function resetTokenLifetimeHours(): number {
   return Number.isNaN(parsed) || parsed <= 0 ? 2 : parsed;
 }
 
-/** POST /api/auth/password-reset-confirm/ — consume the single-use token. */
+/**
+ * POST /api/auth/password-reset-confirm/ — consume the single-use token.
+ *
+ * Account state matters here too: a locked account cannot be reset (the reset
+ * NEVER clears `account_locked`/`locked_until`/`lock_reason`), and rejections
+ * that resolve to a user feed the SAME shared attempt counter as the login
+ * form, so neither flow farms attempts on its own. An unresolvable handle
+ * (already-used or forged) simply cannot be attributed to anyone.
+ */
 export async function passwordResetConfirm(body: unknown): Promise<void> {
   const input = parse(passwordResetConfirmSchema, body);
   const row = await users.findLiveResetToken(input.token);
@@ -166,28 +206,40 @@ export async function passwordResetConfirm(body: unknown): Promise<void> {
       "The reset token is invalid or has expired."
     );
   if (!row) throw invalid();
-  if (!row.user.is_active) throw nonFieldError("This account has been deactivated.");
+  // Lazy auto-unlock first (same rule as login), then reject while locked.
+  const user = await enforceLock(row.user);
+  if (!user.is_active) throw nonFieldError("This account has been deactivated.");
   if (row.created_at.getTime() + resetTokenLifetimeHours() * 3_600_000 < Date.now()) {
     await users.markResetTokenUsed(row.id);
-    throw invalid();
+    throw invalid(); // token failure, not a credential guess — not counted
   }
+  /** Count the rejection, then re-throw (or upgrade it to the 423 lock). */
+  const reject = async (error: ApiError): Promise<never> => {
+    const failed = await registerFailedAttempt(user);
+    if (failed.account_locked && !hasExpiredLock(failed)) throw lockedError(failed);
+    throw error;
+  };
   if (input.new_password !== input.new_password_confirm) {
-    throw new ValidationError({ new_password_confirm: ["The two passwords do not match."] });
+    await reject(
+      new ValidationError({ new_password_confirm: ["The two passwords do not match."] })
+    );
   }
   const errors = validateNewPassword(input.new_password, {
-    username: row.user.username,
-    email: row.user.email,
-    first_name: row.user.first_name,
-    last_name: row.user.last_name,
+    username: user.username,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
   });
-  if (errors.length > 0) throw new ValidationError({ new_password: errors });
-  // Atomic tail: either the new password lands WITH every live session revoked
-  // and the token consumed, or nothing at all is committed.
+  if (errors.length > 0) await reject(new ValidationError({ new_password: errors }));
+  // Atomic tail: either the new password lands WITH every live session revoked,
+  // the token consumed and the attempt counter cleared (the LOCK fields are
+  // never touched here — see the note above), or nothing at all is committed.
   const { prisma } = await import("@/lib/db");
   await prisma.$transaction(async (tx) => {
-    await users.updateUser(row.user_id, { password: hashPassword(input.new_password) }, tx);
-    await users.revokeAllRefreshJtis(row.user_id, tx);
+    await users.updateUser(user.id, { password: hashPassword(input.new_password) }, tx);
+    await users.revokeAllRefreshJtis(user.id, tx);
     await users.markResetTokenUsed(row.id, tx);
+    await users.resetFailedLogins(user.id, tx);
   });
 }
 

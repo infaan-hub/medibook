@@ -71,6 +71,11 @@ export function deleteAdminUser(userId: number): Promise<Envelope<null> | undefi
   return apiDelete<null>(`/admin/users/${userId}/`);
 }
 
+/** POST /api/admin/users/{id}/unlock/ — lift a lock + reset its attempt counter. */
+export function unlockAdminUser(userId: number): Promise<Envelope<User>> {
+  return apiPost<User>(`/admin/users/${userId}/unlock/`);
+}
+
 /** DELETE /api/admin/doctors/{id}/ — remove a doctor profile and their account. */
 export function deleteAdminDoctor(doctorId: number): Promise<Envelope<null> | undefined> {
   return apiDelete<null>(`/admin/doctors/${doctorId}/`);

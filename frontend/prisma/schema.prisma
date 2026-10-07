@@ -102,6 +102,24 @@ model User {
   profile_image    MediaFile? @relation("UserAvatar", fields: [profile_image_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   is_active     Boolean  @default(true)
   is_staff      Boolean  @default(false)
+  /// Brute-force protection: consecutive failed sign-in attempts. One shared
+  /// counter covers BOTH the login form and rejections inside the password-
+  /// reset confirm (a user row that can be resolved), so neither flow can be
+  /// used to farm attempts independently. Reset to 0 on a successful login or
+  /// an admin unlock.
+  failed_login_attempts Int @default(0)
+  /// TRUE while the account is blocked from signing in (and from refreshing /
+  /// social sign-in). Cleared by an auto-expiring lock reaching its deadline
+  /// (checked lazily on the next attempt) or by an administrator unlock.
+  account_locked Boolean @default(false)
+  /// Auto-unlock deadline for TEMPORARY / ADMIN_TEMPORARY locks. NULL means
+  /// only an administrator can lift the lock (doctor ADMIN_REQUIRED locks).
+  locked_until DateTime?
+  /// "" when unlocked, otherwise "TEMPORARY" (patient), "ADMIN_REQUIRED"
+  /// (doctor) or "ADMIN_TEMPORARY" (admin).
+  lock_reason String @default("") @db.VarChar(32)
+  /// When the most recent failed attempt was recorded (audit/UX only).
+  last_failed_login_at DateTime?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 

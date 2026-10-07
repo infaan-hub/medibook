@@ -1,11 +1,14 @@
 /**
  * PHASE 5 — Authentication screens (§54).
  *
- * LoginScreen          — email + password → session (redirects back to the
- *                        URL the guard remembered, or home).
+ * LoginScreen          — username + password → session (lock banner with a
+ *                        live countdown + attempts remaining when the server
+ *                        reports them).
  * RegisterScreen       — patient/doctor self-registration (§54 role-based).
- * ForgotPasswordScreen — neutral request (§36 — never reveals account state).
- * ResetPasswordScreen  — code from the email (supports ?token= prefill).
+ * ForgotPasswordScreen — email only; hands the reset handle straight to the
+ *                        new-password screen (no visible code step).
+ * ResetPasswordScreen  — new-password form (handle from navigation state or
+ *                        ?token= prefill; never a field to type).
  */
 
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent, type ReactNode } from "react";
@@ -794,10 +797,6 @@ function ErrorNote({ message }: { message: string }) {
   );
 }
 
-function SuccessNote({ message }: { message: string }) {
-  return <p className="form-note form-note--success">{message}</p>;
-}
-
 /* ---------------- Social OAuth helpers ---------------- */
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -866,6 +865,19 @@ function useGoogleLogin() {
 
 /* ---------------- Login ---------------- */
 
+/** Live mm:ss countdown rendered under the lock banner. */
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** Lock state carried by the 423 payload from a rejected sign-in. */
+interface LockBanner {
+  requires_admin: boolean;
+  locked_until: string | null;
+}
+
 export function LoginScreen() {
   const { login } = useSession();
   const { notify } = useToast();
@@ -879,6 +891,31 @@ export function LoginScreen() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [topError, setTopError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Server-reported state: lock banner (423) + attempts left (400 data).
+  const [lock, setLock] = useState<LockBanner | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
+
+  // Tick once a second, but ONLY while a countdown is running.
+  useEffect(() => {
+    if (!lock?.locked_until) return;
+    const id = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [lock?.locked_until]);
+
+  const waitSeconds = lock?.locked_until
+    ? Math.max(0, Math.ceil((Date.parse(lock.locked_until) - clock) / 1000))
+    : null;
+
+  // Countdown finished → the server auto-unlocks on the next attempt, so the
+  // banner clears and the form is usable again. The server, not this timer,
+  // decides whether the account is still locked.
+  useEffect(() => {
+    if (lock && !lock.requires_admin && waitSeconds === 0) {
+      setLock(null);
+      setAttemptsLeft(null);
+    }
+  }, [lock, waitSeconds]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -893,13 +930,30 @@ export function LoginScreen() {
       const target = from && canReturnTo(from) ? from : freshHomeForRole();
       navigate(target, { replace: true });
     } catch (error) {
-      const fields = fieldErrors(error);
-      setFormErrors(fields);
-      if (!Object.keys(fields).length) setTopError(errorMessage(error));
+      const data = error instanceof ApiError ? error.data : undefined;
+      if (data?.code === "ACCOUNT_LOCKED") {
+        setAttemptsLeft(0);
+        setLock({
+          requires_admin: data.requires_admin === true,
+          locked_until: typeof data.locked_until === "string" ? data.locked_until : null,
+        });
+        setTopError(errorMessage(error));
+        setFormErrors({});
+      } else {
+        setLock(null);
+        setAttemptsLeft(
+          typeof data?.remaining_attempts === "number" ? data.remaining_attempts : null
+        );
+        const fields = fieldErrors(error);
+        setFormErrors(fields);
+        if (!Object.keys(fields).length) setTopError(errorMessage(error));
+      }
     } finally {
       setSubmitting(false);
     }
   }
+
+  const countingDown = Boolean(lock && !lock.requires_admin && (waitSeconds ?? 0) > 0);
 
   return (
     <AuthLayout
@@ -910,7 +964,23 @@ export function LoginScreen() {
       }
     >
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
-        {topError && <ErrorNote message={topError} />}
+        {lock ? (
+          <ErrorNote
+            message={
+              lock.requires_admin
+                ? "Too many failed sign-in attempts. This account stays locked until an administrator unlocks it."
+                : `Too many failed sign-in attempts. Try again in ${formatCountdown(waitSeconds ?? 0)}.`
+            }
+          />
+        ) : (
+          topError && <ErrorNote message={topError} />
+        )}
+        {!lock && attemptsLeft !== null && attemptsLeft > 0 && (
+          <p className="form-note" role="status">
+            {attemptsLeft} {attemptsLeft === 1 ? "attempt" : "attempts"} left before this
+            account is locked.
+          </p>
+        )}
         <div className="ab-field">
           <label className="ab-field__label" htmlFor="login-username">Username</label>
           <input
@@ -937,7 +1007,11 @@ export function LoginScreen() {
           />
         </div>
         <Link className="ab-forgot" to="/forgot-password">Forgot Password?</Link>
-        <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
+        <button
+          type="submit"
+          className="ab-btn ab-btn--primary ab-btn--full"
+          disabled={submitting || countingDown}
+        >
           {submitting ? "Signing In…" : "Sign In"}
         </button>
         <span className="ab-divider">or</span>
@@ -1132,7 +1206,6 @@ export function RegisterScreen() {
 export function ForgotPasswordScreen() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [topError, setTopError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1143,8 +1216,13 @@ export function ForgotPasswordScreen() {
     setFormErrors({});
     setSubmitting(true);
     try {
-      await requestPasswordReset(email.trim());
-      setSent(true);
+      const response = await requestPasswordReset(email.trim());
+      // No visible "enter the code" step: the handle rides straight into the
+      // new-password form. The emailed link (?token=) still works too.
+      navigate("/reset-password", {
+        state: { reset_handle: response.data?.reset_handle },
+        replace: true,
+      });
     } catch (error) {
       const fields = fieldErrors(error);
       setFormErrors(fields);
@@ -1157,37 +1235,28 @@ export function ForgotPasswordScreen() {
   return (
     <AuthLayout
       title="Forgot Password"
-      subtitle={"Enter your email address and we'll send\nyou a reset code."}
+      subtitle={"Enter your email address and we'll take\nyou to a new password."}
       footer={<span><Link to="/login">Back to Login</Link></span>}
     >
-      {sent ? (
-        <>
-          <SuccessNote message="A reset code has been sent to this email address. The code expires after a short time." />
-          <button className="ab-btn ab-btn--primary ab-btn--full" type="button" onClick={() => navigate("/reset-password")}>
-            Enter reset code
-          </button>
-        </>
-      ) : (
-        <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
-          {topError && <ErrorNote message={topError} />}
-          <div className="ab-field">
-            <label className="ab-field__label" htmlFor="forgot-email">Email Address</label>
-            <input
-              id="forgot-email"
-              className="ab-field__input"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-            />
-            {formErrors.email && <span className="ab-field__error">{formErrors.email}</span>}
-          </div>
-          <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
-            {submitting ? "Sending…" : "Send Code"}
-          </button>
-        </form>
-      )}
+      <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
+        {topError && <ErrorNote message={topError} />}
+        <div className="ab-field">
+          <label className="ab-field__label" htmlFor="forgot-email">Email Address</label>
+          <input
+            id="forgot-email"
+            className="ab-field__input"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+          />
+          {formErrors.email && <span className="ab-field__error">{formErrors.email}</span>}
+        </div>
+        <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
+          {submitting ? "Sending…" : "Reset Password"}
+        </button>
+      </form>
     </AuthLayout>
   );
 }
@@ -1197,8 +1266,14 @@ export function ForgotPasswordScreen() {
 export function ResetPasswordScreen() {
   const navigate = useNavigate();
   const { notify } = useToast();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [token, setToken] = useState(searchParams.get("token") ?? "");
+  // Single-use handle: ?token= from the emailed link, or the state the forgot-
+  // password screen carried — never a field the user is asked to type.
+  const token =
+    searchParams.get("token") ??
+    (location.state as { reset_handle?: string } | null)?.reset_handle ??
+    "";
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -1216,7 +1291,7 @@ export function ResetPasswordScreen() {
     setSubmitting(true);
     try {
       await confirmPasswordReset({
-        token: token.trim(),
+        token,
         new_password: newPassword,
         new_password_confirm: confirm,
       });
@@ -1231,26 +1306,31 @@ export function ResetPasswordScreen() {
     }
   }
 
+  if (!token) {
+    return (
+      <AuthLayout
+        title="Set a new password"
+        subtitle="This page needs the link from your reset email."
+        footer={<span><Link to="/login">Back to sign in</Link></span>}
+      >
+        <p className="form-note">
+          Open the link we emailed you, or start again from the forgot-password form.
+        </p>
+        <Link className="ab-btn ab-btn--primary ab-btn--full" to="/forgot-password">
+          Request a new link
+        </Link>
+      </AuthLayout>
+    );
+  }
+
   return (
     <AuthLayout
       title="Set a new password"
-      subtitle="Paste the reset code from your email."
+      subtitle="Choose a new password for your account."
       footer={<span><Link to="/login">Back to sign in</Link></span>}
     >
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {topError && <ErrorNote message={topError} />}
-        <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reset-token">Reset code</label>
-          <input
-            id="reset-token"
-            className="ab-field__input"
-            required
-            autoComplete="one-time-code"
-            value={token}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setToken(e.target.value)}
-          />
-          {formErrors.token && <span className="ab-field__error">{formErrors.token}</span>}
-        </div>
         <div className="ab-field">
           <TextField
             id="reset-password"

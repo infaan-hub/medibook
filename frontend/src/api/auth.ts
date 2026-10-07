@@ -70,9 +70,15 @@ export function changePassword(payload: ChangePasswordPayload): Promise<Envelope
   return apiPost<null>("/auth/password-change/", payload);
 }
 
-/** POST /api/auth/password-reset/ — neutral request response (§36). */
-export function requestPasswordReset(email: string): Promise<Envelope<null>> {
-  return apiPost<null>("/auth/password-reset/", { email });
+/**
+ * POST /api/auth/password-reset/ — returns the single-use handle the forgot-
+ * password screen carries straight into the new-password form (the UI never
+ * asks the user to type a code). The emailed link still carries `?token=`.
+ */
+export function requestPasswordReset(
+  email: string
+): Promise<Envelope<{ reset_handle: string }>> {
+  return apiPost<{ reset_handle: string }>("/auth/password-reset/", { email });
 }
 
 /** POST /api/auth/password-reset-confirm/ — set the new password. */

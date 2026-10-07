@@ -166,3 +166,78 @@ export const revokeAllRefreshJtis = (userId: number, tx?: Prisma.TransactionClie
     where: { user_id: userId, revoked_at: null },
     data: { revoked_at: new Date() },
   });
+
+/* --------------------------- Sign-in lock state --------------------------- */
+
+/** Row shape returned by the atomic failed-attempt UPDATE (snake_case columns). */
+export interface FailedAttemptRow {
+  id: number;
+  role: string;
+  account_locked: boolean;
+  locked_until: Date | null;
+  lock_reason: string;
+  failed_login_attempts: number;
+}
+
+/**
+ * Record ONE failed sign-in attempt atomically: bump the shared counter and,
+ * the moment it reaches `max`, take the role-appropriate lock — all inside a
+ * single UPDATE, so concurrent attempts can never read a stale count or race
+ * the threshold decision (the row lock serialises them). `RETURNING` hands
+ * back the row as committed, letting the caller choose between "N attempts
+ * left" and "locked right now".
+ *
+ * `until === null` means an administrator-only lock (no deadline).
+ */
+export const recordFailedLogin = async (
+  userId: number,
+  max: number,
+  reason: string,
+  until: Date | null
+): Promise<FailedAttemptRow | null> => {
+  const rows = await prisma.$queryRaw<FailedAttemptRow[]>`
+    UPDATE "accounts_user"
+       SET "failed_login_attempts" = "failed_login_attempts" + 1,
+           "last_failed_login_at" = ${new Date()},
+           "updated_at" = ${new Date()},
+           "account_locked" = CASE WHEN "failed_login_attempts" + 1 >= ${max}::int THEN true ELSE "account_locked" END,
+           "locked_until" = CASE WHEN "failed_login_attempts" + 1 >= ${max}::int THEN ${until}::timestamp ELSE "locked_until" END,
+           "lock_reason" = CASE WHEN "failed_login_attempts" + 1 >= ${max}::int THEN ${reason} ELSE "lock_reason" END
+     WHERE "id" = ${userId}
+ RETURNING "id", "role", "account_locked", "locked_until", "lock_reason", "failed_login_attempts"`;
+  return rows[0] ?? null;
+};
+
+/**
+ * Lazy auto-unlock: clear a temporary lock whose deadline has passed, together
+ * with the stale attempt counter, so the next sign-in starts a fresh budget.
+ * Guarded (`account_locked = true AND locked_until <= now()`) so it never
+ * clobbers a lock an administrator took or extended concurrently.
+ */
+export const clearExpiredLock = (userId: number) =>
+  prisma.user.updateMany({
+    where: {
+      id: userId,
+      account_locked: true,
+      locked_until: { not: null, lte: new Date() },
+    },
+    data: { account_locked: false, locked_until: null, lock_reason: "", failed_login_attempts: 0 },
+  });
+
+/** Administrator unlock: lift the lock AND reset the attempt counter. */
+export const unlockUser = (userId: number) =>
+  prisma.user.update({
+    where: { id: userId },
+    data: { account_locked: false, locked_until: null, lock_reason: "", failed_login_attempts: 0 },
+  });
+
+/**
+ * Successful authentication clears the attempt counter. The LOCK fields are
+ * deliberately untouched: a password reset (or anything else short of
+ * auto-unlock/expiry or an admin action) must never free a locked account.
+ */
+export const resetFailedLogins = (userId: number, tx?: Prisma.TransactionClient) =>
+  (tx ?? prisma).user.updateMany({
+    where: { id: userId, failed_login_attempts: { gt: 0 } },
+    data: { failed_login_attempts: 0 },
+  });

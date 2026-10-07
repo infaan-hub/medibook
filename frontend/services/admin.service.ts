@@ -156,6 +156,10 @@ export const listUsers = async (role?: string, skip = 0, take = 20) => {
     is_superuser: u.is_superuser,
     profile_image: mediaUrl(u.profile_image_id),
     date_joined: u.created_at.toISOString(),
+    account_locked: u.account_locked,
+    locked_until: u.locked_until ? u.locked_until.toISOString() : null,
+    lock_reason: u.lock_reason,
+    failed_login_attempts: u.failed_login_attempts,
   }));
 };
 export const countUsers = (role?: string) => users.countUsers(role);
@@ -174,6 +178,10 @@ export const userDto = (u: {
   is_superuser?: boolean;
   profile_image_id?: number | null;
   created_at?: Date;
+  account_locked?: boolean;
+  locked_until?: Date | null;
+  lock_reason?: string | null;
+  failed_login_attempts?: number;
 }) => ({
   id: u.id,
   username: u.username,
@@ -186,6 +194,11 @@ export const userDto = (u: {
   is_superuser: u.is_superuser ?? false,
   profile_image: mediaUrl(u.profile_image_id ?? null),
   date_joined: u.created_at ? u.created_at.toISOString() : null,
+  // Brute-force state the admin users table renders (lock badge + Unlock).
+  account_locked: u.account_locked ?? false,
+  locked_until: u.locked_until ? u.locked_until.toISOString() : null,
+  lock_reason: u.lock_reason ?? "",
+  failed_login_attempts: u.failed_login_attempts ?? 0,
 });
 
 export const userListRow = userDto;
