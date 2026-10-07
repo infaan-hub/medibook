@@ -8,7 +8,7 @@
  * ResetPasswordScreen  — code from the email (supports ?token= prefill).
  */
 
-import { useState, useRef, useCallback, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   confirmPasswordReset,
@@ -19,6 +19,7 @@ import type { RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
+import { getPushPlatform } from "../lib/platform";
 import { TextField } from "../components/ui";
 
 /* ---------------- shared helpers ---------------- */
@@ -151,38 +152,301 @@ function AbLogo({ large }: { large?: boolean }) {
   );
 }
 
-/* WhatsApp Image 2026-09-19 at 19.01.59 — stylistic medical reference:
-   light cyan canvas, teal circular medallion illustration, clean layout.
-   All slides now reuse the single new onboarding-medical.jpeg asset. */
-const onboardingSlides = [
+/* /onboarding — a 4-slide setup tutorial for first-time visitors. First-visit
+   flow stays /splash → /onboarding → /welcome; nothing else changes.
+   Slide 1 "Welcome to MediBook" says what the guide will set up. Slides 2 and
+   3 teach the real permission flow (what MediBook shows first, what the
+   browser/OS asks, what to press, and how to recover after Block). Slide 4
+   walks installing on Android, iPhone/iPad and desktop.
+   Every teaching image is either a REAL MediBook screenshot
+   (public/images/onboarding/*.png) or a clearly captioned browser mockup
+   (public/images/tutorial-*.svg) — mockups always carry the "Example …"
+   caption so nobody expects pixel-identical UI. The logo is always the real
+   logo.jpeg (36px brand row, 96px welcome hero) — never text or an emoji.
+   Platform tabs are pre-selected from the device but all three remain one tap
+   away; detection is a convenience, never a requirement. */
+
+type PlatformKey = "android" | "iphone" | "desktop";
+
+type OnboardingVisual = {
+  readonly src: string;
+  readonly alt: string;
+  /** Line under the image — what it shows, or the "Example …" label. */
+  readonly caption?: string;
+  /** Real MediBook screenshot (captions render as the teal label style). */
+  readonly real?: boolean;
+};
+
+type OnboardingPlatformPanel = {
+  readonly key: PlatformKey;
+  readonly label: string;
+  readonly visual: OnboardingVisual;
+  /** Numbered "what you see / what you press" procedure. */
+  readonly steps: readonly string[];
+  /** Recovery or caveat shown under the steps. */
+  readonly note?: string;
+  /** Optional real screenshot shown after the steps. */
+  readonly extra?: OnboardingVisual;
+};
+
+type OnboardingSlide = {
+  readonly title: string;
+  readonly description?: string;
+  /** Why this step matters (slides 2–3). */
+  readonly why?: string;
+  /** Real MediBook screenshot shown above the title. */
+  readonly hero?: OnboardingVisual;
+  /** Compact MediBook → Allow → enabled chips (slide 3). */
+  readonly flow?: readonly string[];
+  /** Agenda bullets (slide 1). */
+  readonly steps?: readonly string[];
+  /** Tabbed per-platform procedures (slides 2–4). */
+  readonly platforms?: readonly OnboardingPlatformPanel[];
+  /** Real logo hero (slide 1). */
+  readonly logo?: boolean;
+  /** Show the live "Download app" button under the tabs (slide 4). */
+  readonly installable?: boolean;
+};
+
+const EXAMPLE_CAPTION =
+  "Example \u2014 your screen may look slightly different depending on your browser and version.";
+
+/** Detect the visitor's device; only ever used to pre-select a tab. */
+function detectPlatform(): PlatformKey {
+  if (typeof navigator === "undefined") return "desktop";
+  const platform = getPushPlatform(); // "ios" | "android" | "desktop"
+  if (platform === "ios") return "iphone";
+  if (platform === "android") return "android";
+  return "desktop";
+}
+
+const onboardingSlides: readonly OnboardingSlide[] = [
   {
-    title: "Easy Medicare",
-    description: "Book appointments, consult doctors and manage your health — all in one place.",
-    illustration: "onboarding-medical.jpeg",
-    scene: "team",
+    title: "Welcome to MediBook",
+    description: "Your guide to getting MediBook ready.",
+    logo: true,
+    steps: [
+      "Allow location",
+      "Turn on notifications",
+      "Install MediBook as an app",
+      "Use MediBook comfortably on phone and desktop",
+    ],
   },
   {
-    title: "Safe Medicare",
-    description: "Your health is our priority. Get trusted care from certified professionals.",
-    illustration: "onboarding-medical.jpeg",
-    scene: "care",
+    title: "Allow Location",
+    why: "MediBook can use your location to help you find nearby healthcare services and provide location-aware features.",
+    hero: {
+      src: "onboarding/location-prompt-card.png",
+      alt: 'MediBook asking "Set your location to book" with a "Share my location" button',
+      caption: "What you will see in MediBook first",
+      real: true,
+    },
+    platforms: [
+      {
+        key: "android",
+        label: "Android",
+        visual: {
+          src: "tutorial-location-android.svg",
+          alt: 'Android Chrome asking "Allow MediBook to use your location?" with Allow highlighted',
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
+          "Choose Allow.",
+          "Previously blocked it? Tap the icon next to the address bar \u2192 Site settings \u2192 Location \u2192 Allow.",
+        ],
+      },
+      {
+        key: "iphone",
+        label: "iPhone & iPad",
+        visual: {
+          src: "tutorial-location-iphone.svg",
+          alt: 'iPhone alert asking to let MediBook use your location, with "Allow While Using App" highlighted',
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
+          "Choose \u201cAllow While Using App\u201d.",
+          "Previously blocked it? Tap the address bar \u2192 Website Settings \u2192 Location \u2192 Allow.",
+        ],
+      },
+      {
+        key: "desktop",
+        label: "Computer",
+        visual: {
+          src: "tutorial-location.svg",
+          alt: "Desktop browser pop-up asking to know your location, with Allow highlighted",
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
+          "Choose Allow.",
+          "Previously blocked it? Click the lock icon in the address bar \u2192 Site settings \u2192 Location \u2192 Allow.",
+        ],
+      },
+    ],
   },
   {
-    title: "Quality Care",
-    description: "Quality care, anytime, anywhere. Your health, our commitment.",
-    illustration: "onboarding-medical.jpeg",
-    scene: "consult",
+    title: "Turn On Notifications",
+    why: "Notifications help you know when your appointment, booking, doctor response, emergency request, or other important MediBook activity changes.",
+    flow: ["MediBook", "Allow notifications?", "Press Allow", "Notifications are on"],
+    hero: {
+      src: "onboarding/notification-prompt-card.png",
+      alt: 'The "Turn on notifications" card in MediBook with the Allow button',
+      caption: "What you will see in MediBook first",
+      real: true,
+    },
+    platforms: [
+      {
+        key: "android",
+        label: "Android",
+        visual: {
+          src: "tutorial-notifications-android.svg",
+          alt: 'Android Chrome asking "Allow MediBook to send you notifications?" with Allow highlighted',
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Open MediBook in Chrome.",
+          "When the notification permission appears, tap Allow.",
+          "Return to MediBook \u2014 updates arrive even when MediBook is closed.",
+        ],
+        note: "Pressed Block? Tap the icon next to the address bar \u2192 Site settings \u2192 Notifications \u2192 Allow.",
+      },
+      {
+        key: "iphone",
+        label: "iPhone & iPad",
+        visual: {
+          src: "onboarding/install-ios-steps-card.png",
+          alt: 'MediBook on iPhone showing "Install MediBook to enable notifications" with the Add to Home Screen steps',
+          caption: "What MediBook shows on iPhone",
+          real: true,
+        },
+        steps: [
+          "iPhone and iPad cannot turn notifications on from a normal Safari tab \u2014 install MediBook first.",
+          "In Safari tap Share \u2192 Add to Home Screen \u2192 Add.",
+          "Open MediBook from your Home Screen.",
+          "Tap Allow when notifications are asked.",
+        ],
+        note: "Pressed Don\u2019t Allow? Remove MediBook from your Home Screen, add it again, then tap Allow.",
+      },
+      {
+        key: "desktop",
+        label: "Computer",
+        visual: {
+          src: "tutorial-notifications.svg",
+          alt: "Desktop browser pop-up asking to send MediBook notifications, with Allow highlighted",
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Open MediBook in your browser.",
+          "Press Allow when notifications are asked.",
+          "Leave notifications enabled to get updates while MediBook is in the background.",
+        ],
+        note: "Pressed Block? Click the lock icon in the address bar \u2192 Site settings \u2192 Notifications \u2192 Allow.",
+      },
+    ],
   },
-] as const;
+  {
+    title: "Get MediBook as an App",
+    description: "You can install MediBook on Android, iPhone/iPad, and desktop.",
+    installable: true,
+    platforms: [
+      {
+        key: "android",
+        label: "Android",
+        visual: {
+          src: "tutorial-install-android.svg",
+          alt: 'Chrome menu on Android with "Add to Home screen" highlighted',
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Open MediBook in Chrome.",
+          "Look for \u201cInstall app\u201d or \u201cAdd to Home screen\u201d \u2014 the wording depends on your browser and version.",
+          "Tap the installation option.",
+          "Confirm the installation.",
+          "Open MediBook from your home screen or app launcher.",
+        ],
+        extra: {
+          src: "onboarding/download-button.png",
+          alt: 'The "Download app" button in the MediBook header',
+          caption: "Or tap Download app in the MediBook header",
+          real: true,
+        },
+      },
+      {
+        key: "iphone",
+        label: "iPhone & iPad",
+        visual: {
+          src: "tutorial-install-iphone.svg",
+          alt: 'iPhone Safari Share sheet with "Add to Home Screen" highlighted',
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Open MediBook in Safari.",
+          "Tap the Share button.",
+          "Select Add to Home Screen.",
+          "Confirm with Add.",
+          "Open MediBook from your Home Screen.",
+          "Enable notifications when MediBook asks.",
+        ],
+        note: "Safari has no automatic \u201cInstall app\u201d button \u2014 Share \u2192 Add to Home Screen is the real procedure.",
+      },
+      {
+        key: "desktop",
+        label: "Computer",
+        visual: {
+          src: "tutorial-install-desktop.svg",
+          alt: "Desktop browser address bar with the install icon highlighted",
+          caption: EXAMPLE_CAPTION,
+        },
+        steps: [
+          "Open MediBook in Chrome, Edge or another browser that supports app install.",
+          "Look for the install icon in the address bar, or open the browser menu.",
+          "Select \u201cInstall MediBook\u201d and confirm.",
+          "Open MediBook from your desktop or start menu.",
+        ],
+        note: "The exact button and wording differ between Chrome, Edge, Safari and versions. In browsers without install support, keep using MediBook normally in a browser tab.",
+        extra: {
+          src: "onboarding/download-button.png",
+          alt: 'The "Download app" button in the MediBook header',
+          caption: "Or tap Download app in the MediBook header",
+          real: true,
+        },
+      },
+    ],
+  },
+];
 
 export function OnboardingScreen() {
   const [slide, setSlide] = useState(0);
+  // Tab selection — starts on the safe default and snaps to the real device
+  // after mount (never blocks rendering or hydration on detection).
+  const [platform, setPlatform] = useState<PlatformKey>("desktop");
+  const suggested = useRef<PlatformKey>("desktop");
   const navigate = useNavigate();
   const touchStart = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
   const isLast = slide === onboardingSlides.length - 1;
+
+  useEffect(() => {
+    const detected = detectPlatform();
+    suggested.current = detected;
+    setPlatform(detected);
+  }, []);
+
+  // Left/Right arrows page through the slides like the Back/Next buttons.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") setSlide((s) => Math.max(s - 1, 0));
+      if (event.key === "ArrowRight") {
+        setSlide((s) => Math.min(s + 1, onboardingSlides.length - 1));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const completeAndGoWelcome = useCallback(() => {
     localStorage.setItem("medibook_onboarding_completed", "1");
@@ -201,6 +465,10 @@ export function OnboardingScreen() {
       setSlide((s) => s + 1);
     }
   }, [isLast, completeAndGoWelcome]);
+
+  const goBack = useCallback(() => {
+    setSlide((s) => Math.max(s - 1, 0));
+  }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStart.current = e.touches[0].clientX;
@@ -229,9 +497,19 @@ export function OnboardingScreen() {
       onTouchEnd={handleTouchEnd}
       style={{ touchAction: "pan-y" }}
     >
-      {/* First-run CTA: install MediBook before the visitor even signs up (§69). */}
+      {/* Brand row: the real MediBook logo (36px) at left, Skip at right. */}
       <div className="ab-onboarding__top">
-        <InstallAppButton variant="inline" />
+        <div className="ab-onboarding__brand">
+          <img
+            className="ab-onboarding__brand-img"
+            src="/images/logo.jpeg"
+            alt="MediBook logo"
+            width={36}
+            height={36}
+            draggable={false}
+          />
+          <span className="ab-onboarding__brand-name">Medibook</span>
+        </div>
         <button
           className="ab-onboarding__skip"
           type="button"
@@ -242,58 +520,234 @@ export function OnboardingScreen() {
       </div>
       <div
         ref={trackRef}
-        style={{
-          transform: `translateX(-${slide * 100}%)`,
-          transition: "transform 0.3s ease",
-        }}
+        className="ab-onboarding__track"
+        style={{ transform: `translateX(-${slide * 100}%)` }}
+      >
+        {onboardingSlides.map((item, index) => {
+          const active = index === slide;
+          return (
+            <section
+              key={item.title}
+              className="ab-onboarding__slide"
+              aria-hidden={!active}
+              aria-live={active ? "polite" : undefined}
+              inert={active ? undefined : true}
+            >
+              <div className="ab-onboarding__body">
+                {item.hero && (
+                  <figure className="ab-onboarding__art">
+                    <img
+                      src={`/images/${item.hero.src}`}
+                      alt={item.hero.alt}
+                      loading={active ? "eager" : "lazy"}
+                      decoding="async"
+                      draggable={false}
+                      onError={(event) => {
+                        event.currentTarget.hidden = true;
+                      }}
+                    />
+                    {item.hero.caption && (
+                      <figcaption className="ab-onboarding__caption">
+                        {item.hero.caption}
+                      </figcaption>
+                    )}
+                  </figure>
+                )}
+                {item.logo && (
+                  /* Welcome hero: the real logo.jpeg at its largest size. */
+                  <img
+                    className="ab-onboarding__hero-logo"
+                    src="/images/logo.jpeg"
+                    alt="MediBook logo"
+                    width={96}
+                    height={96}
+                    fetchPriority="high"
+                    draggable={false}
+                  />
+                )}
+                <h1 className="ab-onboarding__title">{item.title}</h1>
+                {item.description && (
+                  <p className="ab-onboarding__desc">{item.description}</p>
+                )}
+                {item.why && <p className="ab-onboarding__why">{item.why}</p>}
+                {item.flow && (
+                  <div
+                    className="ab-onboarding__flow"
+                    role="group"
+                    aria-label={`How it works: ${item.flow.join(", then ")}`}
+                  >
+                    {item.flow.map((node, nodeIndex) => (
+                      <span className="ab-onboarding__flow-group" key={node}>
+                        {nodeIndex > 0 && (
+                          <span
+                            className="ab-onboarding__flow-arrow"
+                            aria-hidden="true"
+                          >
+                            {"\u2192"}
+                          </span>
+                        )}
+                        <span className="ab-onboarding__flow-chip">{node}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {item.steps && (
+                  <ol className="ab-onboarding__steps">
+                    {item.steps.map((step, stepIndex) => (
+                      <li className="ab-onboarding__step" key={step}>
+                        <span
+                          className="ab-onboarding__step-num"
+                          aria-hidden="true"
+                        >
+                          {stepIndex + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {item.platforms && (
+                  <>
+                    <div
+                      className="ab-onboarding__tabs"
+                      role="tablist"
+                      aria-label={`${item.title} by device`}
+                    >
+                      {item.platforms.map((panel) => {
+                        const selected = platform === panel.key;
+                        return (
+                          <button
+                            key={panel.key}
+                            type="button"
+                            role="tab"
+                            id={`ob-tab-${index}-${panel.key}`}
+                            aria-selected={selected}
+                            aria-controls={`ob-panel-${index}-${panel.key}`}
+                            className={`ab-onboarding__tab${
+                              selected ? " ab-onboarding__tab--active" : ""
+                            }`}
+                            onClick={() => setPlatform(panel.key)}
+                          >
+                            {panel.label}
+                            {suggested.current === panel.key && (
+                              <span className="ab-onboarding__tab-hint">
+                                Suggested
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {item.platforms.map((panel) => {
+                      const selected = platform === panel.key;
+                      return (
+                        <div
+                          key={panel.key}
+                          role="tabpanel"
+                          id={`ob-panel-${index}-${panel.key}`}
+                          aria-labelledby={`ob-tab-${index}-${panel.key}`}
+                          className="ab-onboarding__panel"
+                          hidden={!selected}
+                        >
+                          <figure className="ab-onboarding__art">
+                            <img
+                              src={`/images/${panel.visual.src}`}
+                              alt={panel.visual.alt}
+                              loading="lazy"
+                              decoding="async"
+                              draggable={false}
+                              onError={(event) => {
+                                event.currentTarget.hidden = true;
+                              }}
+                            />
+                            {panel.visual.caption && (
+                              <figcaption
+                                className={`ab-onboarding__caption${
+                                  panel.visual.real
+                                    ? ""
+                                    : " ab-onboarding__caption--example"
+                                }`}
+                              >
+                                {panel.visual.caption}
+                              </figcaption>
+                            )}
+                          </figure>
+                          <ol className="ab-onboarding__steps">
+                            {panel.steps.map((step, stepIndex) => (
+                              <li className="ab-onboarding__step" key={step}>
+                                <span
+                                  className="ab-onboarding__step-num"
+                                  aria-hidden="true"
+                                >
+                                  {stepIndex + 1}
+                                </span>
+                                <span>{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                          {panel.note && (
+                            <p className="ab-onboarding__note">{panel.note}</p>
+                          )}
+                          {panel.extra && (
+                            <figure className="ab-onboarding__extra">
+                              <img
+                                className="ab-onboarding__extra-img"
+                                src={`/images/${panel.extra.src}`}
+                                alt={panel.extra.alt}
+                                loading="lazy"
+                                decoding="async"
+                                draggable={false}
+                              />
+                              {panel.extra.caption && (
+                                <figcaption className="ab-onboarding__caption">
+                                  {panel.extra.caption}
+                                </figcaption>
+                              )}
+                            </figure>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {item.installable && (
+                      <div className="ab-onboarding__install">
+                        <InstallAppButton variant="block" />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      <div
+        className="ab-dots"
+        role="group"
+        aria-label={`Slide ${slide + 1} of ${onboardingSlides.length}`}
       >
         {onboardingSlides.map((item, index) => (
-          <section
-            key={index}
-            className="ab-onboarding__slide"
-            aria-live="polite"
-          >
-            <div className="ab-onboarding__art">
-              <img
-                src={`/images/${item.illustration}`}
-                alt=""
-                onError={(event) => {
-                  event.currentTarget.hidden = true;
-                }}
-              />
-              {/* Very small logo — logo.jpeg, positioned below the image */}
-              <img
-                src="/images/logo.jpeg"
-                alt="MediBook logo"
-                className="ab-onboarding__logo"
-                width={20}
-                height={20}
-                loading="lazy"
-                draggable={false}
-              />
-            </div>
-            <h1 className="ab-onboarding__title">{item.title}</h1>
-            <p className="ab-onboarding__desc">{item.description}</p>
-          </section>
-        ))}
-      </div>
-      <div className="ab-dots" aria-label={`Slide ${slide + 1} of ${onboardingSlides.length}`}>
-        {onboardingSlides.map((_item, index) => (
-          <span
-            key={index}
-            className={`ab-dots__dot${index === slide ? " ab-dots__dot--active" : ""}`}
+          <button
+            key={item.title}
+            type="button"
+            className={`ab-dots__dot${
+              index === slide ? " ab-dots__dot--active" : ""
+            }`}
+            aria-label={`Go to slide ${index + 1}: ${item.title}`}
+            aria-current={index === slide ? "step" : undefined}
             onClick={() => setSlide(index)}
-            role="button"
-            tabIndex={0}
-            aria-label={`Go to slide ${index + 1}`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") setSlide(index);
-            }}
           />
         ))}
       </div>
 
       <footer className="ab-onboarding__actions">
+        <button
+          type="button"
+          className="ab-btn ab-btn--outline"
+          onClick={goBack}
+          disabled={slide === 0}
+        >
+          Back
+        </button>
         <button type="button" className="ab-btn ab-btn--outline" onClick={goSignIn}>
           Sign In
         </button>

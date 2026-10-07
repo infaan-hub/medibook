@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="400" height="250">
+  <defs>
+    <filter id="iosLocShadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#163C3C" flood-opacity="0.22"/>
+    </filter>
+    <clipPath id="iosLocWin"><rect x="70" y="8" width="260" height="234" rx="20"/></clipPath>
+  </defs>
+  <rect width="400" height="250" fill="#EAF5F6"/>
+  <!-- iPhone frame -->
+  <rect x="70" y="8" width="260" height="234" rx="20" fill="#FFFFFF" stroke="#E1E8E8" filter="url(#iosLocShadow)"/>
+  <g clip-path="url(#iosLocWin)">
+    <!-- Safari page behind -->
+    <rect x="70" y="8" width="260" height="234" fill="#F6FAFA"/>
+    <rect x="86" y="60" width="140" height="13" rx="6.5" fill="#DDECEB"/>
+    <rect x="86" y="82" width="196" height="9" rx="4.5" fill="#E7F2F1"/>
+    <rect x="86" y="98" width="172" height="9" rx="4.5" fill="#E7F2F1"/>
+    <!-- iOS bottom toolbar -->
+    <rect x="70" y="206" width="260" height="36" fill="#F8FAFA"/>
+    <rect x="70" y="206" width="260" height="1" fill="#E4EAEB"/>
+    <path d="M104 218l8 8-8 8M104 226h14" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M196 218v12m-5-7l5-5 5 5" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="282" y="216" width="16" height="16" rx="4" fill="none" stroke="#007AFF" stroke-width="2"/>
+    <rect x="286" y="220" width="16" height="16" rx="4" fill="#F8FAFA" stroke="#007AFF" stroke-width="2"/>
+    <!-- iOS alert -->
+    <rect x="98" y="44" width="204" height="150" rx="14" fill="#FFFFFF" filter="url(#iosLocShadow)"/>
+    <text x="200" y="70" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1C1C1E">Allow &#8220;MediBook&#8221; to use</text>
+    <text x="200" y="86" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#1C1C1E">your location?</text>
+    <rect x="98" y="98" width="204" height="1" fill="#E5E5EA"/>
+    <text x="200" y="120" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#007AFF">Allow Once</text>
+    <rect x="98" y="130" width="204" height="1" fill="#E5E5EA"/>
+    <text x="200" y="152" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#007AFF">Allow While Using App</text>
+    <rect x="98" y="164" width="204" height="1" fill="#E5E5EA"/>
+    <text x="200" y="186" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#007AFF">Don&#8217;t Allow</text>
+  </g>
+  <!-- highlight on "Allow While Using App" -->
+  <rect x="118" y="133" width="164" height="26" rx="8" fill="none" stroke="#09A99E" stroke-width="2.5"/>
+  <path d="M300 146l16-16m0 0h-10m10 0v10" fill="none" stroke="#09A99E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

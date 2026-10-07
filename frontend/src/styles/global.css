@@ -1866,8 +1866,11 @@ a { color: var(--color-primary); }
 .ab-dots__dot {
   width: 7px;
   height: 7px;
+  border: 0;
+  padding: 0;
   border-radius: 50%;
   background: #c8e6e4;
+  cursor: pointer;
   transition: background 0.2s, width 0.2s;
 }
 .ab-dots__dot--active {
@@ -1876,11 +1879,11 @@ a { color: var(--color-primary); }
   border-radius: 99px;
 }
 
-/* ---- Onboarding actions ---- */
+/* ---- Onboarding actions: [Back] [Sign In] [Next] ---- */
 .ab-onboarding__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
   flex-shrink: 0;
   padding-bottom: 4px;
 }
@@ -2074,13 +2077,373 @@ a { color: var(--color-primary); }
   padding: 0;
 }
 .ab-onboarding__actions .ab-btn {
-  min-height: 43px;
+  min-height: 44px;
   border-radius: 8px;
   font-size: 11px;
 }
-@media (max-width: 599px) {
+
+/* ---- Onboarding tutorial redesign: 4 real-procedure slides ----
+   Slide 1 location, slide 2 notifications, slide 3 install (Android / iPhone /
+   desktop), slide 4 sign-up routine. Each slide centres when it fits and scrolls
+   when it does not, so the numbered procedure is never cut off. */
+.ab-onboarding__brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.ab-onboarding__brand-img {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  object-fit: cover;
+  box-shadow: 0 2px 6px rgba(9, 169, 158, 0.28);
+}
+.ab-onboarding__brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #163C3C;
+}
+/* Selector must out-specify `.ab-onboarding > div[style]`, which also
+   targets the track (it has an inline transform style). */
+.ab-onboarding > div.ab-onboarding__track {
+  flex: 1;
+  display: flex;
+  /* Full-bleed across the container's 24px side padding: the track spans the
+     whole viewport so translated slides land flush against the edges instead
+     of leaving a 24px sliver of the neighbouring slide visible in the padding
+     zone. .ab-onboarding keeps overflow:hidden as the clip. */
+  width: calc(100% + 48px);
+  margin-inline: -24px;
+  min-height: 0;
+  touch-action: pan-y;
+  /* NOTE: no overflow:hidden here — the clip must stay on .ab-onboarding,
+     otherwise the clip box translates with the track and hides slides 2+. */
+  transition: transform 0.3s ease;
+}
+.ab-onboarding__slide {
+  flex: 0 0 100%;
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* The track is full-bleed (see .ab-onboarding__track); re-inset the slide
+     content by the container's 24px side padding so cards/buttons align with
+     the brand row and footer and never touch the screen edge on 320px. */
+  padding: 6px 24px;
+  box-sizing: border-box;
+}
+.ab-onboarding__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: auto;
+  padding: 6px 0;
+  box-sizing: border-box;
+}
+.ab-onboarding__art {
+  width: min(80vw, 330px);
+  margin-bottom: 2px;
+  text-align: center;
+}
+.ab-onboarding__art > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid #dcefee;
+  box-shadow: 0 8px 20px rgba(22, 60, 60, 0.12);
+}
+.ab-onboarding__caption {
+  margin: 9px 0 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #09A99E;
+}
+.ab-onboarding__title {
+  margin: 13px 0 5px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #163C3C;
+}
+.ab-onboarding__desc {
+  max-width: 320px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #7f9c9b;
+}
+.ab-onboarding__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: min(100%, 330px);
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  box-sizing: border-box;
+}
+.ab-onboarding__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #dcefee;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(9, 169, 158, 0.08);
+  font-size: 11px;
+  line-height: 1.5;
+  color: #4c6f6e;
+}
+.ab-onboarding__step > span:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.ab-onboarding__step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #09A99E;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.ab-onboarding__platforms {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 340px);
+  box-sizing: border-box;
+}
+.ab-onboarding__platform {
+  display: grid;
+  grid-template-columns: 124px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #dcefee;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(9, 169, 158, 0.08);
+  text-align: left;
+}
+.ab-onboarding__platform-img {
+  display: block;
+  width: 124px;
+  height: auto;
+  border-radius: 10px;
+  background: #eaf5f6;
+}
+.ab-onboarding__platform-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ab-onboarding__platform-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #163C3C;
+}
+.ab-onboarding__platform-how {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #7f9c9b;
+}
+.ab-onboarding__install {
+  width: min(100%, 340px);
+  margin-top: 10px;
+}
+.ab-onboarding__logo--lg {
+  width: 76px;
+  height: 76px;
+  margin-top: 0;
+  border-radius: 19px;
+  border: 3px solid #ffffff;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgba(9, 169, 158, 0.3);
 }
 @media (max-width: 599px) {
+  .ab-onboarding__art { width: min(84vw, 300px); }
+  .ab-onboarding__title { font-size: 18px; }
+  .ab-onboarding__desc { font-size: 11.5px; }
+  .ab-onboarding__step { font-size: 10.5px; padding: 7px 9px; }
+  .ab-onboarding__platform { grid-template-columns: 112px 1fr; gap: 8px; }
+  .ab-onboarding__platform-img { width: 112px; }
+}
+
+/* ---- Onboarding redesign additions: why box, flow chips, platform tabs, panels ---- */
+.ab-onboarding figure {
+  margin: 0;
+}
+.ab-onboarding__hero-logo {
+  display: block;
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  border: 3px solid #ffffff;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgba(9, 169, 158, 0.3);
+}
+.ab-onboarding__why {
+  width: min(100%, 330px);
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  box-sizing: border-box;
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #3f6665;
+  background: #e7f7f5;
+  border: 1px solid #cdeeea;
+  border-radius: 12px;
+}
+.ab-onboarding__flow {
+  width: min(100%, 335px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: inherit;
+}
+.ab-onboarding__flow-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ab-onboarding__flow-chip {
+  display: inline-block;
+  padding: 5px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #087f79;
+  background: #e7f7f5;
+  border: 1px solid #cdeeea;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ab-onboarding__flow-arrow {
+  font-size: 13px;
+  font-weight: 700;
+  color: #63c8c2;
+}
+.ab-onboarding__tabs {
+  width: min(100%, 335px);
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.ab-onboarding__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #5c7d7c;
+  background: #ffffff;
+  border: 1px solid #cfe8e6;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.ab-onboarding__tab--active {
+  color: #087f79;
+  background: #e7f7f5;
+  border-color: #09a99e;
+}
+.ab-onboarding__tab-hint {
+  padding: 1px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: #09a99e;
+  border-radius: 999px;
+}
+.ab-onboarding__panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 12px;
+}
+.ab-onboarding__note {
+  width: min(100%, 330px);
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  text-align: left;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #4c6f6e;
+  background: #fffefb;
+  border: 1px dashed #b9dfdc;
+  border-radius: 12px;
+}
+.ab-onboarding__caption--example {
+  max-width: 310px;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #7f9c9b;
+}
+.ab-onboarding__extra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+}
+.ab-onboarding__extra-img {
+  display: block;
+  width: 76px;
+  border-radius: 14px;
+  border: 1px solid #dcefee;
+  background: #ffffff;
+  box-shadow: 0 3px 8px rgba(45, 111, 110, 0.16);
+}
+.ab-onboarding button:focus-visible,
+.ab-onboarding a:focus-visible {
+  outline: 2px solid #09a99e;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ab-onboarding__track,
+  .ab-onboarding__tab,
+  .ab-dots__dot,
+  .ab-btn {
+    transition: none !important;
+  }
+}
+@media (max-width: 599px) {
+  .ab-onboarding__hero-logo { width: 84px; height: 84px; border-radius: 20px; }
+  .ab-onboarding__tabs { gap: 4px; }
+  .ab-onboarding__tab { font-size: 10.5px; gap: 3px; }
+  .ab-onboarding__caption--example { max-width: 280px; }
 }
 .home__appointment-info {
   display: flex;

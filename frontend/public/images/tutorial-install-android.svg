@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="400" height="250">
+  <defs>
+    <filter id="andShadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#163C3C" flood-opacity="0.20"/>
+    </filter>
+  </defs>
+  <rect width="400" height="250" fill="#EAF5F6"/>
+  <!-- Chrome menu on Android -->
+  <rect x="24" y="14" width="210" height="196" rx="14" fill="#FFFFFF" stroke="#E1E8E8" filter="url(#andShadow)"/>
+  <text x="44" y="44" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#3C4043">New tab</text>
+  <text x="44" y="76" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#3C4043">History</text>
+  <text x="44" y="108" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#3C4043">Downloads</text>
+  <text x="44" y="140" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#3C4043">Bookmarks</text>
+  <rect x="34" y="156" width="190" height="30" rx="8" fill="#E7F7F5"/>
+  <rect x="30" y="152" width="198" height="38" rx="11" fill="none" stroke="#09A99E" stroke-width="2.5"/>
+  <text x="44" y="176" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#087F79">Add to Home screen</text>
+  <path d="M212 172l0 24 5.5-5.5 4.5 9.5 5-2.3-4.5-9 8.5 0z" fill="#163C3C" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round"/>
+  <!-- arrow to the result -->
+  <path d="M252 106h26" stroke="#09A99E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M276 97l13 9-13 9z" fill="#09A99E"/>
+  <!-- the app icon that lands on the home screen -->
+  <rect x="306" y="62" width="64" height="64" rx="17" fill="#09A99E"/>
+  <rect x="333" y="78" width="10" height="32" rx="4" fill="#FFFFFF"/>
+  <rect x="322" y="89" width="32" height="10" rx="4" fill="#FFFFFF"/>
+  <circle cx="368" cy="66" r="12" fill="#22A45A" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M363 66l4 4 7-8" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="338" y="146" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#163C3C">MediBook</text>
+  <!-- procedure -->
+  <rect x="40" y="212" width="320" height="30" rx="15" fill="#09A99E"/>
+  <text x="200" y="232" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Chrome menu &#8594; Add to Home screen</text>
+</svg>

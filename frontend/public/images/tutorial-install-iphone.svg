@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="400" height="250">
+  <defs>
+    <filter id="iosShadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#163C3C" flood-opacity="0.20"/>
+    </filter>
+  </defs>
+  <rect width="400" height="250" fill="#EAF5F6"/>
+  <!-- iOS Share sheet -->
+  <rect x="20" y="10" width="210" height="196" rx="16" fill="#F2F2F7" stroke="#E1E1E6" filter="url(#iosShadow)"/>
+  <rect x="105" y="20" width="40" height="5" rx="2.5" fill="#C7C7CC"/>
+  <rect x="30" y="34" width="190" height="34" rx="10" fill="#FFFFFF"/>
+  <rect x="38" y="42" width="18" height="18" rx="5" fill="#E5E5EA"/>
+  <text x="64" y="56" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#1C1C1E">Copy</text>
+  <rect x="30" y="72" width="190" height="34" rx="10" fill="#FFFFFF"/>
+  <rect x="38" y="80" width="18" height="18" rx="5" fill="#E5E5EA"/>
+  <text x="64" y="94" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#1C1C1E">Add to Favorites</text>
+  <rect x="30" y="110" width="190" height="34" rx="10" fill="#FFFFFF"/>
+  <rect x="38" y="118" width="18" height="18" rx="5" fill="#E5E5EA"/>
+  <text x="64" y="132" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" fill="#1C1C1E">Find on Page</text>
+  <rect x="30" y="148" width="190" height="34" rx="10" fill="#E7F7F5"/>
+  <rect x="38" y="156" width="18" height="18" rx="5" fill="#CFEDE9"/>
+  <rect x="26" y="144" width="198" height="42" rx="12" fill="none" stroke="#09A99E" stroke-width="2.5"/>
+  <text x="64" y="170" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#087F79">Add to Home Screen</text>
+  <path d="M212 166l0 24 5.5-5.5 4.5 9.5 5-2.3-4.5-9 8.5 0z" fill="#163C3C" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round"/>
+  <!-- arrow to the result -->
+  <path d="M252 96h26" stroke="#09A99E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M276 87l13 9-13 9z" fill="#09A99E"/>
+  <!-- the app icon that lands on the iPhone home screen -->
+  <rect x="306" y="52" width="64" height="64" rx="17" fill="#09A99E"/>
+  <rect x="333" y="68" width="10" height="32" rx="4" fill="#FFFFFF"/>
+  <rect x="322" y="79" width="32" height="10" rx="4" fill="#FFFFFF"/>
+  <circle cx="368" cy="56" r="12" fill="#22A45A" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M363 56l4 4 7-8" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="338" y="136" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#163C3C">MediBook</text>
+  <!-- procedure -->
+  <rect x="40" y="212" width="320" height="30" rx="15" fill="#09A99E"/>
+  <text x="200" y="232" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Share &#8594; Add to Home Screen &#8594; Add</text>
+</svg>

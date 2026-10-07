@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250" width="400" height="250">
+  <defs>
+    <filter id="andLocShadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#163C3C" flood-opacity="0.20"/>
+    </filter>
+    <clipPath id="andLocWin"><rect x="40" y="10" width="320" height="230" rx="18"/></clipPath>
+  </defs>
+  <rect width="400" height="250" fill="#EAF5F6"/>
+  <!-- Android phone frame -->
+  <rect x="40" y="10" width="320" height="230" rx="18" fill="#FFFFFF" stroke="#E1E8E8" filter="url(#andLocShadow)"/>
+  <g clip-path="url(#andLocWin)">
+    <!-- status bar -->
+    <text x="58" y="32" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#3C4043">9:41</text>
+    <circle cx="308" cy="28" r="3.5" fill="#3C4043"/>
+    <rect x="318" y="24" width="14" height="8" rx="2" fill="#3C4043"/>
+    <rect x="336" y="23" width="16" height="10" rx="3" fill="#3C4043"/>
+    <!-- Chrome omnibox -->
+    <rect x="56" y="44" width="248" height="26" rx="13" fill="#F1F3F4"/>
+    <path d="M70 56v-3a4 4 0 0 1 8 0v3" fill="none" stroke="#5F6368" stroke-width="1.6"/>
+    <rect x="68" y="56" width="12" height="9" rx="2" fill="#5F6368"/>
+    <text x="88" y="61.5" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#5F6368">medibook.app</text>
+    <!-- page behind -->
+    <rect x="40" y="80" width="320" height="160" fill="#F3FAFA"/>
+    <rect x="58" y="96" width="150" height="14" rx="7" fill="#DDECEB"/>
+    <rect x="58" y="118" width="220" height="10" rx="5" fill="#E7F2F1"/>
+    <rect x="58" y="134" width="190" height="10" rx="5" fill="#E7F2F1"/>
+    <!-- Android permission bottom sheet -->
+    <path d="M40 150h320v90H40z" fill="#FFFFFF"/>
+    <path d="M40 150c0 0 60-14 160-14s160 14 160 14v6H40z" fill="#FFFFFF"/>
+    <rect x="40" y="146" width="320" height="94" rx="0" fill="none"/>
+    <rect x="40" y="146" width="320" height="2" fill="#E4EAEB"/>
+    <circle cx="76" cy="176" r="13" fill="#E7F7F5"/>
+    <path d="M76 168a6 6 0 0 1 6 6c0 4.5-6 10-6 10s-6-5.5-6-10a6 6 0 0 1 6-6z" fill="none" stroke="#09A99E" stroke-width="2"/>
+    <circle cx="76" cy="174" r="2" fill="#09A99E"/>
+    <text x="98" y="172" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#3C4043">Allow MediBook to use</text>
+    <text x="98" y="188" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#3C4043">your location?</text>
+    <text x="98" y="206" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#5F6368">medibook.app</text>
+    <!-- buttons -->
+    <rect x="222" y="216" width="58" height="26" rx="13" fill="#FFFFFF" stroke="#DADCE0"/>
+    <text x="251" y="233" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#5F6368">Block</text>
+    <rect x="288" y="216" width="58" height="26" rx="13" fill="#FFFFFF" stroke="#DADCE0"/>
+    <text x="317" y="233" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#087F79">Allow</text>
+  </g>
+  <!-- highlight on Allow -->
+  <rect x="284" y="212" width="66" height="34" rx="11" fill="none" stroke="#09A99E" stroke-width="2.5"/>
+  <path d="M356 224l14-14m0 0h-9m9 0v9" fill="none" stroke="#09A99E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
