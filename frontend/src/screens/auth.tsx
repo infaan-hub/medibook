@@ -897,9 +897,7 @@ export function LoginScreen() {
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   // Second step: the password was right, now the one-time code must be typed.
-  const [challenge, setChallenge] = useState<
-    { token: string; expiresAt: number; emailSent?: boolean; emailHint?: string | null } | null
-  >(null);
+  const [challenge, setChallenge] = useState<{ token: string; expiresAt: number } | null>(null);
   const [otpValue, setOtpValue] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpTopError, setOtpTopError] = useState("");
@@ -979,8 +977,6 @@ export function LoginScreen() {
         setChallenge({
           token: outcome.challenge,
           expiresAt: Date.now() + outcome.expiresIn * 1000,
-          emailSent: outcome.emailSent,
-          emailHint: outcome.emailHint,
         });
         setClock(Date.now());
         setAttemptsLeft(null);
@@ -1054,9 +1050,7 @@ export function LoginScreen() {
       title="Sign In"
       subtitle={
         challenge
-          ? challenge.emailSent && challenge.emailHint
-            ? "Enter the 6-digit code we\nemailed to you."
-            : "Enter the 6-digit code we\nsent to your notifications."
+          ? "Enter the 6-digit code we\nsent to your notifications."
           : "Welcome back! Please sign in\nto continue."
       }
       footer={
@@ -1068,9 +1062,7 @@ export function LoginScreen() {
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
             {otpRemaining > 0
-              ? challenge.emailSent && challenge.emailHint
-                ? `We emailed a 6-digit code to ${challenge.emailHint}. It expires in ${formatCountdown(otpRemaining)}.`
-                : `We sent a 6-digit code to your MediBook notifications. It expires in ${formatCountdown(otpRemaining)}.`
+              ? `We sent a 6-digit code to your MediBook notifications. It expires in ${formatCountdown(otpRemaining)}.`
               : "This code has expired. Request a new one."}
           </p>
           <div className="ab-field">

@@ -41,31 +41,3 @@ export function passwordResetMail(user: { email: string; first_name: string; use
     ].join("\n"),
   };
 }
-
-/**
- * The login one-time code. Email is the delivery channel that works EVERYWHERE
- * — including iOS Safari tabs, where Apple only allows Web Push inside the
- * installed Home Screen app (and on devices where the user denied push).
- * Sent only AFTER a correct password, so it never reveals whether an account
- * exists.
- */
-export function loginOtpMail(
-  user: { email: string; first_name: string; username: string },
-  code: string,
-  expiresInMinutes: number
-): MailMessage {
-  const shortName = user.first_name || user.username;
-  return {
-    to: user.email,
-    subject: "Your MediBook login code",
-    body: [
-      `Hello ${shortName},`,
-      "",
-      "Use this code to sign in to MediBook:",
-      "",
-      code,
-      "",
-      `It expires in ${expiresInMinutes} minutes. If you did not request this, ignore this email.`,
-    ].join("\n"),
-  };
-}

@@ -13,7 +13,7 @@ import {
 } from "@/lib/account-lock";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
-import { passwordResetMail, loginOtpMail, sendMail } from "@/lib/mail";
+import { passwordResetMail, sendMail } from "@/lib/mail";
 import { notify } from "@/lib/notify";
 import { createPush } from "./notification.service";
 import * as users from "@/repositories/users.repo";
@@ -89,23 +89,8 @@ export const LOGIN_OTP_MAX_ATTEMPTS = 3;
 
 /** A login either stops at the OTP challenge or hands back the full session. */
 export type LoginResult =
-  | {
-      otpRequired: true;
-      challenge: string;
-      expiresInSeconds: number;
-      /** The code went out by email too — the channel that reaches EVERY device. */
-      emailSent: boolean;
-      /** Masked target (j***@example.com) so the OTP screen says where to look. */
-      emailHint: string | null;
-    }
+  | { otpRequired: true; challenge: string; expiresInSeconds: number }
   | { otpRequired: false; user: AuthUser; pair: { access: string; refresh: string } };
-
-/** j***@example.com — recognizable to their owner, useless for harvesting. */
-function maskEmail(email: string): string {
-  const at = email.indexOf("@");
-  if (at <= 0) return email;
-  return `${email[0]}***${email.slice(at)}`;
-}
 
 /**
  * POST /api/auth/login/ — username + password → OTP challenge.
@@ -150,31 +135,18 @@ export async function login(body: unknown): Promise<LoginResult> {
       console.warn("[push] login-time subscription registration failed:", error);
     }
   }
-  const { challenge, emailSent } = await issueLoginOtp(user);
-  return {
-    otpRequired: true,
-    challenge,
-    expiresInSeconds: LOGIN_OTP_TTL_MS / 1000,
-    emailSent,
-    emailHint: emailSent ? maskEmail(user.email) : null,
-  };
+  const challenge = await issueLoginOtp(user);
+  return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
 }
 
 /**
  * Issue the one-time code for a password-accepted login: replace any earlier
  * challenge (one active row per user), store only its scrypt hash, and
- * deliver the code through THREE channels — inbox row + web push (notify())
- * and EMAIL, which reaches every device including iOS Safari tabs where
- * Apple only allows Web Push inside the installed Home Screen app. Delivery
- * is best-effort: the challenge already exists, so a transient push or mail
- * failure must not deny login; the user re-sends by signing in again.
+ * deliver the code through notify() — inbox row + web push. Delivery is
+ * best-effort: the challenge already exists, so a transient push failure must
+ * not deny login; the user re-sends by signing in again.
  */
-async function issueLoginOtp(user: {
-  id: number;
-  email: string;
-  first_name: string;
-  username: string;
-}): Promise<{ challenge: string; emailSent: boolean }> {
+async function issueLoginOtp(user: { id: number }): Promise<string> {
   const challenge = randomBytes(32).toString("hex");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await users.deleteLoginOtpsForUser(user.id);
@@ -196,14 +168,7 @@ async function issueLoginOtp(user: {
   } catch (error) {
     console.error("[auth] login code delivery failed:", error);
   }
-  let emailSent = false;
-  try {
-    await sendMail(loginOtpMail(user, code, LOGIN_OTP_TTL_MS / 60_000));
-    emailSent = true;
-  } catch (error) {
-    console.warn("[auth] login code email failed:", error);
-  }
-  return { challenge, emailSent };
+  return challenge;
 }
 
 /**

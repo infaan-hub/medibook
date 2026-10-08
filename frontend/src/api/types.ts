@@ -55,10 +55,6 @@ export interface OtpChallengePayload {
   otp_required: true;
   challenge: string;
   expires_in: number;
-  /** The code was emailed — works even where Web Push can't (iOS Safari tabs). */
-  email_sent?: boolean;
-  /** Masked target (j***@example.com) so the OTP screen says where to look. */
-  email_hint?: string | null;
 }
 
 /* ---- Request payloads (Â§27 contracts, PHASE 5) ---- */

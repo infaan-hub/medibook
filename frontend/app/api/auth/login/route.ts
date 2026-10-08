@@ -12,13 +12,7 @@ export const POST = handler(
     const result = await login(body);
     if (result.otpRequired) {
       return ok(
-        {
-          otp_required: true,
-          challenge: result.challenge,
-          expires_in: result.expiresInSeconds,
-          email_sent: result.emailSent,
-          email_hint: result.emailHint,
-        },
+        { otp_required: true, challenge: result.challenge, expires_in: result.expiresInSeconds },
         "Verification code sent."
       );
     }

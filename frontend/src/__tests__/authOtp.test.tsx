@@ -97,32 +97,6 @@ describe("LoginScreen OTP step", () => {
     expect(mocks.notify).toHaveBeenCalledWith("success", "Welcome back to MediBook.");
   });
 
-  it("points at the emailed code when email delivery reported success", async () => {
-    mocks.login.mockResolvedValue({
-      otpRequired: true,
-      challenge: CHALLENGE,
-      expiresIn: 300,
-      emailSent: true,
-      emailHint: "j***@example.com",
-    });
-    render(
-      <MemoryRouter initialEntries={["/login"]}>
-        <LoginScreen />
-      </MemoryRouter>
-    );
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "juma" } });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "pw" } });
-    const form = screen.getByRole("button", { name: /^sign in$/i }).closest("form")!;
-    await act(async () => {
-      fireEvent.submit(form);
-    });
-
-    expect(screen.getByText(/We emailed a 6-digit code to j\*\*\*@example\.com\. It expires in 5:00\./)).toBeInTheDocument();
-    // The subtitle keeps its hard break ("we\nemailed"); whitespace collapses when matching.
-    expect(screen.getByText(/Enter the 6-digit code we\s+emailed to you\./)).toBeInTheDocument();
-    expect(screen.queryByText(/your MediBook notifications/)).toBeNull();
-  });
-
   it("keeps digits only in the code input", async () => {
     await reachOtpStep();
 
