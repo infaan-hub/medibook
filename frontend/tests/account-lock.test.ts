@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => {
   const refreshTokens: Row[] = [];
   const resetTokens: Row[] = [];
   const audits: Row[] = [];
+  const notifications: Row[] = [];
   let seq = 1;
 
   /** Minimal Prisma `where` matcher covering the operators these flows use. */
@@ -29,6 +30,10 @@ const harness = vi.hoisted(() => {
     for (const [key, cond] of Object.entries(where ?? {})) {
       if (key === "NOT") {
         if (matches(row, cond as Row)) return false;
+        continue;
+      }
+      if (key === "OR") {
+        if (!(cond as Row[]).some((clause) => matches(row, clause))) return false;
         continue;
       }
       const value = row[key];
@@ -78,6 +83,7 @@ const harness = vi.hoisted(() => {
         return { count: rows.length };
       },
       count: async () => users.length,
+      findMany: async ({ where }: Row) => filter(users, where).map((row) => ({ ...row })),
     },
     refreshToken: {
       create: async ({ data }: Row) => {
@@ -130,6 +136,23 @@ const harness = vi.hoisted(() => {
         return { ...row };
       },
     },
+    notification: {
+      create: async ({ data }: Row) => {
+        const row = {
+          id: seq++,
+          is_read: false,
+          push_sent: false,
+          push_provider_id: "",
+          related_appointment_id: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+          ...data,
+        };
+        notifications.push(row);
+        return { ...row };
+      },
+    },
+    pushSubscription: { findMany: async () => [] },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     /**
      * Only one raw statement exists in this code path — the atomic
@@ -213,6 +236,7 @@ const harness = vi.hoisted(() => {
     refreshTokens.length = 0;
     resetTokens.length = 0;
     audits.length = 0;
+    notifications.length = 0;
     seq = 1;
   }
 
@@ -222,6 +246,7 @@ const harness = vi.hoisted(() => {
     refreshTokens,
     resetTokens,
     audits,
+    notifications,
     addUser,
     addResetToken,
     reset,
@@ -643,5 +668,82 @@ describe("policy helpers", () => {
   it("enforceLock is a no-op when the account is free", async () => {
     const free = fields();
     await expect(enforceLock(free)).resolves.toEqual(free);
+  });
+});
+
+describe("administrator lock notifications", () => {
+  const addAdmin = (username: string, overrides: Record<string, unknown> = {}) =>
+    harness.addUser({
+      username,
+      email: `${username}@example.com`,
+      role: "admin",
+      is_superuser: true,
+      password: hashPassword(PASSWORD),
+      ...overrides,
+    });
+
+  it("stays silent until the threshold, then notifies only admins", async () => {
+    const root = addAdmin("root");
+    harness.addUser({
+      username: "dr_nosi",
+      email: "dr@example.com",
+      role: "doctor",
+      password: hashPassword(PASSWORD),
+    }); // active non-admin bystander must receive nothing
+    seed();
+
+    await failTimes("juma", 2);
+    expect(harness.notifications).toHaveLength(0);
+
+    await attempt("juma", "wrong-password"); // 3rd failure → patient lock
+    expect(harness.notifications).toHaveLength(1);
+    const notice = harness.notifications[0];
+    expect(notice.recipient_id).toBe(root.id);
+    expect(notice.notification_type).toBe("system");
+    expect(notice.title).toBe("Account locked");
+    expect(notice.message).toBe(
+      'Patient account "juma" was locked after 3 failed sign-in attempts. It unlocks automatically in about 2 minutes.'
+    );
+  });
+
+  it("tells admins a doctor lock needs a human unlock", async () => {
+    const root = addAdmin("root");
+    harness.addUser({
+      username: "dr_nosi",
+      email: "dr@example.com",
+      role: "doctor",
+      password: hashPassword(PASSWORD),
+    });
+
+    await failTimes("dr_nosi", 3);
+
+    expect(harness.notifications).toHaveLength(1);
+    expect(harness.notifications[0].recipient_id).toBe(root.id);
+    expect(harness.notifications[0].message).toBe(
+      'Doctor account "dr_nosi" was locked after 3 failed sign-in attempts. An administrator must unlock it before the user can sign in.'
+    );
+  });
+
+  it("fans out to every active admin and skips inactive ones", async () => {
+    const root = addAdmin("root");
+    const ops = addAdmin("ops");
+    addAdmin("sleeping", { is_active: false });
+    seed();
+
+    await failTimes("juma", 3);
+
+    const recipients = harness.notifications
+      .map((notice) => notice.recipient_id as number)
+      .sort((a, b) => a - b);
+    expect(recipients).toEqual([root.id, ops.id].sort((a, b) => a - b));
+  });
+
+  it("does not notify when an admin account locks itself", async () => {
+    const root = addAdmin("root");
+
+    await failTimes("root", 3);
+
+    expect(harness.user(root.id).account_locked).toBe(true);
+    expect(harness.notifications).toHaveLength(0);
   });
 });

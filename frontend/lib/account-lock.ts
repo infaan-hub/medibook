@@ -13,6 +13,10 @@
  *                             platform's own admins out; another superuser may
  *                             also unlock one sooner.
  *
+ * Whenever a doctor or patient account crosses the threshold, every active
+ * administrator receives one in-app notification (the locked user already
+ * learns through the 423) — doctor locks especially need a human to lift them.
+ *
  * The SERVER is the single source of truth: the UI only renders what a 423
  * payload tells it (its countdown is derived from `locked_until`), a lock that
  * has passed its deadline is cleared lazily on the next attempt (no background
@@ -26,6 +30,9 @@
  *   400 no data                                                  (unknown user)
  */
 import { ApiError, type FieldErrors } from "@/lib/errors";
+import { prisma } from "@/lib/db";
+import { notify } from "@/lib/notify";
+import type { FailedAttemptRow } from "@/repositories/users.repo";
 import * as users from "@/repositories/users.repo";
 
 /** Consecutive failures that trigger a lock (login + reset-confirm shared). */
@@ -159,6 +166,45 @@ export async function enforceLock<T extends LockFields>(user: T): Promise<T> {
   throw lockedError(user);
 }
 
+/** Notice text for a freshly locked doctor/patient row. */
+function lockNotice(row: FailedAttemptRow, username: string | null): string {
+  const subject = `${row.role === "doctor" ? "Doctor" : "Patient"} account ${
+    username ? `"${username}"` : `#${row.id}`
+  }`;
+  if (row.lock_reason === "ADMIN_REQUIRED") {
+    return `${subject} was locked after ${MAX_LOGIN_ATTEMPTS} failed sign-in attempts. An administrator must unlock it before the user can sign in.`;
+  }
+  const waitMinutes = row.locked_until
+    ? Math.max(1, Math.ceil((row.locked_until.getTime() - Date.now()) / 60_000))
+    : 0;
+  return (
+    `${subject} was locked after ${MAX_LOGIN_ATTEMPTS} failed sign-in attempts.` +
+    (waitMinutes
+      ? ` It unlocks automatically in about ${waitMinutes} minute${waitMinutes === 1 ? "" : "s"}.`
+      : "")
+  );
+}
+
+/**
+ * Fresh doctor/patient lock → one notice per active administrator, delivered
+ * through the standard `notify` path (existing `system` type + a title
+ * override, so the notification module itself stays untouched): inbox row,
+ * realtime push, best-effort web push.
+ */
+async function notifyAdminsOfLock(row: FailedAttemptRow): Promise<void> {
+  const [admins, account] = await Promise.all([
+    prisma.user.findMany({
+      where: { is_active: true, OR: [{ is_superuser: true }, { role: "admin" }] },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({ where: { id: row.id }, select: { username: true } }),
+  ]);
+  const message = lockNotice(row, account?.username ?? null);
+  for (const admin of admins) {
+    await notify(admin.id, "system", message, null, "Account locked");
+  }
+}
+
 /**
  * Atomically record one failure (increment + lock at the threshold) and hand
  * back the committed row. Falls back to the pre-attempt row only if the
@@ -168,7 +214,17 @@ export async function enforceLock<T extends LockFields>(user: T): Promise<T> {
 export async function registerFailedAttempt(user: LockFields): Promise<LockFields> {
   const plan = lockPlan(user.role);
   const row = await users.recordFailedLogin(user.id, MAX_LOGIN_ATTEMPTS, plan.reason, plan.until);
-  return row ?? user;
+  if (!row) return user;
+  // Threshold lock on a doctor/patient account → alert the administrators.
+  // Best-effort: the sign-in attempt must never fail because a notice did.
+  if (row.account_locked && !user.account_locked && (row.role === "doctor" || row.role === "patient")) {
+    try {
+      await notifyAdminsOfLock(row);
+    } catch {
+      /* the lock itself already succeeded */
+    }
+  }
+  return row;
 }
 
 /** Data code carried by a rejected password (or reset) attempt. */
