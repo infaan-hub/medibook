@@ -271,6 +271,47 @@ export const expireTimedOutEmergencies = async (
   return stale;
 };
 
+/**
+ * 24-hour retention for the emergency history: delete every appointment whose
+ * status is `expired` AND whose expiry moment passed at or before `cutoff`,
+ * returning the removed rows (id + parties) so the caller can broadcast
+ * `appointment.deleted`. Every other status is untouched, however old it is.
+ *
+ * Expiry moment is `emergency_expired_at` (stamped by expireTimedOutEmergencies);
+ * a row written without one falls back to its scheduled end, and an unparseable
+ * date keeps the row — never delete on uncertainty.
+ */
+export const purgeExpiredEmergencies = async (
+  cutoff: Date,
+  db: AppointmentDb = prisma
+) => {
+  const stale = await db.appointment.findMany({
+    where: { status: "expired", appointment_type: "EMERGENCY" },
+    select: {
+      id: true,
+      emergency_expired_at: true,
+      appointment_date: true,
+      end_time: true,
+      patient_id: true,
+      doctor: { select: { user_id: true } },
+    },
+  });
+  const due = stale.filter((row) => {
+    const end =
+      row.emergency_expired_at ??
+      new Date(
+        `${row.appointment_date.toISOString().slice(0, 10)}T${row.end_time.length === 5 ? `${row.end_time}:00` : row.end_time}Z`
+      );
+    return end.getTime() <= cutoff.getTime();
+  });
+  if (due.length === 0) return due;
+
+  await db.appointment.deleteMany({
+    where: { id: { in: due.map((row) => row.id) }, status: "expired" },
+  });
+  return due;
+};
+
 export const createEmergencyAppointment = (
   data: {
     patient_id: number;

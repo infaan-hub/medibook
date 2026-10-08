@@ -9,12 +9,15 @@
  *     only along accept → in-progress → done. Patients can never set those
  *     statuses, and neither can a second tab replaying a stale transition.
  *  3. The notification kinds stay inside the DB's NotificationType enum.
+ *  4. An `expired` row survives 24 hours as history and is then purged with
+ *     the same realtime `appointment.deleted` contract as a manual delete.
  *
  * Pure tests (no database) — same style as tests/emergency.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EMERGENCY_STATUS_TRANSITIONS,
+  EXPIRED_RETENTION_MS,
   canEmergencyTransition,
   cancelEmergencyAppointment,
   completeEmergencyAppointment,
@@ -23,6 +26,7 @@ import {
   evaluateEmergencyEligibility,
   getEmergencyEligibility,
   normaliseEmergencyAction,
+  purgeExpiredAppointments,
   runEmergencyAction,
   startEmergencyInProgress,
   type EmergencyEligibility,
@@ -37,6 +41,7 @@ const repo = vi.hoisted(() => ({
   updateAppointment: vi.fn(),
   findPatientEmergencyAppointment: vi.fn(),
   expireTimedOutEmergencies: vi.fn(),
+  purgeExpiredEmergencies: vi.fn(),
   createEmergencyAppointment: vi.fn(),
   deleteAppointment: vi.fn(),
 }));
@@ -633,5 +638,36 @@ describe("emergencyNotificationType", () => {
     for (const kind of KINDS) {
       expect(emergencyNotificationType(kind)).not.toMatch(/^emergency_/);
     }
+  });
+});
+
+/* ==================== 4. the 24-hour auto-delete =========================== */
+
+describe("purgeExpiredAppointments — 24h retention", () => {
+  it("keeps the retention window at 24 hours", () => {
+    expect(EXPIRED_RETENTION_MS).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("purges rows whose expiry passed more than a day ago and broadcasts each", async () => {
+    repo.purgeExpiredEmergencies.mockResolvedValue([
+      { id: 9, patient_id: 7, doctor: { user_id: 12 } },
+      { id: 10, patient_id: 7, doctor: { user_id: 12 } },
+    ]);
+
+    const removed = await purgeExpiredAppointments();
+
+    expect(removed).toBe(2);
+    const cutoff = repo.purgeExpiredEmergencies.mock.calls[0][0] as Date;
+    expect(Math.abs(cutoff.getTime() - (Date.now() - EXPIRED_RETENTION_MS))).toBeLessThan(10_000);
+    expect(pushRaw).toHaveBeenCalledTimes(2);
+    expect(pushRaw).toHaveBeenNthCalledWith(1, "appointment.deleted", { id: 9 }, [7, 12]);
+    expect(pushRaw).toHaveBeenNthCalledWith(2, "appointment.deleted", { id: 10 }, [7, 12]);
+  });
+
+  it("stays quiet when there is nothing to purge", async () => {
+    repo.purgeExpiredEmergencies.mockResolvedValue([]);
+
+    expect(await purgeExpiredAppointments()).toBe(0);
+    expect(pushRaw).not.toHaveBeenCalled();
   });
 });

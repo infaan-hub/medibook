@@ -1,9 +1,10 @@
 /**
  * Next.js instrumentation (runs once per server boot, dev + prod).
  *
- * In-process reminder scheduler for long-running Node hosts (`node server.js`).
- * On serverless platforms this interval is NOT reliable — use the HTTP cron
- * endpoint instead: GET|POST /api/cron/reminders/ with header
+ * In-process scheduler for long-running Node hosts (`node server.js`): sends
+ * due reminders and purges expired appointments (24h retention). On serverless
+ * platforms this interval is NOT reliable — use the HTTP cron endpoint
+ * instead: GET|POST /api/cron/reminders/ with header
  * `x-cron-secret: CRON_SECRET` (or Vercel Cron, see vercel.json).
  *
  * Set REMINDERS_INTERVAL_MINUTES=0 to disable the in-process interval entirely.
@@ -18,6 +19,7 @@ export async function register(): Promise<void> {
   if (!Number.isFinite(minutes) || minutes <= 0) return;
 
   const { sendDueReminders } = await import("./lib/reminders");
+  const { purgeExpiredAppointments } = await import("./services/emergency.service");
   const tick = async () => {
     try {
       const result = await sendDueReminders();
@@ -28,6 +30,14 @@ export async function register(): Promise<void> {
       }
     } catch (error) {
       console.error("[reminders] failed:", error);
+    }
+    try {
+      const purged = await purgeExpiredAppointments();
+      if (purged > 0) {
+        console.log(`[appointments] purged=${purged} expired`);
+      }
+    } catch (error) {
+      console.error("[appointments] purge failed:", error);
     }
   };
   setInterval(tick, minutes * 60_000);

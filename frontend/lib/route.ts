@@ -7,6 +7,11 @@
  * applies rate limits, invokes the route, converts any thrown ApiError into
  * the §28 envelope, and stamps the Django security headers on every response.
  * Routes then only assert roles (requirePatient/…) and validate input.
+ *
+ * `skipAuth: true` opts a route out of bearer authentication entirely (the
+ * route asserts its own machine credential instead) — used by the cron
+ * endpoint, whose `Authorization: Bearer <CRON_SECRET>` must not be rejected
+ * by the JWT check before the secret comparison can run.
  */
 import { optionalAuth, type AuthUser } from "./auth";
 import { auditRequest, startIdentifierCapture } from "./audit";
@@ -33,7 +38,7 @@ type NextRouteContext = {
 
 export function handler(
   fn: HandlerFn,
-  options: { throttle?: ThrottleScope } = {}
+  options: { throttle?: ThrottleScope; skipAuth?: boolean } = {}
 ) {
   return async (req: Request, ctx: NextRouteContext): Promise<Response> => {
     const startedAt = Date.now();
@@ -51,7 +56,7 @@ export function handler(
       }
 
       // 1) Authentication (invalid tokens → 401, exactly like SimpleJWT).
-      user = await optionalAuth(req);
+      user = options.skipAuth ? null : await optionalAuth(req);
 
       // 2) Rate limiting — scoped views use ONLY their scope limit (DRF swaps
       //    the throttle classes on those views); everything else uses the

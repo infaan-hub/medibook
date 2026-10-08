@@ -961,8 +961,9 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
 /**
  * Run the 30-minute sweep before anyone reads a queue: a request whose window
  * closed without the doctor reaching IN_PROGRESS drops out of the live list
- * (the row itself is kept as history). Server-side, so a closed browser or a
- * stale tab never keeps a dead request alive (§18).
+ * (the row itself is kept as history — but only for 24h; after that
+ * purgeExpiredAppointments deletes it entirely). Server-side, so a closed
+ * browser or a stale tab never keeps a dead request alive (§18).
  *
  * Exported because EVERY surface that can show an emergency queue has to sweep
  * first — the emergency screens do, and so does the doctor's appointments list,
@@ -971,6 +972,27 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
 export async function sweepTimedOutEmergencies(): Promise<void> {
   const cutoff = new Date(Date.now() - EMERGENCY_TIMEOUT_MS);
   await appointments.expireTimedOutEmergencies(cutoff);
+}
+
+/** An expired emergency row survives 24 hours as history, then is purged. */
+export const EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 24-hour auto-delete for the emergency history: remove `expired` rows whose
+ * window closed more than a day ago (sweepTimedOutEmergencies only flips the
+ * status; this deletes the row so history doesn't grow forever).
+ *
+ * Broadcasts `appointment.deleted` per row — the same realtime contract as a
+ * manual delete — so open doctor/patient screens drop them without a reload.
+ * Returns how many rows were removed.
+ */
+export async function purgeExpiredAppointments(): Promise<number> {
+  const cutoff = new Date(Date.now() - EXPIRED_RETENTION_MS);
+  const removed = await appointments.purgeExpiredEmergencies(cutoff);
+  for (const row of removed) {
+    pushRaw("appointment.deleted", { id: row.id }, [row.patient_id, row.doctor.user_id]);
+  }
+  return removed.length;
 }
 
 /** Get doctor's live (pending + accepted + in-progress) emergency appointments. */
