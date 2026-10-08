@@ -23,6 +23,7 @@ import {
   logout as logoutRequest,
   register as registerRequest,
   socialLogin as socialLoginRequest,
+  verifyLoginOtp as verifyLoginOtpRequest,
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import { realtime } from "../realtime/socket";
@@ -89,10 +90,17 @@ export function useToast(): ToastContextValue {
  */
 export type SessionStatus = "booting" | "authed" | "guest";
 
+/** What the password step of login produced: a challenge, or (legacy) a session. */
+export type LoginOutcome =
+  | { otpRequired: false }
+  | { otpRequired: true; challenge: string; expiresIn: number };
+
 interface SessionContextValue {
   status: SessionStatus;
   user: User | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginOutcome>;
+  /** Second step: exchange the OTP challenge for the JWT pair. */
+  verifyLogin: (challenge: string, otp: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   socialLogin: (provider: "google", token: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -142,8 +150,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (username: string, password: string) => {
+    async (username: string, password: string): Promise<LoginOutcome> => {
       const envelope = await loginRequest(username, password);
+      const data = envelope.data;
+      // The password step mints no tokens — hand the challenge up to the
+      // OTP screen and stop; verifyLogin completes the sign-in.
+      if ("otp_required" in data) {
+        return { otpRequired: true, challenge: data.challenge, expiresIn: data.expires_in };
+      }
+      applyAuth(data);
+      return { otpRequired: false };
+    },
+    [applyAuth]
+  );
+
+  const verifyLogin = useCallback(
+    async (challenge: string, otp: string) => {
+      const envelope = await verifyLoginOtpRequest(challenge, otp);
       applyAuth(envelope.data);
     },
     [applyAuth]
@@ -192,8 +215,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [status, user]);
 
   const value = useMemo(
-    () => ({ status, user, login, register, socialLogin, logout, setUser }),
-    [status, user, login, register, socialLogin, logout, setUser]
+    () => ({ status, user, login, verifyLogin, register, socialLogin, logout, setUser }),
+    [status, user, login, verifyLogin, register, socialLogin, logout, setUser]
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

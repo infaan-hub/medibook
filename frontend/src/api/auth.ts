@@ -9,6 +9,7 @@ import type {
   AuthPayload,
   ChangePasswordPayload,
   Envelope,
+  OtpChallengePayload,
   RegisterPayload,
   ResetConfirmPayload,
   User,
@@ -19,9 +20,20 @@ export function register(payload: RegisterPayload): Promise<Envelope<AuthPayload
   return apiPost<AuthPayload>("/auth/register/", payload);
 }
 
-/** POST /api/auth/login/ — username + password → JWT pair + user. */
-export function login(username: string, password: string): Promise<Envelope<AuthPayload>> {
-  return apiPost<AuthPayload>("/auth/login/", { username, password });
+/** POST /api/auth/login/ — username + password → OTP challenge (no tokens). */
+export function login(
+  username: string,
+  password: string
+): Promise<Envelope<AuthPayload | OtpChallengePayload>> {
+  return apiPost<AuthPayload | OtpChallengePayload>("/auth/login/", { username, password });
+}
+
+/** POST /api/auth/login/verify/ — the OTP step → JWT pair + user. */
+export function verifyLoginOtp(
+  challenge: string,
+  otp: string
+): Promise<Envelope<AuthPayload>> {
+  return apiPost<AuthPayload>("/auth/login/verify/", { challenge, otp });
 }
 
 /** POST /api/auth/social/ — Google OAuth login. */

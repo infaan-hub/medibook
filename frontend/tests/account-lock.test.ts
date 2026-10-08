@@ -21,6 +21,7 @@ const harness = vi.hoisted(() => {
   const users: Row[] = [];
   const refreshTokens: Row[] = [];
   const resetTokens: Row[] = [];
+  const otps: Row[] = [];
   const audits: Row[] = [];
   const notifications: Row[] = [];
   let seq = 1;
@@ -136,6 +137,32 @@ const harness = vi.hoisted(() => {
         return { ...row };
       },
     },
+    // A successful login now only issues an OTP challenge (no tokens); these
+    // flows never verify it, so the row store just has to exist.
+    loginOtp: {
+      create: async ({ data }: Row) => {
+        const row = {
+          id: seq++,
+          attempts: 0,
+          created_at: new Date(),
+          updated_at: new Date(),
+          ...data,
+        };
+        otps.push(row);
+        return { ...row };
+      },
+      findUnique: async ({ where }: Row) => {
+        const row = find(otps, where);
+        return row ? { ...row } : null;
+      },
+      update: async ({ where, data }: Row) =>
+        Object.assign(requireRow(otps, where), data),
+      deleteMany: async ({ where }: Row) => {
+        const rows = filter(otps, where ?? {});
+        rows.forEach((row) => otps.splice(otps.indexOf(row), 1));
+        return { count: rows.length };
+      },
+    },
     notification: {
       create: async ({ data }: Row) => {
         const row = {
@@ -235,6 +262,7 @@ const harness = vi.hoisted(() => {
     users.length = 0;
     refreshTokens.length = 0;
     resetTokens.length = 0;
+    otps.length = 0;
     audits.length = 0;
     notifications.length = 0;
     seq = 1;
@@ -396,7 +424,7 @@ describe("lock policy per role", () => {
     });
 
     const result = await login({ username: "juma", password: PASSWORD });
-    expect(result.user.id).toBe(user.id);
+    expect(result.otpRequired).toBe(true); // password accepted → OTP challenge, no tokens yet
 
     expect(harness.user(user.id)).toMatchObject({
       account_locked: false,

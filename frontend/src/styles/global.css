@@ -1672,7 +1672,7 @@ a { color: var(--color-primary); }
   margin: 0;
 }
 
-/* ---- Forgot password link ---- */
+/* ---- Forgot password / back-to-password link ---- */
 .ab-forgot {
   display: block;
   text-align: right;
@@ -1681,6 +1681,10 @@ a { color: var(--color-primary); }
   color: #087F79;
   text-decoration: none;
   margin: -2px 0 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
 }
 .ab-forgot:hover { text-decoration: underline; }
 

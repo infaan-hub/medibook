@@ -50,6 +50,13 @@ export interface AuthPayload extends AuthPair {
   user: User;
 }
 
+/** POST /api/auth/login/ password step: no tokens yet, just the OTP challenge. */
+export interface OtpChallengePayload {
+  otp_required: true;
+  challenge: string;
+  expires_in: number;
+}
+
 /* ---- Request payloads (Â§27 contracts, PHASE 5) ---- */
 
 export interface RegisterPayload {

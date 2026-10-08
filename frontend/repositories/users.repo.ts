@@ -241,3 +241,30 @@ export const resetFailedLogins = (userId: number, tx?: Prisma.TransactionClient)
     where: { id: userId, failed_login_attempts: { gt: 0 } },
     data: { failed_login_attempts: 0 },
   });
+
+/* --------------------------- Login OTP challenges -------------------------- */
+
+export const findLoginOtp = (challenge: string) =>
+  prisma.loginOtp.findUnique({ where: { challenge } });
+
+export const createLoginOtp = (data: {
+  user_id: number;
+  challenge: string;
+  code_hash: string;
+  expires_at: Date;
+}) => prisma.loginOtp.create({ data });
+
+export const updateLoginOtpAttempts = (challenge: string, attempts: number) =>
+  prisma.loginOtp.update({ where: { challenge }, data: { attempts } });
+
+/** Drop one challenge (burned by guesses, superseded, or consumed by success). */
+export const deleteLoginOtp = (challenge: string) =>
+  prisma.loginOtp.deleteMany({ where: { challenge } });
+
+/** One active challenge per user: a fresh login replaces the previous one. */
+export const deleteLoginOtpsForUser = (userId: number) =>
+  prisma.loginOtp.deleteMany({ where: { user_id: userId } });
+
+/** Opportunistic sweep: challenges that expired more than a day ago. */
+export const purgeExpiredLoginOtps = (cutoff: Date) =>
+  prisma.loginOtp.deleteMany({ where: { expires_at: { lt: cutoff } } });

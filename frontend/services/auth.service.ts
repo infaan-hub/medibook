@@ -2,7 +2,7 @@
  * Auth service — registration, login, logout, refresh, password flows
  * (port of accounts/views.py + serializers.py).
  */
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { ApiError, ValidationError, nonFieldError, unauthorized } from "@/lib/errors";
 import {
   enforceLock,
@@ -14,10 +14,12 @@ import {
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
 import { passwordResetMail, sendMail } from "@/lib/mail";
+import { notify } from "@/lib/notify";
 import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
 import {
+  loginOtpVerifySchema,
   loginSchema,
   logoutSchema,
   passwordChangeSchema,
@@ -25,6 +27,7 @@ import {
   passwordResetRequestSchema,
   registerSchema,
   type LoginInput,
+  type LoginOtpVerifyInput,
   type RegisterInput,
 } from "@/validators/auth";
 import { parse } from "@/validators/base";
@@ -79,8 +82,23 @@ export async function register(body: unknown): Promise<{ user: AuthUser; pair: {
   return { user, pair: await issuePair(user.id) };
 }
 
-/** POST /api/auth/login/ — username + password → JWT pair. */
-export async function login(body: unknown): Promise<{ user: AuthUser; pair: { access: string; refresh: string } }> {
+/** Login second factor: code life and per-challenge guess budget. */
+export const LOGIN_OTP_TTL_MS = 5 * 60_000;
+export const LOGIN_OTP_MAX_ATTEMPTS = 3;
+
+/** A login either stops at the OTP challenge or hands back the full session. */
+export type LoginResult =
+  | { otpRequired: true; challenge: string; expiresInSeconds: number }
+  | { otpRequired: false; user: AuthUser; pair: { access: string; refresh: string } };
+
+/**
+ * POST /api/auth/login/ — username + password → OTP challenge.
+ *
+ * The password step never issues tokens anymore: it proves the secret, resets
+ * the failed-attempt budget, and answers with an opaque challenge. The JWT
+ * pair only comes from verifyLoginOtp() once the code is typed back.
+ */
+export async function login(body: unknown): Promise<LoginResult> {
   const input = parse(loginSchema, body) as LoginInput;
   const found = await users.findUserByUsername(input.username); // exact match (ModelBackend)
   // Unknown account: same message as a wrong password, no lock data — never
@@ -102,6 +120,75 @@ export async function login(body: unknown): Promise<{ user: AuthUser; pair: { ac
   // A successful authentication starts the attempt budget over; the lock
   // fields themselves are already clear (enforceLock threw otherwise).
   await users.resetFailedLogins(user.id);
+  const challenge = await issueLoginOtp(user);
+  return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+}
+
+/**
+ * Issue the one-time code for a password-accepted login: replace any earlier
+ * challenge (one active row per user), store only its scrypt hash, and
+ * deliver the code through notify() — inbox row + web push. Delivery is
+ * best-effort: the challenge already exists, so a transient push failure must
+ * not deny login; the user re-sends by signing in again.
+ */
+async function issueLoginOtp(user: { id: number }): Promise<string> {
+  const challenge = randomBytes(32).toString("hex");
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  await users.deleteLoginOtpsForUser(user.id);
+  await users.purgeExpiredLoginOtps(new Date(Date.now() - 86_400_000));
+  await users.createLoginOtp({
+    user_id: user.id,
+    challenge,
+    code_hash: hashPassword(code),
+    expires_at: new Date(Date.now() + LOGIN_OTP_TTL_MS),
+  });
+  try {
+    await notify(
+      user.id,
+      "system",
+      `Your MediBook login code is ${code}. It expires in ${LOGIN_OTP_TTL_MS / 60_000} minutes.`,
+      null,
+      "Login code"
+    );
+  } catch (error) {
+    console.error("[auth] login code delivery failed:", error);
+  }
+  return challenge;
+}
+
+/**
+ * POST /api/auth/login/verify/ — the OTP step: check the typed code against
+ * the challenge the password step issued, then hand back the JWT pair.
+ *
+ * A wrong guess costs one attempt on THIS challenge (three burn it) — never a
+ * failed sign-in on the account, so OTP typos can't lock anyone out. Unknown,
+ * expired, burned and wrong codes all answer with the same field error, so
+ * the response never confirms which one it was.
+ */
+export async function verifyLoginOtp(
+  body: unknown
+): Promise<{ user: AuthUser; pair: { access: string; refresh: string } }> {
+  const input = parse(loginOtpVerifySchema, body) as LoginOtpVerifyInput;
+  const rejected = () =>
+    new ValidationError(
+      { otp: ["The code is incorrect or expired."] },
+      "The code is incorrect or expired."
+    );
+  const row = await users.findLoginOtp(input.challenge);
+  if (!row || row.expires_at.getTime() <= Date.now() || row.attempts >= LOGIN_OTP_MAX_ATTEMPTS) {
+    throw rejected();
+  }
+  if (!verifyPassword(input.otp, row.code_hash)) {
+    const attempts = row.attempts + 1;
+    if (attempts >= LOGIN_OTP_MAX_ATTEMPTS) await users.deleteLoginOtp(row.challenge);
+    else await users.updateLoginOtpAttempts(row.challenge, attempts);
+    throw rejected();
+  }
+  await users.deleteLoginOtp(row.challenge); // single-use: success consumes it
+  const found = await users.findUserById(row.user_id);
+  if (!found) throw rejected();
+  const user = await enforceLock(found); // an admin may have locked mid-challenge
+  if (!user.is_active) throw nonFieldError("This account has been deactivated.");
   return { user, pair: await issuePair(user.id) };
 }
 

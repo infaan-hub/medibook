@@ -34,6 +34,14 @@ export const loginSchema = z
   })
   .passthrough();
 
+/** POST /api/auth/login/verify/ — the OTP the password step just issued. */
+export const loginOtpVerifySchema = z
+  .object({
+    challenge: z.string().trim().min(1, REQUIRED),
+    otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code."),
+  })
+  .passthrough();
+
 export const logoutSchema = z.object({ refresh: z.string().min(1, REQUIRED) }).passthrough();
 
 export const refreshSchema = z.object({ refresh: z.string().min(1, REQUIRED) }).passthrough();
@@ -87,5 +95,6 @@ export const updateMeSchema = z
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type LoginOtpVerifyInput = z.infer<typeof loginOtpVerifySchema>;
 
 export { parse, drfDate, drfTime, blankable };

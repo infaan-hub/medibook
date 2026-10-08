@@ -879,7 +879,7 @@ interface LockBanner {
 }
 
 export function LoginScreen() {
-  const { login } = useSession();
+  const { login, verifyLogin } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -895,17 +895,27 @@ export function LoginScreen() {
   const [lock, setLock] = useState<LockBanner | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [clock, setClock] = useState(() => Date.now());
+  // Second step: the password was right, now the one-time code must be typed.
+  const [challenge, setChallenge] = useState<{ token: string; expiresAt: number } | null>(null);
+  const [otpValue, setOtpValue] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpTopError, setOtpTopError] = useState("");
 
-  // Tick once a second, but ONLY while a countdown is running.
+  // Tick once a second, but ONLY while a countdown is running (lock banner,
+  // or the OTP code's expiry).
   useEffect(() => {
-    if (!lock?.locked_until) return;
+    if (!lock?.locked_until && !challenge) return;
     const id = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [lock?.locked_until]);
+  }, [lock?.locked_until, challenge]);
 
   const waitSeconds = lock?.locked_until
     ? Math.max(0, Math.ceil((Date.parse(lock.locked_until) - clock) / 1000))
     : null;
+
+  const otpRemaining = challenge
+    ? Math.max(0, Math.ceil((challenge.expiresAt - clock) / 1000))
+    : 0;
 
   // Countdown finished → the server auto-unlocks on the next attempt, so the
   // banner clears and the form is usable again. The server, not this timer,
@@ -917,40 +927,112 @@ export function LoginScreen() {
     }
   }, [lock, waitSeconds]);
 
+  /** Shared error handling for the password step (and OTP resend). */
+  function handlePasswordError(error: unknown) {
+    const data = error instanceof ApiError ? error.data : undefined;
+    if (data?.code === "ACCOUNT_LOCKED") {
+      setAttemptsLeft(0);
+      setLock({
+        requires_admin: data.requires_admin === true,
+        locked_until: typeof data.locked_until === "string" ? data.locked_until : null,
+      });
+      setTopError(errorMessage(error));
+      setFormErrors({});
+    } else {
+      setLock(null);
+      setAttemptsLeft(
+        typeof data?.remaining_attempts === "number" ? data.remaining_attempts : null
+      );
+      const fields = fieldErrors(error);
+      setFormErrors(fields);
+      if (!Object.keys(fields).length) setTopError(errorMessage(error));
+    }
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    await startPasswordStep();
+  }
+
+  /**
+   * Password step: a correct answer does NOT sign the user in — it swaps the
+   * credentials for an OTP challenge and flips the form to the code entry.
+   * Returns true when a fresh challenge was issued.
+   */
+  async function startPasswordStep(): Promise<boolean> {
     setTopError("");
     setFormErrors({});
     setSubmitting(true);
     try {
-      await login(username.trim(), password);
+      const outcome = await login(username.trim(), password);
+      if (outcome?.otpRequired) {
+        setChallenge({
+          token: outcome.challenge,
+          expiresAt: Date.now() + outcome.expiresIn * 1000,
+        });
+        setClock(Date.now());
+        setAttemptsLeft(null);
+        setOtpValue("");
+        setOtpError("");
+        setOtpTopError("");
+        return true;
+      }
       notify("success", "Welcome back to MediBook.");
       // Fresh login: only return to the saved URL if THIS role owns it.
       // Otherwise land on your own dashboard — never another role's page.
       const target = from && canReturnTo(from) ? from : freshHomeForRole();
       navigate(target, { replace: true });
+      return false;
+    } catch (error) {
+      handlePasswordError(error);
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** OTP step: exchange the typed code for the session. */
+  async function onVerify(event: FormEvent) {
+    event.preventDefault();
+    if (!challenge) return;
+    setSubmitting(true);
+    setOtpTopError("");
+    setOtpError("");
+    try {
+      await verifyLogin(challenge.token, otpValue.trim());
+      notify("success", "Welcome back to MediBook.");
+      const target = from && canReturnTo(from) ? from : freshHomeForRole();
+      navigate(target, { replace: true });
     } catch (error) {
       const data = error instanceof ApiError ? error.data : undefined;
       if (data?.code === "ACCOUNT_LOCKED") {
-        setAttemptsLeft(0);
-        setLock({
-          requires_admin: data.requires_admin === true,
-          locked_until: typeof data.locked_until === "string" ? data.locked_until : null,
-        });
-        setTopError(errorMessage(error));
-        setFormErrors({});
+        // The account locked between password and code — back to step one.
+        setChallenge(null);
+        handlePasswordError(error);
       } else {
-        setLock(null);
-        setAttemptsLeft(
-          typeof data?.remaining_attempts === "number" ? data.remaining_attempts : null
-        );
         const fields = fieldErrors(error);
-        setFormErrors(fields);
-        if (!Object.keys(fields).length) setTopError(errorMessage(error));
+        if (fields.otp) setOtpError(fields.otp);
+        else setOtpTopError(errorMessage(error));
       }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /** Ask for a fresh code — same credentials, brand-new challenge. */
+  async function onResend() {
+    setOtpError("");
+    setOtpTopError("");
+    const started = await startPasswordStep();
+    if (started) notify("info", "A new login code is on its way.");
+    else setChallenge(null); // failed → reveal the password form's error state
+  }
+
+  function backToPassword() {
+    setChallenge(null);
+    setOtpValue("");
+    setOtpError("");
+    setOtpTopError("");
   }
 
   const countingDown = Boolean(lock && !lock.requires_admin && (waitSeconds ?? 0) > 0);
@@ -958,11 +1040,58 @@ export function LoginScreen() {
   return (
     <AuthLayout
       title="Sign In"
-      subtitle={"Welcome back! Please sign in\nto continue."}
+      subtitle={
+        challenge
+          ? "Enter the 6-digit code we\nsent to your notifications."
+          : "Welcome back! Please sign in\nto continue."
+      }
       footer={
         <span>Don't have an account? <Link to="/register">Sign Up</Link></span>
       }
     >
+      {challenge ? (
+        <form className="ab-form__inner" onSubmit={onVerify} noValidate>
+          {otpTopError && <ErrorNote message={otpTopError} />}
+          <p className="form-note" role="status">
+            {otpRemaining > 0
+              ? `We sent a 6-digit code to your MediBook notifications. It expires in ${formatCountdown(otpRemaining)}.`
+              : "This code has expired. Request a new one."}
+          </p>
+          <div className="ab-field">
+            <label className="ab-field__label" htmlFor="login-otp">Verification code</label>
+            <input
+              id="login-otp"
+              className="ab-field__input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              required
+              value={otpValue}
+              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            {otpError && <span className="ab-field__error">{otpError}</span>}
+          </div>
+          <button
+            type="submit"
+            className="ab-btn ab-btn--primary ab-btn--full"
+            disabled={submitting || otpRemaining <= 0 || otpValue.length !== 6}
+          >
+            {submitting ? "Verifying…" : "Verify Code"}
+          </button>
+          <button
+            type="button"
+            className="ab-btn ab-btn--outline ab-btn--full"
+            onClick={onResend}
+            disabled={submitting}
+          >
+            {submitting ? "Sending…" : "Resend code"}
+          </button>
+          <button type="button" className="ab-forgot" onClick={backToPassword}>
+            ← Back to password
+          </button>
+        </form>
+      ) : (
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {lock ? (
           <ErrorNote
@@ -1022,6 +1151,7 @@ export function LoginScreen() {
           </button>
         </div>
       </form>
+      )}
     </AuthLayout>
   );
 }
