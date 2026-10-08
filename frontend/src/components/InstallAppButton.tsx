@@ -41,7 +41,13 @@ export function InstallAppButton({
   const handleClick = useCallback(() => {
     // WebKit never fires `beforeinstallprompt` — the only iOS path is manual.
     if (isIOS) {
-      notify("info", "Tap Share, then Add to Home Screen, to install MediBook.");
+      // Share → Add to Home Screen takes several taps of reading; keep the
+      // steps up for 20s instead of the 4s default toast lifetime.
+      notify(
+        "info",
+        "Tap Share, then Add to Home Screen, to install MediBook.",
+        20_000
+      );
       return;
     }
     // One tap → the browser installs MediBook and drops its shortcut

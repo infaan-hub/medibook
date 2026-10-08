@@ -166,10 +166,14 @@ describe("InstallAppButton", () => {
     setUserAgent(IOS_UA);
 
     renderButton("floating");
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
     const button = await screen.findByRole("button", { name: "Download app" });
     fireEvent.click(button);
 
     expect(await screen.findByText(/add to home screen/i)).toBeInTheDocument();
+    // The manual steps must stay readable well past the 4s default toast
+    // lifetime — 20 seconds, long enough to actually follow them.
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 20_000);
   });
 });
 
