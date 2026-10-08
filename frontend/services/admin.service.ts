@@ -3,6 +3,7 @@
  * (port of reports/views.py; every mutating call writes an AuditEvent).
  */
 import { ValidationError, notFound, badRequest } from "@/lib/errors";
+import { purgeExpiredAuditEvents } from "@/lib/audit";
 import { userPayload } from "@/lib/serializers";
 import { mediaUrl } from "@/lib/serialize";
 import { hashPassword, validateNewPassword } from "@/lib/password";
@@ -33,6 +34,9 @@ function auditRowDto(event: AuditRow) {
 
 /** GET /api/admin/audit/ — paginated, filterable platform activity trail. */
 export async function listAudit(req: Request, scope?: { actorId: number }) {
+  // 72h retention is enforced on every read so the page never lists a row
+  // that is already out of window (forced — no once-a-minute throttle here).
+  await purgeExpiredAuditEvents();
   const url = new URL(req.url);
   const param = (key: string) => url.searchParams.get(key);
   const filters: admin.AuditFilters = {
@@ -50,6 +54,12 @@ export async function listAudit(req: Request, scope?: { actorId: number }) {
     fetch: ({ skip, take }) =>
       admin.findAuditEvents(where, skip, take).then((rows) => rows.map(auditRowDto)),
   });
+}
+
+/** DELETE /api/admin/audit/ — wipe the whole trail; returns rows removed. */
+export async function clearAudit(): Promise<number> {
+  const { count } = await admin.deleteAllAuditEvents();
+  return count;
 }
 
 /** POST /api/admin/users/create/ — patient/doctor accounts. */

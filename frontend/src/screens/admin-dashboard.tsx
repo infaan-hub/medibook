@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FilePlus2, FileText, Lock, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
-import { approveDoctor, createAdminDoctor, createAdminUser, deleteAdminDoctor, deleteAdminUser, getAdminStats, listAdminUsers, listAuditEvents, unlockAdminUser, type AdminStats } from "../api/admin";
+import { approveDoctor, clearAuditEvents, createAdminDoctor, createAdminUser, deleteAdminDoctor, deleteAdminUser, getAdminStats, listAdminUsers, listAuditEvents, unlockAdminUser, type AdminStats } from "../api/admin";
 import { deleteAppointment, listAllAppointments } from "../api/appointments";
 import { listDoctors } from "../api/doctors";
 import type { Appointment, AuditEvent, DoctorProfile, User } from "../api/types";
@@ -104,6 +104,7 @@ const AUDIT_TABS: [string, string][] = [
 ];
 
 export function AdminAuditScreen() {
+  const { notify } = useToast();
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -111,6 +112,7 @@ export function AdminAuditScreen() {
   const [search, setSearch] = useState("");
   const [actionPrefix, setActionPrefix] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const load = useCallback(() => {
     setError(null);
@@ -138,6 +140,23 @@ export function AdminAuditScreen() {
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  // Destructive but reversible only by waiting — confirm first (same pattern
+  // as the user/doctor delete actions on the other admin tables).
+  async function handleClear() {
+    if (!window.confirm("Clear the entire audit log? This cannot be undone.")) return;
+    setClearing(true);
+    try {
+      const response = await clearAuditEvents();
+      notify("success", `Audit log cleared (${response?.data.deleted ?? 0} events).`);
+      if (page !== 1) setPage(1);
+      else load();
+    } catch (reason) {
+      notify("error", message(reason));
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(count / AUDIT_PAGE_SIZE));
   const from = count === 0 ? 0 : (page - 1) * AUDIT_PAGE_SIZE + 1;
   const to = Math.min(page * AUDIT_PAGE_SIZE, count);
@@ -146,8 +165,16 @@ export function AdminAuditScreen() {
     <div className="admin-workspace">
       <AdminHeader
         title="Audit log"
-        description="Every login, booking and change across the platform."
-        action={<Link to="/admin" className="admin-outline-button">Back to overview</Link>}
+        description="Every login, booking and change — kept for the last 72 hours."
+        action={
+          <div className="admin-header-actions">
+            <button type="button" className="admin-outline-button" onClick={handleClear} disabled={clearing || (events !== null && events.length === 0)}>
+              <Trash2 size={14} />
+              {clearing ? "Clearing..." : "Clear log"}
+            </button>
+            <Link to="/admin" className="admin-outline-button">Back to overview</Link>
+          </div>
+        }
       />
       <Card className="admin-table-card">
         <div className="admin-table-toolbar">

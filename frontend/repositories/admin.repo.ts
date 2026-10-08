@@ -5,6 +5,9 @@ import type { Prisma } from "@prisma/client";
 export const recordAudit = (actorId: number | null, action: string, target = "", detail = "") =>
   prisma.auditEvent.create({ data: { actor_id: actorId, action, target, detail } });
 
+/** Admin "clear the trail" — wipes every row; returns how many were removed. */
+export const deleteAllAuditEvents = () => prisma.auditEvent.deleteMany();
+
 export interface AuditFilters {
   search?: string | null;
   /** Comma-separated action prefixes (`auth.`, `appointment.` …). */

@@ -86,3 +86,8 @@ export function listAuditEvents(
 ): Promise<Envelope<Paginated<AuditEvent>>> {
   return apiGet<Paginated<AuditEvent>>("/admin/audit/", params);
 }
+
+/** DELETE /api/admin/audit/ — clear the trail (rows also expire after 72h). */
+export function clearAuditEvents(): Promise<Envelope<{ deleted: number }> | undefined> {
+  return apiDelete<{ deleted: number }>("/admin/audit/");
+}

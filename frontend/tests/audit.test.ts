@@ -2,17 +2,19 @@
  * Audit trail — every request persists one compact row (logins, logouts,
  * account creation, appointments, any API call …), the write never breaks
  * the request it describes, failed auth attempts record the attempted
- * identity, and reading the audit list does not feed it (stable pagination).
+ * identity, and reading/clearing the audit list does not feed it (stable
+ * pagination; the clear records its own semantic row from the route).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   create: vi.fn(async (args: { data: Record<string, unknown> }) => ({ id: 1, ...args.data })),
+  deleteMany: vi.fn(async () => ({ count: 0 })),
 }));
 
 vi.mock("@/lib/db", () => ({
   prisma: {
-    auditEvent: { create: state.create },
+    auditEvent: { create: state.create, deleteMany: state.deleteMany },
     user: { findUnique: vi.fn(async () => null) },
   },
 }));
@@ -98,6 +100,12 @@ describe("handler audit capture", () => {
 
   it("does not feed the audit list from itself (stable pagination)", async () => {
     await call("/api/admin/audit/?page=2");
+    expect(state.create).not.toHaveBeenCalled();
+  });
+
+  it("does not feed the trail from clearing it either (any method)", async () => {
+    await call("/api/admin/audit/", { method: "DELETE" });
+    await call("/api/admin/audit/", { method: "GET" });
     expect(state.create).not.toHaveBeenCalled();
   });
 

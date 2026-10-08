@@ -19,7 +19,41 @@ const MAX_DETAIL = 255; // AuditEvent.detail VarChar(255)
 /** Never block a response on the audit insert for longer than this. */
 const WRITE_TIMEOUT_MS = 2_000;
 
-/** Reading the audit log must not feed it (keeps pagination stable). */
+/** The trail is a rolling window: rows older than this are deleted. */
+export const AUDIT_RETENTION_HOURS = 72;
+/** Opportunistic purges run at most once per minute per process. */
+const PURGE_INTERVAL_MS = 60_000;
+let lastPurgeAt = 0;
+
+/** Everything created before this instant is past retention. */
+export const auditRetentionCutoff = (now = Date.now()): Date =>
+  new Date(now - AUDIT_RETENTION_HOURS * 3_600_000);
+
+/**
+ * Delete every audit row past the 72-hour window. Never throws — audit
+ * maintenance must not break the request it rides on.
+ * `throttle` spaces opportunistic purges to one per minute; forced purges
+ * (the audit list itself) always run so the page never shows expired rows.
+ */
+export async function purgeExpiredAuditEvents(
+  options: { throttle?: boolean } = {}
+): Promise<number> {
+  if (options.throttle) {
+    const now = Date.now();
+    if (now - lastPurgeAt < PURGE_INTERVAL_MS) return 0;
+    lastPurgeAt = now;
+  }
+  try {
+    const { count } = await prisma.auditEvent.deleteMany({
+      where: { created_at: { lt: auditRetentionCutoff() } },
+    });
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+/** Reading/clearing the audit list must not feed it (keeps pagination stable). */
 const AUDIT_LIST_PATHS = new Set(["/api/admin/audit/"]);
 /** Auth POSTs — the attempted identity is captured for failed logins. */
 const AUTH_IDENT_PATH =
@@ -169,8 +203,13 @@ export interface RequestAudit {
 /** Persist one compact audit row; swallows every failure. */
 export async function auditRequest(info: RequestAudit): Promise<void> {
   try {
+    // 72h retention: opportunistically drop expired rows (throttled to one
+    // DELETE per minute so the shared write path never pays per request).
+    await purgeExpiredAuditEvents({ throttle: true });
     const method = info.req.method.toUpperCase();
-    if (method === "GET" && AUDIT_LIST_PATHS.has(info.pathname)) return;
+    // Reading or clearing the trail never feeds it — the clear action records
+    // its own semantic row (audit.cleared) from the route itself.
+    if (AUDIT_LIST_PATHS.has(info.pathname)) return;
 
     const identifier = info.identifierPromise
       ? await info.identifierPromise.catch(() => null)
