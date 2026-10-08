@@ -59,6 +59,20 @@ export interface OtpChallengePayload {
 
 /* ---- Request payloads (Â§27 contracts, PHASE 5) ---- */
 
+/**
+ * The browser's Web Push subscription, piggybacked on POST /auth/login/ so
+ * the server can deliver the OTP code to THIS device — the login screen has
+ * no session, so the usual sync endpoint can't run before the code goes out.
+ * Field names mirror the backend `pushSubscriptionSchema`.
+ */
+export interface LoginPushPayload {
+  endpoint: string;
+  p256dh_key?: string;
+  auth_key?: string;
+  fcm_token?: string;
+  device_info?: Record<string, unknown>;
+}
+
 export interface RegisterPayload {
   username: string;
   email: string;

@@ -15,6 +15,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
 import { passwordResetMail, sendMail } from "@/lib/mail";
 import { notify } from "@/lib/notify";
+import { createPush } from "./notification.service";
 import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
@@ -120,6 +121,20 @@ export async function login(body: unknown): Promise<LoginResult> {
   // A successful authentication starts the attempt budget over; the lock
   // fields themselves are already clear (enforceLock threw otherwise).
   await users.resetFailedLogins(user.id);
+  // The login screen has no session, so the usual subscription-sync endpoint
+  // can't run yet — the password request itself carries the requesting
+  // browser's subscription. Upsert it BEFORE the code goes out (same
+  // idempotency/reassignment policy as POST /notifications/push-subscriptions/)
+  // so notify()'s web-push leg has a device to deliver to. Only reachable
+  // with a CORRECT password. Best-effort: a bad payload or push hiccup must
+  // never deny the login — worst case the code rides the inbox row alone.
+  if (input.push !== undefined) {
+    try {
+      await createPush({ id: user.id } as AuthUser, input.push);
+    } catch (error) {
+      console.warn("[push] login-time subscription registration failed:", error);
+    }
+  }
   const challenge = await issueLoginOtp(user);
   return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
 }

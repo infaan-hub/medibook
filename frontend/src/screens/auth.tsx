@@ -23,6 +23,7 @@ import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
 import { getPushPlatform } from "../lib/platform";
+import { collectLoginPush } from "../push/loginPush";
 import { TextField } from "../components/ui";
 
 /* ---------------- shared helpers ---------------- */
@@ -964,7 +965,14 @@ export function LoginScreen() {
     setFormErrors({});
     setSubmitting(true);
     try {
-      const outcome = await login(username.trim(), password);
+      // Piggyback this browser's push subscription (when the platform allows
+      // one) so the OTP code reaches the device: no session exists yet, so
+      // the password request is the only chance to hand it to the server.
+      // Best-effort — no subscription simply means delivery via the inbox.
+      const push = await collectLoginPush();
+      const outcome = push
+        ? await login(username.trim(), password, push)
+        : await login(username.trim(), password);
       if (outcome?.otpRequired) {
         setChallenge({
           token: outcome.challenge,

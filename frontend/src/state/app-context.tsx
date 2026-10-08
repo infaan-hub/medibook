@@ -27,7 +27,7 @@ import {
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import { realtime } from "../realtime/socket";
-import type { RegisterPayload, User } from "../api/types";
+import type { LoginPushPayload, RegisterPayload, User } from "../api/types";
 
 /* ---------------- Toasts ---------------- */
 
@@ -98,7 +98,7 @@ export type LoginOutcome =
 interface SessionContextValue {
   status: SessionStatus;
   user: User | null;
-  login: (username: string, password: string) => Promise<LoginOutcome>;
+  login: (username: string, password: string, push?: LoginPushPayload) => Promise<LoginOutcome>;
   /** Second step: exchange the OTP challenge for the JWT pair. */
   verifyLogin: (challenge: string, otp: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
@@ -150,8 +150,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (username: string, password: string): Promise<LoginOutcome> => {
-      const envelope = await loginRequest(username, password);
+    async (
+      username: string,
+      password: string,
+      push?: LoginPushPayload
+    ): Promise<LoginOutcome> => {
+      const envelope = await loginRequest(username, password, push);
       const data = envelope.data;
       // The password step mints no tokens — hand the challenge up to the
       // OTP screen and stop; verifyLogin completes the sign-in.

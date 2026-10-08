@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => {
   const otps: Row[] = [];
   const refreshTokens: Row[] = [];
   const notifications: Row[] = [];
+  const pushSubs: Row[] = [];
   let seq = 1;
 
   /** Minimal Prisma `where` matcher covering the operators these flows use. */
@@ -143,7 +144,31 @@ const harness = vi.hoisted(() => {
         return { ...row };
       },
     },
-    pushSubscription: { findMany: async () => [] },
+    // Full upsert surface (createPush registers the login page's device);
+    // findMany stays empty on purpose — actual web-push delivery is
+    // pushSender.test's contract, this suite must never touch the network.
+    pushSubscription: {
+      findUnique: async ({ where }: Row) => {
+        const row = find(pushSubs, where);
+        return row ? { ...row } : null;
+      },
+      create: async ({ data }: Row) => {
+        const row = {
+          id: seq++,
+          created_at: new Date(),
+          updated_at: new Date(),
+          ...data,
+        };
+        pushSubs.push(row);
+        return { ...row };
+      },
+      update: async ({ where, data }: Row) => {
+        const row = find(pushSubs, where);
+        if (!row) throw new Error("Record to update not found.");
+        return Object.assign(row, data);
+      },
+      findMany: async () => [],
+    },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     // The atomic failed-attempt UPDATE (registerFailedAttempt) — replayed
     // against the in-memory row so the shared lock counter still works.
@@ -181,6 +206,7 @@ const harness = vi.hoisted(() => {
     otps,
     refreshTokens,
     notifications,
+    pushSubs,
     addUser(overrides: Row = {}): Row {
       const row: Row = {
         id: seq++,
@@ -213,6 +239,7 @@ const harness = vi.hoisted(() => {
       otps.length = 0;
       refreshTokens.length = 0;
       notifications.length = 0;
+      pushSubs.length = 0;
       seq = 1;
     },
   };
@@ -438,5 +465,95 @@ describe("the lock gate", () => {
     expect(body.data.code).toBe("ACCOUNT_LOCKED");
     expect(harness.otps).toHaveLength(0);
     expect(harness.notifications).toHaveLength(0);
+  });
+});
+
+describe("login-time push registration", () => {
+  const ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-abc";
+
+  it("registers the requesting device before the code goes out", async () => {
+    const user = seed();
+
+    const response = await post(loginRoute, {
+      username: "juma",
+      password: PASSWORD,
+      push: {
+        endpoint: ENDPOINT,
+        p256dh_key: "dh-key",
+        auth_key: "auth-key",
+        device_info: { source: "login" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.otp_required).toBe(true);
+    expect(harness.pushSubs).toHaveLength(1);
+    expect(harness.pushSubs[0]).toMatchObject({
+      user_id: user.id,
+      endpoint: ENDPOINT,
+      p256dh_key: "dh-key",
+      auth_key: "auth-key",
+      is_active: true,
+    });
+    // Registered BEFORE notify() — the code row is the device's to receive.
+    expect(harness.notifications).toHaveLength(1);
+    expect(harness.notifications[0].message).toMatch(/login code is \d{6}/);
+  });
+
+  it("re-binds an existing endpoint to the account signing in (reactivated)", async () => {
+    const user = seed();
+    harness.pushSubs.push({
+      id: 900,
+      user_id: 777,
+      endpoint: ENDPOINT,
+      p256dh_key: "stale-dh",
+      auth_key: "stale-auth",
+      fcm_token: "",
+      device_info: {},
+      is_active: false,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+      updated_at: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const response = await post(loginRoute, {
+      username: "juma",
+      password: PASSWORD,
+      push: { endpoint: ENDPOINT, p256dh_key: "fresh-dh", auth_key: "fresh-auth" },
+    });
+
+    expect(response.status).toBe(200);
+    // One endpoint = one device: handed to the account using it now.
+    expect(harness.pushSubs).toHaveLength(1);
+    expect(harness.pushSubs[0]).toMatchObject({
+      id: 900,
+      user_id: user.id,
+      p256dh_key: "fresh-dh",
+      auth_key: "fresh-auth",
+      is_active: true,
+    });
+  });
+
+  it("ignores a malformed push payload instead of blocking the login", async () => {
+    seed();
+
+    const response = await post(loginRoute, {
+      username: "juma",
+      password: PASSWORD,
+      push: { endpoint: "not a url" },
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.otp_required).toBe(true);
+    expect(harness.pushSubs).toHaveLength(0);
+    expect(harness.otps).toHaveLength(1); // the challenge itself is unaffected
+  });
+
+  it("touches no subscription when the request carries none", async () => {
+    seed();
+
+    const response = await submitLogin("juma", PASSWORD);
+
+    expect(response.status).toBe(200);
+    expect(harness.pushSubs).toHaveLength(0);
   });
 });

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   verifyLogin: vi.fn(),
   notify: vi.fn(),
+  subscribeToPush: vi.fn(),
 }));
 
 vi.mock("../state/app-context", async (importOriginal) => ({
@@ -30,12 +31,21 @@ vi.mock("../state/app-context", async (importOriginal) => ({
   useToast: () => ({ notify: mocks.notify, toasts: [], dismiss: vi.fn() }),
 }));
 
+vi.mock("../push/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../push/notifications")>()),
+  subscribeToPush: mocks.subscribeToPush,
+}));
+
 const CHALLENGE = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 beforeEach(() => {
   mocks.login.mockReset();
   mocks.verifyLogin.mockReset();
   mocks.notify.mockReset();
+  // Default: this browser can't push (jsdom has no Web Push) → login carries
+  // no subscription, exactly like the pre-OTP behaviour.
+  mocks.subscribeToPush.mockReset();
+  mocks.subscribeToPush.mockResolvedValue({ ok: false, reason: "unsupported" });
 });
 
 /** Render, then run the password step to the point where `login()` settles. */
@@ -121,5 +131,35 @@ describe("LoginScreen OTP step", () => {
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.queryByLabelText("Verification code")).toBeNull();
     expect(mocks.verifyLogin).not.toHaveBeenCalled();
+  });
+
+  it("attaches the browser push subscription to the password request", async () => {
+    mocks.subscribeToPush.mockResolvedValue({
+      ok: true,
+      subscription: {
+        toJSON: () => ({
+          endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+          keys: { p256dh: "dh-key", auth: "auth-key" },
+        }),
+      },
+    });
+    await reachOtpStep();
+
+    expect(mocks.login).toHaveBeenCalledWith(
+      "juma",
+      "pw",
+      expect.objectContaining({
+        endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+        p256dh_key: "dh-key",
+        auth_key: "auth-key",
+        device_info: expect.objectContaining({ source: "login" }),
+      })
+    );
+  });
+
+  it("still submits without a push payload when the browser can't push", async () => {
+    await reachOtpStep();
+
+    expect(mocks.login).toHaveBeenCalledWith("juma", "pw");
   });
 });
