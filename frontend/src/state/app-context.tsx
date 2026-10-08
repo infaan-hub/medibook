@@ -93,7 +93,13 @@ export type SessionStatus = "booting" | "authed" | "guest";
 /** What the password step of login produced: a challenge, or (legacy) a session. */
 export type LoginOutcome =
   | { otpRequired: false }
-  | { otpRequired: true; challenge: string; expiresIn: number };
+  | {
+      otpRequired: true;
+      challenge: string;
+      expiresIn: number;
+      emailSent?: boolean;
+      emailHint?: string | null;
+    };
 
 interface SessionContextValue {
   status: SessionStatus;
@@ -160,7 +166,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // The password step mints no tokens — hand the challenge up to the
       // OTP screen and stop; verifyLogin completes the sign-in.
       if ("otp_required" in data) {
-        return { otpRequired: true, challenge: data.challenge, expiresIn: data.expires_in };
+        return {
+          otpRequired: true,
+          challenge: data.challenge,
+          expiresIn: data.expires_in,
+          emailSent: data.email_sent,
+          emailHint: data.email_hint,
+        };
       }
       applyAuth(data);
       return { otpRequired: false };

@@ -324,6 +324,8 @@ describe("the password step", () => {
       otp_required: true,
       challenge: expect.stringMatching(/^[0-9a-f]{64}$/),
       expires_in: 300,
+      email_sent: true,
+      email_hint: "j***@example.com",
     });
     // No session material leaks before the code is typed.
     expect(body.data.access).toBeUndefined();
@@ -347,6 +349,27 @@ describe("the password step", () => {
     });
     expect(harness.notifications[0].message).toMatch(/login code is \d{6}/);
     expect(harness.notifications[0].message).toContain("expires in 5 minutes");
+  });
+
+  it("emails the SAME code — the channel that reaches iOS Safari tabs", async () => {
+    seed();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const response = await submitLogin("juma", PASSWORD);
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toMatchObject({
+      email_sent: true,
+      email_hint: "j***@example.com",
+    });
+    const printed = log.mock.calls.map((call) => String(call[0])).join("\n");
+    log.mockRestore();
+    const code = /login code is (\d{6})/.exec(harness.notifications[0].message)?.[1];
+    expect(code).toBeTruthy();
+    expect(printed).toContain("---------- Mail (");
+    expect(printed).toContain("To: juma@example.com");
+    expect(printed).toContain("Subject: Your MediBook login code");
+    expect(printed).toContain(`\n${code}\n`); // the emailed code, verbatim
   });
 });
 
