@@ -2,9 +2,11 @@
  * "Download app" — the A2HS install call to action (§22.1, §69).
  *
  * Placed where the install CTA belongs:
- *  - `header`   — replaces the notification bell in the patient/doctor/admin
- *                 shell header while MediBook is not installed yet (see
- *                 `AppShell`),
+ *  - `header`   — legacy slot (the shell header used to swap the bell for
+ *                 this button while MediBook was not installed; the shell now
+ *                 uses the right-edge barge + sidebar button from
+ *                 `InstallAppBarge` instead, so this variant only backs
+ *                 tests),
  *  - `floating` — top corner of the welcome screen so a first-time visitor
  *                 can install before signing up,
  *  - `inline`   — flows inside a screen's own header row (the onboarding

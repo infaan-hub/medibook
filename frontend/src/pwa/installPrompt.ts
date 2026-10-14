@@ -140,8 +140,8 @@ export interface InstallAvailability {
   installable: boolean;
   /**
    * Running as an installed app (standalone display mode — the installed PWA
-   * that has a desktop/home-screen shortcut). The shell header swaps the
-   * Download app button back to the notification bell in this state.
+   * that has a desktop/home-screen shortcut). The shell retires the
+   * Download app CTA (barge + sidebar button) in this state.
    */
   installed: boolean;
   /** iOS/iPadOS: install is Share → Add to Home Screen, not a prompt. */

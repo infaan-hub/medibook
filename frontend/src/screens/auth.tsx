@@ -372,8 +372,8 @@ const onboardingSlides: readonly OnboardingSlide[] = [
         ],
         extra: {
           src: "onboarding/download-button.png",
-          alt: 'The "Download app" button in the MediBook header',
-          caption: "Or tap Download app in the MediBook header",
+          alt: 'The "Download app" button in the MediBook sidebar',
+          caption: "Or tap Download app below the sidebar menu",
           real: true,
         },
       },
@@ -412,8 +412,8 @@ const onboardingSlides: readonly OnboardingSlide[] = [
         note: "The exact button and wording differ between Chrome, Edge, Safari and versions. In browsers without install support, keep using MediBook normally in a browser tab.",
         extra: {
           src: "onboarding/download-button.png",
-          alt: 'The "Download app" button in the MediBook header',
-          caption: "Or tap Download app in the MediBook header",
+          alt: 'The "Download app" button in the MediBook sidebar',
+          caption: "Or tap Download app below the sidebar menu",
           real: true,
         },
       },

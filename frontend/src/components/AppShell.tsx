@@ -1,8 +1,9 @@
 ﻿/**
  * App shell (Â§22.6 responsive layout): sticky header, phone bottom nav,
  * tablet+ sidebar rail, update prompt, offline banner. The A2HS install CTA
- * lives in `components/InstallAppButton.tsx` (Â§69) â€” patient header plus the
- * first-run guest screens.
+ * lives in `components/InstallAppBarge.tsx` (Â§69) — a right-edge barge plus a
+ * "Download app" button below the sidebar nav; the header only ever shows the
+ * notification bell.
  * PHASE 5: navigation and the header user chip are role-aware.
  * PHASE 13: notification bell with unread count badge.
  * Responsive: CSS Grid layout, hamburger toggle at all sizes,
@@ -23,8 +24,11 @@ import { tokenStore } from "../api/tokens";
 import { getPushSubscription, subscribeToPush } from "../push/notifications";
 import { getNotificationCapability } from "../lib/platform";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { useInstallAvailability } from "../pwa/installPrompt";
-import { InstallAppButton } from "./InstallAppButton";
+import {
+  InstallAppBarge,
+  InstallInfoDialog,
+  useInstallCta,
+} from "./InstallAppBarge";
 import {
   Home,
   Stethoscope,
@@ -43,6 +47,7 @@ import {
   LogOut,
   Newspaper,
   Siren,
+  Download,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
@@ -179,20 +184,13 @@ function NotificationBell() {
  * Header actions.
  *
  * Shared by patients, doctors, and admins (the shell header is the same for
- * all three roles):
- *
- *   Not installed yet          â†’ the "Download app" button (Â§22.1) replaces
- *                                the bell; one tap runs the browser install,
- *                                which puts a MediBook shortcut on the desktop
- *                                (Windows) / home screen (Android) connected
- *                                to the web app.
- *   Installed (standalone PWA) â†’ the notification bell; notifications also
- *                                stay reachable from the drawer / sidebar.
+ * all three roles). The install CTA moved out of the header (Â§22.1): the
+ * "Download app" barge sits on the right edge, middle of the viewport, and
+ * the sidebar keeps its own button below the nav — the header therefore
+ * always shows the notification bell.
  */
 function HeaderActions() {
-  const { installed } = useInstallAvailability();
-  if (installed) return <NotificationBell />;
-  return <InstallAppButton />;
+  return <NotificationBell />;
 }
 
 /** Avatar that shows profile image or initials fallback. */
@@ -391,6 +389,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const { user, logout } = useSession();
   usePushResync(user?.id ?? null);
+  // Install CTA state: right-edge barge + sidebar button + how-to popup (§69).
+  const installCta = useInstallCta();
   const items = navItemsFor(user);
   const bottomItems = bottomNavItemsFor(user);
   const isDesktop = useIsDesktop();
@@ -502,6 +502,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks items={items} side onNavigate={closeSidebar} user={user} />
           <div className="sidebar__spacer" />
           <div className="sidebar__divider" />
+          {installCta.ctaVisible && (
+            <button
+              type="button"
+              className="sidebar__install"
+              onClick={installCta.show}
+            >
+              <Download size={18} aria-hidden="true" />
+              <span>Download app</span>
+            </button>
+          )}
           <Link
             to="/profile"
             className="sidebar__user"
@@ -546,6 +556,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="shell__nav--bottom" aria-label="Primary">
         <NavLinks items={bottomItems} user={user} />
       </nav>
+
+      {/* "Download app" barge (right edge, middle) + device-specific popup. */}
+      <InstallAppBarge visible={installCta.bargeVisible} onOpen={installCta.show} />
+      <InstallInfoDialog
+        open={installCta.open}
+        onClose={installCta.close}
+        onGotIt={installCta.dismiss}
+        isIOS={installCta.isIOS}
+        installable={installCta.installable}
+        install={installCta.install}
+      />
     </div>
   );
 }

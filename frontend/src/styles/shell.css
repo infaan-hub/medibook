@@ -538,6 +538,7 @@
   .shell__nav--side:not(.shell__nav--side--open) .sidebar__user-info,
   .shell__nav--side:not(.shell__nav--side--open) .sidebar__user-chevron,
   .shell__nav--side:not(.shell__nav--side--open) .sidebar__signout span,
+  .shell__nav--side:not(.shell__nav--side--open) .sidebar__install span,
   .shell__nav--side:not(.shell__nav--side--open) .nav-item__label {
     opacity: 0;
     width: 0;
@@ -553,7 +554,8 @@
     padding: var(--space-3);
     margin: 0 var(--space-1) var(--space-1);
   }
-  .shell__nav--side:not(.shell__nav--side--open) .sidebar__signout {
+  .shell__nav--side:not(.shell__nav--side--open) .sidebar__signout,
+  .shell__nav--side:not(.shell__nav--side--open) .sidebar__install {
     justify-content: center;
     padding: var(--space-2);
     margin: var(--space-1) var(--space-1) var(--space-2);
@@ -790,8 +792,9 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
 }
 
 /* ---- "Download app" (A2HS) button (Â§22.1, Â§69) ----
-   Shown while MediBook is not installed yet: in the patient header (replacing
-   the bell) and at the top of the first-run guest screens. */
+   Guest screens only (welcome / onboarding): the shell header no longer
+   carries an install button — inside the app the CTA is the right-edge
+   barge + the sidebar button (see .install-barge / .sidebar__install). */
 .install-btn {
   display: inline-flex;
   align-items: center;
@@ -840,6 +843,91 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   min-height: 44px;
   justify-content: center;
   font-size: 13px;
+}
+
+/* ---- "Download app" barge + how-to-install popup (Â§22.1, Â§69) ----
+   Replaces the header install button: a badge glued to the right edge at the
+   middle of the viewport. Tapping it opens the device-specific popup
+   (InstallInfoDialog, rendered through the shared .modal styles); "Got it"
+   dismisses the barge for good, the sidebar button keeps working. */
+.install-barge {
+  position: fixed;
+  right: var(--safe-right, 0px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px 0 0 10px;
+  background: #09A99E;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(9, 169, 158, 0.35);
+  transition: background 0.15s ease, padding 0.15s ease;
+}
+.install-barge:hover {
+  background: #087F79;
+  padding-right: 16px;
+}
+.install-barge:active { opacity: 0.88; }
+
+/* Small popup: tighten the shared modal card. */
+.install-info__card { max-width: 360px; }
+.install-info__intro {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+.install-info__steps {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.25em;
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* Sidebar CTA — the header slot is gone; the button sits below the nav. */
+.sidebar__install {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: calc(100% - var(--space-4));
+  margin: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgb(9 169 158 / 0.32);
+  color: var(--color-text-inverse, #fff);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sidebar__install:hover {
+  background: rgb(9 169 158 / 0.5);
+}
+.sidebar__install svg {
+  flex-shrink: 0;
+}
+/* Drawer widths (< 1200px): generous touch target, like the sign-out row. */
+@media (max-width: 1199px) {
+  .shell__nav--side .sidebar__install {
+    min-height: 48px;
+    margin: var(--space-1) var(--space-3) var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-md);
+    border-radius: 12px;
+  }
 }
 
 /* ---- Splash screen ---- */
@@ -944,4 +1032,7 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   .shell--admin .sidebar__user-role { color: rgba(255,255,255,.6); }
   .shell--admin .sidebar__signout { color: rgba(255,255,255,.7); }
   .shell--admin .sidebar__signout:hover { color: #fff; background: rgba(255,255,255,.15); }
+  /* The admin rail is already brand teal — the install CTA inverts to white. */
+  .shell--admin .sidebar__install { background: rgba(255,255,255,.16); color: #fff; }
+  .shell--admin .sidebar__install:hover { background: rgba(255,255,255,.26); }
 }
