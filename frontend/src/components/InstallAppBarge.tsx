@@ -15,8 +15,11 @@
  *                        install → app on the home screen) + "Got it",
  *       • Desktop      — short description + "Download app" (desktop / Start
  *                        menu / Dock shortcut, own window) + "Got it",
- *       • no install path (e.g. Firefox, desktop Safari) — manual
- *                        browser-menu instructions + "Got it".
+ *       • no install path (e.g. Firefox, desktop Safari) — device-specific
+ *                        manual steps (three-dot menu on Android, address-bar
+ *                        menu / File → Add to Dock on desktop); Android and
+ *                        desktop still get the "Download app" button, which
+ *                        waits for a late install prompt.
  *   - The sidebar keeps a "Download app" button below the nav links (never in
  *     the header) that opens the same popup; it retires itself once the app
  *     is installed.
@@ -144,21 +147,20 @@ function InstallInfoBody({
       </>
     );
   }
-  if (installable) {
+  if (isAndroidDevice) {
     return (
       <p className="install-info__intro">
-        {isAndroidDevice
+        {installable
           ? "One tap adds MediBook to your home screen with its own icon \u2014 it opens in its own window and keeps working offline. No app store needed."
-          : "One tap installs MediBook on this computer: a shortcut is added to your desktop and Start menu (or Dock), and the app opens in its own window."}
+          : "This browser can't install MediBook automatically here. Open the three-dot menu at the top right and choose \u201CAdd to Home screen\u201D (or \u201CInstall app\u201D), then confirm \u2014 MediBook is added to your home screen."}
       </p>
     );
   }
   return (
     <p className="install-info__intro">
-      This browser can't install MediBook automatically. Open the browser menu
-      (the dots or lines icon) and choose &ldquo;Install MediBook&rdquo; or
-      &ldquo;Install this site as an app&rdquo;. In Safari, use File &rarr; Add
-      to Dock.
+      {installable
+        ? "One tap installs MediBook on this computer: a shortcut is added to your desktop and Start menu (or Dock), and the app opens in its own window."
+        : "This browser can't install MediBook automatically. Open the browser menu (the dots or lines icon) and choose \u201CInstall MediBook\u201D or \u201CInstall this site as an app\u201D. In Safari, use File \u2192 Add to Dock."}
     </p>
   );
 }
@@ -182,6 +184,13 @@ export function InstallInfoDialog({
       if (accepted) {
         notify("success", "Installing MediBook\u2026");
         onClose();
+      } else {
+        // No install path (or the prompt never arrived): keep the popup open
+        // — its description already shows the device-specific manual steps.
+        notify(
+          "info",
+          "This browser didn't offer a one-tap install \u2014 follow the steps above instead."
+        );
       }
     } finally {
       setBusy(false);
@@ -199,7 +208,7 @@ export function InstallInfoDialog({
           <button type="button" className="btn btn--secondary" onClick={onGotIt}>
             Got it
           </button>
-          {!isIOS && installable && (
+          {!isIOS && (
             <button
               type="button"
               className="btn btn--primary"

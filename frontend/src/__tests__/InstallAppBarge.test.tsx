@@ -33,6 +33,8 @@ import type { BeforeInstallPromptEvent } from "../types/pwa";
 const DEFAULT_UA = window.navigator.userAgent;
 const IOS_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+const ANDROID_UA =
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 const DISMISSED_KEY = "medibook_install_barge_dismissed";
 
 /** Minimal MediaQueryList stub — jsdom ships no matchMedia. */
@@ -182,19 +184,41 @@ describe("InstallAppBarge", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("falls back to manual instructions when the browser cannot install", async () => {
+  it("shows device-specific manual steps when the browser cannot install", async () => {
     renderCta();
 
     fireEvent.click(await screen.findByTitle("Download app"));
     const dialog = await screen.findByRole("dialog", {
       name: /download medibook app/i,
     });
-    expect(within(dialog).getByText(/browser menu/i)).toBeInTheDocument();
+    // jsdom's UA is desktop → desktop browser-menu instructions, not a
+    // generic "can't install" text.
+    expect(within(dialog).getByText(/open the browser menu/i)).toBeInTheDocument();
+    // Android/desktop keep the Download app button even without a prompt —
+    // the tap waits for a late beforeinstallprompt.
     expect(
-      within(dialog).queryByRole("button", { name: /download app/i }),
-    ).toBeNull();
+      within(dialog).getByRole("button", { name: /download app/i }),
+    ).toBeInTheDocument();
     expect(
       within(dialog).getByRole("button", { name: /got it/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("describes the manual three-dot-menu path on Android", async () => {
+    setUserAgent(ANDROID_UA);
+    renderCta();
+
+    fireEvent.click(await screen.findByTitle("Download app"));
+    const dialog = await screen.findByRole("dialog", {
+      name: /download medibook app/i,
+    });
+    expect(within(dialog).getByText(/three-dot menu/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/add to home screen/i)).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText(/open the browser menu/i),
+    ).toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: /download app/i }),
     ).toBeInTheDocument();
   });
 
