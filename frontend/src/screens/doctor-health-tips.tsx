@@ -9,7 +9,8 @@ import {
 } from "../api/blog";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { useToast } from "../state/app-context";
-import { Newspaper } from "lucide-react";
+import { Heart, Newspaper } from "lucide-react";
+import { BlogCover } from "./blog";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -239,14 +240,7 @@ export function DoctorHealthTipsScreen() {
         <div className="blog__grid">
           {articles.map((article) => (
             <div key={article.id} className="blog__card">
-              {article.image && (
-                <img
-                  src={article.image}
-                  alt={article.title}
-                  className="blog__card-image"
-                  loading="lazy"
-                />
-              )}
+              <BlogCover article={article} className="blog__card-image" />
               <div className="blog__card-body">
                 <span className="blog__card-category">{t(`blog.categories.${article.category}`)}</span>
                 <h3 className="blog__card-title">{article.title}</h3>
@@ -255,10 +249,17 @@ export function DoctorHealthTipsScreen() {
                   <span className="blog__card-author">{authorLabel(article)}</span>
                 )}
                 {!article.published && <span className="blog__card-status">Draft</span>}
-                <time className="blog__card-date">
-                  {(article.published_at ?? article.created_at) &&
-                    new Date(article.published_at ?? article.created_at).toLocaleDateString()}
-                </time>
+                <div className="blog__card-footer">
+                  <time className="blog__card-date">
+                    {(article.published_at ?? article.created_at) &&
+                      new Date(article.published_at ?? article.created_at).toLocaleDateString()}
+                  </time>
+                  {/* Read-only tally for the author — patients do the liking. */}
+                  <span className="blog__likes-static" title={t("blog.likes", { count: article.likes_count ?? 0 })}>
+                    <Heart size={14} aria-hidden="true" />
+                    {article.likes_count ?? 0}
+                  </span>
+                </div>
                 <div className="health-tips-card-actions">
                   <Button type="button" variant="secondary" onClick={() => startEdit(article)}>
                     Edit

@@ -13,12 +13,22 @@ export const GET = handler(async (ctx) => {
       req: ctx.req,
       where: { author_id: user.id },
       count: () => content.myArticleCount(user.id),
-      fetch: ({ skip, take }) =>
-        content
-          .myArticlePage(user.id, skip, take)
-          .then((rows) => rows.map((a) => articleDetailDto(a, ctx.req))),
-      fetchAll: async () =>
-        (await content.myArticlePage(user.id, 0, 1000)).map((a) => articleDetailDto(a, ctx.req)),
+      fetch: async ({ skip, take }) => {
+        const rows = await content.myArticlePage(user.id, skip, take);
+        const likes = await content.articleLikeState(
+          user.id,
+          rows.map((a) => a.id)
+        );
+        return rows.map((a) => articleDetailDto(a, ctx.req, likes.get(a.id)));
+      },
+      fetchAll: async () => {
+        const rows = await content.myArticlePage(user.id, 0, 1000);
+        const likes = await content.articleLikeState(
+          user.id,
+          rows.map((a) => a.id)
+        );
+        return rows.map((a) => articleDetailDto(a, ctx.req, likes.get(a.id)));
+      },
     });
   }
 
@@ -27,10 +37,22 @@ export const GET = handler(async (ctx) => {
     req: ctx.req,
     where: { status: "published", ...(category ? { category } : {}) },
     count: () => content.publicArticleCount(category),
-    fetch: ({ skip, take }) =>
-      content.publicArticlePage(category, skip, take).then((rows) => rows.map((a) => articleListDto(a, ctx.req))),
-    fetchAll: async () =>
-      content.publicArticlePage(category, 0, 1000).then((rows) => rows.map((a) => articleListDto(a, ctx.req))),
+    fetch: async ({ skip, take }) => {
+      const rows = await content.publicArticlePage(category, skip, take);
+      const likes = await content.articleLikeState(
+        ctx.user?.id ?? null,
+        rows.map((a) => a.id)
+      );
+      return rows.map((a) => articleListDto(a, ctx.req, likes.get(a.id)));
+    },
+    fetchAll: async () => {
+      const rows = await content.publicArticlePage(category, 0, 1000);
+      const likes = await content.articleLikeState(
+        ctx.user?.id ?? null,
+        rows.map((a) => a.id)
+      );
+      return rows.map((a) => articleListDto(a, ctx.req, likes.get(a.id)));
+    },
   });
 });
 

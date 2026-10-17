@@ -72,6 +72,47 @@ export const updateArticle = (
 export const deleteArticle = (id: number, tx?: Prisma.TransactionClient) =>
   (tx ?? prisma).article.delete({ where: { id } });
 
+/* ------------------------------ Article likes ------------------------------ */
+
+export const findArticleLike = (articleId: number, userId: number) =>
+  prisma.articleLike.findUnique({
+    where: { article_id_user_id: { article_id: articleId, user_id: userId } },
+  });
+
+export const createArticleLike = (articleId: number, userId: number) =>
+  prisma.articleLike.create({ data: { article_id: articleId, user_id: userId } });
+
+export const deleteArticleLike = (articleId: number, userId: number) =>
+  prisma.articleLike.deleteMany({ where: { article_id: articleId, user_id: userId } });
+
+export const countArticleLikes = (articleId: number) =>
+  prisma.articleLike.count({ where: { article_id: articleId } });
+
+/** Per-article like counts for a page of articles in ONE query (no N+1). */
+export const countLikesByArticleIds = async (articleIds: number[]): Promise<Map<number, number>> => {
+  const counts = new Map<number, number>();
+  if (articleIds.length === 0) return counts;
+  const rows = await prisma.articleLike.groupBy({
+    by: ["article_id"],
+    where: { article_id: { in: articleIds } },
+    _count: { _all: true },
+  });
+  for (const row of rows) counts.set(row.article_id, row._count._all);
+  return counts;
+};
+
+/** The subset of `articleIds` this user has liked (ONE query). */
+export const likedArticleIds = async (userId: number, articleIds: number[]): Promise<Set<number>> => {
+  const liked = new Set<number>();
+  if (articleIds.length === 0) return liked;
+  const rows = await prisma.articleLike.findMany({
+    where: { user_id: userId, article_id: { in: articleIds } },
+    select: { article_id: true },
+  });
+  for (const row of rows) liked.add(row.article_id);
+  return liked;
+};
+
 /* --------------------------- Specialties / hospitals ----------------------- */
 
 export const countSpecialties = () => prisma.specialty.count();

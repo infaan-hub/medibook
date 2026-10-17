@@ -162,6 +162,9 @@
     "backToList": "Rudi kwenye makala",
     "noArticles": "Hakuna makala bado",
     "noArticlesDesc": "Rudi baadaye kwa vidokezo vya afya na makala za ustawi.",
+    "like": "Penda",
+    "unlike": "Ondoa upendo",
+    "likes": "Upendo {{count}}",
     "categories": {
       "all": "Zote",
       "health_tips": "Vidokezo vya Afya",

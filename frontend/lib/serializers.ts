@@ -211,10 +211,19 @@ export function pushSubscriptionDto(sub: PushSubscription): Record<string, unkno
   };
 }
 
+/** Per-article like state for the requesting viewer. */
+export interface ArticleLikeState {
+  /** Total likes on the article. */
+  count: number;
+  /** True when the requesting user liked it (always false for guests). */
+  liked: boolean;
+}
+
 /** blog.serializers.ArticleListSerializer. */
 export function articleListDto(
   article: Article & { author?: User | null },
-  req: Request
+  req: Request,
+  likes?: ArticleLikeState
 ): Record<string, unknown> {
   const author = article.author ?? null;
   const authorName = author
@@ -231,18 +240,21 @@ export function articleListDto(
     author_role: author?.role ?? "",
     published_at: iso(article.published_at),
     created_at: iso(article.created_at),
+    likes_count: likes?.count ?? 0,
+    liked_by_me: likes?.liked ?? false,
   };
 }
 
 /** blog.serializers.ArticleDetailSerializer. */
 export function articleDetailDto(
   article: Article & { author: User | null },
-  req: Request
+  req: Request,
+  likes?: ArticleLikeState
 ): Record<string, unknown> {
   const author = article.author;
   const fullName = author ? `${author.first_name} ${author.last_name}`.trim() : "";
   return {
-    ...articleListDto(article, req),
+    ...articleListDto(article, req, likes),
     content: article.content,
     published: article.published,
     author: article.author_id,

@@ -13,7 +13,7 @@ import * as content from "@/services/content.service";
 export const GET = handler(async (ctx) => {
   const slug = ctx.params.slug;
   if (!slug) throw notFound();
-  return ok(await content.publicArticleDetail(ctx.req, slug));
+  return ok(await content.publicArticleDetail(ctx.req, slug, ctx.user?.id ?? null));
 });
 
 export const PATCH = handler(async (ctx) => {

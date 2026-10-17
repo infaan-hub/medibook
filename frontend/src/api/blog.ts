@@ -14,6 +14,10 @@ export interface Article {
   author?: number;
   author_name?: string;
   author_role?: string;
+  /** Total likes on this tip. */
+  likes_count?: number;
+  /** True when the signed-in user has liked this tip. */
+  liked_by_me?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -57,4 +61,17 @@ export function deleteArticle(slug: string): Promise<void> {
 
 export function getArticle(slug: string): Promise<Envelope<Article>> {
   return apiGet<Article>(`/blog/articles/${slug}/`);
+}
+
+/** What POST /api/blog/articles/{slug}/like/ answers with after the flip. */
+export interface ArticleLikeResult {
+  liked: boolean;
+  likes_count: number;
+}
+
+/** POST /api/blog/articles/{slug}/like/ — toggle the caller's like. */
+export function toggleArticleLike(slug: string): Promise<Envelope<ArticleLikeResult>> {
+  return http
+    .post<Envelope<ArticleLikeResult>>(`/blog/articles/${slug}/like/`)
+    .then((r) => r.data);
 }

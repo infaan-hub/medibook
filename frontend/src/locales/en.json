@@ -162,6 +162,9 @@
     "backToList": "Back to articles",
     "noArticles": "No articles yet",
     "noArticlesDesc": "Check back soon for health tips and wellness articles.",
+    "like": "Like",
+    "unlike": "Unlike",
+    "likes": "{{count}} likes",
     "categories": {
       "all": "All",
       "health_tips": "Health Tips",

@@ -139,6 +139,7 @@ model User {
   lab_orders           LabOrder[]
   audit_events         AuditEvent[]
   blog_articles        Article[]
+  article_likes        ArticleLike[]
   media_files          MediaFile[]
 
   @@index([role])
@@ -752,6 +753,8 @@ model Article {
   updated_at   DateTime  @updatedAt
   author       User?     @relation(fields: [author_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   author_id    Int?      @map("author_id")
+  /// One row per (user, article) like - the count is likes.length.
+  likes        ArticleLike[]
 
   @@index([author_id])
   @@index([image_id])
@@ -759,6 +762,22 @@ model Article {
   @@index([category])
   @@index([created_at])
   @@map("blog_article")
+}
+
+/// A user's like on a health tip (blog article). The unique pair is the
+/// idempotency primitive: a double-tap can never inflate the count, and the
+/// like button flips by insert/delete (POST /api/blog/articles/{slug}/like/).
+model ArticleLike {
+  id         Int      @id @default(autoincrement())
+  article    Article  @relation(fields: [article_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  article_id Int      @map("article_id")
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user_id    Int      @map("user_id")
+  created_at DateTime @default(now())
+
+  @@unique([article_id, user_id])
+  @@index([user_id])
+  @@map("blog_article_like")
 }
 
 /// Refresh-token rotation + revocation ledger (replaces SimpleJWT blacklist).

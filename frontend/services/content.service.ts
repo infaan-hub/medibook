@@ -48,10 +48,61 @@ export const myArticlePage = (authorId: number, skip: number, take: number) =>
   content.listAuthorArticles(authorId, skip, take);
 
 /** GET /api/blog/articles/{slug}/ — single published article. */
-export async function publicArticleDetail(req: Request, slug: string) {
+export async function publicArticleDetail(
+  req: Request,
+  slug: string,
+  viewerId?: number | null
+) {
   const article = await content.findPublishedArticle(slug);
   if (!article) throw notFound("Article not found."); // custom Django message
-  return articleDetailDto(article, req);
+  return articleDetailDto(article, req, await articleLikeState(viewerId ?? null, [article.id]).then((m) => m.get(article.id)));
+}
+
+/* -------------------------------- Likes ---------------------------------- */
+
+/**
+ * Like state (count + whether the viewer liked it) for a page of articles,
+ * loaded in ONE round trip per concern — no per-article queries.
+ */
+export async function articleLikeState(
+  viewerId: number | null,
+  articleIds: number[]
+): Promise<Map<number, { count: number; liked: boolean }>> {
+  const state = new Map<number, { count: number; liked: boolean }>();
+  if (articleIds.length === 0) return state;
+  const [counts, liked] = await Promise.all([
+    content.countLikesByArticleIds(articleIds),
+    viewerId ? content.likedArticleIds(viewerId, articleIds) : Promise.resolve(new Set<number>()),
+  ]);
+  for (const id of articleIds) {
+    state.set(id, { count: counts.get(id) ?? 0, liked: liked.has(id) });
+  }
+  return state;
+}
+
+/**
+ * POST /api/blog/articles/{slug}/like/ — flip the caller's like on a
+ * published tip (Django toggle semantics). The unique (article, user) pair
+ * makes double-taps idempotent; the fresh count is returned so the client
+ * never has to guess.
+ */
+export async function toggleArticleLike(user: AuthUser, slug: string) {
+  const article = await content.findPublishedArticle(slug);
+  if (!article) throw notFound("Article not found.");
+  const existing = await content.findArticleLike(article.id, user.id);
+  if (existing) {
+    await content.deleteArticleLike(article.id, user.id);
+  } else {
+    // A concurrent duplicate is a no-op, not a 500: the pair is unique.
+    try {
+      await content.createArticleLike(article.id, user.id);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== "P2002") throw error;
+    }
+  }
+  const likes_count = await content.countArticleLikes(article.id);
+  return { liked: !existing, likes_count };
 }
 
 /**
