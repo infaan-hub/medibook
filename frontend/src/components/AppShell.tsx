@@ -415,18 +415,20 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
 
   return (
     <div className={`shell${sidebarOpen && !isDesktop ? " shell--drawer-open" : ""}${user?.role === "admin" && user.is_superuser ? " shell--admin" : ""}`}>
-      <header className="shell__header">
-        <button
-          className="shell__hamburger"
-          type="button"
-          aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
-          aria-expanded={sidebarOpen}
-          aria-controls="shell-sidebar"
-          onClick={toggleSidebar}
-        >
-          <Menu size={20} />
-        </button>
-        <span className="shell__brand">
+      <header className={`shell__header${guestMode ? " shell__header--guest" : ""}`}>
+        {!guestMode && (
+          <button
+            className="shell__hamburger"
+            type="button"
+            aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={sidebarOpen}
+            aria-controls="shell-sidebar"
+            onClick={toggleSidebar}
+          >
+            <Menu size={20} />
+          </button>
+        )}
+        <span className="shell__brand shell__brand--centered">
           <img className="shell__logo" src="/images/logo.jpeg" alt="MediBook" width={28} height={28} draggable={false} />
           <span className="shell__brand-text">MediBook</span>
         </span>

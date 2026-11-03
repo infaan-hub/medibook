@@ -30,6 +30,12 @@
   gap: var(--space-3);
   min-width: 0;
 }
+.shell__header--guest {
+  justify-content: center;
+}
+.shell__brand--centered {
+  justify-content: center;
+}
 .shell__brand {
   display: flex;
   align-items: center;
