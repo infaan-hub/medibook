@@ -15,7 +15,6 @@ import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Spinner } from "./ui";
 import { useSession, type SessionStatus } from "../state/app-context";
-import { isStandalonePWA } from "../lib/platform";
 
 export const LOGIN_PATH = "/login";
 
@@ -208,10 +207,6 @@ export function RequireSession({ children }: { children?: ReactNode }) {
   const location = useLocation();
 
   if (status === "booting") return <BootScreen />;
-  // In a web browser (not installed PWA), guests may view the home screen.
-  if (!isStandalonePWA() && status === "guest" && location.pathname === "/dashboard") {
-    return children ? <>{children}</> : <Outlet />;
-  }
   if (status !== "authed" || !user) {
     return loginWithFrom(location.pathname, location.search);
   }

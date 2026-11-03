@@ -15,14 +15,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
-import {
-  listPushSubscriptions,
-  listUnreadNotifications,
-  registerPushSubscription,
-} from "../api/notifications";
+import { listUnreadNotifications } from "../api/notifications";
 import { tokenStore } from "../api/tokens";
-import { getPushSubscription, subscribeToPush } from "../push/notifications";
-import { getNotificationCapability } from "../lib/platform";
+import { ensureServerSubscription } from "../push/sync";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import {
   InstallAppBarge,
@@ -251,16 +246,9 @@ function useOnline(): boolean {
 }
 
 /**
- * Self-heal the Web Push subscription once per login session, for every role.
- * Push only reaches the OS notification bar when the server holds a row in
- * `PushSubscription` â€” but rows were only created by the patient-home Enable
- * button, and registration failures used to be swallowed, leaving the database
- * empty (send path exits at `subs.length === 0`). This effect repairs every
- * broken state in the background when permission is already granted:
- * - browser subscription missing â†’ re-subscribe;
- * - browser subscription present but no active server row â†’ re-register
- *   (POST /push-subscriptions/ is idempotent per endpoint).
- * Best-effort: any failure is ignored (the manual prompt still reports errors).
+ * Self-heal Web Push through the shared sync path. PatientHome also probes
+ * this subscription, and the shared helper coalesces both calls into one
+ * server request.
  */
 function usePushResync(userId: number | null): void {
   const ranFor = useRef<number | null>(null);
@@ -268,42 +256,8 @@ function usePushResync(userId: number | null): void {
     if (!userId || ranFor.current === userId) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
-    // iOS Safari tab / insecure or unsupported context: Web Push only exists
-    // in the installed Home Screen app, so there is nothing to resync there
-    // (and nothing that could ever grant permission).
-    const capability = getNotificationCapability();
-    if (!capability.webPushSupported) return;
     ranFor.current = userId;
-    void (async () => {
-      try {
-        let sub = await getPushSubscription();
-        if (!sub) {
-          const result = await subscribeToPush();
-          if (!result.ok) return;
-          sub = result.subscription;
-        }
-        const p = sub.toJSON();
-        const keys = (p.keys ?? {}) as { p256dh?: string; auth?: string };
-        if (!p.endpoint || !keys.p256dh || !keys.auth) return;
-        const list = await listPushSubscriptions();
-        const synced = list.data.results.some(
-          (row) => row.endpoint === p.endpoint && row.is_active
-        );
-        if (synced) return;
-        await registerPushSubscription({
-          endpoint: p.endpoint,
-          p256dh_key: keys.p256dh,
-          auth_key: keys.auth,
-          device_info: {
-            userAgent: navigator.userAgent,
-            platform: capability.platform,
-            standalone: capability.standalone,
-          },
-        });
-      } catch {
-        /* background self-heal â€” never surface into the shell */
-      }
-    })();
+    void ensureServerSubscription();
   }, [userId]);
 }
 
