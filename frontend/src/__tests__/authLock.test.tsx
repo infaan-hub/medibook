@@ -13,6 +13,7 @@ import { ApiError } from "../api/client";
 import { ForgotPasswordScreen, LoginScreen, ResetPasswordScreen } from "../screens/auth";
 
 const mocks = vi.hoisted(() => ({
+  checkLoginCredentials: vi.fn(),
   login: vi.fn(),
   notify: vi.fn(),
   requestReset: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("../state/app-context", async (importOriginal) => ({
   useSession: () => ({
     status: "guest",
     user: null,
+    checkLoginCredentials: mocks.checkLoginCredentials,
     login: mocks.login,
     register: vi.fn(),
     socialLogin: vi.fn(),
@@ -39,6 +41,7 @@ vi.mock("../api/auth", () => ({
 }));
 
 beforeEach(() => {
+  mocks.checkLoginCredentials.mockReset();
   mocks.login.mockReset();
   mocks.notify.mockReset();
   mocks.requestReset.mockReset();
@@ -84,7 +87,7 @@ async function submitLogin() {
 
 describe("LoginScreen lock banner", () => {
   it("renders a live countdown from locked_until and blocks resubmission", async () => {
-    mocks.login.mockRejectedValue(
+    mocks.checkLoginCredentials.mockRejectedValue(
       lockedError({
         requiresAdmin: false,
         lockedUntil: new Date(Date.now() + 125_000).toISOString(),
@@ -97,11 +100,11 @@ describe("LoginScreen lock banner", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Try again in 2:0\d/);
     expect(screen.getByRole("button", { name: /^sign in$/i })).toBeDisabled();
     // The page-open itself never counted as an attempt.
-    expect(mocks.login).toHaveBeenCalledTimes(1);
+    expect(mocks.checkLoginCredentials).toHaveBeenCalledTimes(1);
   });
 
   it("tells the doctor to wait for an administrator, without a countdown", async () => {
-    mocks.login.mockRejectedValue(
+    mocks.checkLoginCredentials.mockRejectedValue(
       lockedError({ requiresAdmin: true, lockedUntil: null, role: "doctor" })
     );
 
@@ -116,7 +119,7 @@ describe("LoginScreen lock banner", () => {
   });
 
   it("shows how many attempts remain before the account locks", async () => {
-    mocks.login.mockRejectedValue(
+    mocks.checkLoginCredentials.mockRejectedValue(
       new ApiError("The username or password is incorrect.", 400, {
         non_field_errors: ["The username or password is incorrect."],
       }, {

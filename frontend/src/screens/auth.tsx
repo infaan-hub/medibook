@@ -18,11 +18,11 @@ import {
   requestPasswordReset,
 } from "../api/auth";
 import { ApiError } from "../api/client";
-import type { RegisterPayload } from "../api/types";
+import type { LoginPushPayload, RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
-import { getPushPlatform } from "../lib/platform";
+import { getNotificationCapability, getPushPlatform } from "../lib/platform";
 import { collectLoginPush } from "../push/loginPush";
 import { TextField } from "../components/ui";
 
@@ -880,7 +880,7 @@ interface LockBanner {
 }
 
 export function LoginScreen() {
-  const { login, verifyLogin } = useSession();
+  const { checkLoginCredentials, login, verifyLogin } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -896,6 +896,7 @@ export function LoginScreen() {
   const [lock, setLock] = useState<LockBanner | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [clock, setClock] = useState(() => Date.now());
+  const [credentialsVerified, setCredentialsVerified] = useState(false);
   // Second step: the password was right, now the one-time code must be typed.
   const [challenge, setChallenge] = useState<{ token: string; expiresAt: number } | null>(null);
   const [otpValue, setOtpValue] = useState("");
@@ -956,44 +957,98 @@ export function LoginScreen() {
   }
 
   /**
-   * Password step: a correct answer does NOT sign the user in — it swaps the
-   * credentials for an OTP challenge and flips the form to the code entry.
-   * Returns true when a fresh challenge was issued.
+   * Validate first, then request permission, and only then issue the OTP.
+   * Browsers that block the delayed permission prompt can retry from the
+   * explicit button in the credentials-verified screen.
    */
-  async function startPasswordStep(): Promise<boolean> {
+  async function startPasswordStep(): Promise<void> {
     setTopError("");
     setFormErrors({});
     setSubmitting(true);
     try {
-      // Piggyback this browser's push subscription (when the platform allows
-      // one) so the OTP code reaches the device: no session exists yet, so
-      // the password request is the only chance to hand it to the server.
-      // Best-effort — no subscription simply means delivery via the inbox.
-      const push = await collectLoginPush();
-      const outcome = push
-        ? await login(username.trim(), password, push)
-        : await login(username.trim(), password);
-      if (outcome?.otpRequired) {
-        setChallenge({
-          token: outcome.challenge,
-          expiresAt: Date.now() + outcome.expiresIn * 1000,
-        });
-        setClock(Date.now());
-        setAttemptsLeft(null);
-        setOtpValue("");
-        setOtpError("");
-        setOtpTopError("");
-        return true;
+      // Request notification permission INSTANTLY from this user gesture,
+      // before the async credential check (which would break the gesture
+      // chain and cause browsers to silently drop the permission prompt).
+      // The permission is only acted on if the credentials turn out correct.
+      try {
+        if (typeof window !== "undefined" && "Notification" in window) {
+          const capability = getNotificationCapability();
+          if (capability.canRequestPermission && Notification.permission === "default") {
+            await Notification.requestPermission();
+          }
+        }
+      } catch {
+        /* ignore - collectLoginPush surfaces the typed reason */
       }
-      notify("success", "Welcome back to MediBook.");
-      // Fresh login: only return to the saved URL if THIS role owns it.
-      // Otherwise land on your own dashboard — never another role's page.
-      const target = from && canReturnTo(from) ? from : freshHomeForRole();
-      navigate(target, { replace: true });
-      return false;
+
+      await checkLoginCredentials(username.trim(), password);
+      setCredentialsVerified(true);
+      setOtpTopError("");
+
+      const push = await collectLoginPush();
+      if (push) {
+        await sendLoginCode(push);
+      } else {
+        setOtpTopError(
+          "Your password is correct. Allow browser notifications before a code is sent, or continue without notifications."
+        );
+      }
     } catch (error) {
+      setCredentialsVerified(false);
       handlePasswordError(error);
-      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function sendLoginCode(push?: LoginPushPayload) {
+    const outcome = await login(username.trim(), password, push);
+    if (outcome.otpRequired) {
+      setChallenge({
+        token: outcome.challenge,
+        expiresAt: Date.now() + outcome.expiresIn * 1000,
+      });
+      setCredentialsVerified(false);
+      setClock(Date.now());
+      setAttemptsLeft(null);
+      setOtpValue("");
+      setOtpError("");
+      setOtpTopError("");
+      return;
+    }
+
+    notify("success", "Welcome back to MediBook.");
+    const target = from && canReturnTo(from) ? from : freshHomeForRole();
+    navigate(target, { replace: true });
+  }
+
+  /** Retry permission from a direct tap before issuing or resending the code. */
+  async function onEnableNotifications() {
+    setSubmitting(true);
+    setOtpTopError("");
+    try {
+      const push = await collectLoginPush();
+      if (!push) {
+        setOtpTopError(
+          "Notifications could not be enabled. Check your browser settings, or continue without notifications."
+        );
+        return;
+      }
+      await sendLoginCode(push);
+    } catch (error) {
+      setOtpTopError(errorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onContinueWithoutNotifications() {
+    setSubmitting(true);
+    setOtpTopError("");
+    try {
+      await sendLoginCode();
+    } catch (error) {
+      setOtpTopError(errorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -1027,17 +1082,15 @@ export function LoginScreen() {
     }
   }
 
-  /** Ask for a fresh code — same credentials, brand-new challenge. */
+  /** Re-request permission from this tap, then send a fresh code. */
   async function onResend() {
     setOtpError("");
-    setOtpTopError("");
-    const started = await startPasswordStep();
-    if (started) notify("info", "A new login code is on its way.");
-    else setChallenge(null); // failed → reveal the password form's error state
+    await onEnableNotifications();
   }
 
   function backToPassword() {
     setChallenge(null);
+    setCredentialsVerified(false);
     setOtpValue("");
     setOtpError("");
     setOtpTopError("");
@@ -1050,7 +1103,9 @@ export function LoginScreen() {
       title="Sign In"
       subtitle={
         challenge
-          ? "Enter the 6-digit code we\nsent to your notifications."
+          ? "Enter the 6-digit code sent to your browser notifications."
+          : credentialsVerified
+            ? "Your password was accepted. Set up notifications to receive a verification code."
           : "Welcome back! Please sign in\nto continue."
       }
       footer={
@@ -1062,7 +1117,7 @@ export function LoginScreen() {
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
             {otpRemaining > 0
-              ? `We sent a 6-digit code to your MediBook notifications. It expires in ${formatCountdown(otpRemaining)}.`
+              ? `A 6-digit code was sent to your browser notifications. It expires in ${formatCountdown(otpRemaining)}. If no notification appears, enable notifications and resend the code.`
               : "This code has expired. Request a new one."}
           </p>
           <div className="ab-field">
@@ -1093,12 +1148,38 @@ export function LoginScreen() {
             onClick={onResend}
             disabled={submitting}
           >
-            {submitting ? "Sending…" : "Resend code"}
+            {submitting ? "Enabling notifications…" : "Enable notifications & resend code"}
           </button>
           <button type="button" className="ab-forgot" onClick={backToPassword}>
             ← Back to password
           </button>
         </form>
+      ) : credentialsVerified ? (
+        <div className="ab-form__inner">
+          {otpTopError && <ErrorNote message={otpTopError} />}
+          <p className="form-note" role="status">
+            Your password is correct. Allow notifications before MediBook sends your verification code. Without notifications, the code may only be available in another signed-in session.
+          </p>
+          <button
+            type="button"
+            className="ab-btn ab-btn--primary ab-btn--full"
+            onClick={onEnableNotifications}
+            disabled={submitting}
+          >
+            {submitting ? "Enabling notifications…" : "Enable notifications & send code"}
+          </button>
+          <button
+            type="button"
+            className="ab-btn ab-btn--outline ab-btn--full"
+            onClick={onContinueWithoutNotifications}
+            disabled={submitting}
+          >
+            Continue without notifications
+          </button>
+          <button type="button" className="ab-forgot" onClick={backToPassword}>
+            ← Back to password
+          </button>
+        </div>
       ) : (
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {lock ? (
@@ -1500,4 +1581,3 @@ export function ResetPasswordScreen() {
     </AuthLayout>
   );
 }
-

@@ -10,6 +10,7 @@ import { ApiError } from "../api/client";
 import { LoginScreen } from "../screens/auth";
 
 const mocks = vi.hoisted(() => ({
+  checkLoginCredentials: vi.fn(),
   login: vi.fn(),
   verifyLogin: vi.fn(),
   notify: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("../state/app-context", async (importOriginal) => ({
   useSession: () => ({
     status: "guest",
     user: null,
+    checkLoginCredentials: mocks.checkLoginCredentials,
     login: mocks.login,
     verifyLogin: mocks.verifyLogin,
     register: vi.fn(),
@@ -39,6 +41,8 @@ vi.mock("../push/notifications", async (importOriginal) => ({
 const CHALLENGE = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 beforeEach(() => {
+  mocks.checkLoginCredentials.mockReset();
+  mocks.checkLoginCredentials.mockResolvedValue(undefined);
   mocks.login.mockReset();
   mocks.verifyLogin.mockReset();
   mocks.notify.mockReset();
@@ -48,9 +52,7 @@ beforeEach(() => {
   mocks.subscribeToPush.mockResolvedValue({ ok: false, reason: "unsupported" });
 });
 
-/** Render, then run the password step to the point where `login()` settles. */
-async function reachOtpStep() {
-  mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+async function submitCredentials() {
   render(
     <MemoryRouter initialEntries={["/login"]}>
       <LoginScreen />
@@ -62,6 +64,21 @@ async function reachOtpStep() {
   await act(async () => {
     fireEvent.submit(form);
   });
+}
+
+/** Render and reach the code screen with a working push subscription. */
+async function reachOtpStep() {
+  mocks.subscribeToPush.mockResolvedValue({
+    ok: true,
+    subscription: {
+      toJSON: () => ({
+        endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+        keys: { p256dh: "dh-key", auth: "auth-key" },
+      }),
+    },
+  });
+  mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+  await submitCredentials();
 }
 
 async function submitOtp(code: string) {
@@ -78,6 +95,13 @@ describe("LoginScreen OTP step", () => {
   it("shows the code screen after a correct password, with the live expiry", async () => {
     await reachOtpStep();
 
+    expect(mocks.checkLoginCredentials).toHaveBeenCalledWith("juma", "pw");
+    expect(mocks.checkLoginCredentials.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.subscribeToPush.mock.invocationCallOrder[0]
+    );
+    expect(mocks.subscribeToPush.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.login.mock.invocationCallOrder[0]
+    );
     expect(mocks.verifyLogin).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
     expect(screen.getByText(/expires in 5:00/)).toBeInTheDocument();
@@ -133,16 +157,8 @@ describe("LoginScreen OTP step", () => {
     expect(mocks.verifyLogin).not.toHaveBeenCalled();
   });
 
-  it("attaches the browser push subscription to the password request", async () => {
-    mocks.subscribeToPush.mockResolvedValue({
-      ok: true,
-      subscription: {
-        toJSON: () => ({
-          endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
-          keys: { p256dh: "dh-key", auth: "auth-key" },
-        }),
-      },
-    });
+  it("attaches the browser push subscription when it issues the code", async () => {
+    mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
     await reachOtpStep();
 
     expect(mocks.login).toHaveBeenCalledWith(
@@ -157,9 +173,42 @@ describe("LoginScreen OTP step", () => {
     );
   });
 
-  it("still submits without a push payload when the browser can't push", async () => {
-    await reachOtpStep();
+  it("does not issue the OTP until the user continues after push setup fails", async () => {
+    mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+    await submitCredentials();
 
-    expect(mocks.login).toHaveBeenCalledWith("juma", "pw");
+    expect(mocks.checkLoginCredentials).toHaveBeenCalledWith("juma", "pw");
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(screen.getByText(/allow browser notifications before a code is sent/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /continue without notifications/i }));
+    await waitFor(() => expect(mocks.login).toHaveBeenCalledWith("juma", "pw", undefined));
+    expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
+  });
+
+  it("retries push permission from a tap before issuing the OTP", async () => {
+    mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+    mocks.subscribeToPush
+      .mockResolvedValueOnce({ ok: false, reason: "permission-dismissed" })
+      .mockResolvedValueOnce({
+        ok: true,
+        subscription: {
+          toJSON: () => ({
+            endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+            keys: { p256dh: "dh-key", auth: "auth-key" },
+          }),
+        },
+      });
+    await submitCredentials();
+    fireEvent.click(screen.getByRole("button", { name: /enable notifications & send code/i }));
+
+    await waitFor(() =>
+      expect(mocks.login).toHaveBeenCalledWith(
+        "juma",
+        "pw",
+        expect.objectContaining({ endpoint: "https://fcm.googleapis.com/fcm/send/device-1" })
+      )
+    );
+    expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
   });
 });

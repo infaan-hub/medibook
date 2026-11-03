@@ -39,6 +39,14 @@ export function login(
   });
 }
 
+/** POST /api/auth/login/check/ — validate credentials without issuing a code. */
+export function checkLoginCredentials(
+  username: string,
+  password: string
+): Promise<Envelope<{ credentials_verified: boolean }>> {
+  return apiPost<{ credentials_verified: boolean }>("/auth/login/check/", { username, password });
+}
+
 /** POST /api/auth/login/verify/ — the OTP step → JWT pair + user. */
 export function verifyLoginOtp(
   challenge: string,
@@ -108,4 +116,3 @@ export function requestPasswordReset(
 export function confirmPasswordReset(payload: ResetConfirmPayload): Promise<Envelope<null>> {
   return apiPost<null>("/auth/password-reset-confirm/", payload);
 }
-

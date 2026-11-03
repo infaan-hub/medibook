@@ -93,6 +93,16 @@ export type LoginResult =
   | { otpRequired: false; user: AuthUser; pair: { access: string; refresh: string } };
 
 /**
+ * POST /api/auth/login/check/ — validate credentials without issuing an OTP.
+ * The browser uses this response to request notification permission before
+ * calling login(), which is the operation that creates and delivers the code.
+ */
+export async function checkLoginCredentials(body: unknown): Promise<void> {
+  const input = parse(loginSchema, body) as LoginInput;
+  await authenticateLogin(input);
+}
+
+/**
  * POST /api/auth/login/ — username + password → OTP challenge.
  *
  * The password step never issues tokens anymore: it proves the secret, resets
@@ -101,6 +111,26 @@ export type LoginResult =
  */
 export async function login(body: unknown): Promise<LoginResult> {
   const input = parse(loginSchema, body) as LoginInput;
+  const user = await authenticateLogin(input);
+  // The login screen has no session, so the usual subscription-sync endpoint
+  // can't run yet — the password request itself carries the requesting
+  // browser's subscription. Upsert it BEFORE the code goes out (same
+  // idempotency/reassignment policy as POST /notifications/push-subscriptions/)
+  // so notify()'s web-push leg has a device to deliver to. Only reachable
+  // with a CORRECT password. Best-effort: a bad payload or push hiccup must
+  // never deny the login — worst case the code rides the inbox row alone.
+  if (input.push !== undefined) {
+    try {
+      await createPush(user, input.push);
+    } catch (error) {
+      console.warn("[push] login-time subscription registration failed:", error);
+    }
+  }
+  const challenge = await issueLoginOtp(user);
+  return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+}
+
+async function authenticateLogin(input: LoginInput): Promise<AuthUser> {
   const found = await users.findUserByUsername(input.username); // exact match (ModelBackend)
   // Unknown account: same message as a wrong password, no lock data — never
   // confirm whether the username exists.
@@ -121,22 +151,7 @@ export async function login(body: unknown): Promise<LoginResult> {
   // A successful authentication starts the attempt budget over; the lock
   // fields themselves are already clear (enforceLock threw otherwise).
   await users.resetFailedLogins(user.id);
-  // The login screen has no session, so the usual subscription-sync endpoint
-  // can't run yet — the password request itself carries the requesting
-  // browser's subscription. Upsert it BEFORE the code goes out (same
-  // idempotency/reassignment policy as POST /notifications/push-subscriptions/)
-  // so notify()'s web-push leg has a device to deliver to. Only reachable
-  // with a CORRECT password. Best-effort: a bad payload or push hiccup must
-  // never deny the login — worst case the code rides the inbox row alone.
-  if (input.push !== undefined) {
-    try {
-      await createPush({ id: user.id } as AuthUser, input.push);
-    } catch (error) {
-      console.warn("[push] login-time subscription registration failed:", error);
-    }
-  }
-  const challenge = await issueLoginOtp(user);
-  return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+  return user;
 }
 
 /**
@@ -396,4 +411,3 @@ export async function updateMe(
     { timeout: 15_000 }
   );
 }
-

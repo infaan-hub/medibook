@@ -255,6 +255,7 @@ vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
 
 import { hashPassword } from "@/lib/password";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as loginCheckRoute } from "@/app/api/auth/login/check/route";
 import { POST as verifyRoute } from "@/app/api/auth/login/verify/route";
 
 const PASSWORD = "CorrectHorse1!";
@@ -282,6 +283,8 @@ function post(route: typeof loginRoute, body: unknown): Promise<Response> {
 
 const submitLogin = (username: string, password: string) =>
   post(loginRoute, { username, password });
+const checkLogin = (username: string, password: string) =>
+  post(loginCheckRoute, { username, password });
 const submitOtp = (challenge: string, otp: string) => post(verifyRoute, { challenge, otp });
 
 /** Start the flow and hand back { challenge, code } (code from the notify row). */
@@ -299,6 +302,19 @@ async function startChallenge(username = "juma", password = PASSWORD) {
 beforeEach(() => harness.reset());
 
 describe("the password step", () => {
+  it("validates correct credentials without creating or sending an OTP", async () => {
+    seed();
+
+    const response = await checkLogin("juma", PASSWORD);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.message).toBe("Credentials verified.");
+    expect(body.data).toEqual({ credentials_verified: true });
+    expect(harness.otps).toHaveLength(0);
+    expect(harness.notifications).toHaveLength(0);
+  });
+
   it("keeps counting wrong passwords toward the lock, with no challenge issued", async () => {
     seed();
 

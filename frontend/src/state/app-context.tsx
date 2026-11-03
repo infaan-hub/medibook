@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  checkLoginCredentials as checkLoginCredentialsRequest,
   getMe,
   login as loginRequest,
   logout as logoutRequest,
@@ -98,6 +99,7 @@ export type LoginOutcome =
 interface SessionContextValue {
   status: SessionStatus;
   user: User | null;
+  checkLoginCredentials: (username: string, password: string) => Promise<void>;
   login: (username: string, password: string, push?: LoginPushPayload) => Promise<LoginOutcome>;
   /** Second step: exchange the OTP challenge for the JWT pair. */
   verifyLogin: (challenge: string, otp: string) => Promise<void>;
@@ -168,6 +170,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [applyAuth]
   );
 
+  const checkLoginCredentials = useCallback(async (username: string, password: string) => {
+    await checkLoginCredentialsRequest(username, password);
+  }, []);
+
   const verifyLogin = useCallback(
     async (challenge: string, otp: string) => {
       const envelope = await verifyLoginOtpRequest(challenge, otp);
@@ -219,8 +225,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [status, user]);
 
   const value = useMemo(
-    () => ({ status, user, login, verifyLogin, register, socialLogin, logout, setUser }),
-    [status, user, login, verifyLogin, register, socialLogin, logout, setUser]
+    () => ({ status, user, checkLoginCredentials, login, verifyLogin, register, socialLogin, logout, setUser }),
+    [status, user, checkLoginCredentials, login, verifyLogin, register, socialLogin, logout, setUser]
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
