@@ -14,6 +14,7 @@ import "./i18n";
 import { registerServiceWorker } from "./lib/pwa";
 import { isStandalonePWA } from "./lib/platform";
 import { AppShell } from "./components/AppShell";
+import { DashboardRoute } from "./components/DashboardRoute";
 import { RequireGuest, RequirePatient, RequireRole, RequireSession, launchPath } from "./components/guards";
 import { SplashScreen, UpdatePrompt } from "./components/Splash";
 import { Spinner } from "./components/ui";
@@ -180,6 +181,7 @@ export default function App() {
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<LaunchRoute />} />
+              <Route path="/dashboard" element={<DashboardRoute><HomeScreen /></DashboardRoute>} />
               {/* Guest-only screens (no app shell). Signed-in users bounce to
                   their own home, so /onboarding and /onboarding/welcome stay
                   first-run only. */}
@@ -258,7 +260,6 @@ export default function App() {
                   </RequireSession>
                 }
               >
-                <Route path="/dashboard" element={isStandalonePWA() ? <RequirePatient><HomeScreen /></RequirePatient> : <HomeScreen />} />
                 <Route path="/doctors" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
                 <Route path="/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
                 <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />

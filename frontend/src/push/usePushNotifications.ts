@@ -79,6 +79,7 @@ export function usePushNotifications(userId: number | null) {
   // drops endpoints while the app is closed, which is exactly when the server
   // would otherwise keep pointing at a dead one.
   useEffect(() => {
+    if (!userId) return;
     const refresh = () => {
       if (document.visibilityState === "hidden") return;
       setPermission(readNotificationPermission());
@@ -90,7 +91,7 @@ export function usePushNotifications(userId: number | null) {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, []);
+  }, [userId]);
 
   // Read-only probe: reports the current answer and an existing subscription.
   // It never requests permission — the OS prompt only ever comes from a tap.
