@@ -11,6 +11,7 @@ import { DoctorImage, resolveDoctorImage } from "../components/DoctorImage";
 import { captureFix, directionsUrl, LocationError } from "../lib/location";
 import { nearestAreaName } from "../lib/zanzibar";
 import { useSession } from "../state/app-context";
+import { isStandalonePWA } from "../lib/platform";
 import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
@@ -95,11 +96,11 @@ function GreetingAvatar({ user }: { user: User }) {
   );
 }
 
-function PatientHome({ user }: { user: User }) {
+function PatientHome({ user }: { user: User | null }) {
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const push = usePushNotifications(user.id);
+  const push = usePushNotifications(user?.id ?? 0);
 
   const loadAppointments = useCallback(() => {
     listMyAppointments()
@@ -114,11 +115,12 @@ function PatientHome({ user }: { user: User }) {
   }, []);
 
   useEffect(() => {
-    loadAppointments();
+    if (user) loadAppointments();
+    else setAppointments([]);
     listDoctors()
       .then((response) => setDoctors((response.data?.results ?? []).slice(0, 3)))
       .catch(() => setDoctors([]));
-  }, [loadAppointments]);
+  }, [loadAppointments, user]);
 
   useRealtimeSync({
     refresh: refreshAppointments,
@@ -133,10 +135,10 @@ function PatientHome({ user }: { user: User }) {
     <div className="page home-page">
       <header className="home__topbar">
         <div className="home__greeting">
-          <GreetingAvatar user={user} />
+          {user ? <GreetingAvatar user={user} /> : <span className="home__avatar">M</span>}
           <span>
             <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
-            <span>{user.first_name || user.last_name || "there"}</span>
+            <span>{user ? (user.first_name || user.last_name || "there") : "Guest"}</span>
           </span>
         </div>
       </header>
@@ -154,7 +156,7 @@ function PatientHome({ user }: { user: User }) {
           because iOS ignores a request from a plain tab), ready → Allow,
           granted → finish setup, denied → settings guidance (never a re-ask
           loop), failed → the typed failure that actually happened. */}
-      {push.probed && push.message && pushStateNeedsPrompt(push.state) && (
+      {user && push.probed && push.message && pushStateNeedsPrompt(push.state) && (
         <div className={`home__push-prompt${push.error ? " home__push-prompt--error" : ""}`}>
           <span>
             {push.message}
@@ -220,7 +222,7 @@ function PatientHome({ user }: { user: User }) {
         )}
       </section>
 
-      <section className="home__section home__appointments-section">
+      {user && (<section className="home__section home__appointments-section">
         <div className="home__section-heading">
           <h2>Upcoming Appointments</h2>
           <Link to="/appointments">See all <ChevronRight size={15} /></Link>
@@ -264,7 +266,7 @@ function PatientHome({ user }: { user: User }) {
         ) : (
           <EmptyState icon={<Calendar size={28} />} title="No upcoming appointments" description="Find a doctor to book your next visit." action={<Link to="/doctors">Find a doctor</Link>} />
         )}
-      </section>
+      </section>)}
 
       {/* Quick actions */}
       <div className="home__quick-actions">
@@ -279,10 +281,15 @@ function PatientHome({ user }: { user: User }) {
 
 export function HomeScreen() {
   const { user } = useSession();
-  // Route-level RequirePatient guarantees patient-only. Any non-patient
-  // reaching here (stale render) shows nothing — guards redirect.
-  if (!user || user.role !== "patient") return null;
-  return <PatientHome user={user} />;
+  // Route-level guard handles access. In a web browser (not installed PWA),
+  // guests may view the home screen; in the installed app they are redirected
+  // to login by the route guard, so reaching here as a non-patient means web.
+  if (!user || user.role !== "patient") {
+    // Installed app: nothing to render (guard redirects). Web browser: render
+    // the home with a null user so guests can browse doctors/blog.
+    if (isStandalonePWA()) return null;
+  }
+  return <PatientHome user={user && user.role === "patient" ? user : null} />;
 }
 
 /**

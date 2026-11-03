@@ -12,6 +12,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import "./i18n";
 import { registerServiceWorker } from "./lib/pwa";
+import { isStandalonePWA } from "./lib/platform";
 import { AppShell } from "./components/AppShell";
 import { RequireGuest, RequirePatient, RequireRole, RequireSession, launchPath } from "./components/guards";
 import { SplashScreen, UpdatePrompt } from "./components/Splash";
@@ -135,8 +136,12 @@ function hasOnboarded(): boolean {
  */
 function LaunchRoute() {
   const { status, user } = useSession();
+  // In a web browser (not installed PWA), guests land on the home screen
+  // instead of being pushed to login. Installed apps keep the original flow.
+  if (!isStandalonePWA() && status === "guest") {
+    return <Navigate to="/dashboard" replace />;
+  }
   const destination = launchPath(status, user, hasOnboarded());
-  // `null` â†’ the boot probe is still running and the splash is still up.
   if (!destination) return null;
   return <Navigate to={destination} replace />;
 }
@@ -253,7 +258,7 @@ export default function App() {
                   </RequireSession>
                 }
               >
-                <Route path="/dashboard" element={<RequirePatient><HomeScreen /></RequirePatient>} />
+                <Route path="/dashboard" element={isStandalonePWA() ? <RequirePatient><HomeScreen /></RequirePatient> : <HomeScreen />} />
                 <Route path="/doctors" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
                 <Route path="/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
                 <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
