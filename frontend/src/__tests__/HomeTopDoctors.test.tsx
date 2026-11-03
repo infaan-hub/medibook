@@ -11,10 +11,11 @@ import "../i18n";
 import { HomeScreen } from "../screens/index";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 
-const { listDoctors, listMyAppointments, listArticles } = vi.hoisted(() => ({
+const { listDoctors, listMyAppointments, listArticles, sessionUser } = vi.hoisted(() => ({
   listDoctors: vi.fn(),
   listMyAppointments: vi.fn(),
   listArticles: vi.fn(),
+  sessionUser: { value: null as unknown },
 }));
 
 vi.mock("../api/doctors", async (importOriginal) => ({
@@ -45,7 +46,7 @@ const patient: User = {
 
 vi.mock("../state/app-context", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/app-context")>()),
-  useSession: () => ({ user: patient }),
+  useSession: () => ({ user: sessionUser.value }),
 }));
 
 /** §28 envelope — the home screen reads `data.results` off every list call. */
@@ -95,11 +96,24 @@ function renderHome() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionUser.value = patient;
   listMyAppointments.mockResolvedValue(envelope([]));
   listArticles.mockResolvedValue(envelope([]));
 });
 
 describe("patient home — Top Doctors availability chip", () => {
+  it("omits the guest greeting and avatar on the public home page", async () => {
+    sessionUser.value = null;
+    listDoctors.mockResolvedValue(envelope([]));
+
+    const { container } = renderHome();
+
+    expect(await screen.findByText("Top Doctors")).toBeInTheDocument();
+    expect(screen.queryByText("Guest")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Good morning|Good afternoon|Good evening/)).not.toBeInTheDocument();
+    expect(container.querySelector(".home__avatar")).toBeNull();
+  });
+
   it("shows Available only for a doctor with an active window today", async () => {
     listDoctors.mockResolvedValue(
       envelope([doctor({ id: 4, first_name: "Neema", last_name: "Kimaro", available_today: true })]),

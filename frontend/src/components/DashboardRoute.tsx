@@ -8,7 +8,9 @@ export function DashboardRoute({ children }: { children: ReactNode }) {
   const { status } = useSession();
 
   if (status === "booting") return <BootScreen />;
-  if (status === "guest" && !isStandalonePWA()) return <>{children}</>;
+  if (status === "guest" && !isStandalonePWA()) {
+    return <AppShell guestMode>{children}</AppShell>;
+  }
 
   return (
     <RequireSession>

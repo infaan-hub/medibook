@@ -19,8 +19,16 @@ vi.mock("../lib/platform", () => ({
 }));
 
 vi.mock("../components/AppShell", () => ({
-  AppShell: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="app-shell">{children}</div>
+  AppShell: ({ children, guestMode }: { children: React.ReactNode; guestMode?: boolean }) => (
+    <div data-testid="app-shell">
+      {guestMode && (
+        <nav aria-label="Guest actions">
+          <a href="/login">Log in</a>
+          <a href="/register">Register</a>
+        </nav>
+      )}
+      {children}
+    </div>
   ),
 }));
 
@@ -56,7 +64,9 @@ describe("dashboard guest access", () => {
     renderRoute("/dashboard");
 
     expect(screen.getByText("Home page")).toBeInTheDocument();
-    expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
+    expect(screen.getByTestId("app-shell")).toContainElement(screen.getByText("Home page"));
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Register" })).toHaveAttribute("href", "/register");
   });
 
   it("keeps doctor search behind login for guests", () => {

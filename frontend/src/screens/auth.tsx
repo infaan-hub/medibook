@@ -956,11 +956,7 @@ export function LoginScreen() {
     await startPasswordStep();
   }
 
-  /**
-   * Validate first, then request permission, and only then issue the OTP.
-   * Browsers that block the delayed permission prompt can retry from the
-   * explicit button in the credentials-verified screen.
-   */
+  /** Request notification permission from the sign-in tap, then validate and issue the OTP. */
   async function startPasswordStep(): Promise<void> {
     setTopError("");
     setFormErrors({});
@@ -1022,26 +1018,6 @@ export function LoginScreen() {
     navigate(target, { replace: true });
   }
 
-  /** Retry permission from a direct tap before issuing or resending the code. */
-  async function onEnableNotifications() {
-    setSubmitting(true);
-    setOtpTopError("");
-    try {
-      const push = await collectLoginPush();
-      if (!push) {
-        setOtpTopError(
-          "Notifications could not be enabled. Check your browser settings, or continue without notifications."
-        );
-        return;
-      }
-      await sendLoginCode(push);
-    } catch (error) {
-      setOtpTopError(errorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function onContinueWithoutNotifications() {
     setSubmitting(true);
     setOtpTopError("");
@@ -1082,10 +1058,25 @@ export function LoginScreen() {
     }
   }
 
-  /** Re-request permission from this tap, then send a fresh code. */
+  /** Request a fresh code and deliver it to this browser's existing push subscription. */
   async function onResend() {
     setOtpError("");
-    await onEnableNotifications();
+    setOtpTopError("");
+    setSubmitting(true);
+    try {
+      const push = await collectLoginPush();
+      if (!push) {
+        setOtpTopError(
+          "Could not resend the code to this browser. Check notification permission in your browser settings and try again."
+        );
+        return;
+      }
+      await sendLoginCode(push);
+    } catch (error) {
+      setOtpTopError(errorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function backToPassword() {
@@ -1117,7 +1108,7 @@ export function LoginScreen() {
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
             {otpRemaining > 0
-              ? `A 6-digit code was sent to your browser notifications. It expires in ${formatCountdown(otpRemaining)}. If no notification appears, enable notifications and resend the code.`
+              ? `A 6-digit code was sent to your browser notifications. It expires in ${formatCountdown(otpRemaining)}. If no notification appears, check your browser's notification settings or resend the code.`
               : "This code has expired. Request a new one."}
           </p>
           <div className="ab-field">
@@ -1148,7 +1139,7 @@ export function LoginScreen() {
             onClick={onResend}
             disabled={submitting}
           >
-            {submitting ? "Enabling notifications…" : "Enable notifications & resend code"}
+            {submitting ? "Sending…" : "Resend code"}
           </button>
           <button type="button" className="ab-forgot" onClick={backToPassword}>
             ← Back to password
@@ -1158,16 +1149,8 @@ export function LoginScreen() {
         <div className="ab-form__inner">
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
-            Your password is correct. Allow notifications before MediBook sends your verification code. Without notifications, the code may only be available in another signed-in session.
+            Your password is correct, but this browser did not enable notifications. Check your browser's notification settings. The code has not been sent yet.
           </p>
-          <button
-            type="button"
-            className="ab-btn ab-btn--primary ab-btn--full"
-            onClick={onEnableNotifications}
-            disabled={submitting}
-          >
-            {submitting ? "Enabling notifications…" : "Enable notifications & send code"}
-          </button>
           <button
             type="button"
             className="ab-btn ab-btn--outline ab-btn--full"

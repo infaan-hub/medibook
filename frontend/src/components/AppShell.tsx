@@ -39,6 +39,7 @@ import {
   Users as UsersIcon,
   UserPlus,
   X,
+  LogIn,
   LogOut,
   Newspaper,
   Siren,
@@ -52,6 +53,13 @@ export interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
+}
+
+export function guestNavItemsFor(): NavItem[] {
+  return [
+    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+  ];
 }
 
 export function navItemsFor(user: User | null): NavItem[] {
@@ -339,14 +347,14 @@ function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[];
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, guestMode = false }: { children: ReactNode; guestMode?: boolean }) {
   const online = useOnline();
   const { user, logout } = useSession();
   usePushResync(user?.id ?? null);
   // Install CTA state: right-edge barge + sidebar button + how-to popup (§69).
   const installCta = useInstallCta();
-  const items = navItemsFor(user);
-  const bottomItems = bottomNavItemsFor(user);
+  const items = guestMode ? guestNavItemsFor() : navItemsFor(user);
+  const bottomItems = guestMode ? guestNavItemsFor() : bottomNavItemsFor(user);
   const isDesktop = useIsDesktop();
   const location = useLocation();
   const navigate = useNavigate();
@@ -422,9 +430,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img className="shell__logo" src="/images/logo.jpeg" alt="MediBook" width={28} height={28} draggable={false} />
           <span className="shell__brand-text">MediBook</span>
         </span>
-        <div className="shell__header-actions">
-          <HeaderActions />
-        </div>
+        {!guestMode && <div className="shell__header-actions"><HeaderActions /></div>}
       </header>
 
       {sidebarOpen && !isDesktop && (
@@ -466,35 +472,48 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>Download app</span>
             </button>
           )}
-          <Link
-            to="/profile"
-            className="sidebar__user"
-            onClick={closeSidebar}
-          >
-            <ProfileAvatar user={user} size={44} className="sidebar__user-avatar" />
-            <div className="sidebar__user-info">
-              <span className="sidebar__user-name">
-                {user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email : "Guest"}
-              </span>
-              <span className="sidebar__user-role">{user?.role ?? ""}</span>
+          {guestMode ? (
+            <div className="sidebar__auth-actions">
+              <Link to="/login" className="sidebar__signout sidebar__auth-link" onClick={closeSidebar}>
+                <LogIn size={18} />
+                <span>Log in</span>
+              </Link>
+              <Link to="/register" className="sidebar__auth-register" onClick={closeSidebar}>
+                <UserPlus size={18} />
+                <span>Register</span>
+              </Link>
             </div>
-            <ChevronRight size={16} className="sidebar__user-chevron" aria-hidden="true" />
-          </Link>
-          <button
-            type="button"
-            className="sidebar__signout"
-            onClick={() => {
-              closeSidebar();
-              logout().then(() => {
-                // Every role lands on the guest-only sign-in screen only â€”
-                // never another role's dashboard.
-                navigate("/login", { replace: true });
-              });
-            }}
-          >
-            <LogOut size={18} />
-            <span>Sign out</span>
-          </button>
+          ) : (
+            <>
+              <Link
+                to="/profile"
+                className="sidebar__user"
+                onClick={closeSidebar}
+              >
+                <ProfileAvatar user={user} size={44} className="sidebar__user-avatar" />
+                <div className="sidebar__user-info">
+                  <span className="sidebar__user-name">
+                    {user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email : ""}
+                  </span>
+                  <span className="sidebar__user-role">{user?.role ?? ""}</span>
+                </div>
+                <ChevronRight size={16} className="sidebar__user-chevron" aria-hidden="true" />
+              </Link>
+              <button
+                type="button"
+                className="sidebar__signout"
+                onClick={() => {
+                  closeSidebar();
+                  logout().then(() => {
+                    navigate("/login", { replace: true });
+                  });
+                }}
+              >
+                <LogOut size={18} />
+                <span>Sign out</span>
+              </button>
+            </>
+          )}
         </nav>
 
         <main className="shell__content" id="main">

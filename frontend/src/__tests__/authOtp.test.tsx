@@ -4,9 +4,10 @@
  * through the session, and the flow can walk back to the password step.
  */
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../api/client";
+import * as platform from "../lib/platform";
 import { LoginScreen } from "../screens/auth";
 
 const mocks = vi.hoisted(() => ({
@@ -50,6 +51,11 @@ beforeEach(() => {
   // no subscription, exactly like the pre-OTP behaviour.
   mocks.subscribeToPush.mockReset();
   mocks.subscribeToPush.mockResolvedValue({ ok: false, reason: "unsupported" });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 async function submitCredentials() {
@@ -105,9 +111,53 @@ describe("LoginScreen OTP step", () => {
     expect(mocks.verifyLogin).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
     expect(screen.getByText(/expires in 5:00/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resend code" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /enable notifications/i })).toBeNull();
     // No session yet: the Sign In button is gone, the password inputs with it.
     expect(screen.queryByLabelText("Password")).toBeNull();
     expect(screen.getByRole("button", { name: /verify code/i })).toBeDisabled();
+  });
+
+  it("requests browser notification permission automatically from the sign-in action", async () => {
+    class FakeNotification {
+      static permission: NotificationPermission = "default";
+      static requestPermission = vi.fn(async () => {
+        FakeNotification.permission = "granted";
+        return "granted" as NotificationPermission;
+      });
+    }
+    vi.stubGlobal("Notification", FakeNotification);
+    vi.spyOn(platform, "getNotificationCapability").mockReturnValue({
+      platform: "desktop",
+      standalone: false,
+      secureContext: true,
+      notificationApi: true,
+      serviceWorker: true,
+      pushApi: true,
+      iosNeedsHomeScreen: false,
+      safariNeedsInstall: false,
+      needsInstalledPWA: false,
+      canRequestPermission: true,
+      webPushSupported: true,
+    });
+    mocks.subscribeToPush.mockResolvedValue({
+      ok: true,
+      subscription: {
+        toJSON: () => ({
+          endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+          keys: { p256dh: "dh-key", auth: "auth-key" },
+        }),
+      },
+    });
+    mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+
+    await submitCredentials();
+
+    expect(FakeNotification.requestPermission).toHaveBeenCalledOnce();
+    expect(FakeNotification.requestPermission.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.checkLoginCredentials.mock.invocationCallOrder[0]
+    );
+    expect(screen.queryByRole("button", { name: /enable notifications/i })).toBeNull();
   });
 
   it("submits the typed code to verifyLogin", async () => {
@@ -180,35 +230,26 @@ describe("LoginScreen OTP step", () => {
     expect(mocks.checkLoginCredentials).toHaveBeenCalledWith("juma", "pw");
     expect(mocks.login).not.toHaveBeenCalled();
     expect(screen.getByText(/allow browser notifications before a code is sent/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /enable notifications/i })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /continue without notifications/i }));
     await waitFor(() => expect(mocks.login).toHaveBeenCalledWith("juma", "pw", undefined));
     expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
   });
 
-  it("retries push permission from a tap before issuing the OTP", async () => {
-    mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
-    mocks.subscribeToPush
-      .mockResolvedValueOnce({ ok: false, reason: "permission-dismissed" })
-      .mockResolvedValueOnce({
-        ok: true,
-        subscription: {
-          toJSON: () => ({
-            endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
-            keys: { p256dh: "dh-key", auth: "auth-key" },
-          }),
-        },
-      });
-    await submitCredentials();
-    fireEvent.click(screen.getByRole("button", { name: /enable notifications & send code/i }));
+  it("resends using the browser subscription without showing an enable button", async () => {
+      await reachOtpStep();
+      mocks.login.mockClear();
 
-    await waitFor(() =>
-      expect(mocks.login).toHaveBeenCalledWith(
-        "juma",
-        "pw",
-        expect.objectContaining({ endpoint: "https://fcm.googleapis.com/fcm/send/device-1" })
-      )
-    );
-    expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Resend code" }));
+
+      await waitFor(() =>
+        expect(mocks.login).toHaveBeenCalledWith(
+          "juma",
+          "pw",
+          expect.objectContaining({ endpoint: "https://fcm.googleapis.com/fcm/send/device-1" })
+        )
+      );
+      expect(screen.queryByRole("button", { name: /enable notifications/i })).toBeNull();
   });
 });

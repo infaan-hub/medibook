@@ -133,15 +133,17 @@ function PatientHome({ user }: { user: User | null }) {
 
   return (
     <div className="page home-page">
-      <header className="home__topbar">
-        <div className="home__greeting">
-          {user ? <GreetingAvatar user={user} /> : <span className="home__avatar">M</span>}
-          <span>
-            <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
-            <span>{user ? (user.first_name || user.last_name || "there") : "Guest"}</span>
-          </span>
-        </div>
-      </header>
+      {user && (
+        <header className="home__topbar">
+          <div className="home__greeting">
+            <GreetingAvatar user={user} />
+            <span>
+              <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
+              <span>{user.first_name || user.last_name || "there"}</span>
+            </span>
+          </div>
+        </header>
+      )}
 
       <Link to="/doctors" className="home__search">
         <span className="home__search-icon"><MapPin size={18} /></span>

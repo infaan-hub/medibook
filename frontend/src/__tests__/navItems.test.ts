@@ -10,7 +10,7 @@
  * real `profile_image` avatar now shows on all three phone bars.
  */
 import { describe, expect, it } from "vitest";
-import { activeNavTo, bottomNavItemsFor, navItemsFor } from "../components/AppShell";
+import { activeNavTo, bottomNavItemsFor, guestNavItemsFor, navItemsFor } from "../components/AppShell";
 import type { User } from "../api/types";
 
 const base: User = {
@@ -37,6 +37,10 @@ const sidebarByRole = {
 };
 
 describe("sidebar navigation â€” no Profile button for any role", () => {
+  it("gives guests only public navigation in the shell", () => {
+    expect(guestNavItemsFor().map((item) => item.to)).toEqual(["/dashboard", "/doctors"]);
+  });
+
   it("drops the Lucide-icon Profile entry for admin, doctor and patient", () => {
     for (const user of [patient, doctor, admin]) {
       const items = navItemsFor(user);
