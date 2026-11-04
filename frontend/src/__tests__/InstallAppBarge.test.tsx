@@ -2,10 +2,9 @@
  * "Download app" barge + how-to-install popup tests (§22.1, §69).
  *
  * The barge replaces the old header install button: a badge on the right
- * edge (middle of the viewport) that opens a device-specific popup.
- * "Got it" dismisses the barge for good; Android/desktop also get a
- * "Download app" button that runs the native install; iOS only gets the
- * Share → Add to Home Screen steps.
+ * edge (middle of the viewport) that opens the install instructions.
+ * The combined action installs when a native prompt is available and
+ * dismisses after the user has read the manual steps otherwise.
  *
  * The deferred prompt lives in module scope — one capture per page load,
  * just like the browser — so only the case that needs it captures the event
@@ -85,7 +84,6 @@ function CtaHarness() {
         open={cta.open}
         onClose={cta.close}
         onGotIt={cta.dismiss}
-        isIOS={cta.isIOS}
         installable={cta.installable}
         install={cta.install}
       />
@@ -129,22 +127,16 @@ describe("InstallAppBarge", () => {
     // The barge (right edge, middle) shows while the app is not installed.
     fireEvent.click(await screen.findByTitle("Download app"));
 
-    // Device-specific description + "Download app" + "Got it".
+    // Shared Chrome/Safari instructions and one combined action.
     const dialog = await screen.findByRole("dialog", {
-      name: /download medibook app/i,
+      name: /download the medibook app/i,
     });
-    expect(
-      within(dialog).getByText(/shortcut is added to your desktop/i),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("button", { name: /download app/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("button", { name: /got it/i }),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/quick and easy access anytime/i)).toBeInTheDocument();
+    expect(within(dialog).getByText("For Google Chrome:")).toBeInTheDocument();
+    expect(within(dialog).getByText("For Safari (Mac):")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
 
-    // One tap on Download app runs the native install.
-    fireEvent.click(within(dialog).getByRole("button", { name: /download app/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Got it, Download App" }));
     await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/installing medibook/i)).toBeInTheDocument();
     // Accepted install closes the popup and retires the barge.
@@ -152,21 +144,18 @@ describe("InstallAppBarge", () => {
     await waitFor(() => expect(barge()).toBeNull());
   });
 
-  it("guides iOS users with steps and only a Got it button, then hides the barge", async () => {
+  it("shows Safari installation steps and dismisses after Got it", async () => {
     setUserAgent(IOS_UA);
     renderCta();
 
     fireEvent.click(await screen.findByTitle("Download app"));
     const dialog = await screen.findByRole("dialog", {
-      name: /download medibook app/i,
+      name: /download the medibook app/i,
     });
-    expect(within(dialog).getByText(/add to home screen/i)).toBeInTheDocument();
-    // WebKit has no install prompt — iOS gets no Download app button.
-    expect(
-      within(dialog).queryByRole("button", { name: /download app/i }),
-    ).toBeNull();
+    expect(within(dialog).getByText(/open safari's menu bar and click/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/add to homescreen/i)).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /got it/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Got it, Download App" }));
     // Popup closed, dismissal persisted, barge gone for good.
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(localStorage.getItem(DISMISSED_KEY)).toBe("1");
@@ -184,42 +173,29 @@ describe("InstallAppBarge", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("shows device-specific manual steps when the browser cannot install", async () => {
+  it("shows the requested Chrome and Safari steps when the browser cannot install", async () => {
     renderCta();
 
     fireEvent.click(await screen.findByTitle("Download app"));
     const dialog = await screen.findByRole("dialog", {
-      name: /download medibook app/i,
+      name: /download the medibook app/i,
     });
-    // jsdom's UA is desktop → desktop browser-menu instructions, not a
-    // generic "can't install" text.
-    expect(within(dialog).getByText(/open the browser menu/i)).toBeInTheDocument();
-    // Android/desktop keep the Download app button even without a prompt —
-    // the tap waits for a late beforeinstallprompt.
-    expect(
-      within(dialog).getByRole("button", { name: /download app/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("button", { name: /got it/i }),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText("Tap the Download App button.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Follow the instructions to complete the installation.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
   });
 
-  it("describes the manual three-dot-menu path on Android", async () => {
+  it("uses the same install description on Android", async () => {
     setUserAgent(ANDROID_UA);
     renderCta();
 
     fireEvent.click(await screen.findByTitle("Download app"));
     const dialog = await screen.findByRole("dialog", {
-      name: /download medibook app/i,
+      name: /download the medibook app/i,
     });
-    expect(within(dialog).getByText(/three-dot menu/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/add to home screen/i)).toBeInTheDocument();
-    expect(
-      within(dialog).queryByText(/open the browser menu/i),
-    ).toBeNull();
-    expect(
-      within(dialog).getByRole("button", { name: /download app/i }),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText("For Google Chrome:")).toBeInTheDocument();
+    expect(within(dialog).getByText("For Safari (Mac):")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
   });
 
   it("closes via the X without dismissing the barge", async () => {
@@ -227,7 +203,7 @@ describe("InstallAppBarge", () => {
 
     fireEvent.click(await screen.findByTitle("Download app"));
     const dialog = await screen.findByRole("dialog", {
-      name: /download medibook app/i,
+      name: /download the medibook app/i,
     });
     fireEvent.click(
       within(dialog).getByRole("button", { name: /close dialog/i }),

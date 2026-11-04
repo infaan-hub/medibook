@@ -5,21 +5,11 @@
  *
  *   - `InstallAppBarge` — a small badge glued to the right edge, middle of
  *     the viewport, while MediBook is not installed. One tap opens the
- *     device-specific popup below. Once the user taps "Got it" (or installs
+ *     installation instructions below. Once the user taps the action (or installs
  *     the app) the barge never appears again.
- *   - `InstallInfoDialog` — the small popup:
- *       • iOS/iPadOS   — description + Share → Add to Home Screen steps and
- *                        ONLY a "Got it" button (WebKit has no install
- *                        prompt, so there is nothing to tap),
- *       • Android      — short description + "Download app" (runs the native
- *                        install → app on the home screen) + "Got it",
- *       • Desktop      — short description + "Download app" (desktop / Start
- *                        menu / Dock shortcut, own window) + "Got it",
- *       • no install path (e.g. Firefox, desktop Safari) — device-specific
- *                        manual steps (three-dot menu on Android, address-bar
- *                        menu / File → Add to Dock on desktop); Android and
- *                        desktop still get the "Download app" button, which
- *                        waits for a late install prompt.
+ *   - `InstallInfoDialog` — the popup with Chrome and Safari installation
+ *     instructions and a single button that installs when a native prompt is
+ *     available, or dismisses the instructions otherwise.
  *   - The sidebar keeps a "Download app" button below the nav links (never in
  *     the header) that opens the same popup; it retires itself once the app
  *     is installed.
@@ -33,7 +23,6 @@ import { Download } from "lucide-react";
 import { Modal } from "./Modal";
 import { useToast } from "../state/app-context";
 import { useInstallAvailability } from "../pwa/installPrompt";
-import { isAndroid } from "../lib/platform";
 
 /** Persisted by "Got it" so the barge never comes back (per device/browser). */
 const DISMISSED_KEY = "medibook_install_barge_dismissed";
@@ -49,7 +38,7 @@ function readDismissed(): boolean {
 
 /** Shared install-CTA state for AppShell (barge + sidebar button + popup). */
 export function useInstallCta() {
-  const { installed, isIOS, installable, install } = useInstallAvailability();
+  const { installed, installable, install } = useInstallAvailability();
   const [dismissed, setDismissed] = useState(readDismissed);
   const [open, setOpen] = useState(false);
 
@@ -76,7 +65,6 @@ export function useInstallCta() {
     close,
     dismiss,
     installed,
-    isIOS,
     installable,
     install,
   };
@@ -114,54 +102,36 @@ export interface InstallInfoDialogProps {
   onClose: () => void;
   /** "Got it" — closes the popup AND hides the barge for good. */
   onGotIt: () => void;
-  /** iOS/iPadOS: steps + Got it only, never an install button. */
-  isIOS: boolean;
   /** A native install prompt exists (Chrome / Edge / Android). */
   installable: boolean;
   /** Runs the native install prompt. Resolves true when accepted. */
   install: () => Promise<boolean>;
 }
 
-/** The device-specific "how to download" description. */
-function InstallInfoBody({
-  isIOS,
-  isAndroidDevice,
-  installable,
-}: {
-  isIOS: boolean;
-  isAndroidDevice: boolean;
-  installable: boolean;
-}) {
-  if (isIOS) {
-    return (
-      <>
-        <p className="install-info__intro">
-          Safari can't install apps from the web directly. Add MediBook to your
-          Home Screen instead:
-        </p>
-        <ol className="install-info__steps">
-          <li>Tap the Share button (a square with an upward arrow).</li>
-          <li>Scroll down and tap &ldquo;Add to Home Screen&rdquo;.</li>
-          <li>Tap &ldquo;Add&rdquo; &mdash; MediBook appears on your home screen.</li>
-        </ol>
-      </>
-    );
-  }
-  if (isAndroidDevice) {
-    return (
-      <p className="install-info__intro">
-        {installable
-          ? "One tap adds MediBook to your home screen with its own icon \u2014 it opens in its own window and keeps working offline. No app store needed."
-          : "This browser can't install MediBook automatically here. Open the three-dot menu at the top right and choose \u201CAdd to Home screen\u201D (or \u201CInstall app\u201D), then confirm \u2014 MediBook is added to your home screen."}
-      </p>
-    );
-  }
+/** Shared installation instructions shown from the barge and sidebar CTA. */
+function InstallInfoBody() {
   return (
-    <p className="install-info__intro">
-      {installable
-        ? "One tap installs MediBook on this computer: a shortcut is added to your desktop and Start menu (or Dock), and the app opens in its own window."
-        : "This browser can't install MediBook automatically. Open the browser menu (the dots or lines icon) and choose \u201CInstall MediBook\u201D or \u201CInstall this site as an app\u201D. In Safari, use File \u2192 Add to Dock."}
-    </p>
+    <>
+      <p className="install-info__intro">
+        Install MediBook on your device for quick and easy access anytime.
+      </p>
+      <p className="install-info__platform"><strong>For Google Chrome:</strong></p>
+      <ol className="install-info__steps">
+        <li>Tap the Download App button.</li>
+        <li>Select <strong>Install MediBook</strong>.</li>
+        <li>Follow the instructions to complete the installation.</li>
+      </ol>
+      <p className="install-info__platform"><strong>For Safari (Mac):</strong></p>
+      <ol className="install-info__steps">
+        <li>Open Safari&apos;s menu bar and click <strong>Share</strong>.</li>
+        <li>Select <strong>Add to Homescreen</strong>.</li>
+        <li>MediBook will appear in your Homescreen, ready to use.</li>
+      </ol>
+      <p className="install-info__outro">
+        Once installed, you can open MediBook directly from your device without
+        searching for the website again.
+      </p>
+    </>
   );
 }
 
@@ -170,7 +140,6 @@ export function InstallInfoDialog({
   open,
   onClose,
   onGotIt,
-  isIOS,
   installable,
   install,
 }: InstallInfoDialogProps) {
@@ -178,6 +147,10 @@ export function InstallInfoDialog({
   const [busy, setBusy] = useState(false);
 
   const handleInstall = useCallback(async () => {
+    if (!installable) {
+      onGotIt();
+      return;
+    }
     setBusy(true);
     try {
       const accepted = await install();
@@ -185,8 +158,7 @@ export function InstallInfoDialog({
         notify("success", "Installing MediBook\u2026");
         onClose();
       } else {
-        // No install path (or the prompt never arrived): keep the popup open
-        // — its description already shows the device-specific manual steps.
+        // The user can follow the manual steps shown in the popup.
         notify(
           "info",
           "This browser didn't offer a one-tap install \u2014 follow the steps above instead."
@@ -195,38 +167,27 @@ export function InstallInfoDialog({
     } finally {
       setBusy(false);
     }
-  }, [install, notify, onClose]);
+  }, [installable, install, notify, onClose, onGotIt]);
 
   return (
     <Modal
       open={open}
-      title="Download MediBook app"
+      title="Download the MediBook App"
       className="install-info__card"
       onDismiss={onClose}
       actions={
-        <>
-          <button type="button" className="btn btn--secondary" onClick={onGotIt}>
-            Got it
-          </button>
-          {!isIOS && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={handleInstall}
-              disabled={busy}
-            >
-              <Download size={16} aria-hidden="true" />
-              Download app
-            </button>
-          )}
-        </>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={handleInstall}
+          disabled={busy}
+        >
+          <Download size={16} aria-hidden="true" />
+          Got it, Download App
+        </button>
       }
     >
-      <InstallInfoBody
-        isIOS={isIOS}
-        isAndroidDevice={isAndroid()}
-        installable={installable}
-      />
+      <InstallInfoBody />
     </Modal>
   );
 }

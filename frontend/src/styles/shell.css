@@ -938,13 +938,17 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
 
 /* Small popup: tighten the shared modal card. */
 .install-info__card { max-width: 360px; }
-.install-info__intro {
+.install-info__intro,
+.install-info__platform,
+.install-info__outro {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--color-text);
 }
+.install-info__platform { margin-top: var(--space-3); }
+.install-info__outro { margin-top: var(--space-3); }
 .install-info__steps {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-1) 0 0;
   padding-left: 1.25em;
   display: grid;
   gap: 6px;

@@ -532,13 +532,12 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
         <NavLinks items={bottomItems} user={user} />
       </nav>
 
-      {/* "Download app" barge (right edge, middle) + device-specific popup. */}
+      {/* "Download app" barge (right edge, middle) + installation instructions. */}
       <InstallAppBarge visible={installCta.bargeVisible} onOpen={installCta.show} />
       <InstallInfoDialog
         open={installCta.open}
         onClose={installCta.close}
         onGotIt={installCta.dismiss}
-        isIOS={installCta.isIOS}
         installable={installCta.installable}
         install={installCta.install}
       />
