@@ -81,12 +81,10 @@ async function reachOtpStep() {
 }
 
 async function submitOtp(code: string) {
-  fireEvent.change(screen.getByLabelText("Verification code"), {
-    target: { value: code },
-  });
-  const form = screen.getByRole("button", { name: /verify code/i }).closest("form")!;
   await act(async () => {
-    fireEvent.submit(form);
+    fireEvent.change(screen.getByLabelText("Verification code"), {
+      target: { value: code },
+    });
   });
 }
 
@@ -97,12 +95,18 @@ describe("LoginScreen OTP step", () => {
     expect(mocks.login).toHaveBeenCalledWith("juma", "pw");
     expect(mocks.verifyLogin).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
-    expect(screen.getByText(/expires in 5:00/)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Verification code").parentElement?.querySelectorAll(".otp-code__digit")
+    ).toHaveLength(6);
+    expect(screen.getByRole("heading", { name: "Verify your email" })).toBeInTheDocument();
+    expect(screen.getByText("Enter the code below.")).toBeInTheDocument();
+    expect(screen.getByText(/Expires in 5:00/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Resend code" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable notifications/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /verify code/i })).toBeNull();
     // No session yet: the Sign In button is gone, the password inputs with it.
     expect(screen.queryByLabelText("Password")).toBeNull();
-    expect(screen.getByRole("button", { name: /verify code/i })).toBeDisabled();
+    expect(screen.getByLabelText("Verification code")).toBeEnabled();
   });
 
   it("does not request browser notification permission to send a verification email", async () => {
@@ -115,7 +119,7 @@ describe("LoginScreen OTP step", () => {
 
     expect(requestPermission).not.toHaveBeenCalled();
     // When delivery fields are absent, the summary falls back to the inbox-only message.
-    expect(screen.getByText(/A 6-digit code was sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sent to your email/i)).toBeInTheDocument();
   });
 
   it("submits the typed code to verifyLogin", async () => {
@@ -127,6 +131,21 @@ describe("LoginScreen OTP step", () => {
       expect(mocks.verifyLogin).toHaveBeenCalledWith(CHALLENGE, "123456")
     );
     expect(mocks.notify).toHaveBeenCalledWith("success", "Welcome back to MediBook.");
+  });
+
+  it("automatically verifies once six digits have been entered", async () => {
+    mocks.verifyLogin.mockResolvedValue(undefined);
+    await reachOtpStep();
+    const input = screen.getByLabelText("Verification code");
+
+    fireEvent.change(input, { target: { value: "12345" } });
+    expect(mocks.verifyLogin).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "123456" } });
+    await waitFor(() =>
+      expect(mocks.verifyLogin).toHaveBeenCalledTimes(1)
+    );
+    expect(mocks.verifyLogin).toHaveBeenCalledWith(CHALLENGE, "123456");
   });
 
   it("keeps digits only in the code input", async () => {
@@ -151,8 +170,10 @@ describe("LoginScreen OTP step", () => {
     expect(
       await screen.findByText("The code is incorrect or expired.")
     ).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("The code is incorrect or expired.");
     expect(screen.getByLabelText("Verification code")).toBeInTheDocument();
+    expect(screen.getByLabelText("Verification code")).toHaveValue("");
+    expect(screen.getByLabelText("Verification code")).toHaveFocus();
   });
 
   it("walks back to the password form without calling verifyLogin", async () => {

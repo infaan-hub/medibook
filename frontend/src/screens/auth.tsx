@@ -888,16 +888,16 @@ interface OtpDelivery {
 
 /** Sentence telling the user where the code went (never claims a failed channel). */
 function otpDeliverySummary(delivery: OtpDelivery | null): string {
-  if (!delivery || !delivery.emailSent && !delivery.pushSent) return "A 6-digit code was sent.";
+  if (!delivery || !delivery.emailSent && !delivery.pushSent) return "Sent to your email.";
   const email = delivery.emailSent
     ? delivery.emailHint
       ? `your email (${delivery.emailHint})`
-      : "your email address"
+      : "your email"
     : null;
-  const push = delivery.pushSent ? "a notification on your devices" : null;
-  if (email && push) return `A 6-digit code was sent to ${email} and ${push}.`;
-  if (email) return `A 6-digit code was sent to ${email}.`;
-  if (push) return `A 6-digit code was sent to ${push}.`;
+  const push = delivery.pushSent ? "your devices" : null;
+  if (email && push) return `Sent to ${email} and ${push}.`;
+  if (email) return `Sent to ${email}.`;
+  if (push) return `Sent to ${push}.`;
   return "We couldn't deliver the code to your email or devices.";
 }
 
@@ -923,7 +923,10 @@ export function LoginScreen() {
   const [otpValue, setOtpValue] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpTopError, setOtpTopError] = useState("");
+  const [otpAction, setOtpAction] = useState<"verify" | "resend" | null>(null);
   const [delivery, setDelivery] = useState<OtpDelivery | null>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
+  const otpSubmissionInFlight = useRef(false);
 
   // Tick once a second, but ONLY while a countdown is running (lock banner,
   // or the OTP code's expiry).
@@ -940,6 +943,12 @@ export function LoginScreen() {
   const otpRemaining = challenge
     ? Math.max(0, Math.ceil((challenge.expiresAt - clock) / 1000))
     : 0;
+
+  useEffect(() => {
+    if (challenge && !submitting && otpValue.length === 0 && otpRemaining > 0) {
+      otpInputRef.current?.focus();
+    }
+  }, [challenge, otpRemaining, otpValue, submitting]);
 
   // Countdown finished → the server auto-unlocks on the next attempt, so the
   // banner clears and the form is usable again. The server, not this timer,
@@ -1024,44 +1033,65 @@ export function LoginScreen() {
     navigate(target, { replace: true });
   }
 
-  /** OTP step: exchange the typed code for the session. */
-  async function onVerify(event: FormEvent) {
-    event.preventDefault();
-    if (!challenge) return;
+  /** OTP step: exchange the complete code for the session. */
+  async function verifyOtp(code: string) {
+    if (code.length !== 6 || !challenge || otpRemaining <= 0 || otpSubmissionInFlight.current) return;
+    otpSubmissionInFlight.current = true;
+    setOtpAction("verify");
     setSubmitting(true);
     setOtpTopError("");
     setOtpError("");
     try {
-      await verifyLogin(challenge.token, otpValue.trim());
+      await verifyLogin(challenge.token, code);
       notify("success", "Welcome back to MediBook.");
       const target = from && canReturnTo(from) ? from : freshHomeForRole();
       navigate(target, { replace: true });
     } catch (error) {
       const data = error instanceof ApiError ? error.data : undefined;
       if (data?.code === "ACCOUNT_LOCKED") {
-        // The account locked between password and code — back to step one.
         setChallenge(null);
         handlePasswordError(error);
       } else {
         const fields = fieldErrors(error);
         if (fields.otp) setOtpError(fields.otp);
         else setOtpTopError(errorMessage(error));
+        setOtpValue("");
       }
     } finally {
+      otpSubmissionInFlight.current = false;
+      setOtpAction(null);
       setSubmitting(false);
     }
   }
 
-  /** Request a fresh code and deliver it by email + Web Push. */
-  async function onResend() {
+  function onVerify(event: FormEvent) {
+    event.preventDefault();
+    void verifyOtp(otpValue);
+  }
+
+  function onOtpChange(event: ChangeEvent<HTMLInputElement>) {
+    const code = event.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtpValue(code);
     setOtpError("");
     setOtpTopError("");
+    if (code.length === 6) void verifyOtp(code);
+  }
+
+  /** Request a fresh code and deliver it by email + Web Push. */
+  async function onResend() {
+    if (otpSubmissionInFlight.current) return;
+    otpSubmissionInFlight.current = true;
+    setOtpError("");
+    setOtpTopError("");
+    setOtpAction("resend");
     setSubmitting(true);
     try {
       await sendLoginCode();
     } catch (error) {
       setOtpTopError(errorMessage(error));
     } finally {
+      otpSubmissionInFlight.current = false;
+      setOtpAction(null);
       setSubmitting(false);
     }
   }
@@ -1071,6 +1101,7 @@ export function LoginScreen() {
     setOtpValue("");
     setOtpError("");
     setOtpTopError("");
+    otpSubmissionInFlight.current = false;
     setDelivery(null);
   }
 
@@ -1078,10 +1109,10 @@ export function LoginScreen() {
 
   return (
     <AuthLayout
-      title="Sign In"
+      title={challenge ? "Verify your email" : "Sign In"}
       subtitle={
         challenge
-          ? "Enter the 6-digit code sent to you."
+          ? "Enter the code below."
           : "Welcome back! Please sign in\nto continue."
       }
       footer={
@@ -1091,44 +1122,54 @@ export function LoginScreen() {
       {challenge ? (
         <form className="ab-form__inner" onSubmit={onVerify} noValidate>
           {otpTopError && <ErrorNote message={otpTopError} />}
-          <p className="form-note" role="status">
-            {otpRemaining > 0
-              ? `${otpDeliverySummary(delivery)} It expires in ${formatCountdown(otpRemaining)}. ${
-                  delivery?.emailSent
-                    ? "Check your inbox and spam folder, or resend the code."
-                    : "Tap Resend code if it didn't arrive."
-                }`
-              : "This code has expired. Request a new one."}
+          <p className="form-note" role="status" aria-live="polite">
+            {otpAction === "verify" && "Verifying code…"}
+            {otpAction === "resend" && "Sending a new code…"}
+            {!otpAction && (otpRemaining > 0
+              ? `${otpDeliverySummary(delivery)} Expires in ${formatCountdown(otpRemaining)}.`
+              : "This code has expired. Request a new one.")}
           </p>
           <div className="ab-field">
             <label className="ab-field__label" htmlFor="login-otp">Verification code</label>
-            <input
-              id="login-otp"
-              className="ab-field__input"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              required
-              value={otpValue}
-              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            />
-            {otpError && <span className="ab-field__error">{otpError}</span>}
+            <div className="otp-code" data-filled={otpValue.length > 0}>
+              <div className="otp-code__digits" aria-hidden="true">
+                {Array.from({ length: 6 }, (_, index) => {
+                  const digit = otpValue[index] ?? "";
+                  return (
+                    <span
+                      className={`otp-code__digit${index === otpValue.length ? " otp-code__digit--current" : ""}`}
+                      key={`${index}-${digit}`}
+                    >
+                      {digit}
+                    </span>
+                  );
+                })}
+              </div>
+              <input
+                ref={otpInputRef}
+                id="login-otp"
+                className="otp-code__input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                required
+                disabled={submitting || otpRemaining <= 0}
+                value={otpValue}
+                onChange={onOtpChange}
+                aria-describedby={otpError ? "login-otp-error" : undefined}
+              />
+            </div>
+            {otpError && <span id="login-otp-error" className="ab-field__error" role="alert">{otpError}</span>}
           </div>
-          <button
-            type="submit"
-            className="ab-btn ab-btn--primary ab-btn--full"
-            disabled={submitting || otpRemaining <= 0 || otpValue.length !== 6}
-          >
-            {submitting ? "Verifying…" : "Verify Code"}
-          </button>
           <button
             type="button"
             className="ab-btn ab-btn--outline ab-btn--full"
             onClick={onResend}
             disabled={submitting}
           >
-            {submitting ? "Sending…" : "Resend code"}
+            {otpAction === "resend" ? "Sending…" : "Resend code"}
           </button>
           <button type="button" className="ab-forgot" onClick={backToPassword}>
             ← Back to password
