@@ -31,7 +31,8 @@
   min-width: 0;
 }
 .shell__header--guest {
-  /* Default space-between behavior: hamburger left, brand centered, actions right */
+  /* Inherits justify-content: space-from parent .shell__header */
+  /* With space-between: hamburger left, brand centered, actions right */
 }
 .shell__brand--centered {
   justify-content: center;
