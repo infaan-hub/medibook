@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
 }));
 
+const pushMocks = vi.hoisted(() => ({
+  collectLoginPush: vi.fn(),
+}));
+
+vi.mock("../push/loginPush", () => ({
+  collectLoginPush: pushMocks.collectLoginPush,
+}));
+
 vi.mock("../state/app-context", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/app-context")>()),
   useSession: () => ({
@@ -36,6 +44,8 @@ beforeEach(() => {
   mocks.login.mockReset();
   mocks.verifyLogin.mockReset();
   mocks.notify.mockReset();
+  pushMocks.collectLoginPush.mockReset();
+  pushMocks.collectLoginPush.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -57,9 +67,16 @@ async function submitCredentials() {
   });
 }
 
-/** Render and reach the code screen after requesting an email code. */
+/** Render and reach the code screen after requesting an email + push code. */
 async function reachOtpStep() {
-  mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
+  mocks.login.mockResolvedValue({
+    otpRequired: true,
+    challenge: CHALLENGE,
+    expiresIn: 300,
+    emailSent: true,
+    emailHint: "j***@example.com",
+    pushSent: true,
+  });
   await submitCredentials();
 }
 
@@ -91,12 +108,14 @@ describe("LoginScreen OTP step", () => {
   it("does not request browser notification permission to send a verification email", async () => {
     const requestPermission = vi.fn();
     vi.stubGlobal("Notification", { permission: "default", requestPermission });
+    // Mock without the new delivery fields so the code falls back gracefully.
     mocks.login.mockResolvedValue({ otpRequired: true, challenge: CHALLENGE, expiresIn: 300 });
 
     await submitCredentials();
 
     expect(requestPermission).not.toHaveBeenCalled();
-    expect(screen.getByText(/sent to the email address on your account/i)).toBeInTheDocument();
+    // When delivery fields are absent, the summary falls back to the inbox-only message.
+    expect(screen.getByText(/A 6-digit code was sent/i)).toBeInTheDocument();
   });
 
   it("submits the typed code to verifyLogin", async () => {

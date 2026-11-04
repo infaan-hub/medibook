@@ -9,6 +9,7 @@ import type {
   AuthPayload,
   ChangePasswordPayload,
   Envelope,
+  LoginPushPayload,
   OtpChallengePayload,
   RegisterPayload,
   ResetConfirmPayload,
@@ -22,13 +23,21 @@ export function register(payload: RegisterPayload): Promise<Envelope<AuthPayload
 
 /**
  * POST /api/auth/login/ — username + password → OTP challenge (no tokens).
- * The server emails the one-time code to the account's registered email.
+ * The server emails the one-time code AND sends it through the notification
+ * pipeline (inbox + Web Push). `push` attaches this browser's subscription so
+ * the code can be pushed to the requesting device too; omitted entirely (not
+ * `undefined`-valued) when the browser has none.
  */
 export function login(
   username: string,
-  password: string
+  password: string,
+  push?: LoginPushPayload
 ): Promise<Envelope<AuthPayload | OtpChallengePayload>> {
-  return apiPost<AuthPayload | OtpChallengePayload>("/auth/login/", { username, password });
+  return apiPost<AuthPayload | OtpChallengePayload>("/auth/login/", {
+    username,
+    password,
+    ...(push ? { push } : {}),
+  });
 }
 
 /** POST /api/auth/login/check/ — validate credentials without issuing a code. */

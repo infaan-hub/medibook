@@ -14,6 +14,8 @@ import {
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
 import { loginVerificationMail, passwordResetMail, sendMail } from "@/lib/mail";
+import { notifyWithPush } from "@/lib/notify";
+import { createPush } from "./notification.service";
 import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
@@ -84,11 +86,51 @@ export async function register(body: unknown): Promise<{ user: AuthUser; pair: {
 /** Login second factor: code life and per-challenge guess budget. */
 export const LOGIN_OTP_TTL_MS = 5 * 60_000;
 export const LOGIN_OTP_MAX_ATTEMPTS = 3;
+/**
+ * Hard cap on one delivery channel. SMTP and the push service are external
+ * networks: a wedged connection must not hold the login request open (the
+ * code is already valid, so a late delivery is harmless and a resend retries).
+ */
+const LOGIN_OTP_DELIVERY_TIMEOUT_MS = 8_000;
+
+/** Resolve `fallback` when `promise` has not settled within `timeoutMs`. */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
 
 /** A login either stops at the OTP challenge or hands back the full session. */
 export type LoginResult =
-  | { otpRequired: true; challenge: string; expiresInSeconds: number }
+  | {
+      otpRequired: true;
+      challenge: string;
+      expiresInSeconds: number;
+      /** The code went out by SMTP too — the channel that reaches every device. */
+      emailSent: boolean;
+      /** Masked target (j***@example.com) so the OTP screen says where to look. */
+      emailHint: string | null;
+      /** At least one Web Push subscription accepted the code. */
+      pushSent: boolean;
+    }
   | { otpRequired: false; user: AuthUser; pair: { access: string; refresh: string } };
+
+/** j***@example.com — recognizable to their owner, useless for harvesting. */
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return email;
+  return `${email[0]}***${email.slice(at)}`;
+}
 
 /** POST /api/auth/login/check/ — validate credentials without issuing an OTP. */
 export async function checkLoginCredentials(body: unknown): Promise<void> {
@@ -106,8 +148,31 @@ export async function checkLoginCredentials(body: unknown): Promise<void> {
 export async function login(body: unknown): Promise<LoginResult> {
   const input = parse(loginSchema, body) as LoginInput;
   const user = await authenticateLogin(input);
-  const challenge = await issueLoginOtp(user);
-  return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+  // The login screen has no session, so the authenticated subscription-sync
+  // endpoint cannot run before the code goes out. The password request itself
+  // carries the requesting browser's subscription; store it BEFORE notify()
+  // so the web-push leg has this device to deliver to. Only reachable with a
+  // CORRECT password, and a malformed payload never blocks the login.
+  await registerLoginPush(user, (input as { push?: unknown }).push);
+  const { challenge, emailSent, pushSent } = await issueLoginOtp(user);
+  return {
+    otpRequired: true,
+    challenge,
+    expiresInSeconds: LOGIN_OTP_TTL_MS / 1000,
+    emailSent,
+    emailHint: emailSent ? maskEmail(user.email) : null,
+    pushSent,
+  };
+}
+
+/** Best-effort registration of the browser that is signing in right now. */
+async function registerLoginPush(user: AuthUser, body: unknown): Promise<void> {
+  if (body === undefined || body === null) return;
+  try {
+    await createPush(user, body);
+  } catch (error) {
+    console.warn("[push] login-time subscription registration failed:", error);
+  }
 }
 
 async function authenticateLogin(input: LoginInput): Promise<AuthUser> {
@@ -137,15 +202,20 @@ async function authenticateLogin(input: LoginInput): Promise<AuthUser> {
 /**
  * Issue the one-time code for a password-accepted login: replace any earlier
  * challenge (one active row per user), store only its scrypt hash, and deliver
- * the code by email. A failed SMTP delivery removes the challenge and fails
- * the login request so no undelivered code remains usable.
+ * the code through BOTH channels — SMTP email and the notification pipeline
+ * (inbox row + realtime frame + Web Push to every registered device).
+ *
+ * Delivery is best-effort per channel: a failed SMTP hop or an unreachable
+ * push service never denies the login, because the other channel may already
+ * have reached the user. The result reports which channels accepted the code
+ * so the OTP screen can be truthful and offer a resend.
  */
 async function issueLoginOtp(user: {
   id: number;
   email: string;
   first_name: string;
   username: string;
-}): Promise<string> {
+}): Promise<{ challenge: string; emailSent: boolean; pushSent: boolean }> {
   const challenge = randomBytes(32).toString("hex");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await users.deleteLoginOtpsForUser(user.id);
@@ -156,15 +226,31 @@ async function issueLoginOtp(user: {
     code_hash: hashPassword(code),
     expires_at: new Date(Date.now() + LOGIN_OTP_TTL_MS),
   });
-  try {
-    await sendMail(
-      loginVerificationMail(user, code, LOGIN_OTP_TTL_MS / 60_000)
-    );
-  } catch (error) {
-    await users.deleteLoginOtp(challenge);
-    throw error;
-  }
-  return challenge;
+
+  const message = `Your MediBook login code is ${code}. It expires in ${LOGIN_OTP_TTL_MS / 60_000} minutes.`;
+
+  const emailTask = sendMail(
+    loginVerificationMail(user, code, LOGIN_OTP_TTL_MS / 60_000)
+  )
+    .then(() => true)
+    .catch((error) => {
+      console.warn("[auth] login code email failed:", error);
+      return false;
+    });
+
+  const pushTask = notifyWithPush(user.id, "system", message, null, "Login code")
+    .then(({ push }) => push.sent > 0)
+    .catch((error) => {
+      console.warn("[auth] login code notification failed:", error);
+      return false;
+    });
+
+  const [emailSent, pushSent] = await Promise.all([
+    withTimeout(emailTask, LOGIN_OTP_DELIVERY_TIMEOUT_MS, false),
+    withTimeout(pushTask, LOGIN_OTP_DELIVERY_TIMEOUT_MS, false),
+  ]);
+
+  return { challenge, emailSent, pushSent };
 }
 
 /**

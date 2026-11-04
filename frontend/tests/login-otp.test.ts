@@ -1,12 +1,14 @@
 /**
  * Two-step login (password → OTP) through the REAL route handlers against a
- * stateful stand-in for the User / LoginOtp / RefreshToken / Notification
- * tables:
+ * stateful stand-in for the User / LoginOtp / RefreshToken / Notification /
+ * PushSubscription tables:
  *
  *   • a wrong password still counts toward the account lock (unchanged),
  *   • a correct password answers with an OTP challenge and NO tokens — the
- *     code is emailed via SMTP, no notification row is created, and only its
- *     scrypt hash is stored,
+ *     code is delivered by SMTP email AND through the notification pipeline
+ *     (inbox row + Web Push), and only its scrypt hash is stored,
+ *   • the login request may register the requesting browser's push
+ *     subscription first, so Web Push has a device to reach,
  *   • a wrong code costs one attempt on the CHALLENGE (three burn it), never
  *     a failed sign-in on the account,
  *   • the right code mints the JWT pair and consumes the challenge; every
@@ -22,6 +24,7 @@ const harness = vi.hoisted(() => {
   const otps: Row[] = [];
   const refreshTokens: Row[] = [];
   const notifications: Row[] = [];
+  const pushSubs: Row[] = [];
   const emails: Row[] = [];
   const sendMail = vi.fn(async (message: Row) => {
     emails.push(message);
@@ -147,6 +150,35 @@ const harness = vi.hoisted(() => {
         return { ...row };
       },
     },
+    pushSubscription: {
+      findUnique: async ({ where }: Row) => {
+        const row = find(pushSubs, where);
+        return row ? { ...row } : null;
+      },
+      create: async ({ data }: Row) => {
+        const row = {
+          id: seq++,
+          p256dh_key: "",
+          auth_key: "",
+          fcm_token: "",
+          device_info: {},
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+          ...data,
+        };
+        pushSubs.push(row);
+        return { ...row };
+      },
+      update: async ({ where, data }: Row) => {
+        const row = find(pushSubs, where);
+        if (!row) throw new Error("Record to update not found.");
+        return Object.assign(row, data);
+      },
+      // Empty on purpose: delivery itself is pushSender.test's contract; this
+      // suite must never touch a push service or the network.
+      findMany: async () => [],
+    },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     // The atomic failed-attempt UPDATE (registerFailedAttempt) — replayed
     // against the in-memory row so the shared lock counter still works.
@@ -184,6 +216,7 @@ const harness = vi.hoisted(() => {
     otps,
     refreshTokens,
     notifications,
+    pushSubs,
     emails,
     sendMail,
     addUser(overrides: Row = {}): Row {
@@ -218,6 +251,7 @@ const harness = vi.hoisted(() => {
       otps.length = 0;
       refreshTokens.length = 0;
       notifications.length = 0;
+      pushSubs.length = 0;
       emails.length = 0;
       sendMail.mockReset();
       sendMail.mockImplementation(async (message: Row) => {
@@ -274,15 +308,21 @@ const checkLogin = (username: string, password: string) =>
   post(loginCheckRoute, { username, password });
 const submitOtp = (challenge: string, otp: string) => post(verifyRoute, { challenge, otp });
 
-/** Start the flow and hand back { challenge, code } (code from the email). */
+/** Start the flow and hand back { challenge, code } (code from email + inbox). */
 async function startChallenge(username = "juma", password = PASSWORD) {
   const response = await submitLogin(username, password);
   const body = await response.json();
   expect(response.status).toBe(200);
   expect(body.data.otp_required).toBe(true);
+  expect(body.data.email_sent).toBe(true);
+  expect(body.data.email_hint).toBe("j***@example.com");
   const email = harness.emails[harness.emails.length - 1];
   const match = /complete your MediBook sign-in:\s+(\d{6})/i.exec(email.body);
   expect(match).not.toBeNull();
+  // The notification pipeline got the SAME code, so either channel works.
+  const notification = harness.notifications[harness.notifications.length - 1];
+  const pushed = /login code is (\d{6})/i.exec(notification.message);
+  expect(pushed?.[1]).toBe(match![1]);
   return { challenge: body.data.challenge as string, code: match![1], email };
 }
 
@@ -327,6 +367,11 @@ describe("the password step", () => {
       otp_required: true,
       challenge: expect.stringMatching(/^[0-9a-f]{64}$/),
       expires_in: 300,
+      email_sent: true,
+      email_hint: "j***@example.com",
+      // No push subscription was registered in this request → Web Push had
+      // no device, but the notification/inbox leg still ran.
+      push_sent: false,
     });
     // No session material leaks before the code is typed.
     expect(body.data.access).toBeUndefined();
@@ -341,7 +386,7 @@ describe("the password step", () => {
     expect(row.code_hash).not.toMatch(/^\d{6}$/);
     expect(Math.abs(row.expires_at.getTime() - (Date.now() + 5 * 60_000))).toBeLessThan(15_000);
 
-    // Delivery: SMTP email to the account address, never a notification row.
+    // Delivery: BOTH channels carry the same code.
     expect(harness.emails).toHaveLength(1);
     expect(harness.emails[0]).toMatchObject({
       to: user.email,
@@ -349,7 +394,11 @@ describe("the password step", () => {
     });
     expect(harness.emails[0].body).toMatch(/complete your MediBook sign-in:\s+\d{6}/i);
     expect(harness.emails[0].body).toContain("expires in 5 minutes");
-    expect(harness.notifications).toHaveLength(0);
+
+    expect(harness.notifications).toHaveLength(1);
+    expect(harness.notifications[0].recipient_id).toBe(user.id);
+    expect(harness.notifications[0].title).toBe("Login code");
+    expect(harness.notifications[0].message).toMatch(/login code is \d{6}/i);
   });
 });
 
@@ -471,32 +520,115 @@ describe("the lock gate", () => {
   });
 });
 
-describe("login verification email delivery", () => {
+describe("login code delivery", () => {
   const ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-abc";
 
-  it("ignores legacy login push payloads and delivers the code by email", async () => {
+  it("keeps the challenge usable when SMTP fails, so Web Push or a resend can still deliver", async () => {
+    seed();
+    harness.sendMail.mockRejectedValueOnce(new Error("SMTP unavailable"));
+
+    const response = await submitLogin("juma", PASSWORD);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.otp_required).toBe(true);
+    expect(body.data.email_sent).toBe(false);
+    expect(body.data.email_hint).toBeNull();
+    // The challenge survives: the notification pipeline may already have the
+    // code, and the user can resend if neither channel arrived.
+    expect(harness.otps).toHaveLength(1);
+    expect(harness.notifications).toHaveLength(1);
+  });
+});
+
+describe("login-time push registration", () => {
+  const ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-abc";
+
+  it("registers the requesting device before the code goes out", async () => {
+    const user = seed();
+
+    const response = await post(loginRoute, {
+      username: "juma",
+      password: PASSWORD,
+      push: {
+        endpoint: ENDPOINT,
+        p256dh_key: "dh-key",
+        auth_key: "auth-key",
+        device_info: { source: "login" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.otp_required).toBe(true);
+    expect(harness.pushSubs).toHaveLength(1);
+    expect(harness.pushSubs[0]).toMatchObject({
+      user_id: user.id,
+      endpoint: ENDPOINT,
+      p256dh_key: "dh-key",
+      auth_key: "auth-key",
+      is_active: true,
+    });
+    // Registered BEFORE notify() — the notification row carries the code.
+    expect(harness.emails).toHaveLength(1);
+    expect(harness.notifications).toHaveLength(1);
+    expect(harness.notifications[0].message).toMatch(/login code is \d{6}/);
+    expect(harness.otps).toHaveLength(1);
+  });
+
+  it("re-binds an existing endpoint to the account signing in (reactivated)", async () => {
+    const user = seed();
+    harness.pushSubs.push({
+      id: 900,
+      user_id: 777,
+      endpoint: ENDPOINT,
+      p256dh_key: "stale-dh",
+      auth_key: "stale-auth",
+      fcm_token: "",
+      device_info: {},
+      is_active: false,
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+      updated_at: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const response = await post(loginRoute, {
+      username: "juma",
+      password: PASSWORD,
+      push: { endpoint: ENDPOINT, p256dh_key: "fresh-dh", auth_key: "fresh-auth" },
+    });
+
+    expect(response.status).toBe(200);
+    // One endpoint = one device: handed to the account using it now.
+    expect(harness.pushSubs).toHaveLength(1);
+    expect(harness.pushSubs[0]).toMatchObject({
+      id: 900,
+      user_id: user.id,
+      p256dh_key: "fresh-dh",
+      auth_key: "fresh-auth",
+      is_active: true,
+    });
+  });
+
+  it("ignores a malformed push payload instead of blocking the login", async () => {
     seed();
 
     const response = await post(loginRoute, {
       username: "juma",
       password: PASSWORD,
-      push: { endpoint: ENDPOINT, p256dh_key: "dh-key", auth_key: "auth-key" },
+      push: { endpoint: "not a url" },
     });
 
     expect(response.status).toBe(200);
     expect((await response.json()).data.otp_required).toBe(true);
-    expect(harness.emails).toHaveLength(1);
-    expect(harness.notifications).toHaveLength(0);
+    expect(harness.pushSubs).toHaveLength(0);
     expect(harness.otps).toHaveLength(1); // the challenge itself is unaffected
   });
 
-  it("removes the challenge and returns an error when SMTP delivery fails", async () => {
+  it("touches no subscription when the request carries none", async () => {
     seed();
-    harness.sendMail.mockRejectedValueOnce(new Error("SMTP unavailable"));
 
     const response = await submitLogin("juma", PASSWORD);
 
-    expect(response.status).toBe(500);
-    expect(harness.otps).toHaveLength(0);
+    expect(response.status).toBe(200);
+    expect(harness.pushSubs).toHaveLength(0);
   });
 });

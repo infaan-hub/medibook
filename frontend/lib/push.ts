@@ -4,7 +4,7 @@
  */
 import { prisma } from "./db";
 
-type PushResult = {
+export type PushResult = {
   sent: number;
   failed: number;
   /** Rows removed from rotation this send — purged (endpoint gone) or deactivated (VAPID rotated). */

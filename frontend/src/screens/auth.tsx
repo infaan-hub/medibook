@@ -23,6 +23,7 @@ import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
 import { getPushPlatform } from "../lib/platform";
+import { collectLoginPush } from "../push/loginPush";
 import { TextField } from "../components/ui";
 
 /* ---------------- shared helpers ---------------- */
@@ -878,6 +879,28 @@ interface LockBanner {
   locked_until: string | null;
 }
 
+/** Which channels accepted the login code, as reported by the password step. */
+interface OtpDelivery {
+  emailSent: boolean;
+  emailHint: string | null;
+  pushSent: boolean;
+}
+
+/** Sentence telling the user where the code went (never claims a failed channel). */
+function otpDeliverySummary(delivery: OtpDelivery | null): string {
+  if (!delivery || !delivery.emailSent && !delivery.pushSent) return "A 6-digit code was sent.";
+  const email = delivery.emailSent
+    ? delivery.emailHint
+      ? `your email (${delivery.emailHint})`
+      : "your email address"
+    : null;
+  const push = delivery.pushSent ? "a notification on your devices" : null;
+  if (email && push) return `A 6-digit code was sent to ${email} and ${push}.`;
+  if (email) return `A 6-digit code was sent to ${email}.`;
+  if (push) return `A 6-digit code was sent to ${push}.`;
+  return "We couldn't deliver the code to your email or devices.";
+}
+
 export function LoginScreen() {
   const { login, verifyLogin } = useSession();
   const { notify } = useToast();
@@ -900,6 +923,7 @@ export function LoginScreen() {
   const [otpValue, setOtpValue] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpTopError, setOtpTopError] = useState("");
+  const [delivery, setDelivery] = useState<OtpDelivery | null>(null);
 
   // Tick once a second, but ONLY while a countdown is running (lock banner,
   // or the OTP code's expiry).
@@ -954,7 +978,7 @@ export function LoginScreen() {
     await startPasswordStep();
   }
 
-  /** Validate credentials, issue the OTP, and deliver it by email. */
+  /** Validate credentials, issue the OTP, and deliver it by email + Web Push. */
   async function startPasswordStep(): Promise<void> {
     setTopError("");
     setFormErrors({});
@@ -969,7 +993,14 @@ export function LoginScreen() {
   }
 
   async function sendLoginCode() {
-    const outcome = await login(username.trim(), password);
+    // The password request is the only chance to hand this browser's push
+    // subscription to the server before the code is issued. subscribeToPush()
+    // requests the OS permission synchronously from this Sign-In tap; either
+    // way the SMTP email and inbox row still carry the code.
+    const push = await collectLoginPush();
+    const outcome = push
+      ? await login(username.trim(), password, push)
+      : await login(username.trim(), password);
     if (outcome.otpRequired) {
       setChallenge({
         token: outcome.challenge,
@@ -980,6 +1011,11 @@ export function LoginScreen() {
       setOtpValue("");
       setOtpError("");
       setOtpTopError("");
+      setDelivery({
+        emailSent: outcome.emailSent,
+        emailHint: outcome.emailHint,
+        pushSent: outcome.pushSent,
+      });
       return;
     }
 
@@ -1016,7 +1052,7 @@ export function LoginScreen() {
     }
   }
 
-  /** Request a fresh code and deliver it by email. */
+  /** Request a fresh code and deliver it by email + Web Push. */
   async function onResend() {
     setOtpError("");
     setOtpTopError("");
@@ -1035,6 +1071,7 @@ export function LoginScreen() {
     setOtpValue("");
     setOtpError("");
     setOtpTopError("");
+    setDelivery(null);
   }
 
   const countingDown = Boolean(lock && !lock.requires_admin && (waitSeconds ?? 0) > 0);
@@ -1044,7 +1081,7 @@ export function LoginScreen() {
       title="Sign In"
       subtitle={
         challenge
-          ? "Enter the 6-digit code sent to your email address."
+          ? "Enter the 6-digit code sent to you."
           : "Welcome back! Please sign in\nto continue."
       }
       footer={
@@ -1056,7 +1093,11 @@ export function LoginScreen() {
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
             {otpRemaining > 0
-              ? `A 6-digit code was sent to the email address on your account. It expires in ${formatCountdown(otpRemaining)}. Check your inbox and spam folder, or resend the code.`
+              ? `${otpDeliverySummary(delivery)} It expires in ${formatCountdown(otpRemaining)}. ${
+                  delivery?.emailSent
+                    ? "Check your inbox and spam folder, or resend the code."
+                    : "Tap Resend code if it didn't arrive."
+                }`
               : "This code has expired. Request a new one."}
           </p>
           <div className="ab-field">

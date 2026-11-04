@@ -416,7 +416,7 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
   return (
     <div className={`shell${sidebarOpen && !isDesktop ? " shell--drawer-open" : ""}${user?.role === "admin" && user.is_superuser ? " shell--admin" : ""}`}>
       <header className={`shell__header${guestMode ? " shell__header--guest" : ""}`}>
-        {!guestMode && (
+        {true && (
           <button
             className="shell__hamburger"
             type="button"

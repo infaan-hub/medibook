@@ -7,7 +7,7 @@
 import { prisma } from "./db";
 import { dateStr } from "./serialize";
 import { pushEvent, pushEventAll } from "./realtime";
-import { sendWebPushBounded } from "./push";
+import { sendWebPushBounded, type PushResult } from "./push";
 import type { Notification, NotificationType, Appointment } from "@prisma/client";
 
 /** Django _TITLES map (helpers.py). */
@@ -52,15 +52,21 @@ function versionOf(date: Date | undefined): number {
   return date ? date.getTime() : Date.now();
 }
 
-/** Create an inbox row, push it live, and attempt web push delivery. */
-export async function notify(
+/**
+ * Create an inbox row, push it live, and attempt web push delivery.
+ *
+ * `notifyWithPush` also hands back the push result, so callers that must
+ * report which channels actually accepted the message (the login OTP) can
+ * distinguish "inbox row created" from "reached at least one device".
+ */
+export async function notifyWithPush(
   recipientId: number,
   notificationType: NotificationType | string,
   message: string,
   appointmentId?: number | null,
   /** Overrides the default title for this notification type (push + inbox). */
   title?: string
-): Promise<Notification> {
+): Promise<{ notification: Notification; push: PushResult }> {
   const notification = await prisma.notification.create({
     data: {
       recipient_id: recipientId,
@@ -81,7 +87,7 @@ export async function notify(
   // moment this response returns, which would abort the push to FCM/APNs and
   // leave the user with an inbox entry and no OS notification. The realtime
   // event above is already synchronous, so ordering is unaffected.
-  await sendWebPushBounded(recipientId, {
+  const push = await sendWebPushBounded(recipientId, {
     title: notification.title,
     body: message,
     url: appointmentId != null ? `/appointments/${appointmentId}` : "/notifications",
@@ -93,7 +99,20 @@ export async function notify(
         : `notification-${notification.id}`,
   });
 
-  return notification;
+  return { notification, push };
+}
+
+/** Create an inbox row, push it live, and attempt web push delivery. */
+export async function notify(
+  recipientId: number,
+  notificationType: NotificationType | string,
+  message: string,
+  appointmentId?: number | null,
+  /** Overrides the default title for this notification type (push + inbox). */
+  title?: string
+): Promise<Notification> {
+  return (await notifyWithPush(recipientId, notificationType, message, appointmentId, title))
+    .notification;
 }
 
 /** Emit notification.updated after mark-read / patch so clients sync is_read. */
