@@ -18,12 +18,11 @@ import {
   requestPasswordReset,
 } from "../api/auth";
 import { ApiError } from "../api/client";
-import type { LoginPushPayload, RegisterPayload } from "../api/types";
+import type { RegisterPayload } from "../api/types";
 import { useSession, useToast } from "../state/app-context";
 import { LOGIN_PATH, homeForRole, roleOwnsPath } from "../components/guards";
 import { InstallAppButton } from "../components/InstallAppButton";
-import { getNotificationCapability, getPushPlatform } from "../lib/platform";
-import { collectLoginPush } from "../push/loginPush";
+import { getPushPlatform } from "../lib/platform";
 import { TextField } from "../components/ui";
 
 /* ---------------- shared helpers ---------------- */
@@ -880,7 +879,7 @@ interface LockBanner {
 }
 
 export function LoginScreen() {
-  const { checkLoginCredentials, login, verifyLogin } = useSession();
+  const { login, verifyLogin } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -896,7 +895,6 @@ export function LoginScreen() {
   const [lock, setLock] = useState<LockBanner | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [clock, setClock] = useState(() => Date.now());
-  const [credentialsVerified, setCredentialsVerified] = useState(false);
   // Second step: the password was right, now the one-time code must be typed.
   const [challenge, setChallenge] = useState<{ token: string; expiresAt: number } | null>(null);
   const [otpValue, setOtpValue] = useState("");
@@ -956,55 +954,27 @@ export function LoginScreen() {
     await startPasswordStep();
   }
 
-  /** Request notification permission from the sign-in tap, then validate and issue the OTP. */
+  /** Validate credentials, issue the OTP, and deliver it by email. */
   async function startPasswordStep(): Promise<void> {
     setTopError("");
     setFormErrors({});
     setSubmitting(true);
     try {
-      // Request notification permission INSTANTLY from this user gesture,
-      // before the async credential check (which would break the gesture
-      // chain and cause browsers to silently drop the permission prompt).
-      // The permission is only acted on if the credentials turn out correct.
-      try {
-        if (typeof window !== "undefined" && "Notification" in window) {
-          const capability = getNotificationCapability();
-          if (capability.canRequestPermission && Notification.permission === "default") {
-            await Notification.requestPermission();
-          }
-        }
-      } catch {
-        /* ignore - collectLoginPush surfaces the typed reason */
-      }
-
-      await checkLoginCredentials(username.trim(), password);
-      setCredentialsVerified(true);
-      setOtpTopError("");
-
-      const push = await collectLoginPush();
-      if (push) {
-        await sendLoginCode(push);
-      } else {
-        setOtpTopError(
-          "Your password is correct. Allow browser notifications before a code is sent, or continue without notifications."
-        );
-      }
+      await sendLoginCode();
     } catch (error) {
-      setCredentialsVerified(false);
       handlePasswordError(error);
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function sendLoginCode(push?: LoginPushPayload) {
-    const outcome = await login(username.trim(), password, push);
+  async function sendLoginCode() {
+    const outcome = await login(username.trim(), password);
     if (outcome.otpRequired) {
       setChallenge({
         token: outcome.challenge,
         expiresAt: Date.now() + outcome.expiresIn * 1000,
       });
-      setCredentialsVerified(false);
       setClock(Date.now());
       setAttemptsLeft(null);
       setOtpValue("");
@@ -1016,18 +986,6 @@ export function LoginScreen() {
     notify("success", "Welcome back to MediBook.");
     const target = from && canReturnTo(from) ? from : freshHomeForRole();
     navigate(target, { replace: true });
-  }
-
-  async function onContinueWithoutNotifications() {
-    setSubmitting(true);
-    setOtpTopError("");
-    try {
-      await sendLoginCode();
-    } catch (error) {
-      setOtpTopError(errorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   /** OTP step: exchange the typed code for the session. */
@@ -1058,20 +1016,13 @@ export function LoginScreen() {
     }
   }
 
-  /** Request a fresh code and deliver it to this browser's existing push subscription. */
+  /** Request a fresh code and deliver it by email. */
   async function onResend() {
     setOtpError("");
     setOtpTopError("");
     setSubmitting(true);
     try {
-      const push = await collectLoginPush();
-      if (!push) {
-        setOtpTopError(
-          "Could not resend the code to this browser. Check notification permission in your browser settings and try again."
-        );
-        return;
-      }
-      await sendLoginCode(push);
+      await sendLoginCode();
     } catch (error) {
       setOtpTopError(errorMessage(error));
     } finally {
@@ -1081,7 +1032,6 @@ export function LoginScreen() {
 
   function backToPassword() {
     setChallenge(null);
-    setCredentialsVerified(false);
     setOtpValue("");
     setOtpError("");
     setOtpTopError("");
@@ -1094,9 +1044,7 @@ export function LoginScreen() {
       title="Sign In"
       subtitle={
         challenge
-          ? "Enter the 6-digit code sent to your browser notifications."
-          : credentialsVerified
-            ? "Your password was accepted. Set up notifications to receive a verification code."
+          ? "Enter the 6-digit code sent to your email address."
           : "Welcome back! Please sign in\nto continue."
       }
       footer={
@@ -1108,7 +1056,7 @@ export function LoginScreen() {
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status">
             {otpRemaining > 0
-              ? `A 6-digit code was sent to your browser notifications. It expires in ${formatCountdown(otpRemaining)}. If no notification appears, check your browser's notification settings or resend the code.`
+              ? `A 6-digit code was sent to the email address on your account. It expires in ${formatCountdown(otpRemaining)}. Check your inbox and spam folder, or resend the code.`
               : "This code has expired. Request a new one."}
           </p>
           <div className="ab-field">
@@ -1145,24 +1093,6 @@ export function LoginScreen() {
             ← Back to password
           </button>
         </form>
-      ) : credentialsVerified ? (
-        <div className="ab-form__inner">
-          {otpTopError && <ErrorNote message={otpTopError} />}
-          <p className="form-note" role="status">
-            Your password is correct, but this browser did not enable notifications. Check your browser's notification settings. The code has not been sent yet.
-          </p>
-          <button
-            type="button"
-            className="ab-btn ab-btn--outline ab-btn--full"
-            onClick={onContinueWithoutNotifications}
-            disabled={submitting}
-          >
-            Continue without notifications
-          </button>
-          <button type="button" className="ab-forgot" onClick={backToPassword}>
-            ← Back to password
-          </button>
-        </div>
       ) : (
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {lock ? (

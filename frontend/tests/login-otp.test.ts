@@ -5,7 +5,7 @@
  *
  *   • a wrong password still counts toward the account lock (unchanged),
  *   • a correct password answers with an OTP challenge and NO tokens — the
- *     code is delivered through notify() (inbox row + push) and only its
+ *     code is emailed via SMTP, no notification row is created, and only its
  *     scrypt hash is stored,
  *   • a wrong code costs one attempt on the CHALLENGE (three burn it), never
  *     a failed sign-in on the account,
@@ -22,7 +22,10 @@ const harness = vi.hoisted(() => {
   const otps: Row[] = [];
   const refreshTokens: Row[] = [];
   const notifications: Row[] = [];
-  const pushSubs: Row[] = [];
+  const emails: Row[] = [];
+  const sendMail = vi.fn(async (message: Row) => {
+    emails.push(message);
+  });
   let seq = 1;
 
   /** Minimal Prisma `where` matcher covering the operators these flows use. */
@@ -144,31 +147,6 @@ const harness = vi.hoisted(() => {
         return { ...row };
       },
     },
-    // Full upsert surface (createPush registers the login page's device);
-    // findMany stays empty on purpose — actual web-push delivery is
-    // pushSender.test's contract, this suite must never touch the network.
-    pushSubscription: {
-      findUnique: async ({ where }: Row) => {
-        const row = find(pushSubs, where);
-        return row ? { ...row } : null;
-      },
-      create: async ({ data }: Row) => {
-        const row = {
-          id: seq++,
-          created_at: new Date(),
-          updated_at: new Date(),
-          ...data,
-        };
-        pushSubs.push(row);
-        return { ...row };
-      },
-      update: async ({ where, data }: Row) => {
-        const row = find(pushSubs, where);
-        if (!row) throw new Error("Record to update not found.");
-        return Object.assign(row, data);
-      },
-      findMany: async () => [],
-    },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     // The atomic failed-attempt UPDATE (registerFailedAttempt) — replayed
     // against the in-memory row so the shared lock counter still works.
@@ -206,7 +184,8 @@ const harness = vi.hoisted(() => {
     otps,
     refreshTokens,
     notifications,
-    pushSubs,
+    emails,
+    sendMail,
     addUser(overrides: Row = {}): Row {
       const row: Row = {
         id: seq++,
@@ -239,7 +218,11 @@ const harness = vi.hoisted(() => {
       otps.length = 0;
       refreshTokens.length = 0;
       notifications.length = 0;
-      pushSubs.length = 0;
+      emails.length = 0;
+      sendMail.mockReset();
+      sendMail.mockImplementation(async (message: Row) => {
+        emails.push(message);
+      });
       seq = 1;
     },
   };
@@ -252,6 +235,10 @@ vi.hoisted(() => {
 });
 
 vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
+vi.mock("@/lib/mail", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mail")>();
+  return { ...actual, sendMail: harness.sendMail };
+});
 
 import { hashPassword } from "@/lib/password";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
@@ -287,16 +274,16 @@ const checkLogin = (username: string, password: string) =>
   post(loginCheckRoute, { username, password });
 const submitOtp = (challenge: string, otp: string) => post(verifyRoute, { challenge, otp });
 
-/** Start the flow and hand back { challenge, code } (code from the notify row). */
+/** Start the flow and hand back { challenge, code } (code from the email). */
 async function startChallenge(username = "juma", password = PASSWORD) {
   const response = await submitLogin(username, password);
   const body = await response.json();
   expect(response.status).toBe(200);
   expect(body.data.otp_required).toBe(true);
-  const notice = harness.notifications[harness.notifications.length - 1];
-  const match = /login code is (\d{6})/.exec(notice.message);
+  const email = harness.emails[harness.emails.length - 1];
+  const match = /complete your MediBook sign-in:\s+(\d{6})/i.exec(email.body);
   expect(match).not.toBeNull();
-  return { challenge: body.data.challenge as string, code: match![1], notice };
+  return { challenge: body.data.challenge as string, code: match![1], email };
 }
 
 beforeEach(() => harness.reset());
@@ -354,15 +341,15 @@ describe("the password step", () => {
     expect(row.code_hash).not.toMatch(/^\d{6}$/);
     expect(Math.abs(row.expires_at.getTime() - (Date.now() + 5 * 60_000))).toBeLessThan(15_000);
 
-    // Delivery: one system notification titled "Login code" carrying the code.
-    expect(harness.notifications).toHaveLength(1);
-    expect(harness.notifications[0]).toMatchObject({
-      recipient_id: user.id,
-      notification_type: "system",
-      title: "Login code",
+    // Delivery: SMTP email to the account address, never a notification row.
+    expect(harness.emails).toHaveLength(1);
+    expect(harness.emails[0]).toMatchObject({
+      to: user.email,
+      subject: "Your MediBook verification code",
     });
-    expect(harness.notifications[0].message).toMatch(/login code is \d{6}/);
-    expect(harness.notifications[0].message).toContain("expires in 5 minutes");
+    expect(harness.emails[0].body).toMatch(/complete your MediBook sign-in:\s+\d{6}/i);
+    expect(harness.emails[0].body).toContain("expires in 5 minutes");
+    expect(harness.notifications).toHaveLength(0);
   });
 });
 
@@ -484,92 +471,32 @@ describe("the lock gate", () => {
   });
 });
 
-describe("login-time push registration", () => {
+describe("login verification email delivery", () => {
   const ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-abc";
 
-  it("registers the requesting device before the code goes out", async () => {
-    const user = seed();
-
-    const response = await post(loginRoute, {
-      username: "juma",
-      password: PASSWORD,
-      push: {
-        endpoint: ENDPOINT,
-        p256dh_key: "dh-key",
-        auth_key: "auth-key",
-        device_info: { source: "login" },
-      },
-    });
-
-    expect(response.status).toBe(200);
-    expect((await response.json()).data.otp_required).toBe(true);
-    expect(harness.pushSubs).toHaveLength(1);
-    expect(harness.pushSubs[0]).toMatchObject({
-      user_id: user.id,
-      endpoint: ENDPOINT,
-      p256dh_key: "dh-key",
-      auth_key: "auth-key",
-      is_active: true,
-    });
-    // Registered BEFORE notify() — the code row is the device's to receive.
-    expect(harness.notifications).toHaveLength(1);
-    expect(harness.notifications[0].message).toMatch(/login code is \d{6}/);
-  });
-
-  it("re-binds an existing endpoint to the account signing in (reactivated)", async () => {
-    const user = seed();
-    harness.pushSubs.push({
-      id: 900,
-      user_id: 777,
-      endpoint: ENDPOINT,
-      p256dh_key: "stale-dh",
-      auth_key: "stale-auth",
-      fcm_token: "",
-      device_info: {},
-      is_active: false,
-      created_at: new Date("2026-01-01T00:00:00.000Z"),
-      updated_at: new Date("2026-01-01T00:00:00.000Z"),
-    });
-
-    const response = await post(loginRoute, {
-      username: "juma",
-      password: PASSWORD,
-      push: { endpoint: ENDPOINT, p256dh_key: "fresh-dh", auth_key: "fresh-auth" },
-    });
-
-    expect(response.status).toBe(200);
-    // One endpoint = one device: handed to the account using it now.
-    expect(harness.pushSubs).toHaveLength(1);
-    expect(harness.pushSubs[0]).toMatchObject({
-      id: 900,
-      user_id: user.id,
-      p256dh_key: "fresh-dh",
-      auth_key: "fresh-auth",
-      is_active: true,
-    });
-  });
-
-  it("ignores a malformed push payload instead of blocking the login", async () => {
+  it("ignores legacy login push payloads and delivers the code by email", async () => {
     seed();
 
     const response = await post(loginRoute, {
       username: "juma",
       password: PASSWORD,
-      push: { endpoint: "not a url" },
+      push: { endpoint: ENDPOINT, p256dh_key: "dh-key", auth_key: "auth-key" },
     });
 
     expect(response.status).toBe(200);
     expect((await response.json()).data.otp_required).toBe(true);
-    expect(harness.pushSubs).toHaveLength(0);
+    expect(harness.emails).toHaveLength(1);
+    expect(harness.notifications).toHaveLength(0);
     expect(harness.otps).toHaveLength(1); // the challenge itself is unaffected
   });
 
-  it("touches no subscription when the request carries none", async () => {
+  it("removes the challenge and returns an error when SMTP delivery fails", async () => {
     seed();
+    harness.sendMail.mockRejectedValueOnce(new Error("SMTP unavailable"));
 
     const response = await submitLogin("juma", PASSWORD);
 
-    expect(response.status).toBe(200);
-    expect(harness.pushSubs).toHaveLength(0);
+    expect(response.status).toBe(500);
+    expect(harness.otps).toHaveLength(0);
   });
 });

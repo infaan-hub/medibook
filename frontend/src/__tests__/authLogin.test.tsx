@@ -21,7 +21,6 @@ import { ApiError } from "../api/client";
 import { LoginScreen } from "../screens/auth";
 
 const mocks = vi.hoisted(() => ({
-  checkLoginCredentials: vi.fn(),
   login: vi.fn(),
   notify: vi.fn(),
 }));
@@ -31,7 +30,6 @@ vi.mock("../state/app-context", async (importOriginal) => ({
   useSession: () => ({
     status: "guest",
     user: null,
-    checkLoginCredentials: mocks.checkLoginCredentials,
     login: mocks.login,
     register: vi.fn(),
     socialLogin: vi.fn(),
@@ -42,7 +40,6 @@ vi.mock("../state/app-context", async (importOriginal) => ({
 }));
 
 beforeEach(() => {
-  mocks.checkLoginCredentials.mockReset();
   mocks.login.mockReset();
   mocks.notify.mockReset();
 });
@@ -72,7 +69,7 @@ async function submitLogin() {
 
 describe("LoginScreen error reporting", () => {
   it("surfaces wrong credentials as a visible invalid-credentials message", async () => {
-    mocks.checkLoginCredentials.mockRejectedValue(
+    mocks.login.mockRejectedValue(
       new ApiError("The username or password is incorrect.", 400, {
         non_field_errors: ["The username or password is incorrect."],
       })
@@ -83,12 +80,12 @@ describe("LoginScreen error reporting", () => {
     const banner = await screen.findByRole("alert");
     expect(banner).toHaveTextContent("The username or password is incorrect.");
     await waitFor(() =>
-      expect(mocks.checkLoginCredentials).toHaveBeenCalledWith("saleh", "wrong-password")
+      expect(mocks.login).toHaveBeenCalledWith("saleh", "wrong-password")
     );
   });
 
   it("still renders genuine field errors under their input, without the banner", async () => {
-    mocks.checkLoginCredentials.mockRejectedValue(
+    mocks.login.mockRejectedValue(
       new ApiError("The request could not be processed.", 400, {
         username: ["This field is required."],
       })

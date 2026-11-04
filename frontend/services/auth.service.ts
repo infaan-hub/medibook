@@ -13,9 +13,7 @@ import {
 } from "@/lib/account-lock";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
 import { hashPassword, isDjangoHash, validateNewPassword, verifyPassword } from "@/lib/password";
-import { passwordResetMail, sendMail } from "@/lib/mail";
-import { notify } from "@/lib/notify";
-import { createPush } from "./notification.service";
+import { loginVerificationMail, passwordResetMail, sendMail } from "@/lib/mail";
 import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import type { AuthUser } from "@/lib/auth";
@@ -92,11 +90,7 @@ export type LoginResult =
   | { otpRequired: true; challenge: string; expiresInSeconds: number }
   | { otpRequired: false; user: AuthUser; pair: { access: string; refresh: string } };
 
-/**
- * POST /api/auth/login/check/ — validate credentials without issuing an OTP.
- * The browser uses this response to request notification permission before
- * calling login(), which is the operation that creates and delivers the code.
- */
+/** POST /api/auth/login/check/ — validate credentials without issuing an OTP. */
 export async function checkLoginCredentials(body: unknown): Promise<void> {
   const input = parse(loginSchema, body) as LoginInput;
   await authenticateLogin(input);
@@ -112,20 +106,6 @@ export async function checkLoginCredentials(body: unknown): Promise<void> {
 export async function login(body: unknown): Promise<LoginResult> {
   const input = parse(loginSchema, body) as LoginInput;
   const user = await authenticateLogin(input);
-  // The login screen has no session, so the usual subscription-sync endpoint
-  // can't run yet — the password request itself carries the requesting
-  // browser's subscription. Upsert it BEFORE the code goes out (same
-  // idempotency/reassignment policy as POST /notifications/push-subscriptions/)
-  // so notify()'s web-push leg has a device to deliver to. Only reachable
-  // with a CORRECT password. Best-effort: a bad payload or push hiccup must
-  // never deny the login — worst case the code rides the inbox row alone.
-  if (input.push !== undefined) {
-    try {
-      await createPush(user, input.push);
-    } catch (error) {
-      console.warn("[push] login-time subscription registration failed:", error);
-    }
-  }
   const challenge = await issueLoginOtp(user);
   return { otpRequired: true, challenge, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
 }
@@ -156,12 +136,16 @@ async function authenticateLogin(input: LoginInput): Promise<AuthUser> {
 
 /**
  * Issue the one-time code for a password-accepted login: replace any earlier
- * challenge (one active row per user), store only its scrypt hash, and
- * deliver the code through notify() — inbox row + web push. Delivery is
- * best-effort: the challenge already exists, so a transient push failure must
- * not deny login; the user re-sends by signing in again.
+ * challenge (one active row per user), store only its scrypt hash, and deliver
+ * the code by email. A failed SMTP delivery removes the challenge and fails
+ * the login request so no undelivered code remains usable.
  */
-async function issueLoginOtp(user: { id: number }): Promise<string> {
+async function issueLoginOtp(user: {
+  id: number;
+  email: string;
+  first_name: string;
+  username: string;
+}): Promise<string> {
   const challenge = randomBytes(32).toString("hex");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await users.deleteLoginOtpsForUser(user.id);
@@ -173,15 +157,12 @@ async function issueLoginOtp(user: { id: number }): Promise<string> {
     expires_at: new Date(Date.now() + LOGIN_OTP_TTL_MS),
   });
   try {
-    await notify(
-      user.id,
-      "system",
-      `Your MediBook login code is ${code}. It expires in ${LOGIN_OTP_TTL_MS / 60_000} minutes.`,
-      null,
-      "Login code"
+    await sendMail(
+      loginVerificationMail(user, code, LOGIN_OTP_TTL_MS / 60_000)
     );
   } catch (error) {
-    console.error("[auth] login code delivery failed:", error);
+    await users.deleteLoginOtp(challenge);
+    throw error;
   }
   return challenge;
 }

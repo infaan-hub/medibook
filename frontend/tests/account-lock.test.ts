@@ -293,6 +293,11 @@ vi.hoisted(() => {
 vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
 vi.mock("@/lib/mail", () => ({
   sendMail: harness.mail.sendMail,
+  loginVerificationMail: (user: { email: string }, code: string) => ({
+    to: user.email,
+    subject: "Verification",
+    body: code,
+  }),
   passwordResetMail: (user: { email: string }, token: string) => ({
     to: user.email,
     subject: "Reset",

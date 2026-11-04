@@ -18,7 +18,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  checkLoginCredentials as checkLoginCredentialsRequest,
   getMe,
   login as loginRequest,
   logout as logoutRequest,
@@ -28,7 +27,7 @@ import {
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import { realtime } from "../realtime/socket";
-import type { LoginPushPayload, RegisterPayload, User } from "../api/types";
+import type { RegisterPayload, User } from "../api/types";
 
 /* ---------------- Toasts ---------------- */
 
@@ -99,8 +98,7 @@ export type LoginOutcome =
 interface SessionContextValue {
   status: SessionStatus;
   user: User | null;
-  checkLoginCredentials: (username: string, password: string) => Promise<void>;
-  login: (username: string, password: string, push?: LoginPushPayload) => Promise<LoginOutcome>;
+  login: (username: string, password: string) => Promise<LoginOutcome>;
   /** Second step: exchange the OTP challenge for the JWT pair. */
   verifyLogin: (challenge: string, otp: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
@@ -152,12 +150,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (
-      username: string,
-      password: string,
-      push?: LoginPushPayload
-    ): Promise<LoginOutcome> => {
-      const envelope = await loginRequest(username, password, push);
+    async (username: string, password: string): Promise<LoginOutcome> => {
+      const envelope = await loginRequest(username, password);
       const data = envelope.data;
       // The password step mints no tokens — hand the challenge up to the
       // OTP screen and stop; verifyLogin completes the sign-in.
@@ -169,10 +163,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [applyAuth]
   );
-
-  const checkLoginCredentials = useCallback(async (username: string, password: string) => {
-    await checkLoginCredentialsRequest(username, password);
-  }, []);
 
   const verifyLogin = useCallback(
     async (challenge: string, otp: string) => {
@@ -225,8 +215,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [status, user]);
 
   const value = useMemo(
-    () => ({ status, user, checkLoginCredentials, login, verifyLogin, register, socialLogin, logout, setUser }),
-    [status, user, checkLoginCredentials, login, verifyLogin, register, socialLogin, logout, setUser]
+    () => ({ status, user, login, verifyLogin, register, socialLogin, logout, setUser }),
+    [status, user, login, verifyLogin, register, socialLogin, logout, setUser]
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
