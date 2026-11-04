@@ -15,9 +15,9 @@
   z-index: 30;
   height: calc(var(--header-height) + var(--safe-top));
   padding: var(--safe-top) var(--space-4) 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(36px, 1fr) auto minmax(36px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(14px) saturate(1.3);
@@ -25,16 +25,17 @@
   border-bottom: 1px solid rgba(9, 169, 158, 0.1);
 }
 .shell__header-actions {
+  grid-column: 3;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
-.shell__header--guest {
-  /* Inherits justify-content: space-from parent .shell__header */
-  /* With space-between: hamburger left, brand centered, actions right */
-}
 .shell__brand--centered {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
   justify-content: center;
 }
 .shell__brand {
@@ -60,6 +61,8 @@
 
 /* ---- Hamburger toggle ---- */
 .shell__hamburger {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
