@@ -50,9 +50,7 @@ import {
   UserCheck,
   Play,
   Eye,
-  // This lucide-react build ships no `Report` glyph; FileChartColumn is the
-  // document-with-chart icon used for every report action in the app.
-  FileChartColumn,
+  Download,
 } from "lucide-react";
 
 function message(error: unknown): string {
@@ -731,7 +729,7 @@ export function DoctorDashboardScreen() {
       </Card>
 
       <Card className="doctor-reports-card">
-        <div className="doctor-card-heading"><div><h2>Reports</h2><p>Generate or preview your practice summary</p></div></div>
+        <div className="doctor-card-heading"><div><h2>Reports</h2><p>Download or preview your practice summary PDF</p></div></div>
         <div className="doctor-report-actions">
           <Button
             variant="secondary"
@@ -739,8 +737,8 @@ export function DoctorDashboardScreen() {
             disabled={summaryBusy !== null}
             onClick={() => void runSummaryReport("download")}
           >
-            <FileChartColumn size={16} />
-            {summaryBusy === "download" ? "Generating report..." : "Generate Doctor Report"}
+            <Download size={16} />
+            {summaryBusy === "download" ? "Downloading report..." : "Download Doctor Report"}
           </Button>
           <Button
             variant="secondary"
