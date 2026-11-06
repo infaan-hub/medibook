@@ -134,9 +134,10 @@ describe("InstallAppBarge", () => {
     expect(within(dialog).getByText(/quick and easy access anytime/i)).toBeInTheDocument();
     expect(within(dialog).getByText("For Google Chrome:")).toBeInTheDocument();
     expect(within(dialog).getByText("For Safari (Mac):")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Download App" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Got it" })).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Got it, Download App" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download App" }));
     await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/installing medibook/i)).toBeInTheDocument();
     // Accepted install closes the popup and retires the barge.
@@ -155,7 +156,7 @@ describe("InstallAppBarge", () => {
     expect(within(dialog).getByText(/open safari's menu bar and click/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/add to homescreen/i)).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Got it, Download App" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Got it" }));
     // Popup closed, dismissal persisted, barge gone for good.
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(localStorage.getItem(DISMISSED_KEY)).toBe("1");
@@ -182,7 +183,7 @@ describe("InstallAppBarge", () => {
     });
     expect(within(dialog).getByText("Tap the Download App button.")).toBeInTheDocument();
     expect(within(dialog).getByText("Follow the instructions to complete the installation.")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Download App" })).toBeInTheDocument();
   });
 
   it("uses the same install description on Android", async () => {
@@ -195,7 +196,7 @@ describe("InstallAppBarge", () => {
     });
     expect(within(dialog).getByText("For Google Chrome:")).toBeInTheDocument();
     expect(within(dialog).getByText("For Safari (Mac):")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Got it, Download App" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Download App" })).toBeInTheDocument();
   });
 
   it("closes via the X without dismissing the barge", async () => {

@@ -176,15 +176,24 @@ export function InstallInfoDialog({
       className="install-info__card"
       onDismiss={onClose}
       actions={
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={handleInstall}
-          disabled={busy}
-        >
-          <Download size={16} aria-hidden="true" />
-          Got it, Download App
-        </button>
+        <>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={onGotIt}
+          >
+            Got it
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={handleInstall}
+            disabled={busy}
+          >
+            <Download size={16} aria-hidden="true" />
+            Download App
+          </button>
+        </>
       }
     >
       <InstallInfoBody />
