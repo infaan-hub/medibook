@@ -27,6 +27,7 @@ import {
   type PrescriptionItemInput,
 } from "@/services/prescription.service";
 import type { AuthUser } from "@/lib/auth";
+import { createReminders } from "@/services/appointment.service";
 
 /* ------------------------------ Treatments -------------------------------- */
 
@@ -100,8 +101,26 @@ async function createFollowUpAppointment(
     date
   );
   if (existing) {
-    // Reuse the already-booked visit instead of creating a duplicate; the
-    // patient was notified when it was first created.
+    // Reuse the already-booked visit instead of creating a duplicate. A
+    // follow-up set by the doctor is confirmed, even if the same-day booking
+    // was still waiting for acceptance.
+    if (existing.status === "pending") {
+      const accepted = await appointments.updateAppointment(existing.id, {
+        status: "accepted",
+      });
+      await createReminders(accepted);
+      await notify(
+        patientId,
+        "appointment_confirmed",
+        `Your follow-up appointment has been accepted for ${date} at ${accepted.start_time.slice(0, 5)}.`,
+        accepted.id
+      ).catch(() => undefined);
+      broadcastAppointmentEvent(accepted, "appointment.updated", [
+        patientId,
+        doctor.user_id,
+      ]);
+      return { appointment: accepted, isNew: false };
+    }
     return { appointment: existing, isNew: false };
   }
 
