@@ -497,6 +497,12 @@ export async function runAction(
     await notify(doctor.user_id, NOTIFY_TYPE.done, stamp, updated.id);
   }
   broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, doctor?.user_id]);
+  if (config.status === "rejected" || config.status === "cancelled") {
+    broadcastAvailabilityUpdated(
+      updated.doctor_id,
+      updated.appointment_date.toISOString().slice(0, 10)
+    );
+  }
   return { appointment: updated, message: `Appointment ${config.status}.` };
 }
 

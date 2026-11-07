@@ -29,14 +29,14 @@ beforeEach(() => {
 });
 
 describe("available appointment times", () => {
-  it("returns slots at the window's slot duration intervals", async () => {
+  it("returns one-minute-interval slots across the window", async () => {
     const slots = await availableSlots(4, true, "2099-01-05");
 
-    expect(slots).toHaveLength(4);
-    expect(slots).toContainEqual({ start_time: "09:00:00", end_time: "09:30:00" });
-    expect(slots).toContainEqual({ start_time: "09:30:00", end_time: "10:00:00" });
-    expect(slots).toContainEqual({ start_time: "10:00:00", end_time: "10:30:00" });
-    expect(slots).toContainEqual({ start_time: "10:30:00", end_time: "11:00:00" });
+    // 09:00 through 10:30 inclusive, one slot per minute (30-min duration fits until 11:00)
+    expect(slots).toHaveLength(91);
+    expect(slots[0]).toEqual({ start_time: "09:00:00", end_time: "09:30:00" });
+    expect(slots[1]).toEqual({ start_time: "09:01:00", end_time: "09:31:00" });
+    expect(slots[90]).toEqual({ start_time: "10:30:00", end_time: "11:00:00" });
   });
 
   it("excludes appointments overlapping a partial time-off range", async () => {

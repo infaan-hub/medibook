@@ -61,10 +61,9 @@ export async function availableSlots(
         end: timeToSeconds(item.end_time as string),
       }));
 
-    // Step by the window's slot duration (default 30 minutes) so slots are
-    // generated at sensible intervals, not every minute.
-    const step = window.slot_duration_minutes * 60;
-    for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += step) {
+    // Slot duration controls appointment length, not start-time increments.
+    // Offer any minute that leaves the full appointment inside working hours.
+    for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += 60) {
       const startSec = cursor;
       const endSec = cursor + duration;
       const overlapsBreak = breaks.some((b) => startSec < b.end && endSec > b.start);
