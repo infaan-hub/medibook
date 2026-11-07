@@ -245,13 +245,16 @@ export function BookingScreen() {
     const endTime = `${pad(Math.floor(endSec / 3600))}:${pad(Math.floor((endSec % 3600) / 60))}:00`;
 
     try {
-      await createAppointment({
+      const result = await createAppointment({
         doctor: Number(id),
         appointment_date: selectedDate,
         start_time: startTime,
         end_time: endTime,
         reason,
       });
+      if (!result.success) {
+        throw new ApiError(result.message || "Booking failed.", 409, result.errors);
+      }
       navigate("/booking/success");
     } catch (e) {
       // Location refused → open the guided prompt instead of a raw error line.
@@ -716,7 +719,7 @@ export function RescheduleScreen() {
 
     try {
       await cancelAppointment(Number(id), "Rescheduled");
-      await createAppointment({
+      const result = await createAppointment({
         doctor: appointment.doctor,
         appointment_date: date,
         start_time: startTime,
@@ -724,6 +727,9 @@ export function RescheduleScreen() {
         reason: appointment.reason,
         rescheduled_from: Number(id),
       });
+      if (!result.success) {
+        throw new ApiError(result.message || "Reschedule failed.", 409, result.errors);
+      }
       notify("success", "Appointment rescheduled. The new request is pending doctor confirmation.");
       navigate("/appointments");
     } catch (e) {
