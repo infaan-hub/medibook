@@ -158,11 +158,11 @@ export function BookingScreen() {
       .catch((e) => setError(message(e)));
   }, [id, calYear, calMonth]);
 
-  const loadSlots = useCallback(() => {
+  const loadSlots = useCallback((preserveSelection = false) => {
     if (!id || !selectedDate) return;
     setSlotsLoading(true);
     setAvailability(null);
-    setSelectedTime("");
+    if (!preserveSelection) setSelectedTime("");
     getDoctorAvailability(Number(id), selectedDate)
       .then((r) => { setAvailability(r.data); setSlotsLoading(false); })
       .catch((e) => { setError(message(e)); setSlotsLoading(false); });
@@ -207,7 +207,7 @@ export function BookingScreen() {
     if (payload?.doctor_id != null && Number(payload.doctor_id) !== Number(id)) return;
     if (payload?.date && payload.date !== selectedDate) return;
     if (submitting) return;
-    loadSlots();
+    loadSlots(true);
   });
 
   function prevMonth() {
@@ -286,7 +286,7 @@ export function BookingScreen() {
         setError(errorMessage);
       }
       // Reconcile with server (another client may have taken it while we failed).
-      loadSlots();
+      loadSlots(true);
       // 409 = the slot went, or an open appointment still holds this patient's
       // slot — re-check the gate so the screen explains it instead of re-failing.
       if (e instanceof ApiError && e.status === 409) loadOpenAppointment();
@@ -489,24 +489,23 @@ export function BookingScreen() {
                 Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")} — appointments last 30 minutes.
               </p>
               <div className="field">
-                <label className="field__label" htmlFor="book-time">Available appointment start time</label>
-                <select
+                <label className="field__label" htmlFor="book-time">Set your preferred appointment start time</label>
+                <input
                   id="book-time"
                   className="field__input"
+                  type="time"
+                  step={60}
                   value={selectedTime}
                   onChange={(event) => {
                     setSelectedTime(event.target.value);
                     setError(null);
                   }}
-                >
-                  <option value="">Select a free time</option>
-                  {availability.slots.map((slot) => (
-                    <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
-                      {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
-                    </option>
-                  ))}
-                </select>
-                <p className="page__subtitle">Only free start times are listed. The server checks again when you book.</p>
+                />
+                <p className="page__subtitle">
+                  Enter any minute within the available windows. Appointments last 30 minutes;
+                  the server checks the full interval for breaks and existing bookings. If the
+                  time has just been taken, choose another time.
+                </p>
               </div>
             </>
           )}
