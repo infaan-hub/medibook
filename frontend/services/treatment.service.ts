@@ -617,7 +617,10 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
       end_time: appointment.end_time,
       status: appointment.status,
       deleted_at: appointment.deleted_at?.toISOString() ?? null,
+      booked_at: appointment.created_at.toISOString(),
+      updated_at: appointment.updated_at.toISOString(),
       appointment_type: appointment.appointment_type,
+      hospital_name: appointment.hospital?.name ?? null,
       emergency_reason: appointment.emergency_reason,
       emergency_description: appointment.emergency_description,
       emergency_location: appointment.emergency_latitude !== null && appointment.emergency_longitude !== null

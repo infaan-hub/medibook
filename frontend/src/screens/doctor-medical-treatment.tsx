@@ -988,7 +988,6 @@ export function DoctorMedicalTreatmentScreen() {
     () => typeof window !== "undefined" && window.location.pathname.includes("/doctor/medical-treatment/emergency")
   );
   const [patientHistory, setPatientHistory] = useState<VisitHistoryEntry[]>([]);
-  const [patientHistoryLoading, setPatientHistoryLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MedicalTreatment | null>(null);
@@ -1566,106 +1565,11 @@ export function DoctorMedicalTreatmentScreen() {
           </Card>
 
 
-          <h2 className="visit-section-title">Patient History</h2>
-
-          {patientHistoryLoading ? (
-            <Skeleton lines={6} />
-          ) : patientHistory.length === 0 ? (
-            <EmptyState
-              icon={<Calendar size={28} />}
-              title="No visit history"
-              description="No appointment history recorded for this patient."
-            />
-          ) : (
-            <div className="visit-timeline">
-              {patientHistory.map((entry) => (
-                <div key={entry.appointment_id} className="visit-timeline-entry">
-                  <div className="visit-timeline-dot" />
-                  <div className="visit-timeline-line" />
-                  <div className="visit-timeline-card">
-                    <div className="visit-card-header">
-                      <div className="visit-card-date">
-                        <span>{entry.appointment_date} · {entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}</span>
-                      </div>
-                      <span className={`visit-status visit-status--${entry.deleted_at ? "deleted" : entry.status}`}>{entry.deleted_at ? "deleted" : entry.status}</span>
-                    </div>
-                    <div className="visit-detail-field"><span className="visit-detail-label">Appointment</span><span>{entry.appointment_type ?? "NORMAL"} · {entry.reason || "No reason recorded"}</span></div>
-                    {entry.notes && <div className="visit-detail-field"><span className="visit-detail-label">Appointment notes</span><span>{entry.notes}</span></div>}
-                    {entry.emergency_reason && <div className="visit-detail-field"><span className="visit-detail-label">Emergency reason</span><span>{entry.emergency_reason}{entry.emergency_description ? ` · ${entry.emergency_description}` : ""}</span></div>}
-                    {entry.cancel_reason && <div className="visit-detail-field"><span className="visit-detail-label">Cancellation / deletion reason</span><span>{entry.cancel_reason}</span></div>}
-                    {entry.patient && <div className="visit-detail-field"><span className="visit-detail-label">Patient at booking</span><span>{[entry.patient.first_name, entry.patient.last_name].filter(Boolean).join(" ")} · {String(entry.patient.email ?? "")} · {String(entry.patient.phone ?? "")}{entry.patient.date_of_birth ? ` · DOB ${String(entry.patient.date_of_birth)}` : ""}{entry.patient.blood_group ? ` · ${String(entry.patient.blood_group)}` : ""}</span></div>}
-                    {entry.treatments && entry.treatments.length > 1 && entry.treatments.slice(1).map((treatment) => (
-                      <div key={treatment.id} className="visit-treatment-extra">
-                        <div className="visit-detail-field"><span className="visit-detail-label">Additional treatment · {fmtDate(treatment.created_at.slice(0, 10))}</span><span>{treatment.diagnosis || "No diagnosis"}</span></div>
-                        {treatment.doctor_description && <div className="visit-detail-field"><span className="visit-detail-label">Doctor description</span><span>{treatment.doctor_description}</span></div>}
-                        {treatment.treatment_notes && <div className="visit-detail-field"><span className="visit-detail-label">Treatment notes</span><span>{treatment.treatment_notes}</span></div>}
-                        {treatment.prescription && <div className="visit-detail-field"><span className="visit-detail-label">Prescription</span><span>{treatment.prescription}</span></div>}
-                      </div>
-                    ))}
-                    {entry.diagnosis && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <Stethoscope size={12} /> Diagnosis
-                        </span>
-                        <span>{entry.diagnosis}</span>
-                      </div>
-                    )}
-                    {entry.doctor_description !== undefined && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <FileText size={12} /> Doctor description
-                        </span>
-                        <span>{entry.doctor_description || "Not provided"}</span>
-                      </div>
-                    )}
-                    {entry.treatment_notes && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <FileText size={12} /> Treatment Notes
-                        </span>
-                        <span>{entry.treatment_notes}</span>
-                      </div>
-                    )}
-                    {entry.prescription && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <Pill size={12} /> Prescription
-                        </span>
-                        <span>{entry.prescription}</span>
-                      </div>
-                    )}
-                    <div className="visit-detail-field">
-                      <span className="visit-detail-label">
-                        <Calendar size={12} /> Follow-up
-                      </span>
-                      <span>
-                        {entry.follow_up_date
-                          ? `${fmtDate(entry.follow_up_date)}${entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}`
-                          : "Not scheduled"}
-                      </span>
-                    </div>
-                    <div className="visit-card-actions">
-                      {!entry.deleted_at && <Button variant="secondary" onClick={() => { setContextAppointmentId(entry.appointment_id); setEditing(null); setForm(EMPTY); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Add treatment to this visit</Button>}
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          if (selectedId === null) return;
-                          try {
-                            const result = await viewDoctorReport(selectedId, { appointmentId: entry.appointment_id });
-                            notify("success", `Report opened — ${result.filename}`);
-                          } catch (e) {
-                            notify("error", msg(e));
-                          }
-                        }}
-                      >
-                        View visit report
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="visit-history-shortcut">
+            <Link to={`/doctor/visit-history/${selectedId}`} className="treat-history-link" title="View this patient's full visit history">
+              <History size={16} /> History
+            </Link>
+          </div>
 
 
           {showForm && (

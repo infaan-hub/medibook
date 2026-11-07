@@ -66,7 +66,10 @@ export interface VisitHistoryEntry {
   end_time: string;
   status: string;
   deleted_at?: string | null;
+  booked_at?: string;
+  updated_at?: string;
   appointment_type?: string;
+  hospital_name?: string | null;
   emergency_reason?: string | null;
   emergency_description?: string | null;
   emergency_location?: { latitude: number; longitude: number; accuracy: number | null } | null;

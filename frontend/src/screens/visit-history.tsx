@@ -105,9 +105,9 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
    VISIT TIMELINE ENTRY
    ====================================== */
 
-function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
+function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewReport: (entry: VisitHistoryEntry) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description;
+  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description || entry.reason || entry.notes || entry.patient || entry.treatments?.length;
 
   const statusColors: Record<string, string> = {
     done: "var(--color-status-done)",
@@ -130,8 +130,21 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
             <Clock size={14} />
             <span>{fmtTime(entry.start_time)} – {fmtTime(entry.end_time)}</span>
           </div>
-          <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
+          <span className={`visit-status visit-status--${entry.deleted_at ? "deleted" : entry.status}`}>{entry.deleted_at ? "deleted" : entry.status}</span>
         </div>
+
+        <div className="visit-card-field">
+          <span className="visit-field-label"><Calendar size={12} /> Appointment</span>
+          <span className="visit-field-value">{entry.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {entry.reason || "No reason recorded"}{entry.hospital_name ? ` · ${entry.hospital_name}` : ""}</span>
+        </div>
+        {entry.booked_at && <div className="visit-card-field"><span className="visit-field-label"><Clock size={12} /> Booked</span><span className="visit-field-value">{new Date(entry.booked_at).toLocaleString()}</span></div>}
+        {entry.notes && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Appointment notes</span><span className="visit-field-value">{entry.notes}</span></div>}
+        {entry.cancel_reason && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Cancellation / deletion reason</span><span className="visit-field-value">{entry.cancel_reason}</span></div>}
+        {entry.patient && <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> Patient at booking</span><span className="visit-field-value">{[entry.patient.first_name, entry.patient.last_name].filter(Boolean).join(" ")} · {String(entry.patient.email ?? "")} · {String(entry.patient.phone ?? "")}{entry.patient.date_of_birth ? ` · DOB ${String(entry.patient.date_of_birth)}` : ""}{entry.patient.gender ? ` · ${String(entry.patient.gender)}` : ""}{entry.patient.blood_group ? ` · ${String(entry.patient.blood_group)}` : ""}</span></div>}
+        {Boolean(entry.patient?.allergies) && <div className="visit-card-field"><span className="visit-field-label"><Stethoscope size={12} /> Allergies at booking</span><span className="visit-field-value">{String(entry.patient?.allergies)}</span></div>}
+        {Boolean(entry.patient?.medical_history) && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Medical history at booking</span><span className="visit-field-value">{String(entry.patient?.medical_history)}</span></div>}
+        {Boolean(entry.patient?.emergency_contact_name) && <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> Emergency contact</span><span className="visit-field-value">{String(entry.patient?.emergency_contact_name)} · {String(entry.patient?.emergency_contact_phone ?? "")}</span></div>}
+        {entry.emergency_reason && <div className="visit-card-field"><span className="visit-field-label"><Stethoscope size={12} /> Emergency details</span><span className="visit-field-value">{entry.emergency_reason}{entry.emergency_description ? ` · ${entry.emergency_description}` : ""}</span></div>}
 
         {entry.doctor_description && (
           <div className="visit-card-field">
@@ -150,40 +163,54 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
 
         {expanded && (
           <div className="visit-details">
-            {entry.diagnosis && (
+            {!entry.treatments?.length && entry.diagnosis && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><Stethoscope size={12} /> Diagnosis</span>
                 <span>{entry.diagnosis}</span>
               </div>
             )}
-            {entry.doctor_description !== undefined && (
+            {!entry.treatments?.length && entry.doctor_description !== undefined && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><FileText size={12} /> Doctor description</span>
                 <span>{entry.doctor_description || "Not provided"}</span>
               </div>
             )}
-            {entry.treatment_notes && (
+            {!entry.treatments?.length && entry.treatment_notes && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><FileText size={12} /> Treatment Notes</span>
                 <span>{entry.treatment_notes}</span>
               </div>
             )}
-            {entry.prescription && (
+            {!entry.treatments?.length && entry.prescription && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><Pill size={12} /> Prescription</span>
                 <span>{entry.prescription}</span>
               </div>
             )}
-            <div className="visit-detail-field">
+            {entry.treatments?.map((treatment) => (
+              <div key={treatment.id} className="visit-treatment-record">
+                <h4>Treatment recorded {fmtDate(treatment.created_at.slice(0, 10))}</h4>
+                <div className="visit-detail-field"><span className="visit-detail-label"><Stethoscope size={12} /> Diagnosis</span><span>{treatment.diagnosis || "Not recorded"}</span></div>
+                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Doctor description</span><span>{treatment.doctor_description || "Not provided"}</span></div>
+                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Treatment notes</span><span>{treatment.treatment_notes || "Not provided"}</span></div>
+                {treatment.prescription && <div className="visit-detail-field"><span className="visit-detail-label"><Pill size={12} /> Prescription</span><span>{treatment.prescription}</span></div>}
+                {treatment.prescriptions?.flatMap((rx) => rx.items).map((item, index) => <div key={`${treatment.id}-rx-${index}`} className="visit-detail-field"><span className="visit-detail-label"><Pill size={12} /> {item.medication}</span><span>{[item.dosage, item.route, item.frequency, item.duration_days ? `${item.duration_days} days` : "", item.instructions].filter(Boolean).join(" · ")}</span></div>)}
+                <div className="visit-detail-field"><span className="visit-detail-label"><Calendar size={12} /> Follow-up</span><span>{treatment.follow_up_date ? `${fmtDate(treatment.follow_up_date)}${treatment.follow_up_time ? ` at ${treatment.follow_up_time.slice(0, 5)}` : ""}` : "Not scheduled"}</span></div>
+              </div>
+            ))}
+            {!entry.treatments?.length && <div className="visit-detail-field">
               <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
               <span>
                 {entry.follow_up_date
                   ? `${fmtDate(entry.follow_up_date)}${entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}`
                   : "Not scheduled"}
               </span>
-            </div>
+            </div>}
           </div>
         )}
+        <div className="visit-card-actions">
+          <Button variant="secondary" onClick={() => onViewReport(entry)}><FileText size={14} /> View visit report</Button>
+        </div>
       </div>
     </div>
   );
@@ -517,7 +544,18 @@ export default function VisitHistoryPage() {
       ) : (
         <div className="visit-timeline">
           {history.map((entry) => (
-            <VisitEntry key={entry.appointment_id} entry={entry} />
+            <VisitEntry
+              key={entry.appointment_id}
+              entry={entry}
+              onViewReport={(visit) => {
+                if (!patientId) return;
+                setReportBusy(true);
+                void viewDoctorReport(Number(patientId), { appointmentId: visit.appointment_id })
+                  .then((r) => notify("success", `Visit report opened — ${r.filename}`))
+                  .catch((e) => notify("error", msg(e)))
+                  .finally(() => setReportBusy(false));
+              }}
+            />
           ))}
         </div>
       )}
