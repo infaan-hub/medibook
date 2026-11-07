@@ -1434,23 +1434,7 @@ export function DoctorMedicalTreatmentScreen() {
         <>
           <PatientInfo profile={profile} />
 
-          <div className="visit-section-head">
-            <h2 className="visit-section-title">Patient History</h2>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                if (selectedId === null) return;
-                try {
-                  const result = await viewDoctorReport(selectedId);
-                  notify("success", `Report opened — ${result.filename}`);
-                } catch (e) {
-                  notify("error", msg(e));
-                }
-              }}
-            >
-              View patient report
-            </Button>
-          </div>
+          <h2 className="visit-section-title">Patient History</h2>
 
           {patientHistoryLoading ? (
             <Skeleton lines={6} />
@@ -1505,6 +1489,22 @@ export function DoctorMedicalTreatmentScreen() {
                         <span>{entry.prescription}</span>
                       </div>
                     )}
+                    <div className="visit-card-actions">
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          if (selectedId === null) return;
+                          try {
+                            const result = await viewDoctorReport(selectedId);
+                            notify("success", `Report opened — ${result.filename}`);
+                          } catch (e) {
+                            notify("error", msg(e));
+                          }
+                        }}
+                      >
+                        View patient report
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
