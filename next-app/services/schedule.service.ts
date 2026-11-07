@@ -6,12 +6,14 @@
  * Behaviour preserved (§14):
  *   • doctor.is_available=false → no slots
  *   • a full-day exception (times null) closes the date entirely
- *   • windows iterate from start in slot_duration steps while cursor+step ≤ end
+ *   • every minute within a window can be used as an appointment start time
+ *   • appointments last 30 minutes
  *   • slots overlapping any break or exception are skipped
  *   • slots already booked (any status except cancelled/rejected) are skipped
  *   • times are compared as zero-padded strings (identical to HH:MM:SS order)
  */
 import { ValidationError, notFound } from "@/lib/errors";
+import { broadcastAvailabilityUpdated } from "@/lib/notify";
 import { secondsToTime, timeToSeconds, normalizeTime, isoWeekday, daysInMonth } from "@/lib/dates";
 import * as doctors from "@/repositories/doctors.repo";
 import { bookedSlotKeysForDate } from "@/repositories/appointments.repo";
@@ -21,6 +23,8 @@ export interface Slot {
   start_time: string;
   end_time: string;
 }
+
+const APPOINTMENT_DURATION_SECONDS = 30 * 60;
 
 /** Port of doctors/scheduling.py::available_slots(). */
 export async function availableSlots(
@@ -35,13 +39,17 @@ export async function availableSlots(
   if (exceptions.some((item) => item.start_time === null)) return [];
 
   const booked = await bookedSlotKeysForDate(doctorId, target);
+  const bookedRanges = [...booked].map((key) => {
+    const [start = "00:00:00", end = "00:00:00"] = key.split("|");
+    return { start: timeToSeconds(start), end: timeToSeconds(end) };
+  });
   const windows = await doctors.listActiveWindowsForWeekday(doctorId, isoWeekday(target));
   const slots: Slot[] = [];
 
   for (const window of windows) {
     const windowStart = timeToSeconds(window.start_time);
     const windowEnd = timeToSeconds(window.end_time);
-    const step = window.slot_duration_minutes * 60;
+    const duration = APPOINTMENT_DURATION_SECONDS;
     const breaks = window.breaks.map((item) => ({
       start: timeToSeconds(item.start_time),
       end: timeToSeconds(item.end_time),
@@ -53,14 +61,17 @@ export async function availableSlots(
         end: timeToSeconds(item.end_time as string),
       }));
 
-    for (let cursor = windowStart; cursor + step <= windowEnd; cursor += step) {
+    for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += 60) {
       const startSec = cursor;
-      const endSec = cursor + step;
+      const endSec = cursor + duration;
       const overlapsBreak = breaks.some((b) => startSec < b.end && endSec > b.start);
       const overlapsException = exceptionRanges.some((e) => startSec < e.end && endSec > e.start);
       const start = secondsToTime(startSec);
       const end = secondsToTime(endSec);
-      if (!overlapsBreak && !overlapsException && !booked.has(`${start}|${end}`)) {
+      const overlapsAppointment = bookedRanges.some(
+        (range) => startSec < range.end && endSec > range.start
+      );
+      if (!overlapsBreak && !overlapsException && !overlapsAppointment) {
         slots.push({ start_time: start, end_time: end });
       }
     }
@@ -227,12 +238,14 @@ export async function createOwnException(user: AuthUser, body: unknown) {
   if (start && end && end <= start) {
     throw new ValidationError({ end_time: ["End time must be after start time."] });
   }
-  return doctors.createException(doctor.id, {
+  const exception = await doctors.createException(doctor.id, {
     date: input.date,
     start_time: start,
     end_time: end,
     reason: input.reason ?? "",
   });
+  broadcastAvailabilityUpdated(doctor.id, input.date);
+  return exception;
 }
 
 async function ownedException(user: AuthUser, id: number) {
@@ -268,17 +281,21 @@ export async function updateOwnException(user: AuthUser, id: number, body: unkno
   if (start && end && end <= start) {
     throw new ValidationError({ end_time: ["End time must be after start time."] });
   }
-  return doctors.updateException(id, {
+  const updated = await doctors.updateException(id, {
     ...(input.date !== undefined ? { date: new Date(`${input.date}T00:00:00Z`) } : {}),
     start_time: start,
     end_time: end,
     ...(input.reason !== undefined ? { reason: input.reason } : {}),
   });
+  const previousDate = item.date.toISOString().slice(0, 10);
+  const updatedDate = updated.date.toISOString().slice(0, 10);
+  broadcastAvailabilityUpdated(item.doctor_id, previousDate);
+  if (updatedDate !== previousDate) broadcastAvailabilityUpdated(item.doctor_id, updatedDate);
+  return updated;
 }
 
 export async function deleteOwnException(user: AuthUser, id: number): Promise<void> {
-  await ownedException(user, id);
+  const item = await ownedException(user, id);
   await doctors.deleteException(id);
+  broadcastAvailabilityUpdated(item.doctor_id, item.date.toISOString().slice(0, 10));
 }
-
-

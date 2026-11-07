@@ -12,18 +12,20 @@ export const APPOINTMENT_INCLUDE = {
 export const findAppointmentById = (id: number) =>
   prisma.appointment.findUnique({ where: { id }, include: APPOINTMENT_INCLUDE });
 
-/** Live (non-cancelled/non-rejected) slot occupancy for a doctor/date. */
-export const liveSlotExists = async (
+/** Live appointment overlap for a doctor/date (cancelled/rejected rows release time). */
+export const liveAppointmentOverlapExists = async (
   doctorId: number,
   date: string,
   startTime: string,
+  endTime: string,
   excludeId?: number
 ) =>
   (await prisma.appointment.findFirst({
     where: {
       doctor_id: doctorId,
       appointment_date: new Date(`${date}T00:00:00Z`),
-      start_time: startTime,
+      start_time: { lt: endTime },
+      end_time: { gt: startTime },
       status: { notIn: ["cancelled", "rejected"] },
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
@@ -167,20 +169,22 @@ export const createAppointment = (
     include: APPOINTMENT_INCLUDE,
   });
 
-/** First pending/accepted appointment this doctor already holds for the patient on a date. */
+/** Existing normal booking at the exact follow-up date and start time. */
 export const findLiveAppointmentForPatientOnDate = (
   doctorId: number,
   patientId: number,
-  date: string
+  date: string,
+  startTime: string
 ) =>
   prisma.appointment.findFirst({
     where: {
       doctor_id: doctorId,
       patient_id: patientId,
       appointment_date: new Date(`${date}T00:00:00Z`),
+      start_time: startTime,
+      appointment_type: "NORMAL",
       status: { in: ["pending", "accepted"] },
     },
-    orderBy: { start_time: "asc" },
     include: APPOINTMENT_INCLUDE,
   });
 

@@ -8,8 +8,13 @@ import { Prisma } from "@prisma/client";
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
 import { appointmentDto, healthRecordDto, patientDto, treatmentDto } from "@/lib/serializers";
-import { todayIso, secondsToTime, timeToSeconds } from "@/lib/dates";
-import { broadcastAppointmentEvent, broadcastAvailabilityUpdated, notify } from "@/lib/notify";
+import { todayIso, normalizeTime, secondsToTime, timeToSeconds } from "@/lib/dates";
+import {
+  broadcastAppointmentEvent,
+  broadcastAvailabilityUpdated,
+  broadcastTreatmentUpdated,
+  notify,
+} from "@/lib/notify";
 import {
   healthRecordCreateSchema,
   treatmentCreateSchema,
@@ -19,7 +24,6 @@ import { MISSING, parse } from "@/validators/base";
 import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import * as appointments from "@/repositories/appointments.repo";
-import { availableSlots, type Slot } from "@/services/schedule.service";
 import { findPatientsByUserIds, getPatientProfile } from "@/repositories/users.repo";
 import {
   normalizePrescriptionItems,
@@ -36,7 +40,10 @@ const ownDoctor = (user: AuthUser) => doctors.findDoctorByUserId(user.id);
 
 /* ----------------------- Follow-up appointment helpers ---------------------- */
 
-const FOLLOW_UP_SLOT_SECONDS = 30 * 60;
+// Appointment length only; start times are free-form minute values.
+const FOLLOW_UP_DURATION_SECONDS = 30 * 60;
+const FOLLOW_UP_RETRY_LIMIT = 2;
+const FOLLOW_UP_STALE_PROCESSING_MS = 5 * 60 * 1000;
 
 type DoctorProfile = NonNullable<Awaited<ReturnType<typeof doctors.findDoctorByUserId>>>;
 
@@ -44,212 +51,260 @@ const isSlotConflict = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
   (error.code === "P2002" || error.meta?.constraint === "uniq_live_doctor_slot");
 
-/**
- * Candidate times for an automatically-booked follow-up. Real open slots are
- * preferred; when the doctor has no availability window that day (or every
- * slot is taken) we still honour the doctor's follow-up date with the first
- * free half-hour in working hours, so the appointment the clinician promised
- * the patient actually exists in the system.
- */
-async function followUpSlotCandidates(doctor: DoctorProfile, date: string): Promise<Slot[]> {
-  const open = await availableSlots(doctor.id, doctor.is_available, date);
-  if (open.length > 0) return open.slice(0, 5);
-
-  const booked = await appointments.bookedSlotKeysForDate(doctor.id, date);
-  const ranges = [...booked].map((key) => {
-    const [start = "00:00:00", end = "00:00:00"] = key.split("|");
-    return { start: timeToSeconds(start), end: timeToSeconds(end) };
-  });
-  const fallback: Slot[] = [];
-  for (
-    let seconds = 9 * 3600;
-    seconds + FOLLOW_UP_SLOT_SECONDS <= 17 * 3600;
-    seconds += FOLLOW_UP_SLOT_SECONDS
-  ) {
-    const overlaps = ranges.some(
-      (range) => seconds < range.end && seconds + FOLLOW_UP_SLOT_SECONDS > range.start
-    );
-    if (!overlaps) {
-      fallback.push({
-        start_time: secondsToTime(seconds),
-        end_time: secondsToTime(seconds + FOLLOW_UP_SLOT_SECONDS),
-      });
-    }
-    if (fallback.length >= 5) break;
-  }
-  return fallback;
-}
+class FollowUpSlotUnavailableError extends Error {}
 
 /**
  * Create the real, normal appointment behind a treatment's Follow-up Date.
- * Duplicate-safe: if the doctor already has a live appointment with the
- * patient that day we keep that one instead of booking a second. Returns null
- * when the date is in the past, the doctor is suspended, or no time is free —
- * the treatment itself is still saved in every case.
+ * Duplicate-safe: only an appointment for this same patient, doctor, date,
+ * and exact start time can be reused. The appointment is never moved to a
+ * different slot than the doctor entered.
  */
 async function createFollowUpAppointment(
   doctor: DoctorProfile,
   patientId: number,
   date: string,
   diagnosis: string,
-  time?: string | null
+  time: string
 ) {
-  if (date < todayIso() || !doctor.is_available) return null;
-
-  const existing = await appointments.findLiveAppointmentForPatientOnDate(
-    doctor.id,
-    patientId,
-    date
-  );
-  if (existing) {
-    // Reuse the already-booked visit instead of creating a duplicate. A
-    // follow-up set by the doctor is confirmed, even if the same-day booking
-    // was still waiting for acceptance.
-    if (existing.status === "pending") {
-      const accepted = await appointments.updateAppointment(existing.id, {
-        status: "accepted",
-      });
-      await createReminders(accepted);
-      await notify(
-        patientId,
-        "appointment_confirmed",
-        `Your follow-up appointment has been accepted for ${date} at ${accepted.start_time.slice(0, 5)}.`,
-        accepted.id
-      ).catch(() => undefined);
-      broadcastAppointmentEvent(accepted, "appointment.updated", [
-        patientId,
-        doctor.user_id,
-      ]);
-      return { appointment: accepted, isNew: false };
-    }
-    return { appointment: existing, isNew: false };
+  const startTime = normalizeTime(time);
+  const startSeconds = timeToSeconds(startTime);
+  if (
+    date < todayIso() ||
+    !/^\d{2}:\d{2}:\d{2}$/.test(startTime) ||
+    startSeconds < 0 ||
+    startSeconds + FOLLOW_UP_DURATION_SECONDS >= 24 * 60 * 60 ||
+    new Date(`${date}T${startTime}Z`).getTime() <= Date.now()
+  ) {
+    throw new FollowUpSlotUnavailableError("Choose a valid future follow-up date and time.");
   }
-
+  const endTime = secondsToTime(startSeconds + FOLLOW_UP_DURATION_SECONDS);
   const reason = diagnosis.trim()
     ? `Follow-up: ${diagnosis.trim()}`.slice(0, 255)
     : "Follow-up visit";
 
-  const normalizedTime = time && /^\d{1,2}:\d{2}(:\d{2})?$/.test(time.trim())
-    ? time.trim().length === 5
-      ? `${time.trim()}:00`
-      : time.trim()
-    : null;
-  const candidates: Slot[] = [];
-  if (normalizedTime) {
-    const [h = "0", m = "0", s = "0"] = normalizedTime.split(":");
-    const startSeconds = Number(h) * 3600 + Number(m) * 60 + Number(s);
-    const endSeconds = startSeconds + FOLLOW_UP_SLOT_SECONDS;
-    candidates.push({
-      start_time: secondsToTime(startSeconds),
-      end_time: secondsToTime(endSeconds),
+  const existing = await appointments.findLiveAppointmentForPatientOnDate(
+    doctor.id,
+    patientId,
+    date,
+    startTime
+  );
+  if (existing) {
+    const updated = await appointments.updateAppointment(existing.id, {
+      status: "accepted",
+      reason,
     });
+    return { appointment: updated, isNew: false };
   }
-  candidates.push(...(await followUpSlotCandidates(doctor, date)));
 
-  for (const slot of candidates) {
-    try {
-      const created = await appointments.createAppointment({
-        patient_id: patientId,
-        doctor_id: doctor.id,
-        hospital_id: null,
-        appointment_date: date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        reason,
-        status: "accepted",
-        appointment_type: "NORMAL",
-      });
-      return { appointment: created, isNew: true };
-    } catch (error) {
-      if (isSlotConflict(error)) continue;
-      // Let the background worker retry transient database failures.
-      throw error;
-    }
+  const booked = await appointments.bookedSlotKeysForDate(doctor.id, date);
+  const overlaps = [...booked].some((key) => {
+    const [bookedStart = "00:00:00", bookedEnd = "00:00:00"] = key.split("|");
+    return (
+      startSeconds < timeToSeconds(bookedEnd) &&
+      startSeconds + FOLLOW_UP_DURATION_SECONDS > timeToSeconds(bookedStart)
+    );
+  });
+  if (overlaps) {
+    throw new FollowUpSlotUnavailableError(
+      "That follow-up time overlaps another appointment. Choose a different time."
+    );
   }
-  return null;
+
+  try {
+    const created = await appointments.createAppointment({
+      patient_id: patientId,
+      doctor_id: doctor.id,
+      hospital_id: null,
+      appointment_date: date,
+      start_time: startTime,
+      end_time: endTime,
+      reason,
+      status: "accepted",
+      appointment_type: "NORMAL",
+    });
+    return { appointment: created, isNew: true };
+  } catch (error) {
+    if (!isSlotConflict(error)) throw error;
+    const raced = await appointments.findLiveAppointmentForPatientOnDate(
+      doctor.id,
+      patientId,
+      date,
+      startTime
+    );
+    if (!raced) {
+      throw new FollowUpSlotUnavailableError(
+        "That follow-up time was just booked. Choose a different time."
+      );
+    }
+    const updated = await appointments.updateAppointment(raced.id, {
+      status: "accepted",
+      reason,
+    });
+    return { appointment: updated, isNew: false };
+  }
 }
 
-/** Tell the patient (and live clients) about a follow-up the doctor booked. */
+/** Tell both sides about an accepted follow-up appointment. */
 async function announceFollowUpAppointment(
   doctor: DoctorProfile,
   patientId: number,
-  appointment: NonNullable<Awaited<ReturnType<typeof appointments.createAppointment>>>
+  appointment: NonNullable<Awaited<ReturnType<typeof appointments.createAppointment>>>,
+  isNew: boolean
 ): Promise<void> {
   const date = appointment.appointment_date.toISOString().slice(0, 10);
   const time = appointment.start_time.slice(0, 5);
   const doctorName =
     [doctor.user.first_name, doctor.user.last_name].filter(Boolean).join(" ") ||
     doctor.user.username;
+  broadcastAppointmentEvent(
+    appointment,
+    isNew ? "appointment.created" : "appointment.updated",
+    [patientId, doctor.user_id]
+  );
   await notify(
     patientId,
     "appointment_confirmed",
     `Dr. ${doctorName} scheduled your follow-up appointment on ${date} at ${time}.`,
     appointment.id
-  ).catch(() => undefined);
-  broadcastAppointmentEvent(appointment, "appointment.created", [patientId, doctor.user_id]);
+  );
   broadcastAvailabilityUpdated(doctor.id, date);
 }
 
-/** Run follow-up booking after the response, retrying transient failures. */
-function scheduleFollowUpBooking(args: {
-  doctor: DoctorProfile;
-  patientId: number;
-  date: string;
-  diagnosis: string;
-  time?: string | null;
-  treatmentId: number;
-}): void {
-  after(async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const result = await createFollowUpAppointment(
-          args.doctor,
-          args.patientId,
-          args.date,
-          args.diagnosis,
-          args.time
-        );
-        if (!result) {
-          throw new Error("No follow-up appointment slot could be booked.");
-        }
+/** Claim, book, notify, and persist a follow-up job. Safe to rerun from cron. */
+export async function processFollowUpBooking(treatmentId: number): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - FOLLOW_UP_STALE_PROCESSING_MS);
+  const claimed = await prisma.medicalTreatment.updateMany({
+    where: {
+      id: treatmentId,
+      follow_up_date: { not: null },
+      follow_up_booking_status: { in: ["pending", "processing"] },
+      OR: [
+        { follow_up_booking_status: "pending" },
+        { follow_up_booking_status: "processing", updated_at: { lte: staleBefore } },
+      ],
+    },
+    data: { follow_up_booking_status: "processing" },
+  });
+  if (claimed.count === 0) return false;
 
-        if (result.isNew) {
-          await announceFollowUpAppointment(
-            args.doctor,
-            args.patientId,
-            result.appointment
-          );
-        } else {
-          const doctorName =
-            [args.doctor.user.first_name, args.doctor.user.last_name]
-              .filter(Boolean)
-              .join(" ") || args.doctor.user.username;
-          await notify(
-            args.patientId,
-            "appointment_confirmed",
-            `Dr. ${doctorName} has a follow-up appointment for you on ${args.date}.`,
-            result.appointment.id
-          ).catch(() => undefined);
-        }
-        await createReminders(result.appointment);
-
-        await prisma.medicalTreatment.update({
-          where: { id: args.treatmentId },
-          data: { follow_up_appointment_id: result.appointment.id },
-        });
-        return;
-      } catch (error) {
-        if (attempt === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        } else {
-          console.error(
-            `Follow-up booking failed for treatment ${args.treatmentId} after retry.`,
-            error
-          );
-        }
+  const treatment = await prisma.medicalTreatment.findUnique({ where: { id: treatmentId } });
+  const doctor = treatment ? await doctors.findDoctorById(treatment.doctor_id) : null;
+  if (!treatment || !doctor || !treatment.follow_up_date || !treatment.follow_up_time) {
+    if (treatment) {
+      await prisma.medicalTreatment.update({
+        where: { id: treatmentId },
+        data: { follow_up_booking_status: "failed" },
+      });
+      broadcastTreatmentUpdated(treatmentId, [treatment.patient_id, doctor?.user_id], "failed");
+      if (doctor) {
+        await notify(
+          doctor.user_id,
+          "system",
+          "The follow-up appointment could not be scheduled. Add a valid follow-up time and save the treatment again."
+        ).catch(() => undefined);
       }
     }
+    return false;
+  }
+
+  const date = treatment.follow_up_date.toISOString().slice(0, 10);
+  const diagnosis = treatment.diagnosis;
+  const patientId = treatment.patient_id;
+  let result: Awaited<ReturnType<typeof createFollowUpAppointment>> | null = null;
+  let failure: unknown = null;
+
+  for (let attempt = 0; attempt < FOLLOW_UP_RETRY_LIMIT; attempt++) {
+    try {
+      result = await createFollowUpAppointment(
+        doctor,
+        patientId,
+        date,
+        diagnosis,
+        treatment.follow_up_time
+      );
+      break;
+    } catch (error) {
+      failure = error;
+      if (error instanceof FollowUpSlotUnavailableError) break;
+      if (attempt + 1 < FOLLOW_UP_RETRY_LIMIT) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      }
+    }
+  }
+
+  if (!result) {
+    const message =
+      failure instanceof FollowUpSlotUnavailableError
+        ? failure.message
+        : "The appointment service is temporarily unavailable. Try saving the follow-up again.";
+    await prisma.medicalTreatment.update({
+      where: { id: treatmentId },
+      data: { follow_up_booking_status: "failed" },
+    });
+    broadcastTreatmentUpdated(treatmentId, [patientId, doctor.user_id], "failed");
+    await notify(doctor.user_id, "system", message).catch(() => undefined);
+    return false;
+  }
+
+  const previousAppointmentId = treatment.follow_up_appointment_id;
+  if (previousAppointmentId && previousAppointmentId !== result.appointment.id) {
+    const previous = await appointments.findAppointmentById(previousAppointmentId);
+    if (previous && (previous.status === "pending" || previous.status === "accepted")) {
+      const cancelled = await appointments.updateAppointment(previous.id, {
+        status: "cancelled",
+        cancel_reason: "Follow-up appointment rescheduled by doctor.",
+      });
+      broadcastAppointmentEvent(cancelled, "appointment.updated", [patientId, doctor.user_id]);
+      broadcastAvailabilityUpdated(
+        doctor.id,
+        previous.appointment_date.toISOString().slice(0, 10)
+      );
+    }
+  }
+
+  await createReminders(result.appointment);
+  await prisma.medicalTreatment.update({
+    where: { id: treatmentId },
+    data: {
+      follow_up_appointment_id: result.appointment.id,
+    },
   });
+  await announceFollowUpAppointment(doctor, patientId, result.appointment, result.isNew);
+  await prisma.medicalTreatment.update({
+    where: { id: treatmentId },
+    data: { follow_up_booking_status: "scheduled" },
+  });
+  broadcastTreatmentUpdated(treatmentId, [patientId, doctor.user_id], "scheduled");
+  return true;
+}
+
+/** Schedule work after the response; cron retries jobs interrupted by a cold shutdown. */
+function scheduleFollowUpBooking(treatmentId: number): void {
+  after(() => processFollowUpBooking(treatmentId));
+}
+
+/** Reconcile queued or abandoned follow-up jobs from the Vercel cron route. */
+export async function processPendingFollowUpBookings(): Promise<number> {
+  const staleBefore = new Date(Date.now() - FOLLOW_UP_STALE_PROCESSING_MS);
+  const rows = await prisma.medicalTreatment.findMany({
+    where: {
+      follow_up_date: { not: null },
+      follow_up_booking_status: { in: ["pending", "processing"] },
+      OR: [
+        { follow_up_booking_status: "pending" },
+        { follow_up_booking_status: "processing", updated_at: { lte: staleBefore } },
+      ],
+    },
+    select: { id: true },
+    orderBy: { id: "asc" },
+    take: 10,
+  });
+  for (const row of rows) {
+    await processFollowUpBooking(row.id).catch((error) => {
+      console.error(`Follow-up job ${row.id} will be retried by cron.`, error);
+    });
+  }
+  return rows.length;
 }
 
 /**
@@ -333,6 +388,7 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         prescription: structured ? prescriptionText(items, rxNotes) : input.prescription,
         follow_up_date: input.follow_up_date ?? null,
         follow_up_time: input.follow_up_time ?? "",
+        follow_up_booking_status: input.follow_up_date ? "pending" : null,
         follow_up_notes: input.follow_up_notes,
       },
       tx
@@ -354,14 +410,7 @@ export async function createTreatment(user: AuthUser, body: unknown) {
   const bookingStatus = input.follow_up_date ? "pending" : null;
 
   if (input.follow_up_date) {
-    scheduleFollowUpBooking({
-      doctor,
-      patientId: input.patient,
-      date: input.follow_up_date,
-      diagnosis: input.diagnosis ?? "",
-      time: input.follow_up_time,
-      treatmentId: row.id,
-    });
+    scheduleFollowUpBooking(row.id);
   }
 
   return {
@@ -421,14 +470,18 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     input.follow_up_date !== undefined
       ? (input.follow_up_date || null)
       : previousFollowUp;
-  const timeChanged = input.follow_up_time !== undefined;
+  const previousFollowUpTime = row.follow_up_time ?? "";
+  const timeChanged =
+    input.follow_up_time !== undefined && input.follow_up_time !== previousFollowUpTime;
   const dateChanged =
-    input.follow_up_date !== undefined && input.follow_up_date !== previousFollowUp;
+    input.follow_up_date !== undefined && (input.follow_up_date || null) !== previousFollowUp;
   const followUpCleared =
     input.follow_up_date === null && previousFollowUp !== null;
   const shouldHandleFollowUp =
-    (input.follow_up_date !== undefined || input.follow_up_time !== undefined) &&
-    (targetDate !== null || followUpCleared);
+    (targetDate !== null && (dateChanged || timeChanged)) || followUpCleared;
+  if (shouldHandleFollowUp) {
+    data.follow_up_booking_status = targetDate ? "pending" : null;
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const treatment = await tx.medicalTreatment.update({
@@ -446,112 +499,43 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     return treatment;
   });
 
-  // Reschedule / create / cancel the follow-up appointment when the doctor
-  // changes the Follow-up Date or Time, and keep the patient informed.
-  // Runs in the background so updating the treatment never blocks on slot
-  // lookup, booking, notifications, or realtime broadcasts.
+  // Follow-up schedule changes use the same exact-time booking worker as new
+  // treatments. It creates the replacement first, then cancels the old slot.
   if (shouldHandleFollowUp) {
-    void (async () => {
-      const patientId = input.patient ?? row.patient_id;
-      let followUpAppointment: NonNullable<
-        Awaited<ReturnType<typeof appointments.createAppointment>>
-      > | null = null;
-      let rescheduled = false;
-
-      if (followUpCleared && row.follow_up_appointment_id) {
-        try {
-          await appointments.updateAppointment(row.follow_up_appointment_id, {
+    if (targetDate) {
+      scheduleFollowUpBooking(id);
+    } else if (followUpCleared && row.follow_up_appointment_id) {
+      after(async () => {
+        const oldAppointment = await appointments
+          .findAppointmentById(row.follow_up_appointment_id!)
+          .catch(() => null);
+        if (oldAppointment && (oldAppointment.status === "pending" || oldAppointment.status === "accepted")) {
+          const cancelled = await appointments.updateAppointment(oldAppointment.id, {
             status: "cancelled",
-            cancel_reason: "Follow-up rescheduled/cancelled by doctor.",
+            cancel_reason: "Follow-up appointment cancelled by doctor.",
           });
-        } catch {
-          // ignore
+          broadcastAppointmentEvent(cancelled, "appointment.updated", [
+            row.patient_id,
+            doctor.user_id,
+          ]);
+          broadcastAvailabilityUpdated(
+            doctor.id,
+            oldAppointment.appointment_date.toISOString().slice(0, 10)
+          );
+          await notify(
+            row.patient_id,
+            "appointment_cancelled",
+            `Dr. ${[doctor.user.first_name, doctor.user.last_name].filter(Boolean).join(" ") || doctor.user.username} cancelled your follow-up appointment.`,
+            oldAppointment.id
+          ).catch(() => undefined);
         }
         await prisma.medicalTreatment.update({
           where: { id },
           data: { follow_up_appointment_id: null },
         });
-        const docName = [doctor.user.first_name, doctor.user.last_name]
-          .filter(Boolean)
-          .join(" ");
-        await notify(
-          patientId,
-          "appointment_cancelled",
-          `Dr. ${docName || doctor.user.username} cancelled your follow-up appointment.`,
-          row.follow_up_appointment_id
-        ).catch(() => undefined);
-        broadcastAvailabilityUpdated(doctor.id, previousFollowUp!);
-      } else if (targetDate) {
-        const existingId = row.follow_up_appointment_id;
-        if (existingId && (dateChanged || timeChanged)) {
-          const existing = await appointments.findAppointmentById(existingId);
-          if (existing) {
-            const newTime =
-              input.follow_up_time && input.follow_up_time.trim() !== ""
-                ? input.follow_up_time.trim().length === 5
-                  ? `${input.follow_up_time.trim()}:00`
-                  : input.follow_up_time.trim()
-                : existing.start_time;
-            const [h = "0", m = "0", s = "0"] = newTime.split(":");
-            const startSec = Number(h) * 3600 + Number(m) * 60 + Number(s);
-            const endSec = startSec + FOLLOW_UP_SLOT_SECONDS;
-            const endTime = secondsToTime(endSec);
-            try {
-              const rescheduledAppt = await appointments.updateAppointment(existingId, {
-                appointment_date: new Date(`${targetDate}T00:00:00Z`),
-                start_time: newTime,
-                end_time: endTime,
-                reason:
-                  input.diagnosis && input.diagnosis.trim()
-                    ? `Follow-up: ${input.diagnosis.trim()}`.slice(0, 255)
-                    : existing.reason,
-              });
-              followUpAppointment = rescheduledAppt;
-              rescheduled = true;
-              const docName = [doctor.user.first_name, doctor.user.last_name]
-                .filter(Boolean)
-                .join(" ");
-              await notify(
-                patientId,
-                "appointment_confirmed",
-                `Dr. ${docName || doctor.user.username} rescheduled your follow-up appointment to ${targetDate} at ${newTime.slice(0, 5)}.`,
-                rescheduledAppt.id
-              ).catch(() => undefined);
-              broadcastAppointmentEvent(rescheduledAppt, "appointment.updated", [
-                patientId,
-                doctor.user_id,
-              ]);
-              broadcastAvailabilityUpdated(doctor.id, targetDate);
-              await prisma.medicalTreatment.update({
-                where: { id },
-                data: { follow_up_appointment_id: rescheduledAppt.id },
-              });
-            } catch {
-              // fall through to create
-            }
-          }
-        }
-        if (!followUpAppointment) {
-          const result = await createFollowUpAppointment(
-            doctor,
-            patientId,
-            targetDate,
-            input.diagnosis ?? row.diagnosis,
-            input.follow_up_time
-          );
-          if (result) {
-            followUpAppointment = result.appointment;
-            if (result.isNew) {
-              await announceFollowUpAppointment(doctor, patientId, followUpAppointment);
-            }
-            await prisma.medicalTreatment.update({
-              where: { id },
-              data: { follow_up_appointment_id: followUpAppointment.id },
-            });
-          }
-        }
-      }
-    })().catch(() => undefined);
+        broadcastTreatmentUpdated(id, [row.patient_id, doctor.user_id], null);
+      });
+    }
   }
 
   return {

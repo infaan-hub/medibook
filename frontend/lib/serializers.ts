@@ -320,6 +320,9 @@ export function treatmentDto(
     prescription_items: prescription?.items ? prescription.items.map(prescriptionItemDto) : [],
     follow_up_date: dateStr(treatment.follow_up_date),
     follow_up_time: treatment.follow_up_time,
+    follow_up_booking_status:
+      treatment.follow_up_booking_status ??
+      (treatment.follow_up_appointment_id ? "scheduled" : null),
     follow_up_appointment_id: treatment.follow_up_appointment_id ?? null,
     follow_up_notes: treatment.follow_up_notes,
     created_at: iso(treatment.created_at),

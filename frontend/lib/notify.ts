@@ -155,6 +155,20 @@ export function broadcastAvailabilityUpdated(
   );
 }
 
+/** Tell connected clients a treatment's follow-up booking state has changed. */
+export function broadcastTreatmentUpdated(
+  treatmentId: number,
+  recipients: Array<number | null | undefined>,
+  status: string | null
+): void {
+  pushEvent(
+    recipients,
+    "treatment.updated",
+    { id: treatmentId, follow_up_booking_status: status },
+    { version: Date.now(), entityId: `treatment-${treatmentId}` }
+  );
+}
+
 /** Low-level push (used by DELETE /api/appointments/{id}/ → appointment.deleted). */
 export function pushRaw(
   event: string,

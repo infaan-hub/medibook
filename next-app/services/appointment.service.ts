@@ -28,8 +28,8 @@ import type { Appointment, User } from "@prisma/client";
 type AppointmentWithPatient = Appointment & { patient: User; doctor: { user: User } };
 
 const SLOT_TAKEN = () =>
-  conflict("This appointment slot is no longer available. Please select another time.", {
-    start_time: ["This slot was just booked."],
+  conflict("This appointment time is no longer available. Please choose another time.", {
+    start_time: ["This time was just booked."],
   });
 
 /* -------------------- One open appointment per patient --------------------- */
@@ -120,12 +120,14 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
   const end = normalizeTime(input.end_time);
 
   // 1) Live-slot occupancy (transaction check from the Django view).
-  if (await appointments.liveSlotExists(doctor.id, date, start)) throw SLOT_TAKEN();
+  if (await appointments.liveAppointmentOverlapExists(doctor.id, date, start, end)) {
+    throw SLOT_TAKEN();
+  }
 
   // 2) Past dates + open-slot membership.
   if (date < todayIso() || !(await slotIsOpen(doctor, date, start, end))) {
     throw badRequest("The selected appointment time is not available.", {
-      start_time: ["Choose an available appointment slot."],
+      start_time: ["Choose an available appointment time."],
     });
   }
 
@@ -243,9 +245,15 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
         appointment_date: ["Choose a future date."],
       });
     }
-    if (await appointments.liveSlotExists(appointment.doctor_id, newDate, newStart, id)) {
-      throw conflict("That time slot is already booked. Choose another.", {
-        start_time: ["This slot was just booked."],
+    if (await appointments.liveAppointmentOverlapExists(
+      appointment.doctor_id,
+      newDate,
+      newStart,
+      newEnd,
+      id
+    )) {
+      throw conflict("That appointment time is already booked. Choose another.", {
+        start_time: ["This time was just booked."],
       });
     }
     const open = await slotIsOpen(
@@ -255,8 +263,8 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
       newEnd
     );
     if (!open) {
-      throw badRequest("The new appointment time is not an open slot.", {
-        start_time: ["Choose an available appointment slot."],
+      throw badRequest("The new appointment time is not available.", {
+        start_time: ["Choose an available appointment time."],
       });
     }
   }
@@ -494,5 +502,3 @@ export async function createReminders(appointment: Appointment): Promise<void> {
     }
   }
 }
-
-

@@ -558,6 +558,8 @@ model MedicalTreatment {
   prescription    String       @default("")
   follow_up_date  DateTime?    @db.Date
   follow_up_time  String       @default("")
+  /// Background booking lifecycle for the real appointment created from this follow-up.
+  follow_up_booking_status String? @db.VarChar(16) @map("follow_up_booking_status")
   follow_up_notes String       @default("")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt

@@ -29,14 +29,26 @@ export class ErrorBoundary extends Component<Props, ErrorBoundaryState> {
   override render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      const errorMessage = this.state.error?.message ?? "";
+      const isChunkError =
+        this.state.error?.name === "ChunkLoadError" ||
+        errorMessage.includes("ChunkLoadError") ||
+        errorMessage.includes("Loading chunk") ||
+        (errorMessage.includes("chunk") && errorMessage.includes("failed"));
       return (
         <div style={{ padding: 24, fontFamily: "system-ui" }}>
-          <h2>Something went wrong</h2>
+          <h2>{isChunkError ? "A new app version is available" : "Something went wrong"}</h2>
+          {isChunkError && (
+            <p style={{ color: "#666" }}>
+              Reload the app to load its latest files and continue.
+            </p>
+          )}
           <p style={{ color: "#666" }}>{this.state.error?.message}</p>
           <button
             onClick={() => {
               this.setState({ hasError: false, error: null });
-              window.location.href = "/";
+              if (isChunkError) window.location.reload();
+              else window.location.href = "/";
             }}
             style={{
               marginTop: 16,
@@ -48,7 +60,7 @@ export class ErrorBoundary extends Component<Props, ErrorBoundaryState> {
               cursor: "pointer",
             }}
           >
-            Go to Home
+            {isChunkError ? "Reload app" : "Go to Home"}
           </button>
         </div>
       );

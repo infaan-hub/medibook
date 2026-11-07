@@ -112,10 +112,22 @@ export const treatmentCreateSchema = z
     items: prescriptionItemsList.optional(),
     prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
-    follow_up_time: z.string().optional(),
+    follow_up_time: drfTime().refine((value) => {
+      const [hour, minute, second = 0] = value.split(":").map(Number);
+      return hour < 24 && minute < 60 && second < 60;
+    }, { message: "Choose a valid follow-up time." }).optional(),
     follow_up_notes: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.follow_up_date && !data.follow_up_time?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["follow_up_time"],
+        message: "Choose the exact follow-up appointment time.",
+      });
+    }
+  });
 
 /** treatments.MedicalTreatmentSerializer PATCH payload (all writable fields). */
 export const treatmentPatchSchema = z
@@ -130,7 +142,10 @@ export const treatmentPatchSchema = z
     items: prescriptionItemsList.optional(),
     prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
-    follow_up_time: z.string().optional(),
+    follow_up_time: drfTime().refine((value) => {
+      const [hour, minute, second = 0] = value.split(":").map(Number);
+      return hour < 24 && minute < 60 && second < 60;
+    }, { message: "Choose a valid follow-up time." }).optional(),
     follow_up_notes: z.string().optional(),
   })
   .passthrough();

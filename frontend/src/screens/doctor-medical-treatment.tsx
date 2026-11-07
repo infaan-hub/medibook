@@ -11,9 +11,6 @@ import {
 } from "../api/treatments";
 import { listEmergencies } from "../api/emergency";
 import { getVisitHistory, type VisitHistoryEntry } from "../api/treatments";
-import {
-  deleteAppointment,
-} from "../api/appointments";
 import type { PrescriptionItemInput } from "../api/prescriptions";
 import {
   listVitals,
@@ -868,6 +865,15 @@ function TxRecord({
             {fmtDate(record.follow_up_date)}
             {record.follow_up_time ? ` at ${record.follow_up_time.slice(0, 5)}` : ""}
           </p>
+          {(record.follow_up_booking_status === "pending" ||
+            record.follow_up_booking_status === "processing") && (
+            <p className="treat-rec-val">Scheduling the appointment…</p>
+          )}
+          {record.follow_up_booking_status === "failed" && (
+            <p className="treat-rec-val">
+              This follow-up was not scheduled. Edit the treatment and choose a free time.
+            </p>
+          )}
           {record.follow_up_appointment_id && onCancelFollowUp && (
             <div className="treat-actions-row" style={{ marginTop: 8 }}>
               <Button variant="danger" onClick={() => onCancelFollowUp(record)}>
@@ -1113,7 +1119,12 @@ export function DoctorMedicalTreatmentScreen() {
     refresh: () => {
       if (selectedId) loadPatient(selectedId);
     },
-    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    events: [
+      "appointment.created",
+      "appointment.updated",
+      "appointment.deleted",
+      "treatment.updated",
+    ],
     polling: false,
     reconcileOnFocus: false,
     enabled: selectedId !== null,
@@ -1145,6 +1156,10 @@ export function DoctorMedicalTreatmentScreen() {
 
   async function handleSave() {
     if (!selectedId) return;
+    if (form.follow_up_date && !form.follow_up_time) {
+      notify("error", "Choose the exact time for the follow-up appointment.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -1196,7 +1211,6 @@ export function DoctorMedicalTreatmentScreen() {
   async function handleCancelFollowUp(record: MedicalTreatment) {
     if (!record.follow_up_appointment_id || !selectedId) return;
     try {
-      await deleteAppointment(record.follow_up_appointment_id);
       await updateTreatment(record.id, { follow_up_date: null });
       notify("success", "Follow-up appointment cancelled.");
       loadPatient(selectedId);
@@ -1797,6 +1811,8 @@ export function DoctorMedicalTreatmentScreen() {
                     id="tx-followup-time"
                     className="field__input"
                     type="time"
+                    step={60}
+                    required={Boolean(form.follow_up_date)}
                     value={form.follow_up_time}
                     onChange={(e) => setForm({ ...form, follow_up_time: e.target.value })}
                   />

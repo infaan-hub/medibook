@@ -34,6 +34,32 @@ import { RealtimeProvider } from "./realtime/RealtimeProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { NotificationGate } from "./components/NotificationGate";
 
+const CHUNK_RECOVERY_PARAM = "__chunk_recovery";
+
+function clearChunkRecoveryMarker(): void {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(CHUNK_RECOVERY_PARAM)) return;
+    url.searchParams.delete(CHUNK_RECOVERY_PARAM);
+    window.history.replaceState(window.history.state, "", url.toString());
+  } catch {
+    // Recovery is best-effort; the app should still render if URL state is unavailable.
+  }
+}
+
+/** Reload the current route once with a fresh document URL after stale chunks. */
+function reloadOnceForChunkError(): boolean {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has(CHUNK_RECOVERY_PARAM)) return false;
+    url.searchParams.set(CHUNK_RECOVERY_PARAM, String(Date.now()));
+    window.location.replace(url.toString());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Lazy load with retry on ChunkLoadError.
  * Retries up to 3 times with exponential backoff.
@@ -46,7 +72,9 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
     let lastError: Error;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        return await importFn();
+        const module = await importFn();
+        clearChunkRecoveryMarker();
+        return module;
       } catch (error) {
         lastError = error as Error;
         // Check if it's a chunk load error
@@ -56,7 +84,11 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
            error.message.includes('Loading chunk') ||
            error.message.includes('chunk') && error.message.includes('failed'));
         
-        if (!isChunkError || attempt === maxRetries) {
+        if (!isChunkError) {
+          throw error;
+        }
+        if (attempt === maxRetries) {
+          reloadOnceForChunkError();
           throw error;
         }
         // Wait before retry with exponential backoff

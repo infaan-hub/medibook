@@ -29,7 +29,7 @@ import type { AuthUser } from "@/lib/auth";
 const repo = vi.hoisted(() => ({
   findAppointmentById: vi.fn(),
   findOpenAppointmentForPatient: vi.fn(),
-  liveSlotExists: vi.fn(),
+  liveAppointmentOverlapExists: vi.fn(),
   createAppointment: vi.fn(),
   updateAppointment: vi.fn(),
   createReminderIfAbsent: vi.fn(),
@@ -134,7 +134,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   notify.mockResolvedValue({ id: 1 });
   repo.findOpenAppointmentForPatient.mockResolvedValue(null);
-  repo.liveSlotExists.mockResolvedValue(false);
+  repo.liveAppointmentOverlapExists.mockResolvedValue(false);
   repo.findLiveConsultation.mockResolvedValue(null);
   doctorsRepo.findDoctorById.mockResolvedValue(DOCTOR_PROFILE);
   doctorsRepo.findDoctorByUserId.mockResolvedValue({ id: 4, user_id: 12 });

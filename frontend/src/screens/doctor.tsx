@@ -137,7 +137,7 @@ export function DoctorProfileScreen() {
         )}
       </Card>
       <Card className="card--fit">
-        <h2>Available slots</h2>
+        <h2>Appointment availability</h2>
         {doctor.is_available === false ? (
           <EmptyState
             title="Not available for booking"
@@ -151,9 +151,12 @@ export function DoctorProfileScreen() {
             </div>
             <Button onClick={loadSlots}>Check availability</Button>
             {availability && (availability.slots.length ? (
-              <ul>{availability.slots.map((slot) => <li key={slot.start_time}>{slot.start_time} – {slot.end_time}</li>)}</ul>
+              <p className="page__subtitle">
+                Appointment times are available on this date. Choose any available minute when booking;
+                the doctor's hours, time off, breaks, and existing appointments are respected.
+              </p>
             ) : (
-              <EmptyState title="No available slots" description="Try another date." />
+              <EmptyState title="No available times" description="Try another date." />
             ))}
           </>  
         )}
@@ -773,7 +776,7 @@ export function DoctorAvailabilityScreen() {
         end_time: hasEnd ? exceptionForm.end_time : null,
         reason: exceptionForm.reason.trim(),
       });
-      notify("success", "Schedule exception added.");
+      notify("success", "Time off added.");
       setExceptionForm({ date: "", start_time: "", end_time: "", reason: "" });
       const response = await listScheduleExceptions();
       setExceptions(response.data ?? []);
@@ -908,7 +911,6 @@ export function DoctorAvailabilityScreen() {
                       <span className="avail-schedule-item__time">
                         {hhmm(item.start_time)} – {hhmm(item.end_time)}
                       </span>
-                      <span className="avail-schedule-item__slots">{item.slot_duration_minutes ?? 30} min slots</span>
                       <Button
                         variant="ghost"
                         onClick={() =>
@@ -980,27 +982,27 @@ export function DoctorAvailabilityScreen() {
       </Card>
 
       <Card>
-        <h2>Time off (exceptions)</h2>
-        <p className="page__subtitle">Full-day or partial closures — holidays, travel, conferences.</p>
+        <h2>Time off</h2>
+        <p className="page__subtitle">Add a full day off or a time range when appointments cannot be booked.</p>
         <div className="avail-exception-form">
           <input
             className="field__input"
             type="date"
-            aria-label="Exception date"
+            aria-label="Time off date"
             value={exceptionForm.date}
             onChange={(e) => setExceptionForm((f) => ({ ...f, date: e.target.value }))}
           />
           <input
             className="field__input"
             type="time"
-            aria-label="Exception start (optional)"
+            aria-label="Time off start (optional)"
             value={exceptionForm.start_time}
             onChange={(e) => setExceptionForm((f) => ({ ...f, start_time: e.target.value }))}
           />
           <input
             className="field__input"
             type="time"
-            aria-label="Exception end (optional)"
+            aria-label="Time off end (optional)"
             value={exceptionForm.end_time}
             onChange={(e) => setExceptionForm((f) => ({ ...f, end_time: e.target.value }))}
           />
@@ -1008,7 +1010,7 @@ export function DoctorAvailabilityScreen() {
             className="field__input"
             type="text"
             placeholder="Reason (e.g. vacation)"
-            aria-label="Exception reason"
+            aria-label="Time off reason"
             value={exceptionForm.reason}
             onChange={(e) => setExceptionForm((f) => ({ ...f, reason: e.target.value }))}
           />

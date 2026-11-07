@@ -132,6 +132,7 @@ export function BookingScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ start_time: string; end_time: string } | null>(null);
+  const [selectedTime, setSelectedTime] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -163,6 +164,7 @@ export function BookingScreen() {
     setSlotsLoading(true);
     setAvailability(null);
     setSelectedSlot(null);
+    setSelectedTime("");
     getDoctorAvailability(Number(id), selectedDate)
       .then((r) => { setAvailability(r.data); setSlotsLoading(false); })
       .catch((e) => { setError(message(e)); setSlotsLoading(false); });
@@ -215,6 +217,7 @@ export function BookingScreen() {
     setSelectedDate(null);
     setAvailability(null);
     setSelectedSlot(null);
+    setSelectedTime("");
   }
 
   function nextMonth() {
@@ -223,11 +226,13 @@ export function BookingScreen() {
     setSelectedDate(null);
     setAvailability(null);
     setSelectedSlot(null);
+    setSelectedTime("");
   }
 
   function selectDay(dayStr: string) {
     setSelectedDate(dayStr);
     setSelectedSlot(null);
+    setSelectedTime("");
   }
 
   async function handleBook(event: FormEvent) {
@@ -458,31 +463,41 @@ export function BookingScreen() {
         </p>
       </Card>
 
-      {/* Step 2: Pick a time slot */}
+      {/* Step 2: Choose any available start time */}
       {selectedDate && (
         <Card>
-          <h2>Available slots — {formatDate(selectedDate)}</h2>
+          <h2>Choose a time — {formatDate(selectedDate)}</h2>
           {slotsLoading ? (
             <Skeleton lines={3} />
           ) : availability === null ? (
             <Skeleton lines={3} />
           ) : availability.slots.length === 0 ? (
-            <EmptyState title="No available slots" description="Try another day." />
+            <EmptyState title="No available times" description="Try another day." />
           ) : (
-            <div className="slot-grid">
-              {availability.slots.map((slot) => {
-                const isSelected = selectedSlot?.start_time === slot.start_time && selectedSlot?.end_time === slot.end_time;
-                return (
-                  <button
-                    key={slot.start_time}
-                    type="button"
-                    className={`slot-btn${isSelected ? " slot-btn--selected" : ""}`}
-                    onClick={() => setSelectedSlot(slot)}
-                  >
-                    {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
-                  </button>
-                );
-              })}
+            <div className="field">
+              <label className="field__label" htmlFor="book-time">Appointment start time</label>
+              <input
+                id="book-time"
+                className="field__input"
+                type="time"
+                step={60}
+                value={selectedTime}
+                onChange={(event) => {
+                  const time = event.target.value;
+                  setSelectedTime(time);
+                  setError(null);
+                  setSelectedSlot(
+                    availability.slots.find((slot) => formatTime(slot.start_time) === time) ?? null
+                  );
+                }}
+              />
+              <p className="page__subtitle">
+                Appointments last 30 minutes. Choose any available minute within the doctor's hours;
+                time off, breaks, and existing appointments are blocked.
+              </p>
+              {selectedTime && !selectedSlot && (
+                <p className="form-note--error">That time is unavailable. Choose another time.</p>
+              )}
             </div>
           )}
         </Card>
@@ -658,6 +673,7 @@ export function RescheduleScreen() {
   const [date, setDate] = useState("");
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ start_time: string; end_time: string } | null>(null);
+  const [selectedTime, setSelectedTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -679,6 +695,7 @@ export function RescheduleScreen() {
     setError(null);
     setAvailability(null);
     setSelectedSlot(null);
+    setSelectedTime("");
     getDoctorAvailability(appointment.doctor, date)
       .then((r) => setAvailability(r.data))
       .catch((e) => setError(message(e)));
@@ -731,6 +748,7 @@ export function RescheduleScreen() {
       // Rollback slot selection + availability, then reconcile with the server.
       setAvailability(prevAvailability);
       setSelectedSlot(booked);
+      setSelectedTime(formatTime(booked.start_time));
       setError(message(e));
       if (prevAvailability) loadSlots();
     } finally {
@@ -780,26 +798,35 @@ export function RescheduleScreen() {
       </Card>
 
       <Card>
-        <h2>Available slots</h2>
+        <h2>Choose a new time</h2>
         {availability === null ? (
           <Skeleton lines={3} />
         ) : availability.slots.length === 0 ? (
-          <EmptyState title="No available slots" description="Try another date." />
+          <EmptyState title="No available times" description="Try another date." />
         ) : (
-          <div className="slot-grid">
-            {availability.slots.map((slot) => {
-              const isSelected = selectedSlot?.start_time === slot.start_time && selectedSlot?.end_time === slot.end_time;
-              return (
-                <button
-                  key={slot.start_time}
-                  type="button"
-                  className={`slot-btn${isSelected ? " slot-btn--selected" : ""}`}
-                  onClick={() => setSelectedSlot(slot)}
-                >
-                  {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
-                </button>
-              );
-            })}
+          <div className="field">
+            <label className="field__label" htmlFor="reschedule-time">Appointment start time</label>
+            <input
+              id="reschedule-time"
+              className="field__input"
+              type="time"
+              step={60}
+              value={selectedTime}
+              onChange={(event) => {
+                const time = event.target.value;
+                setSelectedTime(time);
+                setError(null);
+                setSelectedSlot(
+                  availability.slots.find((slot) => formatTime(slot.start_time) === time) ?? null
+                );
+              }}
+            />
+            <p className="page__subtitle">
+              Appointments last 30 minutes. Time off, breaks, and existing appointments are blocked.
+            </p>
+            {selectedTime && !selectedSlot && (
+              <p className="form-note--error">That time is unavailable. Choose another time.</p>
+            )}
           </div>
         )}
       </Card>

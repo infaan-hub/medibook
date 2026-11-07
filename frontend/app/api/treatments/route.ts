@@ -3,6 +3,8 @@ import { handler, ok, created, noContent, readJson, intParam, badRequest } from 
 import { requireDoctor } from "@/lib/auth";
 import * as treatments from "@/services/treatment.service";
 
+export const maxDuration = 60;
+
 export const GET = handler(async (ctx) => {
   const user = await requireDoctor(ctx.req);
   const qs = new URL(ctx.req.url).searchParams;
