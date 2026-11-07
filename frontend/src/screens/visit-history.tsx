@@ -473,6 +473,8 @@ export default function VisitHistoryPage() {
 
       {patient && <PatientInfo profile={patient} />}
 
+      <h2 className="visit-section-title">Patient History</h2>
+
       {patientId && <HealthRecordsSection patientId={Number(patientId)} />}
 
       {history.length === 0 ? (

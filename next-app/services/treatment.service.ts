@@ -219,7 +219,6 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
   if (!linked) return { data: [] as unknown[], message: "No appointments with this patient." };
 
   const { appointments: rows, treatments } = await clinical.listVisitHistory(
-    doctor.id,
     Number(patientId)
   );
   const byAppointment = new Map<number, (typeof treatments)[number]>();
