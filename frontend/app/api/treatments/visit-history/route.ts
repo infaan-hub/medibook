@@ -3,6 +3,8 @@ import { handler, ok } from "@/lib/route";
 import { requireDoctor } from "@/lib/auth";
 import { visitHistory } from "@/services/treatment.service";
 
+export const maxDuration = 60;
+
 export const GET = handler(async (ctx) => {
   const user = await requireDoctor(ctx.req);
   const qs = new URL(ctx.req.url).searchParams;

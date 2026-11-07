@@ -3,7 +3,7 @@
  * doctor-facing patient detail view (treatments.views.PatientDetailView,
  * which only exposes patients the doctor has appointments with).
  */
-import { getOrCreatePatient, updatePatient, findPatientsByUserIds } from "@/repositories/users.repo";
+import { getOrCreatePatient, getPatientProfile, updatePatient, findPatientsByUserIds } from "@/repositories/users.repo";
 import { hasAppointmentsWithPatient } from "@/repositories/appointments.repo";
 import { patientProfileSchema } from "@/validators/doctor";
 import { parse } from "@/validators/base";
@@ -63,11 +63,12 @@ export async function getPatientDetail(user: AuthUser, targetUserId: number) {
   const doctor = await findDoctorByUserId(user.id);
   if (!doctor) return { data: null, message: "Doctor profile not found." };
 
-  const linked = await hasAppointmentsWithPatient(doctor.id, targetUserId);
+  const [linked, profile] = await Promise.all([
+    hasAppointmentsWithPatient(doctor.id, targetUserId),
+    getPatientProfile(targetUserId),
+  ]);
   if (!linked) return { data: null, message: "Access denied. No appointment with this patient." };
 
-  const { getPatientProfile } = await import("@/repositories/users.repo");
-  const profile = await getPatientProfile(targetUserId);
   if (!profile) return { data: null, message: "Patient profile not found." };
   return { data: patientDto(profile) as unknown, message: "" };
 }

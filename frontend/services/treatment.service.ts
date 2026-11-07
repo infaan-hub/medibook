@@ -593,22 +593,10 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
   const doctor = await ownDoctor(user);
   if (!doctor) return { data: [] as unknown[], message: "Doctor profile not found." };
   if (!patientId) return { data: [] as unknown[], message: "Patient ID is required." };
-  const linked = await appointments.hasAppointmentsWithPatient(doctor.id, Number(patientId));
-  if (!linked) return { data: [] as unknown[], message: "No appointments with this patient." };
-
-  const { appointments: rows, treatments } = await clinical.listVisitHistory(
-    Number(patientId)
-  );
-  const byAppointment = new Map<number, (typeof treatments)[number][]>();
-  for (const treatment of treatments) {
-    if (treatment.appointment_id) {
-      const rows = byAppointment.get(treatment.appointment_id) ?? [];
-      rows.push(treatment);
-      byAppointment.set(treatment.appointment_id, rows);
-    }
-  }
+  const rows = await clinical.listVisitHistory(doctor.id, Number(patientId));
+  if (rows.length === 0) return { data: [] as unknown[], message: "No appointments with this patient." };
   const data = rows.map((appointment) => {
-    const visitTreatments = byAppointment.get(appointment.id) ?? [];
+    const visitTreatments = appointment.treatments;
     const treatment = visitTreatments[0];
     return {
       appointment_id: appointment.id,

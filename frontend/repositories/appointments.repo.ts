@@ -202,7 +202,10 @@ export const updateAppointment = (
 export const deleteAppointment = (id: number) => prisma.appointment.delete({ where: { id } });
 
 export const hasAppointmentsWithPatient = async (doctorId: number, patientUserId: number) =>
-  (await prisma.appointment.findFirst({ where: { doctor_id: doctorId, patient_id: patientUserId } })) !== null;
+  (await prisma.appointment.findFirst({
+    where: { doctor_id: doctorId, patient_id: patientUserId },
+    select: { id: true },
+  })) !== null;
 
 /* -------------------------------- Reminders -------------------------------- */
 

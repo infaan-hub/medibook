@@ -9,3 +9,5 @@ export const GET = handler(async (ctx) => {
   const result = await getPatientDetail(user, id);
   return ok(result.data, result.message);
 });
+
+export const maxDuration = 60;
