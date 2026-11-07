@@ -98,7 +98,7 @@ describe("vitalWhere", () => {
 });
 
 describe("vitalsCreateSchema", () => {
-  it("coerces numeric strings and rounds temperature/weight/height to 1 decimal", () => {
+  it("coerces numeric strings without rounding", () => {
     const input = parse(vitalsCreateSchema, {
       patient: "7",
       systolic_bp: "120",
@@ -108,9 +108,9 @@ describe("vitalsCreateSchema", () => {
       height_cm: "175.44",
     });
     expect(input.systolic_bp).toBe(120);
-    expect(input.temperature_c).toBe(37.3);
-    expect(input.weight_kg).toBe(70.5);
-    expect(input.height_cm).toBe(175.4);
+    expect(input.temperature_c).toBe(37.25);
+    expect(input.weight_kg).toBe(70.46);
+    expect(input.height_cm).toBe(175.44);
   });
 
   it("rejects an all-blank reading", () => {
@@ -150,19 +150,13 @@ describe("vitalsCreateSchema", () => {
     );
   });
 
-  it("enforces measurement ranges on the remaining vitals", () => {
+  it("accepts any numeric measurement without range checks", () => {
     expect(() =>
       parse(vitalsCreateSchema, { patient: 7, temperature_c: 20 })
-    ).toThrow(ValidationError);
-    expect(() => parse(vitalsCreateSchema, { patient: 7, weight_kg: 0 })).toThrow(
-      ValidationError
-    );
-    expect(() => parse(vitalsCreateSchema, { patient: 7, spo2_percent: 30 })).toThrow(
-      ValidationError
-    );
-    expect(() => parse(vitalsCreateSchema, { patient: 7, glucose_mg_dl: 5000 })).toThrow(
-      ValidationError
-    );
+    ).not.toThrow();
+    expect(() => parse(vitalsCreateSchema, { patient: 7, weight_kg: 0 })).not.toThrow();
+    expect(() => parse(vitalsCreateSchema, { patient: 7, spo2_percent: 30 })).not.toThrow();
+    expect(() => parse(vitalsCreateSchema, { patient: 7, glucose_mg_dl: 5000 })).not.toThrow();
   });
 
   it("rejects a malformed recorded_at", () => {

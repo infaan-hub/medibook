@@ -567,6 +567,9 @@ model MedicalTreatment {
   appointment     Appointment? @relation(fields: [appointment_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   appointment_id  Int?         @map("appointment_id")
 
+    /// Appointment auto-booked from this treatment's Follow-up Date (idempotency).
+    follow_up_appointment_id Int? @map("follow_up_appointment_id")
+
   prescriptions     Prescription[]
 
   @@index([doctor_id, patient_id], map: "treat_dr_pat_idx")

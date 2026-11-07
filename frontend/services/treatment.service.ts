@@ -272,6 +272,10 @@ export async function createTreatment(user: AuthUser, body: unknown) {
     : null;
   if (followUpAppointment) {
     await announceFollowUpAppointment(doctor, input.patient, followUpAppointment);
+    await prisma.medicalTreatment.update({
+      where: { id: row.id },
+      data: { follow_up_appointment_id: followUpAppointment.id },
+    });
   }
 
   return {
@@ -363,6 +367,10 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
       input.patient ?? row.patient_id,
       followUpAppointment
     );
+    await prisma.medicalTreatment.update({
+      where: { id },
+      data: { follow_up_appointment_id: followUpAppointment.id },
+    });
   }
 
   return {

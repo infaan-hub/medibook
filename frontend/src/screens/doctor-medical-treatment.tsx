@@ -1048,10 +1048,11 @@ export function DoctorMedicalTreatmentScreen() {
       getHealthRecords(id)
         .then((r) => setRecords(r.data?.results ?? []))
         .catch(() => setRecords([]));
-      Promise.all([getPatientProfileById(id), listTreatments(id)])
-        .then(([profileRes, txRes]) => {
+      Promise.all([getPatientProfileById(id), listTreatments(id), getVisitHistory(id)])
+        .then(([profileRes, txRes, vhRes]) => {
           setProfile(profileRes.data);
           setTreatments(txRes.data);
+          setPatientHistory(vhRes.data ?? []);
         })
         .catch((e) => setDetailError(msg(e)))
         .finally(() => setDetailLoading(false));
@@ -1084,14 +1085,6 @@ export function DoctorMedicalTreatmentScreen() {
       })
       .catch(() => undefined);
   }, [emergencyRoute]);
-  useEffect(() => {
-    if (selectedId === null || patientHistoryLoading) return;
-    setPatientHistoryLoading(true);
-    getVisitHistory(selectedId)
-      .then((r) => setPatientHistory(r.data ?? []))
-      .catch(() => setPatientHistory([]))
-      .finally(() => setPatientHistoryLoading(false));
-  }, [selectedId]);
 
   function handleNew() {
     setEditing(null);
