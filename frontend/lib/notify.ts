@@ -161,8 +161,9 @@ export function broadcastTreatmentUpdated(
   recipients: Array<number | null | undefined>,
   status: string | null
 ): void {
+  const targets = recipients.filter((id): id is number => typeof id === "number");
   pushEvent(
-    recipients,
+    targets,
     "treatment.updated",
     { id: treatmentId, follow_up_booking_status: status },
     { version: Date.now(), entityId: `treatment-${treatmentId}` }
