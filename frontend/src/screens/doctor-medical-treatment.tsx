@@ -1434,7 +1434,23 @@ export function DoctorMedicalTreatmentScreen() {
         <>
           <PatientInfo profile={profile} />
 
-          <h2 className="visit-section-title">Patient History</h2>
+          <div className="visit-section-head">
+            <h2 className="visit-section-title">Patient History</h2>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (selectedId === null) return;
+                try {
+                  const result = await viewDoctorReport(selectedId);
+                  notify("success", `Report opened — ${result.filename}`);
+                } catch (e) {
+                  notify("error", msg(e));
+                }
+              }}
+            >
+              View patient report
+            </Button>
+          </div>
 
           {patientHistoryLoading ? (
             <Skeleton lines={6} />
@@ -1457,14 +1473,6 @@ export function DoctorMedicalTreatmentScreen() {
                       </div>
                       <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
                     </div>
-                    {entry.reason && (
-                      <div className="visit-card-field">
-                        <span className="visit-field-label">
-                          <FileText size={12} /> Reason
-                        </span>
-                        <span className="visit-field-value">{entry.reason}</span>
-                      </div>
-                    )}
                     {entry.diagnosis && (
                       <div className="visit-detail-field">
                         <span className="visit-detail-label">
@@ -1473,20 +1481,20 @@ export function DoctorMedicalTreatmentScreen() {
                         <span>{entry.diagnosis}</span>
                       </div>
                     )}
-                    {entry.treatment_notes && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <FileText size={12} /> Treatment Notes
-                        </span>
-                        <span>{entry.treatment_notes}</span>
-                      </div>
-                    )}
                     {entry.doctor_description && (
                       <div className="visit-detail-field">
                         <span className="visit-detail-label">
                           <FileText size={12} /> Doctor description
                         </span>
                         <span>{entry.doctor_description}</span>
+                      </div>
+                    )}
+                    {entry.treatment_notes && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <FileText size={12} /> Treatment Notes
+                        </span>
+                        <span>{entry.treatment_notes}</span>
                       </div>
                     )}
                     {entry.prescription && (
