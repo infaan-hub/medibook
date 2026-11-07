@@ -107,7 +107,7 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
 
 function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes;
+  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description;
 
   const statusColors: Record<string, string> = {
     done: "var(--color-status-done)",
@@ -133,10 +133,10 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
           <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
         </div>
 
-        {entry.reason && (
+        {entry.doctor_description && (
           <div className="visit-card-field">
-            <span className="visit-field-label"><FileText size={12} /> Reason</span>
-            <span className="visit-field-value">{entry.reason}</span>
+            <span className="visit-field-label"><FileText size={12} /> Doctor description</span>
+            <span className="visit-field-value">{entry.doctor_description}</span>
           </div>
         )}
 
@@ -154,6 +154,12 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><Stethoscope size={12} /> Diagnosis</span>
                 <span>{entry.diagnosis}</span>
+              </div>
+            )}
+            {entry.doctor_description && (
+              <div className="visit-detail-field">
+                <span className="visit-detail-label"><FileText size={12} /> Doctor description</span>
+                <span>{entry.doctor_description}</span>
               </div>
             )}
             {entry.treatment_notes && (
