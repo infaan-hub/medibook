@@ -44,6 +44,7 @@ import {
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { downloadDoctorReport, viewDoctorReport } from "../api/reports";
 import { useToast } from "../state/app-context";
+import { useRealtimeSync } from "../realtime/socket";
 import {
   ArrowLeft,
   User,
@@ -1103,6 +1104,18 @@ export function DoctorMedicalTreatmentScreen() {
       })
       .catch(() => undefined);
   }, [emergencyRoute]);
+
+  // When a follow-up appointment is auto-created in the background (non-blocking
+  // to avoid request timeouts), the realtime appointment.created event lets us
+  // notify the doctor immediately so the new accepted appointment shows up in
+  // their appointments list without a page reload.
+  useRealtimeSync({
+    refresh: () => {
+      if (selectedId) loadPatient(selectedId);
+    },
+    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    enabled: selectedId !== null,
+  });
 
   function handleNew() {
     setEditing(null);
