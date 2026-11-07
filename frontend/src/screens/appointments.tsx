@@ -252,6 +252,8 @@ export function BookingScreen() {
         end_time: endTime,
         reason,
       });
+      // apiPost throws on non-2xx, so reaching here means HTTP 2xx.
+      // But the envelope might still carry success: false.
       if (!result.success) {
         throw new ApiError(result.message || "Booking failed.", 409, result.errors);
       }
@@ -263,7 +265,24 @@ export function BookingScreen() {
         setGateOverride(gate);
         setError(null);
       } else {
-        setError(message(e));
+        // Axios throws on 409/5xx before envelope() runs, so the error reaches
+        // here as an ApiError thrown by the response interceptor. Pull the
+        // server's message from it, falling back to the raw Axios payload.
+        let errorMessage: string;
+        if (e instanceof ApiError) {
+          errorMessage = e.message;
+        } else if (
+          e &&
+          typeof e === "object" &&
+          "response" in e &&
+          (e as { response?: { data?: any; status?: number } }).response?.data
+        ) {
+          const data = (e as { response?: { data?: any } }).response?.data;
+          errorMessage = data?.message || `Request failed`;
+        } else {
+          errorMessage = message(e);
+        }
+        setError(errorMessage);
       }
       // Reconcile with server (another client may have taken it while we failed).
       loadSlots();
@@ -733,7 +752,21 @@ export function RescheduleScreen() {
       notify("success", "Appointment rescheduled. The new request is pending doctor confirmation.");
       navigate("/appointments");
     } catch (e) {
-      setError(message(e));
+      let errorMessage: string;
+      if (e instanceof ApiError) {
+        errorMessage = e.message;
+      } else if (
+        e &&
+        typeof e === "object" &&
+        "response" in e &&
+        (e as { response?: { data?: any; status?: number } }).response?.data
+      ) {
+        const data = (e as { response?: { data?: any } }).response?.data;
+        errorMessage = data?.message || `Request failed`;
+      } else {
+        errorMessage = message(e);
+      }
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
