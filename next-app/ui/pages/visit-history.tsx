@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getPatientProfileById } from "../api/patients";
 import { getVisitHistory, type VisitHistoryEntry } from "../api/treatments";
+import { viewDoctorReport } from "../api/reports";
 import {
   getHealthRecords,
   uploadHealthRecord,
@@ -406,8 +407,10 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
 
 export default function VisitHistoryPage() {
   const { patientId } = useParams<{ patientId: string }>();
+  const { notify } = useToast();
   const [patient, setPatient] = useState<PatientProfile | null>(null);
   const [history, setHistory] = useState<VisitHistoryEntry[]>([]);
+  const [reportBusy, setReportBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -474,6 +477,26 @@ export default function VisitHistoryPage() {
       {patient && <PatientInfo profile={patient} />}
 
       <h2 className="visit-section-title">Patient History</h2>
+      <div style={{ marginBottom: 12 }}>
+        <Button
+          variant="secondary"
+          loading={reportBusy}
+          onClick={async () => {
+            if (!patientId) return;
+            setReportBusy(true);
+            try {
+              const r = await viewDoctorReport(Number(patientId));
+              notify("success", `Report opened in a new tab — ${r.filename}`);
+            } catch (e) {
+              notify("error", msg(e));
+            } finally {
+              setReportBusy(false);
+            }
+          }}
+        >
+          Preview patient report
+        </Button>
+      </div>
 
       {patientId && <HealthRecordsSection patientId={Number(patientId)} />}
 
