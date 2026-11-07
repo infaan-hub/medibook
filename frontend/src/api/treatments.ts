@@ -19,6 +19,7 @@ export interface MedicalTreatment {
   prescription_notes: string;
   prescription_items: import("./prescriptions").PrescriptionItem[];
   follow_up_date: string | null;
+  follow_up_time?: string;
   follow_up_notes: string;
   created_at: string;
   updated_at: string;
@@ -68,6 +69,7 @@ export interface VisitHistoryEntry {
   doctor_description: string | null;
   prescription: string | null;
   follow_up_date: string | null;
+  follow_up_time: string | null;
   doctor_first_name: string;
   doctor_last_name: string;
 }

@@ -383,6 +383,7 @@ describe("doctor /doctor/visit-history/:patientId — health records", () => {
     doctor_description: "Bronchitis resolved with rest and fluids.",
     prescription: "Amoxicillin 500mg",
     follow_up_date: "2026-08-26",
+    follow_up_time: null,
     doctor_first_name: "Ada",
     doctor_last_name: "Lovelace",
   };

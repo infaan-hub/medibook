@@ -31,6 +31,7 @@ export const createTreatment = (
     doctor_description?: string;
     prescription?: string;
     follow_up_date?: string | null;
+    follow_up_time?: string;
     follow_up_notes?: string;
   },
   tx?: Prisma.TransactionClient
@@ -45,6 +46,7 @@ export const createTreatment = (
       doctor_description: data.doctor_description ?? "",
       prescription: data.prescription ?? "",
       follow_up_date: data.follow_up_date ? new Date(`${data.follow_up_date}T00:00:00Z`) : null,
+      follow_up_time: data.follow_up_time ?? "",
       follow_up_notes: data.follow_up_notes ?? "",
     },
     include: RX_INCLUDE,

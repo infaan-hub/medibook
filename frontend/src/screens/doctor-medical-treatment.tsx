@@ -863,7 +863,10 @@ function TxRecord({
       {record.follow_up_date && (
         <div className="treat-rec-sec">
           <span className="treat-rec-lbl"><Calendar size={12} /> Follow-up Date</span>
-          <p className="treat-rec-val">{fmtDate(record.follow_up_date)}</p>
+          <p className="treat-rec-val">
+            {fmtDate(record.follow_up_date)}
+            {record.follow_up_time ? ` at ${record.follow_up_time.slice(0, 5)}` : ""}
+          </p>
           {record.follow_up_appointment_id && onCancelFollowUp && (
             <div className="treat-actions-row" style={{ marginTop: 8 }}>
               <Button variant="danger" onClick={() => onCancelFollowUp(record)}>
@@ -1119,7 +1122,7 @@ export function DoctorMedicalTreatmentScreen() {
           : [{ ...EMPTY_ROW }],
       prescription_notes: record.prescription_notes,
       follow_up_date: record.follow_up_date ?? "",
-      follow_up_time: "",
+      follow_up_time: record.follow_up_time ?? "",
       follow_up_notes: record.follow_up_notes,
     });
     setShowForm(true);
@@ -1580,6 +1583,14 @@ export function DoctorMedicalTreatmentScreen() {
                           <Pill size={12} /> Prescription
                         </span>
                         <span>{entry.prescription}</span>
+                      </div>
+                    )}
+                    {entry.follow_up_date && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <Calendar size={12} /> Follow-up
+                        </span>
+                        <span>{fmtDate(entry.follow_up_date)}{entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}</span>
                       </div>
                     )}
                     <div className="visit-card-actions">

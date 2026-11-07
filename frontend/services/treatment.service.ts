@@ -250,6 +250,7 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         doctor_description: input.doctor_description,
         prescription: structured ? prescriptionText(items, rxNotes) : input.prescription,
         follow_up_date: input.follow_up_date ?? null,
+        follow_up_time: input.follow_up_time ?? "",
         follow_up_notes: input.follow_up_notes,
       },
       tx
@@ -317,6 +318,9 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
   }
   if (input.follow_up_date !== undefined) {
     data.follow_up_date = input.follow_up_date ? new Date(`${input.follow_up_date}T00:00:00Z`) : null;
+  }
+  if (input.follow_up_time !== undefined) {
+    data.follow_up_time = input.follow_up_time ?? "";
   }
   if (input.patient !== undefined) data.patient_id = input.patient;
   if (input.appointment !== undefined) data.appointment_id = input.appointment;
@@ -555,6 +559,7 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
       follow_up_date: treatment?.follow_up_date
         ? treatment.follow_up_date.toISOString().slice(0, 10)
         : null,
+      follow_up_time: treatment?.follow_up_time ?? null,
       doctor_first_name: appointment.doctor.user.first_name,
       doctor_last_name: appointment.doctor.user.last_name,
     };

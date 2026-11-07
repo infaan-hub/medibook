@@ -177,7 +177,7 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
             {entry.follow_up_date && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
-                <span>{fmtDate(entry.follow_up_date)}</span>
+                <span>{fmtDate(entry.follow_up_date)}{entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}</span>
               </div>
             )}
           </div>

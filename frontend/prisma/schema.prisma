@@ -557,6 +557,7 @@ model MedicalTreatment {
   doctor_description String    @default("")
   prescription    String       @default("")
   follow_up_date  DateTime?    @db.Date
+  follow_up_time  String       @default("")
   follow_up_notes String       @default("")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
