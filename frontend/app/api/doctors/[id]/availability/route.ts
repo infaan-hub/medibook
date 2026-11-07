@@ -2,6 +2,7 @@ import { handler, ok } from "@/lib/route";
 import { notFound, badRequest } from "@/lib/errors";
 import { todayIso, isoWeekday } from "@/lib/dates";
 import { listActiveWindowsForWeekday, findDoctorById } from "@/repositories/doctors.repo";
+import { availableSlots } from "@/services/schedule.service";
 
 /** GET /api/doctors/{id}/availability/?date=YYYY-MM-DD — available window ranges. */
 export const GET = handler(async ({ req, params }) => {
@@ -23,6 +24,7 @@ export const GET = handler(async ({ req, params }) => {
 
   const weekday = isoWeekday(target);
   const windows = await listActiveWindowsForWeekday(doctor.id, weekday);
+  const slots = await availableSlots(doctor.id, doctor.is_available, target);
 
   // Available window ranges for the patient to pick a time from.
   const windowsForDisplay = windows.map((w) => ({
@@ -35,5 +37,6 @@ export const GET = handler(async ({ req, params }) => {
     doctor: doctor.id,
     date: target,
     windows: windowsForDisplay,
+    slots,
   });
 });

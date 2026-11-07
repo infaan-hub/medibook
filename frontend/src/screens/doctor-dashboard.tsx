@@ -483,24 +483,28 @@ function AppointmentRow({
             <p className="form-note">Loading your schedule…</p>
           ) : reschedSlots === null ? (
             <Skeleton lines={2} />
-          ) : reschedSlots.windows.length === 0 ? (
+          ) : reschedSlots.slots.length === 0 ? (
             <p className="form-note--error">No available windows on this date. Pick another day.</p>
           ) : (
             <>
               <p className="page__subtitle">
-                Available windows:{reschedSlots.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
-                Appointments last 30 minutes. Pick any start time within the windows.
+                Available windows:{reschedSlots.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")} — appointments last 30 minutes.
               </p>
               <div className="field">
-                <label className="field__label" htmlFor="resched-time">Start time</label>
-                <input
+                <label className="field__label" htmlFor="resched-time">Available appointment start time</label>
+                <select
                   id="resched-time"
                   className="field__input"
-                  type="time"
-                  step={60}
                   value={reschedTime}
                   onChange={(e) => setReschedTime(e.target.value)}
-                />
+                >
+                  <option value="">Select a free time</option>
+                  {reschedSlots.slots.map((slot) => (
+                    <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
+                      {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                    </option>
+                  ))}
+                </select>
               </div>
               {reschedTime && (
                 <Button loading={reschedBusy} onClick={handleReschedule}>

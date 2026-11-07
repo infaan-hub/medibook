@@ -250,9 +250,27 @@ describe("runAction done", () => {
       `Appointment cancelled: ${DATE} 09:00:00.`,
       9
     );
+    expect(broadcastAvailabilityUpdated).toHaveBeenCalledWith(4, DATE);
+
   });
 });
 
+describe("runAction reject", () => {
+  it("notifies the patient to choose another time and releases the reserved interval", async () => {
+    repo.findAppointmentById.mockResolvedValue(normalRow("pending"));
+    repo.updateAppointment.mockResolvedValue(normalRow("rejected"));
+
+    await runAction(REQUEST(), account(12, "doctor"), 9, "reject", {});
+
+    expect(notify).toHaveBeenCalledWith(
+      7,
+      "appointment_rejected",
+      `Appointment rejected. Please choose another time and book again.: ${DATE} 09:00:00.`,
+      9
+    );
+    expect(broadcastAvailabilityUpdated).toHaveBeenCalledWith(4, DATE);
+  });
+});
 /* ==================== 3. reschedule, doctor → patient ===================== */
 
 describe("patchAppointment (doctor in-place reschedule)", () => {
@@ -335,6 +353,8 @@ describe("bookAppointment rescheduled_from", () => {
       "New appointment request from asha@example.com.",
       55
     );
+    expect(broadcastAvailabilityUpdated).toHaveBeenCalledWith(4, DATE);
+
   });
 
   it("falls back to the generic message when the marker is not the caller's cancelled row", async () => {

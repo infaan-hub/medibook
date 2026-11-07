@@ -185,9 +185,10 @@ export function BookingScreen() {
     Promise.all([
       listMyAppointments({ status: "pending" }),
       listMyAppointments({ status: "accepted" }),
+      listMyAppointments({ status: "in_progress" }),
     ])
-      .then(([pending, accepted]) => {
-        const rows = [...pending.data.results, ...accepted.data.results].sort(
+      .then(([pending, accepted, inProgress]) => {
+        const rows = [...pending.data.results, ...accepted.data.results, ...inProgress.data.results].sort(
           (a, b) =>
             a.appointment_date.localeCompare(b.appointment_date) ||
             a.start_time.localeCompare(b.start_time)
@@ -480,34 +481,32 @@ export function BookingScreen() {
             <Skeleton lines={3} />
           ) : availability === null ? (
             <Skeleton lines={3} />
-          ) : availability.windows.length === 0 ? (
-            <EmptyState title="No available times" description="Try another day." />
+          ) : availability.slots.length === 0 ? (
+            <EmptyState title="No available appointment times" description="All times are booked or unavailable. Try another day." />
           ) : (
             <>
               <p className="page__subtitle">
-                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
-                Appointments last 30 minutes. Pick any start time within the windows;
-                breaks and existing appointments are checked server-side.
+                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")} — appointments last 30 minutes.
               </p>
               <div className="field">
-                <label className="field__label" htmlFor="book-time">Appointment start time</label>
-                <input
+                <label className="field__label" htmlFor="book-time">Available appointment start time</label>
+                <select
                   id="book-time"
                   className="field__input"
-                  type="time"
-                  step={60}
                   value={selectedTime}
                   onChange={(event) => {
-                    const time = event.target.value;
-                    setSelectedTime(time);
+                    setSelectedTime(event.target.value);
                     setError(null);
                   }}
-                />
-                <p className="page__subtitle">
-                  Appointments last 30 minutes. Choose any start time within the
-                  doctor's available windows; breaks and existing appointments are
-                  blocked server-side.
-                </p>
+                >
+                  <option value="">Select a free time</option>
+                  {availability.slots.map((slot) => (
+                    <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
+                      {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                    </option>
+                  ))}
+                </select>
+                <p className="page__subtitle">Only free start times are listed. The server checks again when you book.</p>
               </div>
             </>
           )}
@@ -819,26 +818,28 @@ export function RescheduleScreen() {
         <h2>Choose a new time</h2>
         {availability === null ? (
           <Skeleton lines={3} />
-        ) : availability.windows.length === 0 ? (
-          <EmptyState title="No available times" description="Try another date." />
+        ) : availability.slots.length === 0 ? (
+          <EmptyState title="No available appointment times" description="All times are booked or unavailable. Try another date." />
         ) : (
           <div className="field">
-            <label className="field__label" htmlFor="reschedule-time">Appointment start time</label>
-            <input
+            <label className="field__label" htmlFor="reschedule-time">Available appointment start time</label>
+            <select
               id="reschedule-time"
               className="field__input"
-              type="time"
-              step={60}
               value={selectedTime}
               onChange={(event) => {
-                const time = event.target.value;
-                setSelectedTime(time);
+                setSelectedTime(event.target.value);
                 setError(null);
               }}
-            />
-            <p className="page__subtitle">
-              Appointments last 30 minutes. Time off, breaks, and existing appointments are blocked.
-            </p>
+            >
+              <option value="">Select a free time</option>
+              {availability.slots.map((slot) => (
+                <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
+                  {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                </option>
+              ))}
+            </select>
+            <p className="page__subtitle">Appointments last 30 minutes. Only free times are listed.</p>
           </div>
         )}
       </Card>

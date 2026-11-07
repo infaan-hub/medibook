@@ -327,6 +327,8 @@ export interface DoctorAvailability {
   doctor: number;
   date: string;
   windows: AvailabilityWindow[];
+  /** Free 30-minute appointment starts, one-minute granularity. */
+  slots: Array<{ start_time: string; end_time: string }>;
 }
 
 export interface DoctorAvailableDays {
