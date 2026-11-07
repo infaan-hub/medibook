@@ -235,6 +235,47 @@ export function labsSection(d: ReportDoc, rows: LabEntry[]): void {
   d.moveDown(space[3]);
 }
 
+/* ============================ Follow up appointments ======================== */
+
+/**
+ * Upcoming follow-up appointments booked from treatments' Follow-up Date.
+ * Each row shows the follow-up date and time so the patient can see when
+ * their next visit is scheduled.
+ */
+export function followUpAppointmentsSection(d: ReportDoc, rows: TreatmentEntry[]): void {
+  const upcoming = rows.filter((row) => row.followUpSlot !== "Not scheduled");
+  sectionTitle(d, {
+    title: "Follow up appointments",
+    eyebrow: "Appointments",
+    subtitle:
+      "Follow-up appointments booked from previous treatments in this period.",
+  });
+  if (upcoming.length === 0) {
+    emptyNote(d, "No follow-up appointments are scheduled in this period.");
+    d.moveDown(space[3]);
+    return;
+  }
+
+  upcoming.forEach((row, index) => {
+    subsectionTitle(d, `${index + 1}. Follow up appointment \u2014 ${row.followUpSlot}`);
+    const infoRows: { label: string; value: string; strong?: boolean }[] = [];
+    if (row.appointmentDate !== "Not linked") {
+      infoRows.push({ label: "Appointment date", value: row.appointmentDate });
+    }
+    infoRows.push({
+      label: "Appointment type",
+      value: row.appointmentType,
+      strong: row.appointmentTypeKey === "EMERGENCY",
+    });
+    infoRows.push({ label: "Diagnosis", value: row.diagnosis || "Not provided" });
+    infoRows.push({ label: "Recorded", value: row.date });
+    infoTable(d, infoRows);
+    if (row.attribution) doctorAttribution(d, row.attribution);
+    if (index < upcoming.length - 1) divider(d, space[4]);
+  });
+  d.moveDown(space[3]);
+}
+
 /* ============================ Doctor description ========================== */
 
 /**
@@ -310,6 +351,7 @@ export function clinicalSections(d: ReportDoc, history: ClinicalHistory): void {
   prescriptionsSection(d, history.prescriptions);
   vitalsSection(d, history.vitals);
   labsSection(d, history.labs);
+  followUpAppointmentsSection(d, history.treatments);
   doctorDescriptionsSection(d, history.treatments);
 }
 
