@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
 export const RX_INCLUDE = {
+  appointment: true,
   prescriptions: { include: { items: { orderBy: { sort_order: "asc" as const } } } },
 } satisfies Prisma.MedicalTreatmentInclude;
 

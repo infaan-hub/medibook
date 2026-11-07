@@ -9,6 +9,7 @@ export interface MedicalTreatment {
   doctor: number;
   patient: number;
   appointment: number | null;
+  appointment_status?: string | null;
   diagnosis: string;
   treatment_notes: string;
   /** Doctor-written description shown in the patient report's Documents section. */

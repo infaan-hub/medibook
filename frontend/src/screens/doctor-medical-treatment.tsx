@@ -1814,18 +1814,26 @@ export function DoctorMedicalTreatmentScreen() {
             />
           )}
 
-          {treatments.length > 0 && (
+          {treatments.filter((tx) => {
+            const s = tx.appointment_status;
+            return s === null || s === undefined || s === "pending" || s === "accepted" || s === "in_progress";
+          }).length > 0 && (
             <div className="treat-patient-list">
-              {treatments.map((tx, index) => (
-                <TxRecord
-                  key={tx.id}
-                  record={tx}
-                  isCurrent={index === 0}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onCancelFollowUp={(r) => void handleCancelFollowUp(r)}
-                />
-              ))}
+              {treatments
+                .filter((tx) => {
+                  const s = tx.appointment_status;
+                  return s === null || s === undefined || s === "pending" || s === "accepted" || s === "in_progress";
+                })
+                .map((tx) => (
+                  <TxRecord
+                    key={tx.id}
+                    record={tx}
+                    isCurrent
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onCancelFollowUp={(r) => void handleCancelFollowUp(r)}
+                  />
+                ))}
             </div>
           )}
         </>

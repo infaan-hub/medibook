@@ -297,6 +297,7 @@ export function healthRecordDto(
 /** treatments.serializers.MedicalTreatmentSerializer. */
 export function treatmentDto(
   treatment: MedicalTreatment & {
+    appointment?: { status: string } | null;
     prescriptions?: (Prescription & { items?: PrescriptionItem[] })[];
   }
 ): Record<string, unknown> {
@@ -309,6 +310,7 @@ export function treatmentDto(
     doctor: treatment.doctor_id,
     patient: treatment.patient_id,
     appointment: treatment.appointment_id,
+    appointment_status: treatment.appointment?.status ?? null,
     diagnosis: treatment.diagnosis,
     treatment_notes: treatment.treatment_notes,
     doctor_description: treatment.doctor_description,
