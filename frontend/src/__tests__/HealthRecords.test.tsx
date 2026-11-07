@@ -418,7 +418,7 @@ describe("doctor /doctor/visit-history/:patientId — health records", () => {
 
     expect(await screen.findByText("CBC panel — March 2026")).toBeInTheDocument();
     expect(screen.getByText("Health records")).toBeInTheDocument();
-    expect(screen.getByText("Persistent cough")).toBeInTheDocument();
+    expect(screen.getByText("Bronchitis resolved with rest and fluids.")).toBeInTheDocument();
     expect(getHealthRecords).toHaveBeenCalledWith(7);
 
     const view = screen.getByTitle("View");
