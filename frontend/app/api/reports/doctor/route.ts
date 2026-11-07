@@ -20,6 +20,7 @@ export const GET = handler(async (ctx) => {
   const data = await collectDoctorReport(user.id, {
     ...periodQueryFrom(ctx.req),
     patient: new URL(ctx.req.url).searchParams.get("patient"),
+    appointmentId: new URL(ctx.req.url).searchParams.get("appointmentId"),
   });
   const generatedAt = new Date();
   const buffer = await renderDoctorReport(data, generatedAt);

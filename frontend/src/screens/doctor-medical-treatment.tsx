@@ -1131,6 +1131,12 @@ export function DoctorMedicalTreatmentScreen() {
   });
 
   function handleNew() {
+    const visitId = contextAppointmentId ?? patientHistory.find((row) => !row.deleted_at)?.appointment_id;
+    if (!visitId) {
+      notify("error", "Choose an appointment from Patient History before adding treatment.");
+      return;
+    }
+    setContextAppointmentId(visitId);
     setEditing(null);
     setForm(EMPTY);
     setShowForm(true);
@@ -1579,10 +1585,23 @@ export function DoctorMedicalTreatmentScreen() {
                   <div className="visit-timeline-card">
                     <div className="visit-card-header">
                       <div className="visit-card-date">
-                        <span>{entry.appointment_date}</span>
+                        <span>{entry.appointment_date} · {entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}</span>
                       </div>
-                      <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
+                      <span className={`visit-status visit-status--${entry.deleted_at ? "deleted" : entry.status}`}>{entry.deleted_at ? "deleted" : entry.status}</span>
                     </div>
+                    <div className="visit-detail-field"><span className="visit-detail-label">Appointment</span><span>{entry.appointment_type ?? "NORMAL"} · {entry.reason || "No reason recorded"}</span></div>
+                    {entry.notes && <div className="visit-detail-field"><span className="visit-detail-label">Appointment notes</span><span>{entry.notes}</span></div>}
+                    {entry.emergency_reason && <div className="visit-detail-field"><span className="visit-detail-label">Emergency reason</span><span>{entry.emergency_reason}{entry.emergency_description ? ` · ${entry.emergency_description}` : ""}</span></div>}
+                    {entry.cancel_reason && <div className="visit-detail-field"><span className="visit-detail-label">Cancellation / deletion reason</span><span>{entry.cancel_reason}</span></div>}
+                    {entry.patient && <div className="visit-detail-field"><span className="visit-detail-label">Patient at booking</span><span>{[entry.patient.first_name, entry.patient.last_name].filter(Boolean).join(" ")} · {String(entry.patient.email ?? "")} · {String(entry.patient.phone ?? "")}{entry.patient.date_of_birth ? ` · DOB ${String(entry.patient.date_of_birth)}` : ""}{entry.patient.blood_group ? ` · ${String(entry.patient.blood_group)}` : ""}</span></div>}
+                    {entry.treatments && entry.treatments.length > 1 && entry.treatments.slice(1).map((treatment) => (
+                      <div key={treatment.id} className="visit-treatment-extra">
+                        <div className="visit-detail-field"><span className="visit-detail-label">Additional treatment · {fmtDate(treatment.created_at.slice(0, 10))}</span><span>{treatment.diagnosis || "No diagnosis"}</span></div>
+                        {treatment.doctor_description && <div className="visit-detail-field"><span className="visit-detail-label">Doctor description</span><span>{treatment.doctor_description}</span></div>}
+                        {treatment.treatment_notes && <div className="visit-detail-field"><span className="visit-detail-label">Treatment notes</span><span>{treatment.treatment_notes}</span></div>}
+                        {treatment.prescription && <div className="visit-detail-field"><span className="visit-detail-label">Prescription</span><span>{treatment.prescription}</span></div>}
+                      </div>
+                    ))}
                     {entry.diagnosis && (
                       <div className="visit-detail-field">
                         <span className="visit-detail-label">
@@ -1626,19 +1645,20 @@ export function DoctorMedicalTreatmentScreen() {
                       </span>
                     </div>
                     <div className="visit-card-actions">
+                      {!entry.deleted_at && <Button variant="secondary" onClick={() => { setContextAppointmentId(entry.appointment_id); setEditing(null); setForm(EMPTY); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Add treatment to this visit</Button>}
                       <Button
                         variant="secondary"
                         onClick={async () => {
                           if (selectedId === null) return;
                           try {
-                            const result = await viewDoctorReport(selectedId);
+                            const result = await viewDoctorReport(selectedId, { appointmentId: entry.appointment_id });
                             notify("success", `Report opened — ${result.filename}`);
                           } catch (e) {
                             notify("error", msg(e));
                           }
                         }}
                       >
-                        View patient report
+                        View visit report
                       </Button>
                     </div>
                   </div>

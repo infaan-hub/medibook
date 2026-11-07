@@ -13,6 +13,8 @@ import { ApiError, http } from "./client";
 export type ReportPreset = "month" | "week" | "custom";
 
 export interface ReportPeriodParams {
+  /** Constrain a doctor report to a single appointment visit. */
+  appointmentId?: number;
   preset?: ReportPreset;
   /** Custom range start, `YYYY-MM-DD`. */
   from?: string;

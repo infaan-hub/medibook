@@ -60,6 +60,7 @@ async function isLinked(doctorId: number, patientId: number): Promise<boolean> {
 export interface DoctorReportQuery extends PeriodQuery {
   /** Patient **user** id — the id the app already uses everywhere. */
   patient?: string | number | null | undefined;
+  appointmentId?: string | number | null | undefined;
 }
 
 export async function collectDoctorReport(
@@ -89,6 +90,16 @@ export async function collectDoctorReport(
     throw forbidden("You do not have any recorded activity with this patient.");
   }
 
+  const appointmentId = query.appointmentId == null ? undefined : Number(query.appointmentId);
+  if (appointmentId !== undefined) {
+    if (!Number.isInteger(appointmentId)) throw badRequest("Select a valid appointment for this report.");
+    const visit = await prisma.appointment.findFirst({
+      where: { id: appointmentId, doctor_id: doctor.id, patient_id: patient.id },
+      select: { id: true },
+    });
+    if (!visit) throw forbidden("This appointment is not part of your patient visits.");
+  }
+
   const period = hasExplicitPeriod(query)
     ? resolvePeriod(query)
     : fullRecordPeriod(isoDayInTimezone(patient.created_at));
@@ -100,6 +111,7 @@ export async function collectDoctorReport(
   const history = await collectClinicalHistory({
     period,
     patientId: patient.id,
+    appointmentId,
   });
 
   return {

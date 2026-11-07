@@ -225,23 +225,25 @@ export interface ClinicalScope {
   period: ReportPeriod;
   /** Patient whose chart is being reported on. */
   patientId: number;
+  appointmentId?: number;
 }
 
 export async function collectClinicalHistory(scope: ClinicalScope): Promise<ClinicalHistory> {
-  const { period, patientId } = scope;
+  const { period, patientId, appointmentId } = scope;
   const timestampWindow = timestampRange(period);
 
   const [appointments, treatments, prescriptions, vitals, labs, records] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         patient_id: patientId,
+        ...(appointmentId ? { id: appointmentId } : {}),
         appointment_date: dateColumnRange(period),
       },
       orderBy: [{ appointment_date: "desc" }, { start_time: "asc" }],
       include: { doctor: { include: DOCTOR_CARD }, patient: true, hospital: true },
     }),
     prisma.medicalTreatment.findMany({
-      where: { patient_id: patientId, created_at: timestampWindow },
+      where: { patient_id: patientId, created_at: timestampWindow, ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       orderBy: { created_at: "desc" },
       include: {
         doctor: { include: DOCTOR_CARD },
@@ -249,7 +251,7 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
       },
     }),
     prisma.prescription.findMany({
-      where: { patient_id: patientId, created_at: timestampWindow },
+      where: { patient_id: patientId, created_at: timestampWindow, ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       orderBy: { created_at: "desc" },
       include: {
         doctor: { include: DOCTOR_CARD },
@@ -257,17 +259,17 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
       },
     }),
     prisma.vital.findMany({
-      where: { patient_id: patientId, recorded_at: timestampWindow },
+      where: { patient_id: patientId, recorded_at: timestampWindow, ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       orderBy: { recorded_at: "desc" },
       include: { doctor: { include: DOCTOR_CARD } },
     }),
     prisma.labOrder.findMany({
-      where: { patient_id: patientId, ordered_at: timestampWindow },
+      where: { patient_id: patientId, ordered_at: timestampWindow, ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       orderBy: { ordered_at: "desc" },
       include: { doctor: { include: DOCTOR_CARD } },
     }),
     prisma.healthRecord.findMany({
-      where: { patient_id: patientId, created_at: timestampWindow },
+      where: { patient_id: patientId, created_at: timestampWindow, ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       orderBy: { created_at: "desc" },
       include: { doctor: { include: DOCTOR_CARD }, file: true },
     }),

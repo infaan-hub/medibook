@@ -390,6 +390,10 @@ model Appointment {
   reason                 String            @default("")
   notes                  String            @default("")
   cancel_reason          String            @default("")
+  /// Soft deletion preserves the appointment and all visit records in history.
+  deleted_at              DateTime?         @map("deleted_at")
+  /// Patient profile captured when this appointment was booked.
+  patient_snapshot        Json?             @map("patient_snapshot")
   // Emergency-specific fields
   emergency_reason       String?
   emergency_description  String?
@@ -439,6 +443,7 @@ model Appointment {
   @@index([hospital_id])
   @@index([created_at])
   @@index([appointment_type])
+  @@index([deleted_at])
   @@map("appointments_appointment")
 }
 

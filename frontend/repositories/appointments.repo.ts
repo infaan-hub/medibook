@@ -27,6 +27,7 @@ export const liveAppointmentOverlapExists = async (
       start_time: { lt: endTime },
       end_time: { gt: startTime },
       status: { notIn: ["cancelled", "rejected"] },
+      deleted_at: null,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
     select: { id: true },
@@ -66,6 +67,7 @@ export const openAppointmentWhere = (
   patientUserId: number
 ): Prisma.AppointmentWhereInput => ({
   patient_id: patientUserId,
+  deleted_at: null,
   status: { in: [...OPEN_APPOINTMENT_STATUSES] },
 });
 
@@ -83,6 +85,7 @@ export const bookedSlotKeysForDate = async (doctorId: number, date: string): Pro
       doctor_id: doctorId,
       appointment_date: new Date(`${date}T00:00:00Z`),
       status: { notIn: ["cancelled", "rejected"] },
+      deleted_at: null,
     },
     select: { start_time: true, end_time: true },
   });
@@ -107,6 +110,7 @@ export function appointmentListWhere(scope: Pick<AppointmentListScope, "role" | 
     where.patient_id = scope.userId;
   }
   if (scope.status) where.status = scope.status as AppointmentStatus;
+  where.deleted_at = null;
   return where;
 }
 
@@ -151,6 +155,7 @@ export const createAppointment = (
     reason?: string;
     status?: "pending" | "accepted";
     appointment_type?: "NORMAL" | "EMERGENCY";
+    patient_snapshot?: Prisma.InputJsonValue;
   },
   db: AppointmentDb = prisma
 ) =>
@@ -163,6 +168,7 @@ export const createAppointment = (
       start_time: data.start_time,
       end_time: data.end_time,
       reason: data.reason ?? "",
+      ...(data.patient_snapshot ? { patient_snapshot: data.patient_snapshot } : {}),
       ...(data.status ? { status: data.status } : {}),
       ...(data.appointment_type ? { appointment_type: data.appointment_type } : {}),
     },
@@ -334,8 +340,9 @@ export const purgeExpiredEmergencies = async (
   });
   if (due.length === 0) return due;
 
-  await db.appointment.deleteMany({
+  await db.appointment.updateMany({
     where: { id: { in: due.map((row) => row.id) }, status: "expired" },
+    data: { deleted_at: cutoff },
   });
   return due;
 };
@@ -361,6 +368,7 @@ export const createEmergencyAppointment = (
     emergency_requested_at: Date;
     /** Stamped when the row starts life already `accepted` (auto-dispatch). */
     emergency_accepted_at?: Date | null;
+    patient_snapshot?: Prisma.InputJsonValue;
   },
   db: AppointmentDb = prisma
 ) =>
@@ -374,6 +382,7 @@ export const createEmergencyAppointment = (
       end_time: data.end_time,
       reason: data.reason ?? "",
       notes: data.notes ?? "",
+      ...(data.patient_snapshot ? { patient_snapshot: data.patient_snapshot } : {}),
       appointment_type: "EMERGENCY",
       status: data.status ?? "pending",
       emergency_reason: data.emergency_reason,

@@ -1,14 +1,14 @@
 /**
- * 24-hour auto-delete for expired emergency appointments (repo layer):
+ * 24-hour archival for expired emergency appointments (repo layer):
  *
  *  • only `expired` EMERGENCY rows are ever considered — every other status
  *    is untouched no matter how old it is,
- *  • a row is deleted when its expiry moment (`emergency_expired_at`, falling
+ *  • a row is archived when its expiry moment (`emergency_expired_at`, falling
  *    back to its scheduled end) is at or before the cutoff,
- *  • the removed rows come back with id + parties so the caller can broadcast
+ *  • the archived rows come back with id + parties so the caller can broadcast
  *    `appointment.deleted`, and the guarded delete re-asserts the status.
  *
- * The fake honours the delete guard but returns the seeded rows from
+ * The fake honours the archive guard but returns the seeded rows from
  * findMany, so the WHERE shape is asserted rather than emulated.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ const harness = vi.hoisted(() => {
   type Row = Record<string, any>;
 
   const rows: Row[] = [];
-  const state = { findWhere: null as Row | null, deleteWhere: null as Row | null };
+  const state = { findWhere: null as Row | null, archiveWhere: null as Row | null, archiveData: null as Row | null };
 
   const prisma: any = {
     appointment: {
@@ -25,13 +25,12 @@ const harness = vi.hoisted(() => {
         state.findWhere = where;
         return rows.map((row) => ({ ...row }));
       },
-      deleteMany: async ({ where }: Row) => {
-        state.deleteWhere = where;
+      updateMany: async ({ where, data }: Row) => {
+        state.archiveWhere = where;
+        state.archiveData = data;
         const ids: number[] = where.id.in;
-        const kept = rows.filter((row) => !(ids.includes(row.id) && row.status === where.status));
-        const count = rows.length - kept.length;
-        rows.splice(0, rows.length, ...kept);
-        return { count };
+        for (const row of rows) if (ids.includes(row.id) && row.status === where.status) row.deleted_at = data.deleted_at;
+        return { count: ids.length };
       },
     },
   };
@@ -43,7 +42,8 @@ const harness = vi.hoisted(() => {
     reset() {
       rows.length = 0;
       state.findWhere = null;
-      state.deleteWhere = null;
+      state.archiveWhere = null;
+      state.archiveData = null;
     },
   };
 });
@@ -80,7 +80,7 @@ describe("purgeExpiredEmergencies", () => {
     });
   });
 
-  it("deletes only rows whose expiry is at or before the cutoff", async () => {
+  it("archives only rows whose expiry is at or before the cutoff", async () => {
     harness.rows.push(
       expiredRow({ id: 1, emergency_expired_at: new Date(CUTOFF.getTime() - 24 * HOUR - HOUR) }),
       expiredRow({ id: 2, emergency_expired_at: new Date(CUTOFF.getTime() + HOUR) }),
@@ -99,11 +99,13 @@ describe("purgeExpiredEmergencies", () => {
 
     expect(removed.map((row) => row.id)).toEqual([1, 3, 4, 6]);
     expect(removed[0]).toMatchObject({ patient_id: 7, doctor: { user_id: 12 } });
-    expect(harness.state.deleteWhere).toMatchObject({
+    expect(harness.state.archiveWhere).toMatchObject({
       status: "expired",
       id: { in: [1, 3, 4, 6] },
     });
-    expect(harness.rows.map((row) => row.id)).toEqual([2, 5]);
+    expect(harness.state.archiveData).toEqual({ deleted_at: CUTOFF });
+    expect(harness.rows.map((row) => row.id)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(harness.rows.filter((row) => row.deleted_at).map((row) => row.id)).toEqual([1, 3, 4, 6]);
   });
 
   it("does nothing when no expired row is old enough", async () => {
@@ -112,6 +114,6 @@ describe("purgeExpiredEmergencies", () => {
     const removed = await purgeExpiredEmergencies(CUTOFF);
 
     expect(removed).toEqual([]);
-    expect(harness.state.deleteWhere).toBeNull();
+    expect(harness.state.archiveWhere).toBeNull();
   });
 });

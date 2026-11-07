@@ -17,6 +17,7 @@ import { Prisma } from "@prisma/client";
 import { conflict, notFound, badRequest, forbidden, ValidationError } from "@/lib/errors";
 import { isoWeekday, normalizeTime, secondsToTime, timeToSeconds, todayIso } from "@/lib/dates";
 import { appointmentDto, emergencyAppointmentDto } from "@/lib/serializers";
+import { patientSnapshotForAppointment } from "@/lib/appointment-history";
 import { emergencyAppointmentCreateSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
@@ -637,6 +638,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
           emergency_location_accuracy: input.emergency_location_accuracy ?? null,
           emergency_requested_at: requestedAt,
           emergency_accepted_at: autoDispatched ? requestedAt : null,
+          patient_snapshot: await patientSnapshotForAppointment(user.id),
         },
         tx
       );
@@ -946,11 +948,11 @@ export async function deleteEmergencyAppointment(user: AuthUser, id: number) {
     );
   }
 
-  await appointments.deleteAppointment(id);
+  const deleted = await appointments.updateAppointment(id, { deleted_at: new Date() });
 
   // Same realtime contract as a normal appointment delete, so every open screen
   // (doctor queue, patient card) drops the row without a reload.
-  pushRaw("appointment.deleted", { id }, [appointment.patient_id, appointment.doctor.user_id]);
+  pushRaw("appointment.deleted", { id: deleted.id, appointment: emergencyAppointmentDto(deleted) }, [appointment.patient_id, appointment.doctor.user_id]);
 }
 
 /** Get patient's active emergency appointment. */
@@ -974,7 +976,7 @@ export async function sweepTimedOutEmergencies(): Promise<void> {
   await appointments.expireTimedOutEmergencies(cutoff);
 }
 
-/** An expired emergency row survives 24 hours as history, then is purged. */
+/** Expired rows are hidden from the live queue after one day, but retained in history. */
 export const EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -988,11 +990,12 @@ export const EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
  */
 export async function purgeExpiredAppointments(): Promise<number> {
   const cutoff = new Date(Date.now() - EXPIRED_RETENTION_MS);
-  const removed = await appointments.purgeExpiredEmergencies(cutoff);
-  for (const row of removed) {
-    pushRaw("appointment.deleted", { id: row.id }, [row.patient_id, row.doctor.user_id]);
+  const archived = await appointments.purgeExpiredEmergencies(cutoff);
+  for (const row of archived) {
+    const deleted = await appointments.updateAppointment(row.id, { deleted_at: new Date() });
+    pushRaw("appointment.deleted", { id: deleted.id }, [row.patient_id, row.doctor.user_id]);
   }
-  return removed.length;
+  return archived.length;
 }
 
 /** Get doctor's live (pending + accepted + in-progress) emergency appointments. */

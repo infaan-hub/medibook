@@ -76,6 +76,7 @@ describe("one open appointment per patient", () => {
     expect([...OPEN_APPOINTMENT_STATUSES]).toEqual(["pending", "accepted", "in_progress"]);
     expect(openAppointmentWhere(11)).toEqual({
       patient_id: 11,
+      deleted_at: null,
       status: { in: ["pending", "accepted", "in_progress"] },
     });
   });

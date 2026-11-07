@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared API types (Â§28 envelope).
  */
 
@@ -203,6 +203,8 @@ export interface Appointment {
   reason: string;
   notes: string;
   cancel_reason: string;
+  deleted_at?: string | null;
+  patient_snapshot?: Record<string, unknown> | null;
   emergency_reason?: EmergencyReason;
   emergency_description?: string;
   emergency_latitude?: number;

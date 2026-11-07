@@ -65,8 +65,21 @@ export interface VisitHistoryEntry {
   start_time: string;
   end_time: string;
   status: string;
+  deleted_at?: string | null;
+  appointment_type?: string;
+  emergency_reason?: string | null;
+  emergency_description?: string | null;
+  emergency_location?: { latitude: number; longitude: number; accuracy: number | null } | null;
   reason: string;
   notes: string;
+  cancel_reason?: string;
+  patient?: Record<string, unknown>;
+  treatments?: Array<{
+    id: number; created_at: string; diagnosis: string; treatment_notes: string;
+    doctor_description: string; prescription: string; follow_up_date: string | null;
+    follow_up_time: string | null;
+    prescriptions?: Array<{ id: number; notes: string; created_at: string; items: Array<{ medication: string; dosage: string; frequency: string; route: string; duration_days: number | null; instructions: string }> }>;
+  }>;
   diagnosis: string | null;
   treatment_notes: string | null;
   doctor_description: string | null;

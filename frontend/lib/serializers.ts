@@ -1,4 +1,4 @@
-﻿/**
+/**
  * DTO serializers â€” the TypeScript port of the Django REST Framework
  * serializers. Field names, shapes and value formats match exactly:
  *
@@ -498,6 +498,8 @@ export function appointmentDto(
     reason: appointment.reason,
     notes: appointment.notes,
     cancel_reason: appointment.cancel_reason,
+    deleted_at: appointment.deleted_at?.toISOString() ?? null,
+    patient_snapshot: appointment.patient_snapshot ?? null,
     /** Doctor's phone numbers shown in appointment booking. */
     doctor_phone: appointment.doctor.user.phone ?? "",
     doctor_phone_secondary: (appointment.doctor as { phone_secondary?: string }).phone_secondary ?? "",

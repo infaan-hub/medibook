@@ -33,6 +33,7 @@ import {
 import type { AuthUser } from "@/lib/auth";
 import { createReminders } from "@/services/appointment.service";
 import { after } from "next/server";
+import { patientSnapshotForAppointment } from "@/lib/appointment-history";
 
 /* ------------------------------ Treatments -------------------------------- */
 
@@ -121,6 +122,7 @@ async function createFollowUpAppointment(
       reason,
       status: "accepted",
       appointment_type: "NORMAL",
+      patient_snapshot: await patientSnapshotForAppointment(patientId),
     });
     return { appointment: created, isNew: true };
   } catch (error) {
@@ -372,6 +374,9 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         appointment: [`Invalid pk "${input.appointment}" - object does not exist.`],
       });
     }
+    if (appointment.patient_id !== input.patient || appointment.doctor_id !== doctor.id) {
+      throw forbidden("Treatments can only be attached to your appointment with this patient.");
+    }
   }
   const structured = input.items !== undefined || input.prescription_notes !== undefined;
   const items = structured ? normalizePrescriptionItems(input.items ?? []) : [];
@@ -594,22 +599,68 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
   const { appointments: rows, treatments } = await clinical.listVisitHistory(
     Number(patientId)
   );
-  const byAppointment = new Map<number, (typeof treatments)[number]>();
+  const byAppointment = new Map<number, (typeof treatments)[number][]>();
   for (const treatment of treatments) {
-    if (treatment.appointment_id && !byAppointment.has(treatment.appointment_id)) {
-      byAppointment.set(treatment.appointment_id, treatment);
+    if (treatment.appointment_id) {
+      const rows = byAppointment.get(treatment.appointment_id) ?? [];
+      rows.push(treatment);
+      byAppointment.set(treatment.appointment_id, rows);
     }
   }
   const data = rows.map((appointment) => {
-    const treatment = byAppointment.get(appointment.id);
+    const visitTreatments = byAppointment.get(appointment.id) ?? [];
+    const treatment = visitTreatments[0];
     return {
       appointment_id: appointment.id,
       appointment_date: appointment.appointment_date.toISOString().slice(0, 10),
       start_time: appointment.start_time,
       end_time: appointment.end_time,
       status: appointment.status,
+      deleted_at: appointment.deleted_at?.toISOString() ?? null,
+      appointment_type: appointment.appointment_type,
+      emergency_reason: appointment.emergency_reason,
+      emergency_description: appointment.emergency_description,
+      emergency_location: appointment.emergency_latitude !== null && appointment.emergency_longitude !== null
+        ? { latitude: appointment.emergency_latitude, longitude: appointment.emergency_longitude, accuracy: appointment.emergency_location_accuracy }
+        : null,
+      emergency_requested_at: appointment.emergency_requested_at?.toISOString() ?? null,
+      emergency_accepted_at: appointment.emergency_accepted_at?.toISOString() ?? null,
+      emergency_in_progress_at: appointment.emergency_in_progress_at?.toISOString() ?? null,
+      emergency_completed_at: appointment.emergency_completed_at?.toISOString() ?? null,
+      emergency_expired_at: appointment.emergency_expired_at?.toISOString() ?? null,
       reason: appointment.reason,
       notes: appointment.notes,
+      cancel_reason: appointment.cancel_reason,
+      patient: appointment.patient_snapshot ?? {
+        patient_id: appointment.patient_id,
+        first_name: appointment.patient.first_name,
+        last_name: appointment.patient.last_name,
+        email: appointment.patient.email,
+        phone: appointment.patient.phone,
+      },
+      treatments: visitTreatments.map((row) => ({
+        id: row.id,
+        created_at: row.created_at.toISOString(),
+        diagnosis: row.diagnosis,
+        treatment_notes: row.treatment_notes,
+        doctor_description: row.doctor_description,
+        prescription: row.prescription,
+        prescriptions: row.prescriptions.map((rx) => ({
+          id: rx.id,
+          notes: rx.notes,
+          created_at: rx.created_at.toISOString(),
+          items: rx.items.map((item) => ({
+            medication: item.medication,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            route: item.route,
+            duration_days: item.duration_days,
+            instructions: item.instructions,
+          })),
+        })),
+        follow_up_date: row.follow_up_date?.toISOString().slice(0, 10) ?? null,
+        follow_up_time: row.follow_up_time,
+      })),
       diagnosis: treatment?.diagnosis ?? null,
       treatment_notes: treatment?.treatment_notes ?? null,
       doctor_description: treatment?.doctor_description ?? null,

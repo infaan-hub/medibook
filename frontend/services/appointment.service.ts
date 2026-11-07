@@ -24,6 +24,7 @@ import {
 } from "./emergency.service";
 import type { AuthUser } from "@/lib/auth";
 import type { Appointment, User } from "@prisma/client";
+import { patientSnapshotForAppointment } from "@/lib/appointment-history";
 
 type AppointmentWithPatient = Appointment & { patient: User; doctor: { user: User } };
 
@@ -136,6 +137,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     });
   }
 
+  const patientSnapshot = await patientSnapshotForAppointment(user.id);
   const appointment = await createWithSlotGuard(() =>
     appointments.createAppointment({
       patient_id: user.id,
@@ -145,6 +147,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
       start_time: start,
       end_time: end,
       reason: input.reason ?? "",
+      patient_snapshot: patientSnapshot,
     })
   );
 
@@ -350,8 +353,12 @@ export async function destroyAppointment(user: AuthUser, id: number): Promise<vo
   }
 
   const doctor = await doctors.findDoctorById(appointment.doctor_id);
-  await appointments.deleteAppointment(id);
-  pushRaw("appointment.deleted", { id }, [appointment.patient_id, doctor?.user_id]);
+  const deleted = await appointments.updateAppointment(id, {
+    status: "cancelled",
+    cancel_reason: appointment.cancel_reason || "Deleted by user",
+    deleted_at: new Date(),
+  });
+  pushRaw("appointment.deleted", { id: deleted.id, appointment: appointmentDto(deleted) }, [appointment.patient_id, doctor?.user_id]);
   broadcastAvailabilityUpdated(
     appointment.doctor_id,
     appointment.appointment_date.toISOString().slice(0, 10)
