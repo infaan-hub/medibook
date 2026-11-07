@@ -11,6 +11,8 @@ export interface MedicalTreatment {
   appointment: number | null;
   diagnosis: string;
   treatment_notes: string;
+  /** Doctor-written description shown in the patient report's Documents section. */
+  doctor_description: string;
   /** Plain-text rendering of `prescription_items` (kept for older screens). */
   prescription: string;
   prescription_id: number | null;
@@ -20,6 +22,8 @@ export interface MedicalTreatment {
   follow_up_notes: string;
   created_at: string;
   updated_at: string;
+  /** Present when the Follow-up Date automatically booked a real appointment. */
+  follow_up_appointment?: import("./types").Appointment | null;
 }
 
 export interface CreateTreatmentPayload {
@@ -27,6 +31,7 @@ export interface CreateTreatmentPayload {
   appointment?: number | null;
   diagnosis?: string;
   treatment_notes?: string;
+  doctor_description?: string;
   prescription?: string;
   /** Structured medication lines (phase 1) — preferred over free text. */
   items?: import("./prescriptions").PrescriptionItemInput[];
@@ -38,6 +43,7 @@ export interface CreateTreatmentPayload {
 export interface UpdateTreatmentPayload {
   diagnosis?: string;
   treatment_notes?: string;
+  doctor_description?: string;
   prescription?: string;
   items?: import("./prescriptions").PrescriptionItemInput[];
   prescription_notes?: string;
@@ -55,6 +61,7 @@ export interface VisitHistoryEntry {
   notes: string;
   diagnosis: string | null;
   treatment_notes: string | null;
+  doctor_description: string | null;
   prescription: string | null;
   follow_up_date: string | null;
   doctor_first_name: string;

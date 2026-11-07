@@ -4,10 +4,12 @@
  * treatments/views_health_records.py). Strict server-side authorization:
  * patients only ever see their own records; doctors only their own uploads.
  */
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
-import { healthRecordDto, patientDto, treatmentDto } from "@/lib/serializers";
+import { appointmentDto, healthRecordDto, patientDto, treatmentDto } from "@/lib/serializers";
+import { todayIso, secondsToTime, timeToSeconds } from "@/lib/dates";
+import { broadcastAppointmentEvent, broadcastAvailabilityUpdated, notify } from "@/lib/notify";
 import {
   healthRecordCreateSchema,
   treatmentCreateSchema,
@@ -17,6 +19,7 @@ import { MISSING, parse } from "@/validators/base";
 import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import * as appointments from "@/repositories/appointments.repo";
+import { availableSlots, type Slot } from "@/services/schedule.service";
 import { findPatientsByUserIds, getPatientProfile } from "@/repositories/users.repo";
 import {
   normalizePrescriptionItems,
@@ -28,6 +31,121 @@ import type { AuthUser } from "@/lib/auth";
 /* ------------------------------ Treatments -------------------------------- */
 
 const ownDoctor = (user: AuthUser) => doctors.findDoctorByUserId(user.id);
+
+/* ----------------------- Follow-up appointment helpers ---------------------- */
+
+const FOLLOW_UP_SLOT_SECONDS = 30 * 60;
+
+type DoctorProfile = NonNullable<Awaited<ReturnType<typeof doctors.findDoctorByUserId>>>;
+
+const isSlotConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  (error.code === "P2002" || error.meta?.constraint === "uniq_live_doctor_slot");
+
+/**
+ * Candidate times for an automatically-booked follow-up. Real open slots are
+ * preferred; when the doctor has no availability window that day (or every
+ * slot is taken) we still honour the doctor's follow-up date with the first
+ * free half-hour in working hours, so the appointment the clinician promised
+ * the patient actually exists in the system.
+ */
+async function followUpSlotCandidates(doctor: DoctorProfile, date: string): Promise<Slot[]> {
+  const open = await availableSlots(doctor.id, doctor.is_available, date);
+  if (open.length > 0) return open.slice(0, 5);
+
+  const booked = await appointments.bookedSlotKeysForDate(doctor.id, date);
+  const ranges = [...booked].map((key) => {
+    const [start = "00:00:00", end = "00:00:00"] = key.split("|");
+    return { start: timeToSeconds(start), end: timeToSeconds(end) };
+  });
+  const fallback: Slot[] = [];
+  for (
+    let seconds = 9 * 3600;
+    seconds + FOLLOW_UP_SLOT_SECONDS <= 17 * 3600;
+    seconds += FOLLOW_UP_SLOT_SECONDS
+  ) {
+    const overlaps = ranges.some(
+      (range) => seconds < range.end && seconds + FOLLOW_UP_SLOT_SECONDS > range.start
+    );
+    if (!overlaps) {
+      fallback.push({
+        start_time: secondsToTime(seconds),
+        end_time: secondsToTime(seconds + FOLLOW_UP_SLOT_SECONDS),
+      });
+    }
+    if (fallback.length >= 5) break;
+  }
+  return fallback;
+}
+
+/**
+ * Create the real, normal appointment behind a treatment's Follow-up Date.
+ * Duplicate-safe: if the doctor already has a live appointment with the
+ * patient that day we keep that one instead of booking a second. Returns null
+ * when the date is in the past, the doctor is suspended, or no time is free —
+ * the treatment itself is still saved in every case.
+ */
+async function createFollowUpAppointment(
+  doctor: DoctorProfile,
+  patientId: number,
+  date: string,
+  diagnosis: string
+) {
+  if (date < todayIso() || !doctor.is_available) return null;
+
+  const existing = await appointments.findLiveAppointmentForPatientOnDate(
+    doctor.id,
+    patientId,
+    date
+  );
+  if (existing) return null;
+
+  const reason = diagnosis.trim()
+    ? `Follow-up: ${diagnosis.trim()}`.slice(0, 255)
+    : "Follow-up visit";
+
+  for (const slot of await followUpSlotCandidates(doctor, date)) {
+    try {
+      return await appointments.createAppointment({
+        patient_id: patientId,
+        doctor_id: doctor.id,
+        hospital_id: null,
+        appointment_date: date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        reason,
+        status: "accepted",
+        appointment_type: "NORMAL",
+      });
+    } catch (error) {
+      if (isSlotConflict(error)) continue;
+      // Schedule failures must never discard a treatment the doctor just saved.
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Tell the patient (and live clients) about a follow-up the doctor booked. */
+async function announceFollowUpAppointment(
+  doctor: DoctorProfile,
+  patientId: number,
+  appointment: NonNullable<Awaited<ReturnType<typeof createFollowUpAppointment>>>
+): Promise<void> {
+  const date = appointment.appointment_date.toISOString().slice(0, 10);
+  const time = appointment.start_time.slice(0, 5);
+  const doctorName =
+    [doctor.user.first_name, doctor.user.last_name].filter(Boolean).join(" ") ||
+    doctor.user.username;
+  await notify(
+    patientId,
+    "appointment_confirmed",
+    `Dr. ${doctorName} scheduled your follow-up appointment on ${date} at ${time}.`,
+    appointment.id
+  ).catch(() => undefined);
+  broadcastAppointmentEvent(appointment, "appointment.created", [patientId, doctor.user_id]);
+  broadcastAvailabilityUpdated(doctor.id, date);
+}
 
 /**
  * Structured prescription payload on a treatment write: when the client sends
@@ -106,6 +224,7 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         appointment_id: input.appointment ?? null,
         diagnosis: input.diagnosis,
         treatment_notes: input.treatment_notes,
+        doctor_description: input.doctor_description,
         prescription: structured ? prescriptionText(items, rxNotes) : input.prescription,
         follow_up_date: input.follow_up_date ?? null,
         follow_up_notes: input.follow_up_notes,
@@ -121,7 +240,30 @@ export async function createTreatment(user: AuthUser, body: unknown) {
     }
     return treatment;
   });
-  return { data: treatmentDto(row), message: "Treatment record created." };
+
+  // Follow-up Date is a real booking, not just a printed note: the patient
+  // receives a normal appointment with this doctor on that date.
+  const followUpAppointment = input.follow_up_date
+    ? await createFollowUpAppointment(
+        doctor,
+        input.patient,
+        input.follow_up_date,
+        input.diagnosis ?? ""
+      )
+    : null;
+  if (followUpAppointment) {
+    await announceFollowUpAppointment(doctor, input.patient, followUpAppointment);
+  }
+
+  return {
+    data: {
+      ...treatmentDto(row),
+      follow_up_appointment: followUpAppointment ? appointmentDto(followUpAppointment) : null,
+    },
+    message: followUpAppointment
+      ? "Treatment record created and follow-up appointment scheduled."
+      : "Treatment record created.",
+  };
 }
 
 /** GET/PATCH/DELETE /api/treatments/{id}/ — doctor's own records only. */
@@ -134,11 +276,12 @@ export async function retrieveTreatment(user: AuthUser, id: number) {
 
 export async function patchTreatment(user: AuthUser, id: number, body: unknown) {
   const doctor = await ownDoctor(user);
-  const row = doctor ? await clinical.findTreatmentOwned(id, doctor.id) : null;
+  if (!doctor) return { data: null, message: "Treatment not found." };
+  const row = await clinical.findTreatmentOwned(id, doctor.id);
   if (!row) return { data: null, message: "Treatment not found." };
   const input = parse(treatmentPatchSchema, body);
   const data: Record<string, unknown> = {};
-  for (const key of ["diagnosis", "treatment_notes", "prescription", "follow_up_notes"] as const) {
+  for (const key of ["diagnosis", "treatment_notes", "doctor_description", "prescription", "follow_up_notes"] as const) {
     if (input[key] !== undefined) data[key] = input[key];
   }
   if (input.follow_up_date !== undefined) {
@@ -158,6 +301,16 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     data.prescription = prescriptionText(items, rxNotes);
   }
 
+  const previousFollowUp = row.follow_up_date
+    ? row.follow_up_date.toISOString().slice(0, 10)
+    : null;
+  const newFollowUp =
+    input.follow_up_date !== undefined &&
+    input.follow_up_date !== null &&
+    input.follow_up_date !== previousFollowUp
+      ? input.follow_up_date
+      : null;
+
   const updated = await prisma.$transaction(async (tx) => {
     const treatment = await tx.medicalTreatment.update({
       where: { id },
@@ -173,7 +326,34 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     }
     return treatment;
   });
-  return { data: treatmentDto(updated), message: "Treatment updated." };
+
+  // Moving a Follow-up Date books the new visit automatically, exactly like
+  // creating a treatment does.
+  const followUpAppointment = newFollowUp
+    ? await createFollowUpAppointment(
+        doctor,
+        input.patient ?? row.patient_id,
+        newFollowUp,
+        input.diagnosis ?? row.diagnosis
+      )
+    : null;
+  if (followUpAppointment) {
+    await announceFollowUpAppointment(
+      doctor,
+      input.patient ?? row.patient_id,
+      followUpAppointment
+    );
+  }
+
+  return {
+    data: {
+      ...treatmentDto(updated),
+      follow_up_appointment: followUpAppointment ? appointmentDto(followUpAppointment) : null,
+    },
+    message: followUpAppointment
+      ? "Treatment updated and follow-up appointment scheduled."
+      : "Treatment updated.",
+  };
 }
 
 export async function destroyTreatment(user: AuthUser, id: number) {
@@ -239,6 +419,7 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
       notes: appointment.notes,
       diagnosis: treatment?.diagnosis ?? null,
       treatment_notes: treatment?.treatment_notes ?? null,
+      doctor_description: treatment?.doctor_description ?? null,
       prescription: treatment?.prescription ?? null,
       follow_up_date: treatment?.follow_up_date
         ? treatment.follow_up_date.toISOString().slice(0, 10)

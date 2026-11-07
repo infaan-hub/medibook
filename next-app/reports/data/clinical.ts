@@ -27,10 +27,16 @@ export interface TreatmentEntry {
   date: string;
   diagnosis: string;
   treatmentNotes: string;
+  /** Doctor-written description shown in the report's Documents section. */
+  doctorDescription: string;
   prescriptionNotes: string;
   followUp: string;
   followUpNotes: string;
   appointmentDate: string;
+  /** Display label for the linked appointment type ("Normal" / "Emergency"). */
+  appointmentType: string;
+  /** Raw appointment type enum, used for the pill tone. */
+  appointmentTypeKey: string;
   attribution: Attribution | null;
 }
 
@@ -237,7 +243,7 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
       orderBy: { created_at: "desc" },
       include: {
         doctor: { include: DOCTOR_CARD },
-        appointment: { select: { appointment_date: true } },
+        appointment: { select: { appointment_date: true, appointment_type: true } },
       },
     }),
     prisma.prescription.findMany({
@@ -285,12 +291,16 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
     date: formatDateTime(treatment.created_at),
     diagnosis: orMissing(treatment.diagnosis),
     treatmentNotes: orMissing(treatment.treatment_notes),
+    doctorDescription: optional(treatment.doctor_description),
     prescriptionNotes: optional(treatment.prescription),
     followUp: treatment.follow_up_date ? formatIsoDate(treatment.follow_up_date) : "Not scheduled",
     followUpNotes: optional(treatment.follow_up_notes),
     appointmentDate: treatment.appointment
       ? formatIsoDate(treatment.appointment.appointment_date)
       : "Not linked",
+    appointmentType:
+      treatment.appointment?.appointment_type === "EMERGENCY" ? "Emergency" : "Normal",
+    appointmentTypeKey: treatment.appointment?.appointment_type ?? "NORMAL",
     attribution: attribution(treatment.doctor, treatment.created_at),
   }));
 

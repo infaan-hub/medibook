@@ -894,7 +894,7 @@ export function DoctorEmergencyScreen() {
                         Visit open — close it with Done, which is what lets the
                         patient request help again later.
                       </p>
-                      <Link to="/doctor/medical-treatment/emergency">
+                      <Link to={`/doctor/medical-treatment/emergency?appointment=${request.id}`}>
                         <Button variant="secondary">
                           <Stethoscope size={14} /> Treatment
                         </Button>

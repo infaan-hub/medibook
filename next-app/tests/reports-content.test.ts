@@ -45,7 +45,27 @@ const HISTORY: ClinicalHistory = {
       hospital: "Mnazi Mmoja Hospital",
     },
   ],
-  treatments: [],
+  treatments: [
+    {
+      date: "3 October 2026, 09:45 AM",
+      diagnosis: "Acute coronary syndrome",
+      treatmentNotes: "ECG performed; aspirin given and cardiology review arranged.",
+      doctorDescription:
+        "Patient presented with sudden chest pain. ECG showed ischaemic changes; emergency transfer to cardiology was arranged.",
+      prescriptionNotes: "",
+      followUp: "Not scheduled",
+      followUpNotes: "",
+      appointmentDate: "3 October 2026",
+      appointmentType: "Emergency",
+      appointmentTypeKey: "EMERGENCY",
+      attribution: {
+        name: "Dr. Amina Hassan",
+        context: "Cardiology",
+        dateText: "3 October 2026",
+        timeText: "09:45 AM",
+      },
+    },
+  ],
   prescriptions: [],
   vitals: [
     {
@@ -82,11 +102,11 @@ const HISTORY: ClinicalHistory = {
 
 const COUNTS = {
   appointments: "1",
-  treatments: "0",
+  treatments: "1",
   prescriptions: "0",
   vitals: "1",
   labs: "1",
-  records: "0",
+  records: "1",
 };
 
 function adminData(): AdminReportData {
@@ -293,6 +313,8 @@ describe("medical report content", () => {
       "Complete blood count",
       "Penicillin",
       "Emergency",
+      "Doctor description",
+      "Patient presented with sudden chest pain",
       "Scope: the full record of Salma Juma",
       // Missing values are labelled, never blank.
       "Not provided",
@@ -312,6 +334,8 @@ describe("medical report content", () => {
       "Salma Juma",
       "Emergency",
       "142/90 mmHg",
+      "Doctor description",
+      "Patient presented with sudden chest pain",
       "Not provided",
       "Scope: everything on your record",
       "nothing in this document is inferred",

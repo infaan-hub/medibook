@@ -98,6 +98,7 @@ interface MedRow {
 interface TForm {
   diagnosis: string;
   treatment_notes: string;
+  doctor_description: string;
   items: MedRow[];
   prescription_notes: string;
   follow_up_date: string;
@@ -117,6 +118,7 @@ const EMPTY_ROW: MedRow = {
 const EMPTY: TForm = {
   diagnosis: "",
   treatment_notes: "",
+  doctor_description: "",
   items: [{ ...EMPTY_ROW }],
   prescription_notes: "",
   follow_up_date: "",
@@ -852,6 +854,13 @@ function TxRecord({
         </div>
       )}
 
+      {record.doctor_description && (
+        <div className="treat-rec-sec">
+          <span className="treat-rec-lbl"><FileText size={12} /> Doctor description</span>
+          <p className="treat-rec-val">{record.doctor_description}</p>
+        </div>
+      )}
+
       {(record.prescription_items?.length ?? 0) > 0 ? (
         <div className="treat-rec-sec">
           <span className="treat-rec-lbl"><Pill size={12} /> Prescription</span>
@@ -988,6 +997,15 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
   const [editing, setEditing] = useState<MedicalTreatment | null>(null);
   const [form, setForm] = useState<TForm>(EMPTY);
   const [saving, setSaving] = useState(false);
+  // Appointment the treatment belongs to. The emergency queue passes its id in
+  // the URL so the report can label the doctor description "Emergency"; a
+  // normal visit stays "Normal".
+  const [contextAppointmentId, setContextAppointmentId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const id = Number(new URLSearchParams(window.location.search).get("appointment"));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  });
+  const [contextPatientId, setContextPatientId] = useState<number | null>(null);
 
   /* ---- Vitals (phase 2) ---- */
   const [vitals, setVitals] = useState<Vital[]>([]);
@@ -1104,7 +1122,11 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
           (r.data ?? []).find((e) => e.status === "in_progress") ??
           (r.data ?? []).find((e) => e.status === "accepted") ??
           (r.data ?? [])[0];
-        if (match) setSelectedId(match.patient);
+        if (match) {
+          setSelectedId(match.patient);
+          setContextAppointmentId((current) => current ?? match.id);
+          setContextPatientId(match.patient);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -1123,6 +1145,7 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
     setForm({
       diagnosis: record.diagnosis,
       treatment_notes: record.treatment_notes,
+      doctor_description: record.doctor_description ?? "",
       items:
         record.prescription_items.length > 0
           ? record.prescription_items.map(rowFromItem)
@@ -1141,18 +1164,26 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
       const payload = {
         diagnosis: form.diagnosis,
         treatment_notes: form.treatment_notes,
+        doctor_description: form.doctor_description,
         items: toPrescriptionItems(form.items),
         prescription_notes: form.prescription_notes,
         follow_up_date: form.follow_up_date || null,
         follow_up_notes: form.follow_up_notes,
       };
-      if (editing) {
-        await updateTreatment(editing.id, payload);
-        notify("success", "Treatment record updated.");
-      } else {
-        await createTreatment({ patient: selectedId, ...payload });
-        notify("success", "Treatment record created.");
-      }
+      const result = editing
+        ? await updateTreatment(editing.id, payload)
+        : await createTreatment({
+            patient: selectedId,
+            ...(contextAppointmentId ? { appointment: contextAppointmentId } : {}),
+            ...payload,
+          });
+      const followUpSuffix = result.data.follow_up_appointment
+        ? " Follow-up appointment scheduled automatically."
+        : "";
+      notify(
+        "success",
+        `${editing ? "Treatment record updated." : "Treatment record created."}${followUpSuffix}`
+      );
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY);
@@ -1341,7 +1372,16 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
                 <button
                   type="button"
                   className="treat-patient-sel"
-                  onClick={() => setSelectedId(p.id)}
+                  onClick={() => {
+                    setSelectedId(p.id);
+                    // Clicking a different patient leaves the emergency
+                    // appointment behind, so its id must not leak into the
+                    // new treatment.
+                    if (contextPatientId !== null && p.id !== contextPatientId) {
+                      setContextAppointmentId(null);
+                      setContextPatientId(null);
+                    }
+                  }}
                 >
                   <div className="treat-patient-sel-av">
                     <User size={18} />
@@ -1617,6 +1657,23 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
                     onChange={(e) => setForm({ ...form, treatment_notes: e.target.value })}
                     placeholder="Clinical notes, observations, procedures..."
                   />
+                </div>
+                <div className="treat-pf treat-pf--wide">
+                  <label className="treat-pf__label" htmlFor="tx-doctor-description">
+                    Doctor description
+                  </label>
+                  <textarea
+                    id="tx-doctor-description"
+                    className="field__input"
+                    rows={4}
+                    value={form.doctor_description}
+                    onChange={(e) => setForm({ ...form, doctor_description: e.target.value })}
+                    placeholder="Describe the patient's condition, findings and plan for this appointment..."
+                  />
+                  <p className="form-note">
+                    Saved with this treatment and shown under Documents in the patient&rsquo;s
+                    report — labelled Normal or Emergency from the linked appointment.
+                  </p>
                 </div>
                 <div className="treat-pf treat-pf--wide">
                   <span className="treat-pf__label">Medications</span>

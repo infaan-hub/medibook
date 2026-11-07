@@ -102,6 +102,7 @@ export const treatmentCreateSchema = z
     appointment: drfInteger().nullable().optional(),
     diagnosis: z.string().max(255, "Ensure this string has at most 255 characters.").optional(),
     treatment_notes: z.string().optional(),
+    doctor_description: z.string().optional(),
     prescription: z.string().optional(),
     /** Structured e-prescription lines (phase 1) — replaces the free-text box. */
     items: prescriptionItemsList.optional(),
@@ -119,6 +120,7 @@ export const treatmentPatchSchema = z
     appointment: drfInteger().nullable().optional(),
     diagnosis: z.string().max(255, "Ensure this string has at most 255 characters.").optional(),
     treatment_notes: z.string().optional(),
+    doctor_description: z.string().optional(),
     prescription: z.string().optional(),
     items: prescriptionItemsList.optional(),
     prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),

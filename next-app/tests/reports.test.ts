@@ -73,10 +73,14 @@ const HISTORY: ClinicalHistory = {
       date: "3 October 2026, 09:52 AM",
       diagnosis: "Hypertension, stage 1",
       treatmentNotes: "Lifestyle advice given; blood pressure re-check in four weeks.",
+      doctorDescription:
+        "Blood pressure remains above target. Continue Amlodipine and review the home readings at the next visit.",
       prescriptionNotes: "",
       followUp: "31 October 2026",
       followUpNotes: "Bring the home BP diary.",
       appointmentDate: "3 October 2026",
+      appointmentType: "Normal",
+      appointmentTypeKey: "NORMAL",
       attribution: {
         name: "Dr. Amina Hassan",
         context: "Cardiology",

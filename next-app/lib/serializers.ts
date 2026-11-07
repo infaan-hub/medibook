@@ -299,6 +299,7 @@ export function treatmentDto(
     appointment: treatment.appointment_id,
     diagnosis: treatment.diagnosis,
     treatment_notes: treatment.treatment_notes,
+    doctor_description: treatment.doctor_description,
     prescription: treatment.prescription,
     prescription_id: prescription?.id ?? null,
     prescription_notes: prescription?.notes ?? "",

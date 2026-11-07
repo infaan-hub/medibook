@@ -28,6 +28,7 @@ export const createTreatment = (
     appointment_id?: number | null;
     diagnosis?: string;
     treatment_notes?: string;
+    doctor_description?: string;
     prescription?: string;
     follow_up_date?: string | null;
     follow_up_notes?: string;
@@ -41,6 +42,7 @@ export const createTreatment = (
       appointment_id: data.appointment_id ?? null,
       diagnosis: data.diagnosis ?? "",
       treatment_notes: data.treatment_notes ?? "",
+      doctor_description: data.doctor_description ?? "",
       prescription: data.prescription ?? "",
       follow_up_date: data.follow_up_date ? new Date(`${data.follow_up_date}T00:00:00Z`) : null,
       follow_up_notes: data.follow_up_notes ?? "",

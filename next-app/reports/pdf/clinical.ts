@@ -235,6 +235,46 @@ export function labsSection(d: ReportDoc, rows: LabEntry[]): void {
   d.moveDown(space[3]);
 }
 
+/* ============================ Doctor description ========================== */
+
+/**
+ * The old "Documents / Health records" block is now the doctor's own
+ * description of the visit, with the appointment that produced it. A row only
+ * appears when the clinician actually wrote a description, and the type pill
+ * makes it explicit whether it came from a normal or an emergency appointment.
+ */
+export function doctorDescriptionsSection(d: ReportDoc, rows: TreatmentEntry[]): void {
+  const described = rows.filter((row) => row.doctorDescription);
+  sectionTitle(d, {
+    title: "Doctor description",
+    eyebrow: "Documents",
+    subtitle:
+      "Doctor descriptions recorded for normal and emergency appointments in this period.",
+  });
+  if (described.length === 0) {
+    emptyNote(d, "No doctor descriptions were recorded in this period.");
+    d.moveDown(space[3]);
+    return;
+  }
+
+  described.forEach((row, index) => {
+    subsectionTitle(d, `${index + 1}. ${row.appointmentType} appointment — ${row.date}`);
+    infoTable(d, [
+      { label: "Appointment", value: row.appointmentDate },
+      {
+        label: "Appointment type",
+        value: row.appointmentType,
+        strong: row.appointmentTypeKey === "EMERGENCY",
+      },
+      { label: "Recorded", value: row.date },
+    ]);
+    fieldBlock(d, { label: "Doctor description", value: row.doctorDescription });
+    if (row.attribution) doctorAttribution(d, row.attribution);
+    if (index < described.length - 1) divider(d, space[4]);
+  });
+  d.moveDown(space[3]);
+}
+
 /* ============================== Health records =========================== */
 
 export function recordsSection(d: ReportDoc, rows: RecordEntry[]): void {
@@ -268,7 +308,7 @@ export function clinicalSections(d: ReportDoc, history: ClinicalHistory): void {
   prescriptionsSection(d, history.prescriptions);
   vitalsSection(d, history.vitals);
   labsSection(d, history.labs);
-  recordsSection(d, history.records);
+  doctorDescriptionsSection(d, history.treatments);
 }
 
 
