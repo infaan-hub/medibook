@@ -276,6 +276,7 @@ export default function App() {
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
+                <Route path="/doctor/medical-treatment/emergency" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
 <Route path="/doctor/health-tips" element={<RequireRole role="doctor"><DoctorHealthTipsScreen /></RequireRole>} />
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />

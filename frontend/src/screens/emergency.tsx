@@ -49,6 +49,7 @@ import {
   Check,
   X,
   Clock3,
+  Stethoscope,
   User as UserIcon,
 } from "lucide-react";
 
@@ -597,6 +598,12 @@ export function PatientEmergencyScreen() {
             <ShieldAlert size={18} /> Request emergency help
           </h2>
           {closedNote && <p className="form-note">{closedNote}</p>}
+          <Button
+            variant="secondary"
+            onClick={() => window.location.href = "/doctor/medical-treatment"}
+          >
+            <Stethoscope size={14} /> Treatment
+          </Button>
           <form className="form" onSubmit={submit}>
             <div className="field">
               <label className="field__label" htmlFor="em-reason">

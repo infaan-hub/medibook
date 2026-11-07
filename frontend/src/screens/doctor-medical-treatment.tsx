@@ -9,6 +9,8 @@ import {
   deleteTreatment,
   type MedicalTreatment,
 } from "../api/treatments";
+import { listEmergencies } from "../api/emergency";
+import { getVisitHistory, type VisitHistoryEntry } from "../api/treatments";
 import type { PrescriptionItemInput } from "../api/prescriptions";
 import {
   listVitals,
@@ -975,6 +977,9 @@ export function DoctorMedicalTreatmentScreen() {
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [emergencyId, setEmergencyId] = useState<number | null>(null);
+  const [patientHistory, setPatientHistory] = useState<VisitHistoryEntry[]>([]);
+  const [patientHistoryLoading, setPatientHistoryLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MedicalTreatment | null>(null);
@@ -1079,6 +1084,24 @@ export function DoctorMedicalTreatmentScreen() {
   useEffect(() => {
     if (selectedId !== null) loadPatient(selectedId);
   }, [selectedId, loadPatient]);
+  useEffect(() => {
+    if (emergencyId !== null) {
+      listEmergencies()
+        .then((r) => {
+          const match = r.data?.find((x) => x.id === emergencyId);
+          if (match) setSelectedId(match.patient);
+        })
+        .catch(() => undefined);
+    }
+  }, [emergencyId]);
+  useEffect(() => {
+    if (selectedId === null || patientHistoryLoading) return;
+    setPatientHistoryLoading(true);
+    getVisitHistory(selectedId)
+      .then((r) => setPatientHistory(r.data ?? []))
+      .catch(() => setPatientHistory([]))
+      .finally(() => setPatientHistoryLoading(false));
+  }, [selectedId]);
 
   function handleNew() {
     setEditing(null);
@@ -1366,6 +1389,67 @@ export function DoctorMedicalTreatmentScreen() {
       {!detailLoading && profile && (
         <>
           <PatientInfo profile={profile} />
+
+          <h2 className="visit-section-title">Patient History</h2>
+
+          {patientHistoryLoading ? (
+            <Skeleton lines={6} />
+          ) : patientHistory.length === 0 ? (
+            <EmptyState
+              icon={<Calendar size={28} />}
+              title="No visit history"
+              description="No appointment history recorded for this patient."
+            />
+          ) : (
+            <div className="visit-timeline">
+              {patientHistory.map((entry) => (
+                <div key={entry.appointment_id} className="visit-timeline-entry">
+                  <div className="visit-timeline-dot" />
+                  <div className="visit-timeline-line" />
+                  <div className="visit-timeline-card">
+                    <div className="visit-card-header">
+                      <div className="visit-card-date">
+                        <span>{entry.appointment_date}</span>
+                      </div>
+                      <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
+                    </div>
+                    {entry.reason && (
+                      <div className="visit-card-field">
+                        <span className="visit-field-label">
+                          <FileText size={12} /> Reason
+                        </span>
+                        <span className="visit-field-value">{entry.reason}</span>
+                      </div>
+                    )}
+                    {entry.diagnosis && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <Stethoscope size={12} /> Diagnosis
+                        </span>
+                        <span>{entry.diagnosis}</span>
+                      </div>
+                    )}
+                    {entry.treatment_notes && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <FileText size={12} /> Treatment Notes
+                        </span>
+                        <span>{entry.treatment_notes}</span>
+                      </div>
+                    )}
+                    {entry.prescription && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <Pill size={12} /> Prescription
+                        </span>
+                        <span>{entry.prescription}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Vitals — readings taken for this patient (phase 2). */}
           <VitalsCard
