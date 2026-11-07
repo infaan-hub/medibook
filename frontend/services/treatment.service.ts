@@ -272,22 +272,27 @@ export async function createTreatment(user: AuthUser, body: unknown) {
   if (input.follow_up_date) {
     const followUpDate = input.follow_up_date;
     void (async () => {
-      const result = await createFollowUpAppointment(
-        doctor,
-        input.patient,
-        followUpDate,
-        input.diagnosis ?? "",
-        input.follow_up_time
-      );
-      const appointment = result?.appointment ?? null;
-      if (result?.isNew && appointment) {
-        await announceFollowUpAppointment(doctor, input.patient, appointment);
-      }
-      if (appointment) {
-        await prisma.medicalTreatment.update({
-          where: { id: row.id },
-          data: { follow_up_appointment_id: appointment.id },
-        });
+      try {
+        const result = await createFollowUpAppointment(
+          doctor,
+          input.patient,
+          followUpDate,
+          input.diagnosis ?? "",
+          input.follow_up_time
+        );
+        const appointment = result?.appointment ?? null;
+        if (result?.isNew && appointment) {
+          await announceFollowUpAppointment(doctor, input.patient, appointment);
+        }
+        if (appointment) {
+          await prisma.medicalTreatment.update({
+            where: { id: row.id },
+            data: { follow_up_appointment_id: appointment.id },
+          });
+        }
+      } catch {
+        // Background follow-up booking must never fail the treatment save.
+        // Errors are swallowed so the doctor always gets a successful save.
       }
     })();
   }
@@ -478,7 +483,7 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
           }
         }
       }
-    })();
+    })().catch(() => undefined);
   }
 
   return {
