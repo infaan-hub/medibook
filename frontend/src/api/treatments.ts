@@ -37,6 +37,7 @@ export interface CreateTreatmentPayload {
   items?: import("./prescriptions").PrescriptionItemInput[];
   prescription_notes?: string;
   follow_up_date?: string | null;
+  follow_up_time?: string;
   follow_up_notes?: string;
 }
 
@@ -48,6 +49,7 @@ export interface UpdateTreatmentPayload {
   items?: import("./prescriptions").PrescriptionItemInput[];
   prescription_notes?: string;
   follow_up_date?: string | null;
+  follow_up_time?: string;
   follow_up_notes?: string;
 }
 

@@ -112,6 +112,7 @@ export const treatmentCreateSchema = z
     items: prescriptionItemsList.optional(),
     prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
+    follow_up_time: z.string().optional(),
     follow_up_notes: z.string().optional(),
   })
   .passthrough();
@@ -129,6 +130,7 @@ export const treatmentPatchSchema = z
     items: prescriptionItemsList.optional(),
     prescription_notes: z.string().max(2000, "Ensure this string has at most 2000 characters.").optional(),
     follow_up_date: drfDate().nullable().optional(),
+    follow_up_time: z.string().optional(),
     follow_up_notes: z.string().optional(),
   })
   .passthrough();

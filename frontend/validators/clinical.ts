@@ -142,13 +142,13 @@ export const vitalsCreateSchema = z
       .transform((value, ctx) => {
         if (value === undefined || value === null || String(value).trim() === "") return null;
         const parsed = Number(value);
-        if (Number.isNaN(parsed) || parsed < 25 || parsed > 45) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a temperature between 25 and 45 °C." });
+        if (Number.isNaN(parsed)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A valid number is required." });
           return z.NEVER;
         }
-        return Math.round(parsed * 10) / 10;
+        return parsed;
       }),
-    glucose_mg_dl: nullableInt(10, 1000),
+    glucose_mg_dl: recordedInt(),
     weight_kg: z
       .union([z.string(), z.number()])
       .nullable()
@@ -156,11 +156,11 @@ export const vitalsCreateSchema = z
       .transform((value, ctx) => {
         if (value === undefined || value === null || String(value).trim() === "") return null;
         const parsed = Number(value);
-        if (Number.isNaN(parsed) || parsed < 1 || 400 < parsed) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a weight between 1 and 400 kg." });
+        if (Number.isNaN(parsed)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A valid number is required." });
           return z.NEVER;
         }
-        return Math.round(parsed * 10) / 10;
+        return parsed;
       }),
     height_cm: z
       .union([z.string(), z.number()])
@@ -169,13 +169,13 @@ export const vitalsCreateSchema = z
       .transform((value, ctx) => {
         if (value === undefined || value === null || String(value).trim() === "") return null;
         const parsed = Number(value);
-        if (Number.isNaN(parsed) || parsed < 30 || 250 < parsed) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a height between 30 and 250 cm." });
+        if (Number.isNaN(parsed)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A valid number is required." });
           return z.NEVER;
         }
-        return Math.round(parsed * 10) / 10;
+        return parsed;
       }),
-    spo2_percent: nullableInt(40, 100),
+    spo2_percent: recordedInt(),
     notes: z.string().max(1000, "Ensure this string has at most 1000 characters.").optional(),
     recorded_at: z
       .string()

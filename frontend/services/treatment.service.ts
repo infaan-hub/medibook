@@ -89,7 +89,8 @@ async function createFollowUpAppointment(
   doctor: DoctorProfile,
   patientId: number,
   date: string,
-  diagnosis: string
+  diagnosis: string,
+  time?: string | null
 ) {
   if (date < todayIso() || !doctor.is_available) return null;
 
@@ -104,7 +105,24 @@ async function createFollowUpAppointment(
     ? `Follow-up: ${diagnosis.trim()}`.slice(0, 255)
     : "Follow-up visit";
 
-  for (const slot of await followUpSlotCandidates(doctor, date)) {
+  const normalizedTime = time && /^\d{1,2}:\d{2}(:\d{2})?$/.test(time.trim())
+    ? time.trim().length === 5
+      ? `${time.trim()}:00`
+      : time.trim()
+    : null;
+  const candidates: Slot[] = [];
+  if (normalizedTime) {
+    const [h = "0", m = "0", s = "0"] = normalizedTime.split(":");
+    const startSeconds = Number(h) * 3600 + Number(m) * 60 + Number(s);
+    const endSeconds = startSeconds + FOLLOW_UP_SLOT_SECONDS;
+    candidates.push({
+      start_time: secondsToTime(startSeconds),
+      end_time: secondsToTime(endSeconds),
+    });
+  }
+  candidates.push(...(await followUpSlotCandidates(doctor, date)));
+
+  for (const slot of candidates) {
     try {
       return await appointments.createAppointment({
         patient_id: patientId,
@@ -248,7 +266,8 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         doctor,
         input.patient,
         input.follow_up_date,
-        input.diagnosis ?? ""
+        input.diagnosis ?? "",
+        input.follow_up_time
       )
     : null;
   if (followUpAppointment) {
@@ -334,7 +353,8 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
         doctor,
         input.patient ?? row.patient_id,
         newFollowUp,
-        input.diagnosis ?? row.diagnosis
+        input.diagnosis ?? row.diagnosis,
+        input.follow_up_time
       )
     : null;
   if (followUpAppointment) {

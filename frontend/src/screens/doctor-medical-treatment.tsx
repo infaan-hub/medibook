@@ -100,6 +100,7 @@ interface TForm {
   items: MedRow[];
   prescription_notes: string;
   follow_up_date: string;
+  follow_up_time: string;
   follow_up_notes: string;
 }
 
@@ -120,6 +121,7 @@ const EMPTY: TForm = {
   items: [{ ...EMPTY_ROW }],
   prescription_notes: "",
   follow_up_date: "",
+  follow_up_time: "",
   follow_up_notes: "",
 };
 
@@ -274,44 +276,6 @@ const VITAL_RECORDED_INT: (keyof VitalForm)[] = [
  */
 function vitalValidationError(form: VitalForm): string | null {
   if (vitalFormIsEmpty(form)) return "Record at least one measurement.";
-  for (const rule of VITAL_INT_RULES) {
-    const raw = form[rule.key].trim();
-    if (raw === "") continue;
-    const parsed = numOrNull(raw);
-    if (parsed === null || !Number.isInteger(parsed)) return "A valid integer is required.";
-    if (parsed < rule.min || parsed > rule.max) {
-      return `Ensure this value is greater than or equal to ${rule.min}.`;
-    }
-  }
-  const temperature = form.temperature_c.trim();
-  if (temperature !== "") {
-    const parsed = numOrNull(temperature);
-    if (parsed === null || parsed < 25 || parsed > 45) {
-      return "Enter a temperature between 25 and 45 °C.";
-    }
-  }
-  const weight = form.weight_kg.trim();
-  if (weight !== "") {
-    const parsed = numOrNull(weight);
-    if (parsed === null || parsed < 1 || parsed > 400) {
-      return "Enter a weight between 1 and 400 kg.";
-    }
-  }
-  const height = form.height_cm.trim();
-  if (height !== "") {
-    const parsed = numOrNull(height);
-    if (parsed === null || parsed < 30 || parsed > 250) {
-      return "Enter a height between 30 and 250 cm.";
-    }
-  }
-  for (const key of VITAL_RECORDED_INT) {
-    const raw = form[key].trim();
-    if (raw === "") continue;
-    const parsed = numOrNull(raw);
-    if (parsed === null || !Number.isInteger(parsed)) return "A valid integer is required.";
-  }
-  // Systolic, diastolic and pulse are saved exactly as entered — they are not
-  // required to arrive as a pair and are not compared against each other.
   return null;
 }
 
@@ -1147,6 +1111,7 @@ export function DoctorMedicalTreatmentScreen() {
           : [{ ...EMPTY_ROW }],
       prescription_notes: record.prescription_notes,
       follow_up_date: record.follow_up_date ?? "",
+      follow_up_time: "",
       follow_up_notes: record.follow_up_notes,
     });
     setShowForm(true);
@@ -1163,6 +1128,7 @@ export function DoctorMedicalTreatmentScreen() {
         items: toPrescriptionItems(form.items),
         prescription_notes: form.prescription_notes,
         follow_up_date: form.follow_up_date || null,
+        follow_up_time: form.follow_up_time || undefined,
         follow_up_notes: form.follow_up_notes,
       };
       const result = editing
@@ -1775,7 +1741,16 @@ export function DoctorMedicalTreatmentScreen() {
                   />
                 </div>
                 <div className="treat-pf">
-                  <label htmlFor="tx-followup-notes">Follow-up Notes</label>
+                  <label htmlFor="tx-followup-time">Follow-up Time</label>
+                  <input
+                    id="tx-followup-time"
+                    className="field__input"
+                    type="time"
+                    value={form.follow_up_time}
+                    onChange={(e) => setForm({ ...form, follow_up_time: e.target.value })}
+                  />
+                </div>
+                <div className="treat-pf">
                   <textarea
                     id="tx-followup-notes"
                     className="field__input"
