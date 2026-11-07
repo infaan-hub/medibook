@@ -246,8 +246,8 @@ export function labsSection(d: ReportDoc, rows: LabEntry[]): void {
 export function doctorDescriptionsSection(d: ReportDoc, rows: TreatmentEntry[]): void {
   const described = rows.filter((row) => row.doctorDescription);
   sectionTitle(d, {
-    title: "Doctor description",
-    eyebrow: "Documents",
+    title: "DOCTOR DESCRIPTION",
+    eyebrow: "Doctor description",
     subtitle:
       "Doctor descriptions recorded for normal and emergency appointments in this period.",
   });
@@ -258,16 +258,18 @@ export function doctorDescriptionsSection(d: ReportDoc, rows: TreatmentEntry[]):
   }
 
   described.forEach((row, index) => {
-    subsectionTitle(d, `${index + 1}. ${row.appointmentType} appointment \u2014 ${row.date}`);
-    infoTable(d, [
-      { label: "Appointment", value: row.appointmentDate },
-      {
-        label: "Appointment type",
-        value: row.appointmentType,
-        strong: row.appointmentTypeKey === "EMERGENCY",
-      },
-      { label: "Recorded", value: row.date },
-    ]);
+    subsectionTitle(d, `${index + 1}. Follow up appointment \u2014 ${row.followUpSlot}`);
+    const infoRows: { label: string; value: string; strong?: boolean }[] = [];
+    if (row.appointmentDate !== "Not linked") {
+      infoRows.push({ label: "Appointment", value: row.appointmentDate });
+    }
+    infoRows.push({
+      label: "Appointment type",
+      value: row.appointmentType,
+      strong: row.appointmentTypeKey === "EMERGENCY",
+    });
+    infoRows.push({ label: "Recorded", value: row.date });
+    infoTable(d, infoRows);
     fieldBlock(d, { label: "Doctor description", value: row.doctorDescription });
     if (row.attribution) doctorAttribution(d, row.attribution);
     if (index < described.length - 1) divider(d, space[4]);

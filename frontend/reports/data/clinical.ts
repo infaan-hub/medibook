@@ -31,6 +31,8 @@ export interface TreatmentEntry {
   doctorDescription: string;
   prescriptionNotes: string;
   followUp: string;
+  /** Full follow-up slot rendered as "8 November 2026 at 10:00" or "Not scheduled". */
+  followUpSlot: string;
   followUpNotes: string;
   appointmentDate: string;
   /** Display label for the linked appointment type ("Normal" / "Emergency"). */
@@ -294,6 +296,11 @@ export async function collectClinicalHistory(scope: ClinicalScope): Promise<Clin
     doctorDescription: optional(treatment.doctor_description),
     prescriptionNotes: optional(treatment.prescription),
     followUp: treatment.follow_up_date ? formatIsoDate(treatment.follow_up_date) : "Not scheduled",
+    followUpSlot: treatment.follow_up_date
+      ? `${formatIsoDate(treatment.follow_up_date)}${
+          treatment.follow_up_time ? ` at ${treatment.follow_up_time.slice(0, 5)}` : ""
+        }`
+      : "Not scheduled",
     followUpNotes: optional(treatment.follow_up_notes),
     appointmentDate: treatment.appointment
       ? formatIsoDate(treatment.appointment.appointment_date)

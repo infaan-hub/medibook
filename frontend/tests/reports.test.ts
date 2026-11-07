@@ -77,6 +77,7 @@ const HISTORY: ClinicalHistory = {
         "Blood pressure remains above target. Continue Amlodipine and review the home readings at the next visit.",
       prescriptionNotes: "",
       followUp: "31 October 2026",
+      followUpSlot: "31 October 2026",
       followUpNotes: "Bring the home BP diary.",
       appointmentDate: "3 October 2026",
       appointmentType: "Normal",
