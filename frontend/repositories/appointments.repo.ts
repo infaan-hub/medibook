@@ -167,7 +167,7 @@ export const createAppointment = (
     include: APPOINTMENT_INCLUDE,
   });
 
-/** First live appointment this doctor already holds for the patient on a date. */
+/** First pending/accepted appointment this doctor already holds for the patient on a date. */
 export const findLiveAppointmentForPatientOnDate = (
   doctorId: number,
   patientId: number,
@@ -178,7 +178,7 @@ export const findLiveAppointmentForPatientOnDate = (
       doctor_id: doctorId,
       patient_id: patientId,
       appointment_date: new Date(`${date}T00:00:00Z`),
-      status: { notIn: ["cancelled", "rejected"] },
+      status: { in: ["pending", "accepted"] },
     },
     orderBy: { start_time: "asc" },
     include: APPOINTMENT_INCLUDE,

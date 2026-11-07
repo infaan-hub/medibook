@@ -28,6 +28,7 @@ import {
 } from "@/services/prescription.service";
 import type { AuthUser } from "@/lib/auth";
 import { createReminders } from "@/services/appointment.service";
+import { after } from "next/server";
 
 /* ------------------------------ Treatments -------------------------------- */
 
@@ -161,8 +162,8 @@ async function createFollowUpAppointment(
       return { appointment: created, isNew: true };
     } catch (error) {
       if (isSlotConflict(error)) continue;
-      // Schedule failures must never discard a treatment the doctor just saved.
-      return null;
+      // Let the background worker retry transient database failures.
+      throw error;
     }
   }
   return null;
@@ -187,6 +188,68 @@ async function announceFollowUpAppointment(
   ).catch(() => undefined);
   broadcastAppointmentEvent(appointment, "appointment.created", [patientId, doctor.user_id]);
   broadcastAvailabilityUpdated(doctor.id, date);
+}
+
+/** Run follow-up booking after the response, retrying transient failures. */
+function scheduleFollowUpBooking(args: {
+  doctor: DoctorProfile;
+  patientId: number;
+  date: string;
+  diagnosis: string;
+  time?: string | null;
+  treatmentId: number;
+}): void {
+  after(async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await createFollowUpAppointment(
+          args.doctor,
+          args.patientId,
+          args.date,
+          args.diagnosis,
+          args.time
+        );
+        if (!result) {
+          throw new Error("No follow-up appointment slot could be booked.");
+        }
+
+        if (result.isNew) {
+          await announceFollowUpAppointment(
+            args.doctor,
+            args.patientId,
+            result.appointment
+          );
+        } else {
+          const doctorName =
+            [args.doctor.user.first_name, args.doctor.user.last_name]
+              .filter(Boolean)
+              .join(" ") || args.doctor.user.username;
+          await notify(
+            args.patientId,
+            "appointment_confirmed",
+            `Dr. ${doctorName} has a follow-up appointment for you on ${args.date}.`,
+            result.appointment.id
+          ).catch(() => undefined);
+        }
+        await createReminders(result.appointment);
+
+        await prisma.medicalTreatment.update({
+          where: { id: args.treatmentId },
+          data: { follow_up_appointment_id: result.appointment.id },
+        });
+        return;
+      } catch (error) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+          console.error(
+            `Follow-up booking failed for treatment ${args.treatmentId} after retry.`,
+            error
+          );
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -291,58 +354,14 @@ export async function createTreatment(user: AuthUser, body: unknown) {
   const bookingStatus = input.follow_up_date ? "pending" : null;
 
   if (input.follow_up_date) {
-    const followUpDate = input.follow_up_date;
-    const followUpTime = input.follow_up_time;
-    const followUpDiagnosis = input.diagnosis ?? "";
-    const followUpPatient = input.patient;
-    void (async () => {
-      let lastError: unknown = null;
-      // One retry so a transient slot conflict or DB blip doesn't silently
-      // drop the follow-up the doctor promised the patient.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const result = await createFollowUpAppointment(
-            doctor,
-            followUpPatient,
-            followUpDate,
-            followUpDiagnosis,
-            followUpTime
-          );
-          const appointment = result?.appointment ?? null;
-          // Always tell the patient — whether it's a new booking or an
-          // existing live appointment they already hold.
-          if (appointment) {
-            if (result?.isNew) {
-              await announceFollowUpAppointment(doctor, followUpPatient, appointment);
-            } else {
-              const docName = [doctor.user.first_name, doctor.user.last_name]
-                .filter(Boolean)
-                .join(" ");
-              await notify(
-                followUpPatient,
-                "appointment_confirmed",
-                `Dr. ${docName || doctor.user.username} has a follow-up appointment for you on ${followUpDate}.`,
-                appointment.id
-              ).catch(() => undefined);
-            }
-            await prisma.medicalTreatment.update({
-              where: { id: row.id },
-              data: { follow_up_appointment_id: appointment.id },
-            });
-          }
-          return; // success — no retry needed
-        } catch (error) {
-          lastError = error;
-          // small pause before retry
-          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-        }
-      }
-      // Both attempts failed — record failure so the doctor can see it.
-      await prisma.medicalTreatment.update({
-        where: { id: row.id },
-        data: { follow_up_appointment_id: null },
-      }).catch(() => undefined);
-    })();
+    scheduleFollowUpBooking({
+      doctor,
+      patientId: input.patient,
+      date: input.follow_up_date,
+      diagnosis: input.diagnosis ?? "",
+      time: input.follow_up_time,
+      treatmentId: row.id,
+    });
   }
 
   return {

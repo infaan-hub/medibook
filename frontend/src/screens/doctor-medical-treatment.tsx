@@ -1166,6 +1166,8 @@ export function DoctorMedicalTreatmentScreen() {
           });
       const followUpSuffix = result?.data?.follow_up_appointment
         ? " Follow-up appointment scheduled automatically."
+        : result?.data?.follow_up_booking_status === "pending"
+        ? " Follow-up appointment is being scheduled and will appear in Appointments shortly."
         : "";
       notify(
         "success",

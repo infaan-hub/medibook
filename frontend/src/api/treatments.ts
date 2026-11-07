@@ -29,7 +29,7 @@ export interface MedicalTreatment {
   /** Id of the auto-booked follow-up appointment (if any). */
   follow_up_appointment_id?: number | null;
   /** Status of the background follow-up booking: "pending" | "scheduled" | "failed". */
-  follow_up_booking_status?: string | null;
+  follow_up_booking_status?: "pending" | "scheduled" | "failed" | null;
 }
 
 export interface CreateTreatmentPayload {
