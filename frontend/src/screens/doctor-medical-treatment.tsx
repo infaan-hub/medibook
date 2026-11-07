@@ -1114,6 +1114,8 @@ export function DoctorMedicalTreatmentScreen() {
       if (selectedId) loadPatient(selectedId);
     },
     events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    polling: false,
+    reconcileOnFocus: false,
     enabled: selectedId !== null,
   });
 

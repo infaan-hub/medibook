@@ -848,6 +848,8 @@ export function AppointmentsListScreen() {
   useRealtimeSync({
     refresh,
     events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    polling: false,
+    reconcileOnFocus: false,
   });
 
   // Optimistic delete.

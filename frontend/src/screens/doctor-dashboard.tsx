@@ -621,6 +621,8 @@ export function DoctorDashboardScreen() {
   useRealtimeSync({
     refresh,
     events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    polling: false,
+    reconcileOnFocus: false,
   });
 
   // Optimistic delete + live status updates.
@@ -814,6 +816,8 @@ export function DoctorAppointmentsScreen() {
   useRealtimeSync({
     refresh,
     events: ["appointment.created", "appointment.updated", "appointment.deleted"],
+    polling: false,
+    reconcileOnFocus: false,
   });
 
   // Optimistic delete + live status updates.

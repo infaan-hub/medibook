@@ -589,11 +589,17 @@ export function useRealtimeSync({
   refresh,
   events = [],
   interval = FALLBACK_POLL_INTERVAL_MS,
+  polling = true,
+  reconcileOnFocus = true,
   enabled = true,
 }: {
   refresh: () => void;
   events?: string[];
   interval?: number;
+  /** Disable periodic reconciliation for screens refreshed by API actions and socket events. */
+  polling?: boolean;
+  /** Disable focus/visibility catch-up reads for screens that update from API writes and events. */
+  reconcileOnFocus?: boolean;
   enabled?: boolean;
 }): void {
   const connected = useRealtimeConnected();
@@ -602,10 +608,10 @@ export function useRealtimeSync({
   const wasConnected = useRef(connected);
   const lastRefresh = useRef(0);
 
-  const safeRefresh = useCallback(() => {
+  const safeRefresh = useCallback((immediate = false) => {
     if (!enabled || inflight.current || !mounted.current) return;
     const now = Date.now();
-    if (now - lastRefresh.current < 2000) return;
+    if (!immediate && now - lastRefresh.current < 2000) return;
     inflight.current = true;
     lastRefresh.current = now;
     try {
@@ -617,18 +623,18 @@ export function useRealtimeSync({
 
   // Fallback polling: only when WS is down AND the browser is online.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !polling) return;
     if (connected) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     const poll = setInterval(safeRefresh, interval);
     // One immediate catch-up when entering fallback mode.
     safeRefresh();
     return () => clearInterval(poll);
-  }, [safeRefresh, interval, enabled, connected]);
+  }, [safeRefresh, interval, enabled, polling, connected]);
 
   useRealtimeEvent((event) => {
     if (events.length === 0 || events.includes(event)) {
-      safeRefresh();
+      safeRefresh(true);
     }
   });
 
@@ -640,18 +646,20 @@ export function useRealtimeSync({
   }, [connected, safeRefresh]);
 
   useEffect(() => {
+    if (!reconcileOnFocus) return;
     const handler = () => { if (navigator.onLine) safeRefresh(); };
     window.addEventListener("online", handler);
     return () => window.removeEventListener("online", handler);
-  }, [safeRefresh]);
+  }, [safeRefresh, reconcileOnFocus]);
 
   useEffect(() => {
+    if (!reconcileOnFocus) return;
     const handler = () => {
       if (document.visibilityState === "visible") safeRefresh();
     };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [safeRefresh]);
+  }, [safeRefresh, reconcileOnFocus]);
 
   useEffect(() => {
     mounted.current = true;
