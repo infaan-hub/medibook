@@ -269,7 +269,9 @@ export function BookingScreen() {
         // here as an ApiError thrown by the response interceptor. Pull the
         // server's message from it, falling back to the raw Axios payload.
         let errorMessage: string;
-        if (e instanceof ApiError) {
+        if (e instanceof ApiError && e.status === 409) {
+          errorMessage = "That start time is not available. Choose another time.";
+        } else if (e instanceof ApiError) {
           errorMessage = e.message;
         } else if (
           e &&
@@ -753,7 +755,9 @@ export function RescheduleScreen() {
       navigate("/appointments");
     } catch (e) {
       let errorMessage: string;
-      if (e instanceof ApiError) {
+      if (e instanceof ApiError && e.status === 409) {
+        errorMessage = "That start time is not available. Choose another time.";
+      } else if (e instanceof ApiError) {
         errorMessage = e.message;
       } else if (
         e &&
