@@ -3544,6 +3544,20 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .treat-history-link { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #09A99E; background: #f0fdfa; border: 1px solid #d1fae5; text-decoration: none; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
 .treat-history-link:hover { background: #ecfdf5; border-color: #09A99E; }
 
+/* ---- Patient History section ---- */
+.visit-section-title { margin: 0 0 var(--space-2); font-size: 16px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.patient-history-card { margin-top: var(--space-3); }
+.patient-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.patient-history-head .btn { flex: 0 0 auto; white-space: nowrap; }
+.patient-history-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: var(--space-3); }
+.patient-history-actions .btn { white-space: nowrap; }
+.patient-history-empty { padding: var(--space-4) 0; }
+@media (max-width: 600px) {
+  .patient-history-head { flex-direction: column; align-items: stretch; }
+  .patient-history-head .btn { width: 100%; justify-content: center; }
+  .patient-history-card .visit-timeline { margin-top: var(--space-3); }
+}
+
 /* ---- Visit History Timeline ---- */
 .visit-timeline { display: flex; flex-direction: column; gap: 0; padding-left: 18px; margin-top: var(--space-4); }
 .visit-timeline-entry { position: relative; display: flex; gap: 16px; padding-bottom: 24px; }
@@ -3558,9 +3572,11 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .visit-status { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
 .visit-status--done { background: #ecfdf5; color: #059669; }
 .visit-status--accepted { background: #eff6ff; color: #2563eb; }
+.visit-status--in_progress { background: #eff6ff; color: #2563eb; }
 .visit-status--pending { background: #fffbeb; color: #d97706; }
 .visit-status--cancelled { background: #fef2f2; color: #dc2626; }
 .visit-status--rejected { background: #fef2f2; color: #dc2626; }
+.visit-status--expired { background: #f1f5f9; color: #64748b; }
 .visit-card-field { margin-bottom: 8px; }
 .visit-field-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
 .visit-field-value { font-size: 13px; color: #334155; line-height: 1.5; }

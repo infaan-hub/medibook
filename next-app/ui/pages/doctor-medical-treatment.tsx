@@ -1400,16 +1400,17 @@ export function DoctorMedicalTreatmentScreen({ emergency = false }: { emergency?
           <PatientInfo profile={profile} />
 
           {/* Patient History — treatments from previous appointments (any doctor). */}
-          <Card className="visit-records-card">
-            <div className="visit-card-header">
+          <Card className="visit-records-card patient-history-card">
+            <div className="patient-history-head">
               <div>
-                <h2 className="visit-section-title" style={{ margin: 0 }}>Patient History</h2>
-                <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+                <h2 className="visit-section-title">Patient History</h2>
+                <p className="page__subtitle" style={{ margin: 0 }}>
                   Previous appointments and treatments for this patient
                 </p>
               </div>
               <Button
                 variant="secondary"
+                className="btn--sm"
                 loading={reportBusy === "view"}
                 disabled={reportBusy !== null}
                 onClick={() => void runReport("view")}

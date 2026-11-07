@@ -477,9 +477,10 @@ export default function VisitHistoryPage() {
       {patient && <PatientInfo profile={patient} />}
 
       <h2 className="visit-section-title">Patient History</h2>
-      <div style={{ marginBottom: 12 }}>
+      <div className="patient-history-actions">
         <Button
           variant="secondary"
+          className="btn--sm"
           loading={reportBusy}
           onClick={async () => {
             if (!patientId) return;
