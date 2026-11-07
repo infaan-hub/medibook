@@ -99,7 +99,11 @@ async function createFollowUpAppointment(
     patientId,
     date
   );
-  if (existing) return null;
+  if (existing) {
+    // Reuse the already-booked visit instead of creating a duplicate; the
+    // patient was notified when it was first created.
+    return { appointment: existing, isNew: false };
+  }
 
   const reason = diagnosis.trim()
     ? `Follow-up: ${diagnosis.trim()}`.slice(0, 255)
@@ -124,7 +128,7 @@ async function createFollowUpAppointment(
 
   for (const slot of candidates) {
     try {
-      return await appointments.createAppointment({
+      const created = await appointments.createAppointment({
         patient_id: patientId,
         doctor_id: doctor.id,
         hospital_id: null,
@@ -135,6 +139,7 @@ async function createFollowUpAppointment(
         status: "accepted",
         appointment_type: "NORMAL",
       });
+      return { appointment: created, isNew: true };
     } catch (error) {
       if (isSlotConflict(error)) continue;
       // Schedule failures must never discard a treatment the doctor just saved.
@@ -148,7 +153,7 @@ async function createFollowUpAppointment(
 async function announceFollowUpAppointment(
   doctor: DoctorProfile,
   patientId: number,
-  appointment: NonNullable<Awaited<ReturnType<typeof createFollowUpAppointment>>>
+  appointment: NonNullable<Awaited<ReturnType<typeof appointments.createAppointment>>>
 ): Promise<void> {
   const date = appointment.appointment_date.toISOString().slice(0, 10);
   const time = appointment.start_time.slice(0, 5);
@@ -261,7 +266,7 @@ export async function createTreatment(user: AuthUser, body: unknown) {
 
   // Follow-up Date is a real booking, not just a printed note: the patient
   // receives a normal appointment with this doctor on that date.
-  const followUpAppointment = input.follow_up_date
+  const followUpResult = input.follow_up_date
     ? await createFollowUpAppointment(
         doctor,
         input.patient,
@@ -270,8 +275,11 @@ export async function createTreatment(user: AuthUser, body: unknown) {
         input.follow_up_time
       )
     : null;
-  if (followUpAppointment) {
+  const followUpAppointment = followUpResult?.appointment ?? null;
+  if (followUpResult?.isNew && followUpAppointment) {
     await announceFollowUpAppointment(doctor, input.patient, followUpAppointment);
+  }
+  if (followUpAppointment) {
     await prisma.medicalTreatment.update({
       where: { id: row.id },
       data: { follow_up_appointment_id: followUpAppointment.id },
@@ -352,7 +360,7 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
 
   // Moving a Follow-up Date books the new visit automatically, exactly like
   // creating a treatment does.
-  const followUpAppointment = newFollowUp
+  const followUpResult = newFollowUp
     ? await createFollowUpAppointment(
         doctor,
         input.patient ?? row.patient_id,
@@ -361,12 +369,15 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
         input.follow_up_time
       )
     : null;
-  if (followUpAppointment) {
+  const followUpAppointment = followUpResult?.appointment ?? null;
+  if (followUpResult?.isNew && followUpAppointment) {
     await announceFollowUpAppointment(
       doctor,
       input.patient ?? row.patient_id,
       followUpAppointment
     );
+  }
+  if (followUpAppointment) {
     await prisma.medicalTreatment.update({
       where: { id },
       data: { follow_up_appointment_id: followUpAppointment.id },
