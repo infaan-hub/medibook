@@ -31,7 +31,7 @@ function summaryCardsFor(data: DoctorReportData): SummaryCard[] {
     { label: "Prescriptions", value: data.counts.prescriptions, detail: "Issued in period", tone: "primary" },
     { label: "Vital records", value: data.counts.vitals, detail: "Observations", tone: "success" },
     { label: "Lab tests", value: data.counts.labs, detail: "Ordered in period", tone: "warning" },
-    { label: "Documents", value: data.counts.records, detail: "Health records", tone: "neutral" },
+    { label: "Doctor descriptions", value: data.counts.records, detail: "Normal & emergency", tone: "neutral" },
   ];
 }
 

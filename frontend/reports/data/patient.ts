@@ -63,7 +63,7 @@ export async function collectPatientReport(
       prescriptions: count(history.prescriptions.length),
       vitals: count(history.vitals.length),
       labs: count(history.labs.length),
-      records: count(history.records.length),
+      records: count(history.treatments.filter((row) => row.doctorDescription).length),
     },
   };
 }

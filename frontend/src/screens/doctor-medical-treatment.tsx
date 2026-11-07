@@ -96,6 +96,7 @@ interface MedRow {
 interface TForm {
   diagnosis: string;
   treatment_notes: string;
+  doctor_description: string;
   items: MedRow[];
   prescription_notes: string;
   follow_up_date: string;
@@ -115,6 +116,7 @@ const EMPTY_ROW: MedRow = {
 const EMPTY: TForm = {
   diagnosis: "",
   treatment_notes: "",
+  doctor_description: "",
   items: [{ ...EMPTY_ROW }],
   prescription_notes: "",
   follow_up_date: "",
@@ -854,6 +856,13 @@ function TxRecord({
         </div>
       )}
 
+      {record.doctor_description && (
+        <div className="treat-rec-sec">
+          <span className="treat-rec-lbl"><FileText size={12} /> Doctor description</span>
+          <p className="treat-rec-val">{record.doctor_description}</p>
+        </div>
+      )}
+
       {(record.prescription_items?.length ?? 0) > 0 ? (
         <div className="treat-rec-sec">
           <span className="treat-rec-lbl"><Pill size={12} /> Prescription</span>
@@ -977,7 +986,18 @@ export function DoctorMedicalTreatmentScreen() {
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [emergencyId, setEmergencyId] = useState<number | null>(null);
+  // Appointment the treatment belongs to. The emergency queue passes its id in
+  // the URL so the report can label the doctor description "Emergency"; a
+  // normal visit stays "Normal".
+  const [contextAppointmentId, setContextAppointmentId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const id = Number(new URLSearchParams(window.location.search).get("appointment"));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  });
+  const [contextPatientId, setContextPatientId] = useState<number | null>(null);
+  const [emergencyRoute] = useState(
+    () => typeof window !== "undefined" && window.location.pathname.includes("/doctor/medical-treatment/emergency")
+  );
   const [patientHistory, setPatientHistory] = useState<VisitHistoryEntry[]>([]);
   const [patientHistoryLoading, setPatientHistoryLoading] = useState(false);
 
@@ -1085,15 +1105,21 @@ export function DoctorMedicalTreatmentScreen() {
     if (selectedId !== null) loadPatient(selectedId);
   }, [selectedId, loadPatient]);
   useEffect(() => {
-    if (emergencyId !== null) {
-      listEmergencies()
-        .then((r) => {
-          const match = r.data?.find((x) => x.id === emergencyId);
-          if (match) setSelectedId(match.patient);
-        })
-        .catch(() => undefined);
-    }
-  }, [emergencyId]);
+    if (!emergencyRoute) return;
+    listEmergencies()
+      .then((r) => {
+        const match =
+          (r.data ?? []).find((e) => e.status === "in_progress") ??
+          (r.data ?? []).find((e) => e.status === "accepted") ??
+          (r.data ?? [])[0];
+        if (match) {
+          setSelectedId(match.patient);
+          setContextAppointmentId((current) => current ?? match.id);
+          setContextPatientId(match.patient);
+        }
+      })
+      .catch(() => undefined);
+  }, [emergencyRoute]);
   useEffect(() => {
     if (selectedId === null || patientHistoryLoading) return;
     setPatientHistoryLoading(true);
@@ -1114,6 +1140,7 @@ export function DoctorMedicalTreatmentScreen() {
     setForm({
       diagnosis: record.diagnosis,
       treatment_notes: record.treatment_notes,
+      doctor_description: record.doctor_description ?? "",
       items:
         record.prescription_items.length > 0
           ? record.prescription_items.map(rowFromItem)
@@ -1132,18 +1159,26 @@ export function DoctorMedicalTreatmentScreen() {
       const payload = {
         diagnosis: form.diagnosis,
         treatment_notes: form.treatment_notes,
+        doctor_description: form.doctor_description,
         items: toPrescriptionItems(form.items),
         prescription_notes: form.prescription_notes,
         follow_up_date: form.follow_up_date || null,
         follow_up_notes: form.follow_up_notes,
       };
-      if (editing) {
-        await updateTreatment(editing.id, payload);
-        notify("success", "Treatment record updated.");
-      } else {
-        await createTreatment({ patient: selectedId, ...payload });
-        notify("success", "Treatment record created.");
-      }
+      const result = editing
+        ? await updateTreatment(editing.id, payload)
+        : await createTreatment({
+            patient: selectedId,
+            ...(contextAppointmentId ? { appointment: contextAppointmentId } : {}),
+            ...payload,
+          });
+      const followUpSuffix = result.data.follow_up_appointment
+        ? " Follow-up appointment scheduled automatically."
+        : "";
+      notify(
+        "success",
+        `${editing ? "Treatment record updated." : "Treatment record created."}${followUpSuffix}`
+      );
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY);
@@ -1332,7 +1367,16 @@ export function DoctorMedicalTreatmentScreen() {
                 <button
                   type="button"
                   className="treat-patient-sel"
-                  onClick={() => setSelectedId(p.id)}
+                  onClick={() => {
+                    setSelectedId(p.id);
+                    // Clicking a different patient leaves the emergency
+                    // appointment behind, so its id must not leak into the
+                    // new treatment.
+                    if (contextPatientId !== null && p.id !== contextPatientId) {
+                      setContextAppointmentId(null);
+                      setContextPatientId(null);
+                    }
+                  }}
                 >
                   <div className="treat-patient-sel-av">
                     <User size={18} />
@@ -1435,6 +1479,14 @@ export function DoctorMedicalTreatmentScreen() {
                           <FileText size={12} /> Treatment Notes
                         </span>
                         <span>{entry.treatment_notes}</span>
+                      </div>
+                    )}
+                    {entry.doctor_description && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <FileText size={12} /> Doctor description
+                        </span>
+                        <span>{entry.doctor_description}</span>
                       </div>
                     )}
                     {entry.prescription && (
@@ -1582,6 +1634,21 @@ export function DoctorMedicalTreatmentScreen() {
                     onChange={(e) => setForm({ ...form, treatment_notes: e.target.value })}
                     placeholder="Clinical notes, observations, procedures..."
                   />
+                </div>
+                <div className="treat-pf treat-pf--wide">
+                  <label htmlFor="tx-doctor-description">Doctor description</label>
+                  <textarea
+                    id="tx-doctor-description"
+                    className="field__input"
+                    rows={4}
+                    value={form.doctor_description}
+                    onChange={(e) => setForm({ ...form, doctor_description: e.target.value })}
+                    placeholder="Describe the patient's condition, findings and plan for this appointment..."
+                  />
+                  <p className="form-note">
+                    Saved with this treatment and shown under Documents in the patient&rsquo;s
+                    report — labelled Normal or Emergency from the linked appointment.
+                  </p>
                 </div>
                 <div className="treat-pf treat-pf--wide">
                   <span className="treat-pf__label">Medications</span>

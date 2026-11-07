@@ -551,6 +551,10 @@ model MedicalTreatment {
   id              Int          @id @default(autoincrement())
   diagnosis       String       @default("") @db.VarChar(255)
   treatment_notes String       @default("")
+  /// Doctor-written description of the patient's episode, shown in the
+  /// patient report's "Doctor description" section (normal and emergency
+  /// appointments alike).
+  doctor_description String    @default("")
   prescription    String       @default("")
   follow_up_date  DateTime?    @db.Date
   follow_up_notes String       @default("")

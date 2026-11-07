@@ -138,16 +138,21 @@ export const listAppointmentsUnpaginated = (
     orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
   });
 
-export const createAppointment = (data: {
-  patient_id: number;
-  doctor_id: number;
-  hospital_id: number | null;
-  appointment_date: string;
-  start_time: string;
-  end_time: string;
-  reason?: string;
-}) =>
-  prisma.appointment.create({
+export const createAppointment = (
+  data: {
+    patient_id: number;
+    doctor_id: number;
+    hospital_id: number | null;
+    appointment_date: string;
+    start_time: string;
+    end_time: string;
+    reason?: string;
+    status?: "pending" | "accepted";
+    appointment_type?: "NORMAL" | "EMERGENCY";
+  },
+  db: AppointmentDb = prisma
+) =>
+  db.appointment.create({
     data: {
       patient_id: data.patient_id,
       doctor_id: data.doctor_id,
@@ -156,7 +161,26 @@ export const createAppointment = (data: {
       start_time: data.start_time,
       end_time: data.end_time,
       reason: data.reason ?? "",
+      ...(data.status ? { status: data.status } : {}),
+      ...(data.appointment_type ? { appointment_type: data.appointment_type } : {}),
     },
+    include: APPOINTMENT_INCLUDE,
+  });
+
+/** First live appointment this doctor already holds for the patient on a date. */
+export const findLiveAppointmentForPatientOnDate = (
+  doctorId: number,
+  patientId: number,
+  date: string
+) =>
+  prisma.appointment.findFirst({
+    where: {
+      doctor_id: doctorId,
+      patient_id: patientId,
+      appointment_date: new Date(`${date}T00:00:00Z`),
+      status: { notIn: ["cancelled", "rejected"] },
+    },
+    orderBy: { start_time: "asc" },
     include: APPOINTMENT_INCLUDE,
   });
 
