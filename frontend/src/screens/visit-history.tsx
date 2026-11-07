@@ -156,10 +156,10 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
                 <span>{entry.diagnosis}</span>
               </div>
             )}
-            {entry.doctor_description && (
+            {entry.doctor_description !== undefined && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><FileText size={12} /> Doctor description</span>
-                <span>{entry.doctor_description}</span>
+                <span>{entry.doctor_description || "Not provided"}</span>
               </div>
             )}
             {entry.treatment_notes && (
@@ -174,12 +174,14 @@ function VisitEntry({ entry }: { entry: VisitHistoryEntry }) {
                 <span>{entry.prescription}</span>
               </div>
             )}
-            {entry.follow_up_date && (
-              <div className="visit-detail-field">
-                <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
-                <span>{fmtDate(entry.follow_up_date)}{entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}</span>
-              </div>
-            )}
+            <div className="visit-detail-field">
+              <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
+              <span>
+                {entry.follow_up_date
+                  ? `${fmtDate(entry.follow_up_date)}${entry.follow_up_time ? ` at ${entry.follow_up_time.slice(0, 5)}` : ""}`
+                  : "Not scheduled"}
+              </span>
+            </div>
           </div>
         )}
       </div>
