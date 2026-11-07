@@ -1131,7 +1131,7 @@ export function DoctorMedicalTreatmentScreen() {
             ...(contextAppointmentId ? { appointment: contextAppointmentId } : {}),
             ...payload,
           });
-      const followUpSuffix = result.data.follow_up_appointment
+      const followUpSuffix = result?.data?.follow_up_appointment
         ? " Follow-up appointment scheduled automatically."
         : "";
       notify(
