@@ -1174,7 +1174,6 @@ export function DoctorMedicalTreatmentScreen() {
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY);
-      loadPatient(selectedId);
     } catch (e) {
       notify("error", msg(e));
     } finally {
