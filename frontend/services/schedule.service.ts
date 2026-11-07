@@ -6,7 +6,7 @@
  * Behaviour preserved (§14):
  *   • doctor.is_available=false → no slots
  *   • a full-day exception (times null) closes the date entirely
- *   • every minute within a window can be used as an appointment start time
+ *   • appointment start times follow the configured availability cadence
  *   • appointments last 30 minutes
  *   • slots overlapping any break or exception are skipped
  *   • slots overlapping a booking (any status except cancelled/rejected) are skipped

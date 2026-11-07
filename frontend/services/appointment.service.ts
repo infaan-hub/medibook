@@ -124,10 +124,15 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     throw SLOT_TAKEN();
   }
 
-  // 2) Past dates + open-slot membership.
-  if (date < todayIso() || !(await slotIsOpen(doctor, date, start, end))) {
-    throw badRequest("The selected appointment time is not available.", {
-      start_time: ["Choose an available appointment time."],
+  // Past dates are a validation error; time conflicts are a clear 409.
+  if (date < todayIso()) {
+    throw badRequest("Appointments cannot be booked for a past date.", {
+      appointment_date: ["Choose today or a future date."],
+    });
+  }
+  if (!(await slotIsOpen(doctor, date, start, end))) {
+    throw conflict("The selected time is outside the doctor's availability or overlaps a break. Choose another time.", {
+      start_time: ["Choose a time within the doctor's available hours that does not overlap a break."],
     });
   }
 
@@ -418,7 +423,7 @@ const NOTIFY_MESSAGE: Record<string, string> = {
   accepted: "Appointment accepted",
   done: "Appointment marked as done",
   cancelled: "Appointment cancelled",
-  rejected: "Appointment rejected",
+  rejected: "Appointment rejected. Please choose another time and book again.",
 };
 
 export const isKnownAction = (action: string): boolean => action in ACTION_MAP;
