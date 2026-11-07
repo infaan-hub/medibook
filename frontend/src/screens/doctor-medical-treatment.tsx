@@ -11,6 +11,9 @@ import {
 } from "../api/treatments";
 import { listEmergencies } from "../api/emergency";
 import { getVisitHistory, type VisitHistoryEntry } from "../api/treatments";
+import {
+  deleteAppointment,
+} from "../api/appointments";
 import type { PrescriptionItemInput } from "../api/prescriptions";
 import {
   listVitals,
@@ -771,12 +774,16 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
 
 function TxRecord({
   record,
+  isCurrent,
   onEdit,
   onDelete,
+  onCancelFollowUp,
 }: {
   record: MedicalTreatment;
+  isCurrent?: boolean;
   onEdit: (r: MedicalTreatment) => void;
   onDelete: (id: number) => void;
+  onCancelFollowUp?: (r: MedicalTreatment) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -795,6 +802,7 @@ function TxRecord({
         <div className="treat-rec-title">
           <Stethoscope size={16} />
           <h4>{record.diagnosis || "No diagnosis"}</h4>
+          {isCurrent && <span className="badge badge--accepted">Current</span>}
         </div>
         <div className="treat-rec-acts">
           {confirmDel && (
@@ -856,6 +864,13 @@ function TxRecord({
         <div className="treat-rec-sec">
           <span className="treat-rec-lbl"><Calendar size={12} /> Follow-up Date</span>
           <p className="treat-rec-val">{fmtDate(record.follow_up_date)}</p>
+          {record.follow_up_appointment_id && onCancelFollowUp && (
+            <div className="treat-actions-row" style={{ marginTop: 8 }}>
+              <Button variant="danger" onClick={() => onCancelFollowUp(record)}>
+                Cancel follow-up appointment
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1159,6 +1174,18 @@ export function DoctorMedicalTreatmentScreen() {
     }
   }
 
+  async function handleCancelFollowUp(record: MedicalTreatment) {
+    if (!record.follow_up_appointment_id || !selectedId) return;
+    try {
+      await deleteAppointment(record.follow_up_appointment_id);
+      await updateTreatment(record.id, { follow_up_date: null });
+      notify("success", "Follow-up appointment cancelled.");
+      loadPatient(selectedId);
+    } catch (e) {
+      notify("error", msg(e));
+    }
+  }
+
   /* ---- Structured medication lines (phase 1 e-prescriptions) ---- */
 
   function updateRow(index: number, patch: Partial<MedRow>) {
@@ -1393,83 +1420,6 @@ export function DoctorMedicalTreatmentScreen() {
         <>
           <PatientInfo profile={profile} />
 
-          <h2 className="visit-section-title">Patient History</h2>
-
-          {patientHistoryLoading ? (
-            <Skeleton lines={6} />
-          ) : patientHistory.length === 0 ? (
-            <EmptyState
-              icon={<Calendar size={28} />}
-              title="No visit history"
-              description="No appointment history recorded for this patient."
-            />
-          ) : (
-            <div className="visit-timeline">
-              {patientHistory.map((entry) => (
-                <div key={entry.appointment_id} className="visit-timeline-entry">
-                  <div className="visit-timeline-dot" />
-                  <div className="visit-timeline-line" />
-                  <div className="visit-timeline-card">
-                    <div className="visit-card-header">
-                      <div className="visit-card-date">
-                        <span>{entry.appointment_date}</span>
-                      </div>
-                      <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
-                    </div>
-                    {entry.diagnosis && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <Stethoscope size={12} /> Diagnosis
-                        </span>
-                        <span>{entry.diagnosis}</span>
-                      </div>
-                    )}
-                    {entry.doctor_description && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <FileText size={12} /> Doctor description
-                        </span>
-                        <span>{entry.doctor_description}</span>
-                      </div>
-                    )}
-                    {entry.treatment_notes && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <FileText size={12} /> Treatment Notes
-                        </span>
-                        <span>{entry.treatment_notes}</span>
-                      </div>
-                    )}
-                    {entry.prescription && (
-                      <div className="visit-detail-field">
-                        <span className="visit-detail-label">
-                          <Pill size={12} /> Prescription
-                        </span>
-                        <span>{entry.prescription}</span>
-                      </div>
-                    )}
-                    <div className="visit-card-actions">
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          if (selectedId === null) return;
-                          try {
-                            const result = await viewDoctorReport(selectedId);
-                            notify("success", `Report opened — ${result.filename}`);
-                          } catch (e) {
-                            notify("error", msg(e));
-                          }
-                        }}
-                      >
-                        View patient report
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Vitals — readings taken for this patient (phase 2). */}
           <VitalsCard
             vitals={vitals}
@@ -1575,6 +1525,85 @@ export function DoctorMedicalTreatmentScreen() {
               month. You can generate this because you are linked to the patient.
             </p>
           </Card>
+
+
+          <h2 className="visit-section-title">Patient History</h2>
+
+          {patientHistoryLoading ? (
+            <Skeleton lines={6} />
+          ) : patientHistory.length === 0 ? (
+            <EmptyState
+              icon={<Calendar size={28} />}
+              title="No visit history"
+              description="No appointment history recorded for this patient."
+            />
+          ) : (
+            <div className="visit-timeline">
+              {patientHistory.map((entry) => (
+                <div key={entry.appointment_id} className="visit-timeline-entry">
+                  <div className="visit-timeline-dot" />
+                  <div className="visit-timeline-line" />
+                  <div className="visit-timeline-card">
+                    <div className="visit-card-header">
+                      <div className="visit-card-date">
+                        <span>{entry.appointment_date}</span>
+                      </div>
+                      <span className={`visit-status visit-status--${entry.status}`}>{entry.status}</span>
+                    </div>
+                    {entry.diagnosis && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <Stethoscope size={12} /> Diagnosis
+                        </span>
+                        <span>{entry.diagnosis}</span>
+                      </div>
+                    )}
+                    {entry.doctor_description && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <FileText size={12} /> Doctor description
+                        </span>
+                        <span>{entry.doctor_description}</span>
+                      </div>
+                    )}
+                    {entry.treatment_notes && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <FileText size={12} /> Treatment Notes
+                        </span>
+                        <span>{entry.treatment_notes}</span>
+                      </div>
+                    )}
+                    {entry.prescription && (
+                      <div className="visit-detail-field">
+                        <span className="visit-detail-label">
+                          <Pill size={12} /> Prescription
+                        </span>
+                        <span>{entry.prescription}</span>
+                      </div>
+                    )}
+                    <div className="visit-card-actions">
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          if (selectedId === null) return;
+                          try {
+                            const result = await viewDoctorReport(selectedId);
+                            notify("success", `Report opened — ${result.filename}`);
+                          } catch (e) {
+                            notify("error", msg(e));
+                          }
+                        }}
+                      >
+                        View patient report
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
 
           {showForm && (
             <Card className="treat-form-hdr treat-form">
@@ -1776,8 +1805,15 @@ export function DoctorMedicalTreatmentScreen() {
 
           {treatments.length > 0 && (
             <div className="treat-patient-list">
-              {treatments.map((tx) => (
-                <TxRecord key={tx.id} record={tx} onEdit={handleEdit} onDelete={handleDelete} />
+              {treatments.map((tx, index) => (
+                <TxRecord
+                  key={tx.id}
+                  record={tx}
+                  isCurrent={index === 0}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onCancelFollowUp={(r) => void handleCancelFollowUp(r)}
+                />
               ))}
             </div>
           )}

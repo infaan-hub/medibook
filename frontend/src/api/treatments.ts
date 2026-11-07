@@ -24,6 +24,8 @@ export interface MedicalTreatment {
   updated_at: string;
   /** Present when the Follow-up Date automatically booked a real appointment. */
   follow_up_appointment?: import("./types").Appointment | null;
+  /** Id of the auto-booked follow-up appointment (if any). */
+  follow_up_appointment_id?: number | null;
 }
 
 export interface CreateTreatmentPayload {

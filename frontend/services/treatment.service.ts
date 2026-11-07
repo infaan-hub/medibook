@@ -335,12 +335,18 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
   const previousFollowUp = row.follow_up_date
     ? row.follow_up_date.toISOString().slice(0, 10)
     : null;
-  const newFollowUp =
-    input.follow_up_date !== undefined &&
-    input.follow_up_date !== null &&
-    input.follow_up_date !== previousFollowUp
-      ? input.follow_up_date
-      : null;
+  const targetDate =
+    input.follow_up_date !== undefined
+      ? (input.follow_up_date || null)
+      : previousFollowUp;
+  const timeChanged = input.follow_up_time !== undefined;
+  const dateChanged =
+    input.follow_up_date !== undefined && input.follow_up_date !== previousFollowUp;
+  const followUpCleared =
+    input.follow_up_date === null && previousFollowUp !== null;
+  const shouldHandleFollowUp =
+    (input.follow_up_date !== undefined || input.follow_up_time !== undefined) &&
+    (targetDate !== null || followUpCleared);
 
   const updated = await prisma.$transaction(async (tx) => {
     const treatment = await tx.medicalTreatment.update({
@@ -358,40 +364,126 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     return treatment;
   });
 
-  // Moving a Follow-up Date books the new visit automatically, exactly like
-  // creating a treatment does.
-  const followUpResult = newFollowUp
-    ? await createFollowUpAppointment(
-        doctor,
-        input.patient ?? row.patient_id,
-        newFollowUp,
-        input.diagnosis ?? row.diagnosis,
-        input.follow_up_time
-      )
-    : null;
-  const followUpAppointment = followUpResult?.appointment ?? null;
-  if (followUpResult?.isNew && followUpAppointment) {
-    await announceFollowUpAppointment(
-      doctor,
-      input.patient ?? row.patient_id,
-      followUpAppointment
-    );
+  // Reschedule / create / cancel the follow-up appointment when the doctor
+  // changes the Follow-up Date or Time, and keep the patient informed.
+  const patientId = input.patient ?? row.patient_id;
+  let followUpAppointment: NonNullable<
+    Awaited<ReturnType<typeof appointments.createAppointment>>
+  > | null = null;
+  let rescheduled = false;
+
+  if (shouldHandleFollowUp) {
+    if (followUpCleared && row.follow_up_appointment_id) {
+      // Cancel the previously booked follow-up and clear the link.
+      try {
+        await appointments.updateAppointment(row.follow_up_appointment_id, {
+          status: "cancelled",
+          cancel_reason: "Follow-up rescheduled/cancelled by doctor.",
+        });
+      } catch {
+        // ignore
+      }
+      await prisma.medicalTreatment.update({
+        where: { id },
+        data: { follow_up_appointment_id: null },
+      });
+      const docName = [doctor.user.first_name, doctor.user.last_name]
+        .filter(Boolean)
+        .join(" ");
+      await notify(
+        patientId,
+        "appointment_cancelled",
+        `Dr. ${docName || doctor.user.username} cancelled your follow-up appointment.`,
+        row.follow_up_appointment_id
+      ).catch(() => undefined);
+      broadcastAvailabilityUpdated(doctor.id, previousFollowUp!);
+    } else if (targetDate) {
+      const existingId = row.follow_up_appointment_id;
+      if (existingId && (dateChanged || timeChanged)) {
+        // Reschedule the existing appointment in place.
+        const existing = await appointments.findAppointmentById(existingId);
+        if (existing) {
+          const newTime =
+            input.follow_up_time && input.follow_up_time.trim() !== ""
+              ? input.follow_up_time.trim().length === 5
+                ? `${input.follow_up_time.trim()}:00`
+                : input.follow_up_time.trim()
+              : existing.start_time;
+          const [h = "0", m = "0", s = "0"] = newTime.split(":");
+          const startSec = Number(h) * 3600 + Number(m) * 60 + Number(s);
+          const endSec = startSec + FOLLOW_UP_SLOT_SECONDS;
+          const endTime = secondsToTime(endSec);
+          try {
+            const rescheduledAppt = await appointments.updateAppointment(existingId, {
+              appointment_date: new Date(`${targetDate}T00:00:00Z`),
+              start_time: newTime,
+              end_time: endTime,
+              reason:
+                input.diagnosis && input.diagnosis.trim()
+                  ? `Follow-up: ${input.diagnosis.trim()}`.slice(0, 255)
+                  : existing.reason,
+            });
+            followUpAppointment = rescheduledAppt;
+            rescheduled = true;
+            const docName = [doctor.user.first_name, doctor.user.last_name]
+              .filter(Boolean)
+              .join(" ");
+            await notify(
+              patientId,
+              "appointment_confirmed",
+              `Dr. ${docName || doctor.user.username} rescheduled your follow-up appointment to ${targetDate} at ${newTime.slice(0, 5)}.`,
+              rescheduledAppt.id
+            ).catch(() => undefined);
+            broadcastAppointmentEvent(rescheduledAppt, "appointment.updated", [
+              patientId,
+              doctor.user_id,
+            ]);
+            broadcastAvailabilityUpdated(doctor.id, targetDate);
+            await prisma.medicalTreatment.update({
+              where: { id },
+              data: { follow_up_appointment_id: rescheduledAppt.id },
+            });
+          } catch {
+            // fall through to create
+          }
+        }
+      }
+      if (!followUpAppointment) {
+        const result = await createFollowUpAppointment(
+          doctor,
+          patientId,
+          targetDate,
+          input.diagnosis ?? row.diagnosis,
+          input.follow_up_time
+        );
+        if (result) {
+          followUpAppointment = result.appointment;
+          if (result.isNew) {
+            await announceFollowUpAppointment(doctor, patientId, followUpAppointment);
+          }
+          await prisma.medicalTreatment.update({
+            where: { id },
+            data: { follow_up_appointment_id: followUpAppointment.id },
+          });
+        }
+      }
+    }
   }
-  if (followUpAppointment) {
-    await prisma.medicalTreatment.update({
-      where: { id },
-      data: { follow_up_appointment_id: followUpAppointment.id },
-    });
-  }
+
+  const message = followUpAppointment
+    ? rescheduled
+      ? "Treatment updated and follow-up appointment rescheduled."
+      : "Treatment updated and follow-up appointment scheduled."
+    : "Treatment updated.";
 
   return {
     data: {
       ...treatmentDto(updated),
-      follow_up_appointment: followUpAppointment ? appointmentDto(followUpAppointment) : null,
+      follow_up_appointment: followUpAppointment
+        ? appointmentDto(followUpAppointment)
+        : null,
     },
-    message: followUpAppointment
-      ? "Treatment updated and follow-up appointment scheduled."
-      : "Treatment updated.",
+    message,
   };
 }
 
