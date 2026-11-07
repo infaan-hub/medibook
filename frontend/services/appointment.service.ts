@@ -12,7 +12,7 @@ import { conflict, forbidden, notFound, badRequest, ValidationError } from "@/li
 import { combineDateTime, normalizeTime, todayIso } from "@/lib/dates";
 import { appointmentDto } from "@/lib/serializers";
 import { broadcastAppointmentEvent, broadcastAvailabilityUpdated, notify, pushRaw } from "@/lib/notify";
-import { availableSlots } from "./schedule.service";
+import { isSlotAvailable } from "./schedule.service";
 import { appointmentCreateSchema, appointmentPatchSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import * as appointments from "@/repositories/appointments.repo";
@@ -180,8 +180,7 @@ async function slotIsOpen(
   start: string,
   end: string
 ): Promise<boolean> {
-  const slots = await availableSlots(doctor.id, doctor.is_available, date);
-  return slots.some((slot) => slot.start_time === start && slot.end_time === end);
+  return isSlotAvailable(doctor.id, date, start, end);
 }
 
 export { slotIsOpen };

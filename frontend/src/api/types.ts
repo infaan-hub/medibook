@@ -317,15 +317,16 @@ export interface DoctorOnboardingStatus {
   user: User;
 }
 
-export interface AvailabilitySlot {
+export interface AvailabilityWindow {
   start_time: string;
   end_time: string;
+  duration_minutes: number;
 }
 
 export interface DoctorAvailability {
   doctor: number;
   date: string;
-  slots: AvailabilitySlot[];
+  windows: AvailabilityWindow[];
 }
 
 export interface DoctorAvailableDays {

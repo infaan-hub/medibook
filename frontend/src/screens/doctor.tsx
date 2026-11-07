@@ -150,10 +150,11 @@ export function DoctorProfileScreen() {
               <input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
             </div>
             <Button onClick={loadSlots}>Check availability</Button>
-            {availability && (availability.slots.length ? (
+            {availability && (availability.windows.length ? (
               <p className="page__subtitle">
-                Appointment times are available on this date. Choose any available minute when booking;
-                the doctor's hours, time off, breaks, and existing appointments are respected.
+                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
+                Appointments last 30 minutes. Choose any start time within the windows;
+                time off, breaks, and existing appointments are respected.
               </p>
             ) : (
               <EmptyState title="No available times" description="Try another date." />

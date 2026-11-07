@@ -61,8 +61,10 @@ export async function availableSlots(
         end: timeToSeconds(item.end_time as string),
       }));
 
-    // Duration controls appointment length; start times are available every minute.
-    for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += 60) {
+    // Step by the window's slot duration (default 30 minutes) so slots are
+    // generated at sensible intervals, not every minute.
+    const step = window.slot_duration_minutes * 60;
+    for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += step) {
       const startSec = cursor;
       const endSec = cursor + duration;
       const overlapsBreak = breaks.some((b) => startSec < b.end && endSec > b.start);
@@ -78,6 +80,53 @@ export async function availableSlots(
     }
   }
   return slots;
+}
+
+/** Check whether a specific start/end time is bookable for a doctor on a date.
+ *  The time must fall inside an active availability window, not overlap any
+ *  break or exception, and not overlap any live appointment. */
+export async function isSlotAvailable(
+  doctorId: number,
+  date: string,
+  startTime: string,
+  endTime: string
+): Promise<boolean> {
+  const doctor = await doctors.findDoctorById(doctorId);
+  if (!doctor || !doctor.is_available) return false;
+
+  const exceptions = await doctors.listExceptionsForDate(doctorId, date);
+  if (exceptions.some((item) => item.start_time === null)) return false;
+
+  const startSec = timeToSeconds(startTime);
+  const endSec = timeToSeconds(endTime);
+  const weekday = isoWeekday(date);
+  const windows = await doctors.listActiveWindowsForWeekday(doctorId, weekday);
+
+  // Must fall within at least one active window.
+  const inWindow = windows.some((w) => {
+    const ws = timeToSeconds(w.start_time);
+    const we = timeToSeconds(w.end_time);
+    return startSec >= ws && endSec <= we;
+  });
+  if (!inWindow) return false;
+
+  const breaks = windows.flatMap((w) =>
+    w.breaks.map((item) => ({ start: timeToSeconds(item.start_time), end: timeToSeconds(item.end_time) }))
+  );
+  const exceptionRanges = exceptions
+    .filter((item) => item.start_time && item.end_time)
+    .map((item) => ({ start: timeToSeconds(item.start_time as string), end: timeToSeconds(item.end_time as string) }));
+  const booked = await bookedSlotKeysForDate(doctorId, date);
+  const bookedRanges = [...booked].map((key) => {
+    const [start = "00:00:00", end = "00:00:00"] = key.split("|");
+    return { start: timeToSeconds(start), end: timeToSeconds(end) };
+  });
+
+  const overlapsBreak = breaks.some((b) => startSec < b.end && endSec > b.start);
+  const overlapsException = exceptionRanges.some((e) => startSec < e.end && endSec > e.start);
+  const overlapsAppointment = bookedRanges.some((range) => startSec < range.end && endSec > range.start);
+
+  return !overlapsBreak && !overlapsException && !overlapsAppointment;
 }
 
 /** GET /api/doctors/{id}/available-days/ — days in a month with ≥1 slot. */

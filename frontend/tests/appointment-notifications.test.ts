@@ -43,6 +43,7 @@ const doctorsRepo = vi.hoisted(() => ({
 }));
 
 const availableSlots = vi.hoisted(() => vi.fn());
+const isSlotAvailable = vi.hoisted(() => vi.fn());
 
 const notify = vi.hoisted(() => vi.fn());
 const broadcastAppointmentEvent = vi.hoisted(() => vi.fn());
@@ -56,7 +57,7 @@ vi.mock("@/repositories/appointments.repo", async (importOriginal) => ({
 
 vi.mock("@/repositories/doctors.repo", () => doctorsRepo);
 
-vi.mock("@/services/schedule.service", () => ({ availableSlots }));
+vi.mock("@/services/schedule.service", () => ({ availableSlots, isSlotAvailable }));
 
 vi.mock("@/services/location.service", () => ({
   assertBookingLocation: vi.fn().mockResolvedValue(undefined),
@@ -139,6 +140,7 @@ beforeEach(() => {
   doctorsRepo.findDoctorById.mockResolvedValue(DOCTOR_PROFILE);
   doctorsRepo.findDoctorByUserId.mockResolvedValue({ id: 4, user_id: 12 });
   availableSlots.mockResolvedValue([{ start_time: "09:00:00", end_time: "09:30:00" }]);
+  isSlotAvailable.mockResolvedValue(true);
 });
 
 /* ====================== 1. consultation start ============================= */
@@ -256,6 +258,7 @@ describe("runAction done", () => {
 describe("patchAppointment (doctor in-place reschedule)", () => {
   beforeEach(() => {
     availableSlots.mockResolvedValue([{ start_time: "10:00:00", end_time: "10:30:00" }]);
+    isSlotAvailable.mockResolvedValue(true);
   });
 
   it("still tells the patient the new time and who moved it", async () => {
@@ -297,6 +300,7 @@ describe("bookAppointment rescheduled_from", () => {
 
   beforeEach(() => {
     availableSlots.mockResolvedValue([{ start_time: "09:00:00", end_time: "09:30:00" }]);
+    isSlotAvailable.mockResolvedValue(true);
     repo.createAppointment.mockResolvedValue(normalRow("pending", { id: 55 }));
   });
 

@@ -1,10 +1,9 @@
 import { handler, ok } from "@/lib/route";
 import { notFound, badRequest } from "@/lib/errors";
-import { todayIso, hhmm } from "@/lib/dates";
-import { availableSlots } from "@/services/schedule.service";
-import { findDoctorById } from "@/repositories/doctors.repo";
+import { todayIso, isoWeekday } from "@/lib/dates";
+import { listActiveWindowsForWeekday, findDoctorById } from "@/repositories/doctors.repo";
 
-/** GET /api/doctors/{id}/availability/?date=YYYY-MM-DD — bookable slots. */
+/** GET /api/doctors/{id}/availability/?date=YYYY-MM-DD — available window ranges. */
 export const GET = handler(async ({ req, params }) => {
   const id = Number(params.id);
   if (!Number.isInteger(id)) throw notFound();
@@ -22,13 +21,19 @@ export const GET = handler(async ({ req, params }) => {
     target = todayIso();
   }
 
-  const slots = await availableSlots(doctor.id, doctor.is_available, target);
+  const weekday = isoWeekday(target);
+  const windows = await listActiveWindowsForWeekday(doctor.id, weekday);
+
+  // Available window ranges for the patient to pick a time from.
+  const windowsForDisplay = windows.map((w) => ({
+    start_time: w.start_time,
+    end_time: w.end_time,
+    duration_minutes: w.slot_duration_minutes ?? 30,
+  }));
+
   return ok({
     doctor: doctor.id,
     date: target,
-    slots: slots.map((slot) => ({
-      start_time: hhmm(slot.start_time),
-      end_time: hhmm(slot.end_time),
-    })),
+    windows: windowsForDisplay,
   });
 });

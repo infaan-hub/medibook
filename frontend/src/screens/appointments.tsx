@@ -131,7 +131,6 @@ export function BookingScreen() {
   const [availableDays, setAvailableDays] = useState<DoctorAvailableDays | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{ start_time: string; end_time: string } | null>(null);
   const [selectedTime, setSelectedTime] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +162,6 @@ export function BookingScreen() {
     if (!id || !selectedDate) return;
     setSlotsLoading(true);
     setAvailability(null);
-    setSelectedSlot(null);
     setSelectedTime("");
     getDoctorAvailability(Number(id), selectedDate)
       .then((r) => { setAvailability(r.data); setSlotsLoading(false); })
@@ -216,7 +214,6 @@ export function BookingScreen() {
     else { setCalMonth((m) => m - 1); }
     setSelectedDate(null);
     setAvailability(null);
-    setSelectedSlot(null);
     setSelectedTime("");
   }
 
@@ -225,48 +222,38 @@ export function BookingScreen() {
     else { setCalMonth((m) => m + 1); }
     setSelectedDate(null);
     setAvailability(null);
-    setSelectedSlot(null);
     setSelectedTime("");
   }
 
   function selectDay(dayStr: string) {
     setSelectedDate(dayStr);
-    setSelectedSlot(null);
     setSelectedTime("");
   }
 
   async function handleBook(event: FormEvent) {
     event.preventDefault();
-    if (!id || !selectedSlot || !selectedDate) return;
+    if (!id || !selectedTime || !selectedDate) return;
     setSubmitting(true);
     setError(null);
 
-    // Optimistic: the chosen slot disappears immediately (occupied while in flight).
-    const booked = selectedSlot;
-    const prevAvailability = availability;
-    if (availability) {
-      setAvailability({
-        ...availability,
-        slots: availability.slots.filter(
-          (s) => !(s.start_time === booked.start_time && s.end_time === booked.end_time)
-        ),
-      });
-    }
-    setSelectedSlot(null);
+    // Compute end time = start + 30 minutes.
+    const [startH, startM] = selectedTime.split(":").map(Number);
+    const startSec = startH * 3600 + startM * 60;
+    const endSec = startSec + 30 * 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startTime = `${pad(Math.floor(startSec / 3600))}:${pad(Math.floor((startSec % 3600) / 60))}:00`;
+    const endTime = `${pad(Math.floor(endSec / 3600))}:${pad(Math.floor((endSec % 3600) / 60))}:00`;
 
     try {
       await createAppointment({
         doctor: Number(id),
         appointment_date: selectedDate,
-        start_time: booked.start_time,
-        end_time: booked.end_time,
+        start_time: startTime,
+        end_time: endTime,
         reason,
       });
       navigate("/booking/success");
     } catch (e) {
-      // Rollback: restore the slot so the patient can retry or pick another.
-      setAvailability(prevAvailability);
-      setSelectedSlot(booked);
       // Location refused → open the guided prompt instead of a raw error line.
       const gate = locationGateFromError(e);
       if (gate) {
@@ -276,7 +263,7 @@ export function BookingScreen() {
         setError(message(e));
       }
       // Reconcile with server (another client may have taken it while we failed).
-      if (prevAvailability) loadSlots();
+      loadSlots();
       // 409 = the slot went, or an open appointment still holds this patient's
       // slot — re-check the gate so the screen explains it instead of re-failing.
       if (e instanceof ApiError && e.status === 409) loadOpenAppointment();
@@ -471,44 +458,51 @@ export function BookingScreen() {
             <Skeleton lines={3} />
           ) : availability === null ? (
             <Skeleton lines={3} />
-          ) : availability.slots.length === 0 ? (
+          ) : availability.windows.length === 0 ? (
             <EmptyState title="No available times" description="Try another day." />
           ) : (
-            <div className="field">
-              <label className="field__label" htmlFor="book-time">Appointment start time</label>
-              <input
-                id="book-time"
-                className="field__input"
-                type="time"
-                step={60}
-                value={selectedTime}
-                onChange={(event) => {
-                  const time = event.target.value;
-                  setSelectedTime(time);
-                  setError(null);
-                  setSelectedSlot(
-                    availability.slots.find((slot) => formatTime(slot.start_time) === time) ?? null
-                  );
-                }}
-              />
+            <>
               <p className="page__subtitle">
-                Appointments last 30 minutes. Choose any available minute within the doctor's hours;
-                time off, breaks, and existing appointments are blocked.
+                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
+                Appointments last 30 minutes. Pick any start time within the windows;
+                breaks and existing appointments are checked server-side.
               </p>
-              {selectedTime && !selectedSlot && (
-                <p className="form-note--error">That time is unavailable. Choose another time.</p>
-              )}
-            </div>
+              <div className="field">
+                <label className="field__label" htmlFor="book-time">Appointment start time</label>
+                <input
+                  id="book-time"
+                  className="field__input"
+                  type="time"
+                  step={60}
+                  value={selectedTime}
+                  onChange={(event) => {
+                    const time = event.target.value;
+                    setSelectedTime(time);
+                    setError(null);
+                  }}
+                />
+                <p className="page__subtitle">
+                  Appointments last 30 minutes. Choose any start time within the
+                  doctor's available windows; breaks and existing appointments are
+                  blocked server-side.
+                </p>
+                {selectedTime && (
+                  <p className="form-note--error">
+                    That start time is not available. Choose another time.
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </Card>
       )}
 
       {/* Step 3: reason + confirm */}
-      {selectedSlot && selectedDate && (
+      {selectedTime && selectedDate && (
         <Card>
           <h2>Confirm your booking</h2>
           <p className="page__subtitle">
-            {formatDate(selectedDate)} at {formatTime(selectedSlot.start_time)} – {formatTime(selectedSlot.end_time)}
+            {formatDate(selectedDate)} at {selectedTime.slice(0, 5)}
           </p>
 
           <form className="form" onSubmit={handleBook}>
@@ -672,7 +666,6 @@ export function RescheduleScreen() {
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [date, setDate] = useState("");
   const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{ start_time: string; end_time: string } | null>(null);
   const [selectedTime, setSelectedTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -694,7 +687,6 @@ export function RescheduleScreen() {
     if (!appointment?.doctor) return;
     setError(null);
     setAvailability(null);
-    setSelectedSlot(null);
     setSelectedTime("");
     getDoctorAvailability(appointment.doctor, date)
       .then((r) => setAvailability(r.data))
@@ -715,42 +707,32 @@ export function RescheduleScreen() {
 
   async function handleReschedule(event: FormEvent) {
     event.preventDefault();
-    if (!id || !selectedSlot || !appointment || !appointment.doctor) return;
+    if (!id || !selectedTime || !appointment || !appointment.doctor) return;
     setSubmitting(true);
     setError(null);
 
-    // Optimistic: hide the chosen slot while the create is in flight.
-    const booked = selectedSlot;
-    const prevAvailability = availability;
-    if (availability) {
-      setAvailability({
-        ...availability,
-        slots: availability.slots.filter(
-          (s) => !(s.start_time === booked.start_time && s.end_time === booked.end_time)
-        ),
-      });
-    }
-    setSelectedSlot(null);
+    // Compute end time = start + 30 minutes.
+    const [startH, startM] = selectedTime.split(":").map(Number);
+    const startSec = startH * 3600 + startM * 60;
+    const endSec = startSec + 30 * 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startTime = `${pad(Math.floor(startSec / 3600))}:${pad(Math.floor((startSec % 3600) / 60))}:00`;
+    const endTime = `${pad(Math.floor(endSec / 3600))}:${pad(Math.floor((endSec % 3600) / 60))}:00`;
 
     try {
       await cancelAppointment(Number(id), "Rescheduled");
       await createAppointment({
         doctor: appointment.doctor,
         appointment_date: date,
-        start_time: booked.start_time,
-        end_time: booked.end_time,
+        start_time: startTime,
+        end_time: endTime,
         reason: appointment.reason,
         rescheduled_from: Number(id),
       });
       notify("success", "Appointment rescheduled. The new request is pending doctor confirmation.");
       navigate("/appointments");
     } catch (e) {
-      // Rollback slot selection + availability, then reconcile with the server.
-      setAvailability(prevAvailability);
-      setSelectedSlot(booked);
-      setSelectedTime(formatTime(booked.start_time));
       setError(message(e));
-      if (prevAvailability) loadSlots();
     } finally {
       setSubmitting(false);
     }
@@ -801,7 +783,7 @@ export function RescheduleScreen() {
         <h2>Choose a new time</h2>
         {availability === null ? (
           <Skeleton lines={3} />
-        ) : availability.slots.length === 0 ? (
+        ) : availability.windows.length === 0 ? (
           <EmptyState title="No available times" description="Try another date." />
         ) : (
           <div className="field">
@@ -816,26 +798,23 @@ export function RescheduleScreen() {
                 const time = event.target.value;
                 setSelectedTime(time);
                 setError(null);
-                setSelectedSlot(
-                  availability.slots.find((slot) => formatTime(slot.start_time) === time) ?? null
-                );
               }}
             />
             <p className="page__subtitle">
               Appointments last 30 minutes. Time off, breaks, and existing appointments are blocked.
             </p>
-            {selectedTime && !selectedSlot && (
-              <p className="form-note--error">That time is unavailable. Choose another time.</p>
+            {selectedTime && (
+              <p className="form-note--error">That start time is not available. Choose another time.</p>
             )}
           </div>
         )}
       </Card>
 
-      {selectedSlot && (
+      {selectedTime && (
         <Card>
           <h2>Confirm reschedule</h2>
           <p className="page__subtitle">
-            New time: {formatDate(date)} at {formatTime(selectedSlot.start_time)} – {formatTime(selectedSlot.end_time)}
+            New time: {formatDate(date)} at {selectedTime.slice(0, 5)}
           </p>
           <p className="form-note">Your current appointment will be cancelled and a new request will be submitted.</p>
           {error && <p className="form-note--error">{error}</p>}

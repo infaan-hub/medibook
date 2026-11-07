@@ -131,7 +131,7 @@ function AppointmentRow({
   const [showReschedule, setShowReschedule] = useState(false);
   const [reschedDate, setReschedDate] = useState(appointment.appointment_date);
   const [reschedSlots, setReschedSlots] = useState<DoctorAvailability | null>(null);
-  const [reschedSlot, setReschedSlot] = useState<{ start_time: string; end_time: string } | null>(null);
+  const [reschedTime, setReschedTime] = useState("");
   const [reschedBusy, setReschedBusy] = useState(false);
   const [reschedError, setReschedError] = useState<string | null>(null);
   const [showMedical, setShowMedical] = useState(false);
@@ -214,7 +214,6 @@ function AppointmentRow({
       return;
     }
     setReschedSlots(null);
-    setReschedSlot(null);
     setReschedError(null);
     getDoctorAvailability(doctorId, reschedDate)
       .then((r) => setReschedSlots(r.data))
@@ -222,14 +221,23 @@ function AppointmentRow({
   }, [showReschedule, doctorId, reschedDate]);
 
   async function handleReschedule() {
-    if (!reschedSlot) return;
+    if (!reschedTime) return;
     setReschedBusy(true);
     setReschedError(null);
+
+    // Compute end time = start + 30 minutes.
+    const [startH, startM] = reschedTime.split(":").map(Number);
+    const startSec = startH * 3600 + startM * 60;
+    const endSec = startSec + 30 * 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startTime = `${pad(Math.floor(startSec / 3600))}:${pad(Math.floor((startSec % 3600) / 60))}:00`;
+    const endTime = `${pad(Math.floor(endSec / 3600))}:${pad(Math.floor((endSec % 3600) / 60))}:00`;
+
     try {
       await rescheduleAppointment(appointment.id, {
         appointment_date: reschedDate,
-        start_time: reschedSlot.start_time,
-        end_time: reschedSlot.end_time,
+        start_time: startTime,
+        end_time: endTime,
       });
       notify("success", "Appointment rescheduled — the patient sees the new time instantly.");
       setShowReschedule(false);
@@ -475,33 +483,33 @@ function AppointmentRow({
             <p className="form-note">Loading your schedule…</p>
           ) : reschedSlots === null ? (
             <Skeleton lines={2} />
-          ) : reschedSlots.slots.length === 0 ? (
-            <p className="form-note--error">No open slots on this date. Pick another day.</p>
+          ) : reschedSlots.windows.length === 0 ? (
+            <p className="form-note--error">No available windows on this date. Pick another day.</p>
           ) : (
-            <div className="slot-grid">
-              {reschedSlots.slots.map((slot) => {
-                const isSelected =
-                  reschedSlot?.start_time === slot.start_time &&
-                  reschedSlot?.end_time === slot.end_time;
-                return (
-                  <button
-                    key={slot.start_time}
-                    type="button"
-                    className={`slot-btn${isSelected ? " slot-btn--selected" : ""}`}
-                    onClick={() => setReschedSlot(slot)}
-                  >
-                    {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              <p className="page__subtitle">
+                Available windows:{reschedSlots.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
+                Appointments last 30 minutes. Pick any start time within the windows.
+              </p>
+              <div className="field">
+                <label className="field__label" htmlFor="resched-time">Start time</label>
+                <input
+                  id="resched-time"
+                  className="field__input"
+                  type="time"
+                  step={60}
+                  value={reschedTime}
+                  onChange={(e) => setReschedTime(e.target.value)}
+                />
+              </div>
+              {reschedTime && (
+                <Button loading={reschedBusy} onClick={handleReschedule}>
+                  Save new time
+                </Button>
+              )}
+            </>
           )}
           {reschedError && <p className="form-note--error">{reschedError}</p>}
-          {reschedSlot && (
-            <Button loading={reschedBusy} onClick={handleReschedule}>
-              Save new time
-            </Button>
-          )}
         </div>
       )}
     </Card>
