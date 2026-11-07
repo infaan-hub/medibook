@@ -4,7 +4,6 @@ import {
   createScheduleItem,
   deleteScheduleItem,
   getDoctor,
-  getDoctorAvailability,
   getMyDoctorProfile,
   getMySchedule,
   updateMyDoctorProfile,
@@ -21,7 +20,6 @@ import { listSpecialties } from "../api/specialties";
 import { ApiError } from "../api/client";
 import type {
   AvailabilityBreak,
-  DoctorAvailability,
   DoctorProfile,
   GeoInput,
   ScheduleException,
@@ -49,8 +47,6 @@ function specialtyMeaning(s: Specialty): string {
 export function DoctorProfileScreen() {
   const { id } = useParams<{ id: string }>();
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
-  const [availability, setAvailability] = useState<DoctorAvailability | null>(null);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -59,12 +55,6 @@ export function DoctorProfileScreen() {
     getDoctor(Number(id)).then((response) => setDoctor(response.data)).catch((reason: unknown) => setError(message(reason)));
   }, [id]);
   useEffect(() => { load(); }, [load]);
-
-  function loadSlots() {
-    if (!id) return;
-    setError(null);
-    getDoctorAvailability(Number(id), date).then((response) => setAvailability(response.data)).catch((reason: unknown) => setError(message(reason)));
-  }
 
   if (error) return <div className="page"><ErrorState message={error} onRetry={load} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
@@ -134,32 +124,6 @@ export function DoctorProfileScreen() {
           <div style={{ marginTop: "var(--space-4)" }}>
             <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
           </div>
-        )}
-      </Card>
-      <Card className="card--fit">
-        <h2>Appointment availability</h2>
-        {doctor.is_available === false ? (
-          <EmptyState
-            title="Not available for booking"
-            description="This doctor has paused appointments — check back later."
-          />
-        ) : (
-          <>
-            <div className="field">
-              <label className="field__label" htmlFor="availability-date">Date</label>
-              <input id="availability-date" className="field__input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-            </div>
-            <Button onClick={loadSlots}>Check availability</Button>
-            {availability && (availability.windows.length ? (
-              <p className="page__subtitle">
-                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")}{" "}
-                Appointments last 30 minutes. Choose any start time within the windows;
-                time off, breaks, and existing appointments are respected.
-              </p>
-            ) : (
-              <EmptyState title="No available times" description="Try another date." />
-            ))}
-          </>  
         )}
       </Card>
     </div>

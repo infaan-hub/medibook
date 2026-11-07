@@ -486,11 +486,6 @@ export function BookingScreen() {
                   doctor's available windows; breaks and existing appointments are
                   blocked server-side.
                 </p>
-                {selectedTime && (
-                  <p className="form-note--error">
-                    That start time is not available. Choose another time.
-                  </p>
-                )}
               </div>
             </>
           )}
@@ -803,9 +798,6 @@ export function RescheduleScreen() {
             <p className="page__subtitle">
               Appointments last 30 minutes. Time off, breaks, and existing appointments are blocked.
             </p>
-            {selectedTime && (
-              <p className="form-note--error">That start time is not available. Choose another time.</p>
-            )}
           </div>
         )}
       </Card>
