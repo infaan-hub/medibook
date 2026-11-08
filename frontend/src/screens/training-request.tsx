@@ -79,16 +79,18 @@ export function TrainingRequestScreen() {
           {mode === "onsite" && (
             <div className="admin-field admin-field--wide">
               <label htmlFor="location">Location</label>
-              <input id="location" value={location} onChange={(e:any)=>setLocation(e.target.value)} required placeholder="Enter location" />
-              <button type="button" onClick={() => {
-                if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
-                navigator.geolocation.getCurrentPosition((pos) => {
-                  setLocation(`Current location (${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)})`);
-                  setLatitude(pos.coords.latitude);
-                  setLongitude(pos.coords.longitude);
-                  setAccuracy(pos.coords.accuracy);
-                }, () => alert("Unable to get location"));
-              }} style={{ marginTop: 4 }}>Use current location</button>
+              <input id="location" value={location} onChange={(e:any)=>{ setLocation(e.target.value); setLatitude(null); setLongitude(null); setAccuracy(null); }} required placeholder="Enter address or use current location" />
+              <div style={{ marginTop: 8 }}>
+                <Button type="button" variant="secondary" onClick={() => {
+                  if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+                  navigator.geolocation.getCurrentPosition((pos) => {
+                    setLocation(`${pos.coords.latitude}, ${pos.coords.longitude}`);
+                    setLatitude(pos.coords.latitude);
+                    setLongitude(pos.coords.longitude);
+                    setAccuracy(pos.coords.accuracy);
+                  }, () => alert("Unable to get location"));
+                }}>Use current location</Button>
+              </div>
             </div>
           )}
           <div className="admin-field admin-field--wide"><label htmlFor="notes">Notes</label><textarea id="notes" value={notes} onChange={(e:any)=>setNotes(e.target.value)} /></div>
