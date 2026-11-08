@@ -18,14 +18,14 @@ import {
 import { apiGet } from "../api/client";
 import { getQueue, startConsultation, checkIn, type QueueSlot } from "../api/queue";
 import { respondToEmergency } from "../api/emergency";
-import { getDoctorAvailability, getMyDoctorProfile } from "../api/doctors";
+import { getMyDoctorProfile } from "../api/doctors";
 import { getPatientProfileById } from "../api/patients";
 import {
   downloadDoctorSummaryReport,
   viewDoctorSummaryReport,
   type ReportPeriodParams,
 } from "../api/reports";
-import type { Appointment, DoctorAvailability, DoctorProfile, PatientProfile } from "../api/types";
+import type { Appointment, DoctorProfile, PatientProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
@@ -119,13 +119,11 @@ function QueueChip({ queue }: { queue: QueueSlot }) {
 function AppointmentRow({
   appointment,
   onAction,
-  doctorId,
   onChanged,
   queue,
 }: {
   appointment: Appointment;
   onAction: (id: number, action: string) => Promise<void>;
-  doctorId?: number | null;
   onChanged?: () => void;
   queue?: QueueSlot | null;
 }) {
@@ -137,7 +135,6 @@ function AppointmentRow({
   const [notes, setNotes] = useState(appointment.notes);
   const [showReschedule, setShowReschedule] = useState(false);
   const [reschedDate, setReschedDate] = useState(appointment.appointment_date);
-  const [reschedSlots, setReschedSlots] = useState<DoctorAvailability | null>(null);
   const [reschedTime, setReschedTime] = useState("");
   const [reschedBusy, setReschedBusy] = useState(false);
   const [reschedError, setReschedError] = useState<string | null>(null);
@@ -222,18 +219,6 @@ function AppointmentRow({
       })
       .finally(() => setMedicalLoading(false));
   }
-
-  useEffect(() => {
-    if (!showReschedule || !doctorId || !reschedDate) {
-      setReschedSlots(null);
-      return;
-    }
-    setReschedSlots(null);
-    setReschedError(null);
-    getDoctorAvailability(doctorId, reschedDate)
-      .then((r) => setReschedSlots(r.data))
-      .catch((e) => setReschedError(message(e)));
-  }, [showReschedule, doctorId, reschedDate]);
 
   async function handleReschedule() {
     if (!reschedTime) return;
@@ -508,42 +493,30 @@ function AppointmentRow({
               type="date"
               min={new Date().toISOString().slice(0, 10)}
               value={reschedDate}
-              onChange={(e) => setReschedDate(e.target.value)}
+              onChange={(e) => {
+                setReschedDate(e.target.value);
+                setReschedError(null);
+              }}
             />
           </div>
-          {!doctorId ? (
-            <p className="form-note">Loading your schedule…</p>
-          ) : reschedSlots === null ? (
-            <Skeleton lines={2} />
-          ) : reschedSlots.slots.length === 0 ? (
-            <p className="form-note--error">No available windows on this date. Pick another day.</p>
-          ) : (
-            <>
-              <p className="page__subtitle">
-                Available windows:{reschedSlots.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")} — appointments last 30 minutes.
-              </p>
-              <div className="field">
-                <label className="field__label" htmlFor="resched-time">Available appointment start time</label>
-                <select
-                  id="resched-time"
-                  className="field__input"
-                  value={reschedTime}
-                  onChange={(e) => setReschedTime(e.target.value)}
-                >
-                  <option value="">Select a free time</option>
-                  {reschedSlots.slots.map((slot) => (
-                    <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
-                      {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {reschedTime && (
-                <Button loading={reschedBusy} onClick={handleReschedule}>
-                  Save new time
-                </Button>
-              )}
-            </>
+          <p className="page__subtitle">
+            Enter any start time. The appointment lasts 30 minutes; the server checks working hours, breaks, exceptions, and other appointments when you save.
+          </p>
+          <div className="field">
+            <label className="field__label" htmlFor={`resched-time-${appointment.id}`}>New appointment start time</label>
+            <input
+              id={`resched-time-${appointment.id}`}
+              className="field__input"
+              type="time"
+              required
+              value={reschedTime}
+              onChange={(e) => setReschedTime(e.target.value)}
+            />
+          </div>
+          {reschedTime && (
+            <Button loading={reschedBusy} onClick={handleReschedule}>
+              Save new time
+            </Button>
           )}
           {reschedError && <p className="form-note--error">{reschedError}</p>}
         </div>
@@ -756,7 +729,7 @@ export function DoctorDashboardScreen() {
 
       <Card className="doctor-appointments-card">
         <div className="doctor-card-heading"><div><h2>Today's schedule</h2><p>Appointments that need your attention</p></div><Link to="/doctor/appointments"><span>View all</span><ArrowUpRight size={15} /></Link></div>
-        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} doctorId={profile?.id ?? null} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
+        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
       </Card>
 
       <Card className="doctor-reports-card">
@@ -805,15 +778,10 @@ export function DoctorAppointmentsScreen() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [doctorId, setDoctorId] = useState<number | null>(null);
   /** Waiting room (phase 11): today's queue keyed by appointment id. */
   const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(
     new Map()
   );
-
-  useEffect(() => {
-    getMyDoctorProfile().then((r) => setDoctorId(r.data.id)).catch(() => {});
-  }, []);
 
   const load = useCallback(() => {
     setError(null);
@@ -940,7 +908,7 @@ export function DoctorAppointmentsScreen() {
       ) : (
         <div className="appt-card-list">
           {filtered.map((a) => (
-            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} doctorId={doctorId} onChanged={load} queue={queueByAppointment.get(a.id) ?? null} />
+            <AppointmentRow key={a.id} appointment={a} onAction={handleAction} onChanged={load} queue={queueByAppointment.get(a.id) ?? null} />
           ))}
         </div>
       )}
