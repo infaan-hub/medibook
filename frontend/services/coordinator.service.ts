@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 import { notify, broadcastAppointmentEvent, broadcastAvailabilityUpdated } from "@/lib/notify";
 import { appointmentDto } from "@/lib/serializers";
+import { mediaUrl } from "@/lib/serialize";
 import { isSlotAvailable } from "@/services/schedule.service";
 import { coordinatorVisitHistory } from "@/services/treatment.service";
 import * as appointments from "@/repositories/appointments.repo";
@@ -100,12 +101,12 @@ export async function doctorSchedule(date: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw badRequest("Enter a valid date.");
   const weekday = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
   const [rows, bookings] = await Promise.all([
-    prisma.doctor.findMany({ include: { user: { select: { id: true, first_name: true, last_name: true, email: true } }, availabilities: { where: { is_active: true, weekday }, include: { breaks: true }, orderBy: { start_time: "asc" } }, schedule_exceptions: { where: { date: new Date(`${date}T00:00:00Z`) } } }, orderBy: [{ is_available: "desc" }, { id: "asc" }] }),
+    prisma.doctor.findMany({ include: { user: { select: { id: true, first_name: true, last_name: true, email: true, profile_image_id: true } }, availabilities: { where: { is_active: true, weekday }, include: { breaks: true }, orderBy: { start_time: "asc" } }, schedule_exceptions: { where: { date: new Date(`${date}T00:00:00Z`) } } }, orderBy: [{ is_available: "desc" }, { id: "asc" }] }),
     prisma.appointment.findMany({ where: { appointment_date: new Date(`${date}T00:00:00Z`), deleted_at: null, status: { in: [...liveStatuses] } }, include: { patient: { select: { id: true, first_name: true, last_name: true } }, doctor: { select: { id: true } } }, orderBy: [{ start_time: "asc" }] }),
   ]);
   return rows.map((doctor) => ({
     id: doctor.id, user_id: doctor.user.id, name: `${doctor.user.first_name} ${doctor.user.last_name}`.trim() || doctor.user.email,
-    email: doctor.user.email, is_available: doctor.is_available,
+    email: doctor.user.email, is_available: doctor.is_available, profile_image: mediaUrl(doctor.user.profile_image_id),
     windows: doctor.availabilities.map((w) => ({ start_time: w.start_time, end_time: w.end_time, breaks: w.breaks.map((b) => ({ start_time: b.start_time, end_time: b.end_time })) })),
     exceptions: doctor.schedule_exceptions.map((x) => ({ start_time: x.start_time, end_time: x.end_time, reason: x.reason })),
     appointments: bookings.filter((a) => a.doctor_id === doctor.id).map((a) => ({ id: a.id, patient_id: a.patient.id, patient_name: `${a.patient.first_name} ${a.patient.last_name}`.trim(), date, start_time: a.start_time, end_time: a.end_time, status: a.status, type: a.appointment_type })),
@@ -142,6 +143,7 @@ export async function listAppointments(type?: string) {
       emergency_completed_at: true,
       emergency_expired_at: true,
       patient: { select: { email: true } },
+      doctor: { select: { user: { select: { first_name: true, last_name: true } } } },
     },
     orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
     take: 250,
@@ -150,6 +152,7 @@ export async function listAppointments(type?: string) {
     id: row.id,
     patient: row.patient_id,
     patient_email: row.patient.email,
+    doctor_name: `${row.doctor.user.first_name} ${row.doctor.user.last_name}`.trim(),
     doctor: row.doctor_id,
     hospital: row.hospital_id,
     appointment_date: row.appointment_date.toISOString().slice(0, 10),
@@ -175,18 +178,18 @@ export async function listAppointments(type?: string) {
 
 export async function listPatients(search = "") {
   const q = search.trim();
-  const users = await prisma.user.findMany({ where: { role: "patient", ...(q ? { OR: [ { first_name: { contains: q, mode: "insensitive" } }, { last_name: { contains: q, mode: "insensitive" } }, { username: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } } ] } : {}) }, select: { id: true, username: true, email: true, first_name: true, last_name: true, phone: true, patient: { select: { date_of_birth: true, gender: true, blood_group: true, allergies: true, medical_history: true } }, _count: { select: { patient_appointments: true } } }, orderBy: [{ first_name: "asc" }, { last_name: "asc" }], take: 100 });
-  return users.map((u) => ({ id: u.id, username: u.username, email: u.email, first_name: u.first_name, last_name: u.last_name, phone: u.phone, profile: u.patient, appointment_count: u._count.patient_appointments }));
+  const users = await prisma.user.findMany({ where: { role: "patient", ...(q ? { OR: [ { first_name: { contains: q, mode: "insensitive" } }, { last_name: { contains: q, mode: "insensitive" } }, { username: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } } ] } : {}) }, select: { id: true, username: true, email: true, first_name: true, last_name: true, phone: true, profile_image_id: true, patient: { select: { date_of_birth: true, gender: true, blood_group: true, allergies: true, medical_history: true } }, _count: { select: { patient_appointments: true } } }, orderBy: [{ first_name: "asc" }, { last_name: "asc" }], take: 100 });
+  return users.map((u) => ({ id: u.id, username: u.username, email: u.email, first_name: u.first_name, last_name: u.last_name, phone: u.phone, profile_image: mediaUrl(u.profile_image_id), profile: u.patient, appointment_count: u._count.patient_appointments }));
 }
 
 export async function patientHistory(actor: AuthUser, patientId: number) {
   if (!Number.isInteger(patientId) || patientId < 1) throw badRequest("Enter a valid patient id.");
-  const patient = await prisma.user.findFirst({ where: { id: patientId, role: "patient" }, select: { id: true, username: true, email: true, first_name: true, last_name: true, phone: true, patient: true } });
+  const patient = await prisma.user.findFirst({ where: { id: patientId, role: "patient" }, select: { id: true, username: true, email: true, first_name: true, last_name: true, phone: true, profile_image_id: true, patient: true } });
   if (!patient) throw notFound("Patient not found.");
   const history = await coordinatorVisitHistory(patientId);
-  const { patient: profile, ...user } = patient;
+  const { patient: profile, profile_image_id, ...user } = patient;
   await admin.recordAudit(actor.id, "coordinator.patient_history_viewed", String(patientId), "System coordinator viewed patient visit history.");
-  return { patient: { ...user, profile, appointment_count: history.data.length }, visits: history.data };
+  return { patient: { ...user, profile_image: mediaUrl(profile_image_id), profile, appointment_count: history.data.length }, visits: history.data };
 }
 
 function doctorName(doctor: { user: { first_name: string; last_name: string; username: string } } | null) {
@@ -234,7 +237,9 @@ export async function reassignAppointment(actor: AuthUser, appointmentId: number
   sideEffects.forEach((result) => {
     if (result.status === "rejected") console.error("[coordinator] reassignment side effect failed", result.reason);
   });
-  return appointmentDto(updated);
+  const dto = appointmentDto(updated) as Record<string, unknown>;
+  dto.doctor_name = `${next.user.first_name} ${next.user.last_name}`.trim();
+  return dto as any;
 }
 
 export async function reassignEmergency(actor: AuthUser, appointmentId: number, doctorId: number) {
@@ -251,14 +256,21 @@ export async function reassignEmergency(actor: AuthUser, appointmentId: number, 
     const changed = await tx.appointment.updateMany({ where: { id: appointmentId, doctor_id: current.doctor_id, appointment_type: "EMERGENCY", status: { in: ["pending", "accepted"] }, emergency_in_progress_at: null, consultation_started_at: null, deleted_at: null }, data: { doctor_id: doctorId, status: "pending", emergency_accepted_at: null } });
     if (changed.count === 1) await tx.appointmentReminder.deleteMany({ where: { appointment_id: appointmentId } });
     return changed;
-  });
+  }, { timeout: 30000 });
   if (result.count !== 1) throw conflict("This emergency has started or changed. Refresh and try again.");
   const updated = await appointments.findAppointmentById(appointmentId);
   if (!updated) throw notFound("Emergency appointment not found.");
-  await notify(next.user_id, "appointment_request", `Emergency request #${updated.id} has been assigned to you by a system coordinator. Review it immediately.`, updated.id, "Emergency reassigned");
-  await notify(updated.patient_id, "appointment_request", `Your emergency request has been transferred to ${doctorName(next)} and is waiting for their response.`, updated.id, "Emergency doctor changed");
-  await admin.recordAudit(actor.id, "emergency.reassigned", String(updated.id), `Doctor ${current.doctor_id} → ${doctorId}; emergency acceptance reset.`);
+  const sideEffects = await Promise.allSettled([
+    notify(next.user_id, "appointment_request", `Emergency request #${updated.id} has been assigned to you by a system coordinator. Review it immediately.`, updated.id, "Emergency reassigned"),
+    notify(updated.patient_id, "appointment_request", `Your emergency request has been transferred to ${doctorName(next)} and is waiting for their response.`, updated.id, "Emergency doctor changed"),
+    admin.recordAudit(actor.id, "emergency.reassigned", String(updated.id), `Doctor ${current.doctor_id} → ${doctorId}; emergency acceptance reset.`),
+  ]);
+  sideEffects.forEach((result) => {
+    if (result.status === "rejected") console.error("[coordinator] emergency reassignment side effect failed", result.reason);
+  });
   broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, oldDoctor.user_id, next.user_id]);
-  return appointmentDto(updated);
+  const dto = appointmentDto(updated) as Record<string, unknown>;
+  dto.doctor_name = `${next.user.first_name} ${next.user.last_name}`.trim();
+  return dto as any;
 }
 

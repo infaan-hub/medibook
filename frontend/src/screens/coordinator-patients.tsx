@@ -203,6 +203,8 @@ function visitTimestamp(value?: string | null) {
 
 function PatientCard({ patient }: { patient: CoordinatorPatient }) {
   const name = patientName(patient);
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const avatarSrc = patient.profile_image && patient.profile_image !== brokenSrc ? patient.profile_image : null;
   const bloodGroup = profileText(patient.profile, "blood_group");
   const gender = profileText(patient.profile, "gender");
   const birthDate = profileText(patient.profile, "date_of_birth");
@@ -215,7 +217,16 @@ function PatientCard({ patient }: { patient: CoordinatorPatient }) {
   return (
     <Card className="coordinator-patient-card">
       <div className="coordinator-patient-card__head">
+        {avatarSrc ? (
+        <img
+          src={avatarSrc}
+          alt={name}
+          className="coordinator-patient-avatar"
+          onError={() => setBrokenSrc(avatarSrc)}
+        />
+      ) : (
         <span className="coordinator-patient-avatar" aria-hidden="true">{initials(name)}</span>
+      )}
         <div className="coordinator-patient-identity">
           <h2>{name}</h2>
           <p>{patient.email}</p>
@@ -645,6 +656,8 @@ function PatientHistoryView({
   const name = patient ? patientName(patient) : "Patient history";
   const allergies = profileText(profile, "allergies", "None recorded");
   const medicalHistory = profileText(profile, "medical_history", "None recorded");
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const avatarSrc = patient?.profile_image && patient.profile_image !== brokenSrc ? patient.profile_image : null;
 
   return (
     <div className="page doctor-workspace">
@@ -708,6 +721,16 @@ function PatientHistoryView({
 
           <Card className="coordinator-patient-profile">
             <div className="doctor-card-heading">
+              {avatarSrc ? (
+                <img
+                  src={avatarSrc}
+                  alt={name}
+                  className="coordinator-patient-avatar"
+                  onError={() => setBrokenSrc(avatarSrc)}
+                />
+              ) : (
+                <span className="coordinator-patient-avatar" aria-hidden="true">{initials(name)}</span>
+              )}
               <div>
                 <h2>Patient profile</h2>
                 <p>Registration and medical details on file</p>

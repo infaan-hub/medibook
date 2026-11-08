@@ -1,6 +1,7 @@
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Stethoscope } from "lucide-react";
 import type { CoordinatorDoctor } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
+import { DoctorImage } from "../components/DoctorImage";
 
 function formatDate(date: string) {
   return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
@@ -78,18 +79,19 @@ function exceptionLabel(doctor: CoordinatorDoctor) {
 function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
   const free = freeIntervals(doctor);
   const state = doctorState(doctor);
-  const initials = (doctor.name || doctor.email)
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
 
   return (
     <Card className="coordinator-doctor-card">
       <div className="coordinator-doctor-card__head">
-        <span className="coordinator-doctor-avatar" aria-hidden="true">{initials || "DR"}</span>
+        <DoctorImage
+        src={doctor.profile_image}
+        alt={`Dr. ${doctor.name}`}
+        width={44}
+        height={44}
+        sizes="44px"
+        className="coordinator-doctor-avatar"
+        emptyClassName="coordinator-doctor-avatar--empty"
+      />
         <div className="coordinator-doctor-identity">
           <h2>Dr. {doctor.name}</h2>
           <p>{doctor.email}</p>

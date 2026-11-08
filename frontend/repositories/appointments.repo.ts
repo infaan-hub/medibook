@@ -296,10 +296,10 @@ export async function withDoctorDateLocks<T>(
   const uniqueKeys = [...new Set(keys.map(({ doctorId, date }) => `${doctorId}:${date}`))].sort();
   return prisma.$transaction(async (tx) => {
     for (const key of uniqueKeys) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:doctor-date:${key}`}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:doctor-date:${key}`}))`;
     }
     return work(tx);
-  }, { isolationLevel: "ReadCommitted" });
+  }, { isolationLevel: "ReadCommitted", timeout: 30000 });
 }
 
 

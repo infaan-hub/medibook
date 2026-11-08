@@ -131,7 +131,7 @@ function EmergencyCard({
         </div>
         <div>
           <span>Assigned doctor</span>
-          <b>{currentDoctor ? `Dr. ${currentDoctor.name}` : `Doctor #${appointment.doctor}`}</b>
+          <b>{currentDoctor ? `Dr. ${currentDoctor.name}` : appointment.doctor_name ? `Dr. ${appointment.doctor_name}` : `Doctor #${appointment.doctor}`}</b>
         </div>
       </div>
 
