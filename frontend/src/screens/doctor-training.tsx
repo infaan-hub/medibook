@@ -89,27 +89,52 @@ export function DoctorTrainingScreen() {
     finally { setSaving(false); }
   }
 
+  const statusTone = (status: string) => {
+    if (status === "completed") return "#0a9f94";
+    if (status === "pending") return "#f3a629";
+    if (status === "accepted" || status === "scheduled") return "#7c3aed";
+    if (status === "in_progress") return "#2563eb";
+    if (status === "cancelled") return "#a9b6bf";
+    return "#a9b6bf";
+  };
+
   if (loading) return <Skeleton lines={6} />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
   return (
     <div className="page">
-      <h1 className="page__title">Training</h1>
-      {items.length === 0 ? <EmptyState title="No training assignments" description="Assigned trainings will appear here." /> :
+      <div className="doctor-page-header">
+        <div>
+          <p className="doctor-eyebrow">Training service</p>
+          <h1>My training sessions</h1>
+          <p>Review your assigned training sessions and record questions for each session.</p>
+        </div>
+      </div>
+
+      {items.length === 0 ? <EmptyState title="No training assignments" description="Assigned training sessions will appear here." /> :
        <div style={{ display: "grid", gap: 12 }}>
           {items.map((t: any) => {
             const sessions = t.sessions || [];
             const currentSession = sessions.find((s: any) => s.status !== "completed") || sessions[sessions.length - 1];
             const isLast = (currentSession?.session_number ?? 0) >= sessions.length;
+            const tone = statusTone(t.status);
             return (
-              <Card key={t.id}>
-                <h3>{t.training_topic}</h3>
-                <p>Patient: {t.patient.first_name} {t.patient.last_name}</p>
-                <p>Days: {t.preferred_days} · Delivery: {t.delivery_mode}</p>
-                {t.doctor && <p>Specialist: Dr. {t.doctor.user.first_name} {t.doctor.user.last_name}</p>}
+              <Card key={t.id} style={{ borderLeft: `4px solid ${tone}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, color: "#17384a" }}>{t.training_topic}</h2>
+                  <span style={{ padding: "4px 10px", borderRadius: 99, background: tone + "1a", color: tone, fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{t.status}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, fontSize: 13, color: "#405563", marginBottom: 10 }}>
+                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Patient</b><div>{t.patient.first_name} {t.patient.last_name}</div></div>
+                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Days · Delivery</b><div>{t.preferred_days} day{t.preferred_days === 1 ? "" : "s"} · {t.delivery_mode}</div></div>
+                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Specialist</b><div>Dr. {t.doctor.user.first_name} {t.doctor.user.last_name}</div></div>
+                </div>
                 {currentSession && (
                   <div style={{ marginTop: 8 }}>
-                    <p>Session {currentSession.session_number} of {sessions.length} — {currentSession.status}</p>
+                    <div style={{ marginBottom: 6, fontSize: 13, color: "#405563" }}>
+                      <b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Session</b>
+                      <div>Session {currentSession.session_number} of {sessions.length} — {currentSession.status}</div>
+                    </div>
                     {currentSession.status === "pending" && (
                       <Button loading={saving} onClick={() => start(currentSession)}>Start session</Button>
                     )}
