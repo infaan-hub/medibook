@@ -83,11 +83,19 @@ export function TrainingRequestScreen() {
               <div style={{ marginTop: 8 }}>
                 <Button type="button" variant="secondary" onClick={() => {
                   if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
-                  navigator.geolocation.getCurrentPosition((pos) => {
-                    setLocation(`${pos.coords.latitude}, ${pos.coords.longitude}`);
-                    setLatitude(pos.coords.latitude);
-                    setLongitude(pos.coords.longitude);
+                  navigator.geolocation.getCurrentPosition(async (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    setLatitude(lat);
+                    setLongitude(lng);
                     setAccuracy(pos.coords.accuracy);
+                    try {
+                      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                      const data = await res.json();
+                      setLocation(data.display_name || `${lat}, ${lng}`);
+                    } catch {
+                      setLocation(`${lat}, ${lng}`);
+                    }
                   }, () => alert("Unable to get location"));
                 }}>Use current location</Button>
               </div>
