@@ -117,6 +117,9 @@ export function roleOwnsPath(pathname: string, user: RoleUser): boolean {
   if (pathname.startsWith("/doctor/")) {
     return user.role === "doctor";
   }
+  // Appointment detail pages are shared by every signed-in role. The list,
+  // booking, and rescheduling routes below remain patient-only.
+  if (/^\/appointments\/\d+\/?$/.test(pathname)) return true;
   const patientOnly = [
     "/dashboard",
     "/doctors",

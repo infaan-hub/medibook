@@ -45,6 +45,17 @@ describe("role isolation rules", () => {
     }
   });
 
+  it("allows every role to open appointment details while keeping lists patient-only", () => {
+    for (const path of ["/appointments/119", "/appointments/119/"]) {
+      expect(roleOwnsPath(path, patient)).toBe(true);
+      expect(roleOwnsPath(path, doctor)).toBe(true);
+      expect(roleOwnsPath(path, admin)).toBe(true);
+    }
+    expect(roleOwnsPath("/appointments", doctor)).toBe(false);
+    expect(roleOwnsPath("/appointments/119/reschedule", doctor)).toBe(false);
+    expect(roleOwnsPath("/appointments/not-an-id", doctor)).toBe(false);
+  });
+
   it("allows shared areas for every signed-in role", () => {
     for (const path of ["/profile", "/notifications", "/specialties", "/blog"]) {
       expect(roleOwnsPath(path, patient)).toBe(true);
