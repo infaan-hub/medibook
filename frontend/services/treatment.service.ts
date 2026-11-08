@@ -600,8 +600,15 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
   const doctor = await ownDoctor(user);
   if (!doctor) return { data: [] as unknown[], message: "Doctor profile not found." };
   if (!patientId) return { data: [] as unknown[], message: "Patient ID is required." };
-  const rows = await clinical.listVisitHistory(doctor.id, Number(patientId));
-  if (rows.length === 0) return { data: [] as unknown[], message: "No appointments with this patient." };
+  const parsedPatientId = Number(patientId);
+  if (!Number.isInteger(parsedPatientId) || parsedPatientId <= 0) {
+    throw new ValidationError({ patient: ["Select a valid patient."] });
+  }
+  if (!(await appointments.hasAcceptedAppointmentWithPatient(doctor.id, parsedPatientId))) {
+    throw forbidden("Accept an appointment with this patient before viewing their history.");
+  }
+  const rows = await clinical.listPatientVisitHistory(parsedPatientId);
+  if (rows.length === 0) return { data: [] as unknown[], message: "No history is available for this patient." };
   const data = rows.map((appointment) => {
     const visitTreatments = appointment.treatments;
     const treatment = visitTreatments[0];
@@ -723,16 +730,19 @@ export async function healthRecordScope(user: AuthUser, patientFilter?: string) 
   }
   const doctor = await ownDoctor(user);
   if (!doctor) return clinical.healthRecordWhere("doctor", user.id, null, patientFilter);
-  // Every patient this doctor treats: their own uploads plus anything shared
-  // with another doctor for the same chart must still show up for them.
-  const links = await clinical.listPatientUserIdsForDoctor(doctor.id);
-  return clinical.healthRecordWhere(
-    "doctor",
-    user.id,
-    doctor.id,
-    patientFilter,
-    links.map((row) => row.patient_id)
-  );
+  // Cross-doctor records are visible only for patients with an accepted,
+  // active, or completed appointment with this doctor.
+  if (patientFilter !== undefined && patientFilter !== "") {
+    const patientId = Number(patientFilter);
+    if (!Number.isInteger(patientId) || patientId <= 0 ||
+      !(await appointments.hasAcceptedAppointmentWithPatient(doctor.id, patientId))) {
+      return { id: -1 };
+    }
+    return { patient_id: patientId };
+  }
+  const links = await appointments.listPatientHistoryAccessIdsForDoctor(doctor.id);
+  const patientIds = links.map((row) => row.patient_id);
+  return patientIds.length ? { patient_id: { in: patientIds } } : { id: -1 };
 }
 
 /**

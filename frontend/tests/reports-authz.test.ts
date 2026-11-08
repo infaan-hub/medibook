@@ -19,7 +19,7 @@ const db = vi.hoisted(() => {
   return {
     user: { count: fn(), findUnique: fn(), findMany: fn() },
     doctor: { count: fn(), findUnique: fn(), findMany: fn() },
-    appointment: { count: fn(), findMany: fn(), groupBy: fn() },
+    appointment: { count: fn(), findMany: fn(), findFirst: fn(), groupBy: fn() },
     medicalTreatment: { count: fn(), findMany: fn() },
     prescription: { count: fn(), findMany: fn() },
     vital: { count: fn(), findMany: fn() },
@@ -61,6 +61,7 @@ function emptyDb() {
   db.doctor.findMany.mockResolvedValue([]);
   db.appointment.count.mockResolvedValue(0);
   db.appointment.findMany.mockResolvedValue([]);
+  db.appointment.findFirst.mockResolvedValue(null);
   db.appointment.groupBy.mockResolvedValue([]);
   for (const model of [
     db.medicalTreatment,
@@ -115,36 +116,37 @@ describe("collectDoctorReport - who may generate a chart", () => {
     await expectStatus(collectDoctorReport(3, { patient: 7 }), 404);
   });
 
-  it("refuses a doctor with no recorded activity at all", async () => {
-    // Every relationship count is 0: appointment, treatment, prescription,
-    // vital, lab order and health record.
+  it("refuses a doctor without an accepted appointment, even if other records exist", async () => {
+    db.vital.count.mockResolvedValue(1);
     const error = await expectStatus(collectDoctorReport(3, { patient: 7 }), 403);
-    expect(error.message).toMatch(/recorded activity/i);
+    expect(error.message).toMatch(/accept an appointment/i);
     // The chart is never even assembled — no clinical rows are read.
     expect(db.appointment.findMany).not.toHaveBeenCalled();
   });
 
   it("allows a doctor who shares only an appointment with the patient", async () => {
-    db.appointment.count.mockResolvedValue(2);
+    db.appointment.findFirst.mockResolvedValue({ id: 55 });
     const data = await collectDoctorReport(3, { patient: 7 });
     expect(data.patient.reference).toBe("salma");
     expect(data.doctor.reference).toBe("amina");
+    expect(db.appointment.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { doctor_id: 3, patient_id: 7, status: { in: ["accepted", "in_progress", "done"] } },
+    }));
   });
 
-  it("allows a doctor who shares only a vital with the patient", async () => {
-    db.vital.count.mockResolvedValue(1);
-    const data = await collectDoctorReport(3, { patient: 7 });
-    expect(data.patient.reference).toBe("salma");
+  it("does not grant full-history access for a pending appointment", async () => {
+    db.appointment.findFirst.mockResolvedValue(null);
+    await expectStatus(collectDoctorReport(3, { patient: 7 }), 403);
   });
 
   it("reads the patient's full chart while the link gate stays doctor-scoped", async () => {
-    db.appointment.count.mockResolvedValue(1);
+    db.appointment.findFirst.mockResolvedValue({ id: 55 });
     await collectDoctorReport(3, { patient: 7 });
 
-    // Authorization: the link check is still scoped to this doctor.
-    expect(db.appointment.count).toHaveBeenCalledWith(
+    // Authorization uses this doctor's accepted relationship.
+    expect(db.appointment.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ doctor_id: 3, patient_id: 7 }),
+        where: expect.objectContaining({ doctor_id: 3, patient_id: 7, status: { in: ["accepted", "in_progress", "done"] } }),
       })
     );
     // The chart itself is the patient's whole record — never narrowed to one

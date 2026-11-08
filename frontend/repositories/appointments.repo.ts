@@ -215,6 +215,32 @@ export const hasAppointmentsWithPatient = async (doctorId: number, patientUserId
     select: { id: true },
   })) !== null;
 
+/** A confirmed care relationship grants access to the patient's full chart. */
+export const PATIENT_HISTORY_ACCESS_STATUSES = ["accepted", "in_progress", "done"] as const;
+
+export const patientHistoryAppointmentWhere = (doctorId: number, patientUserId: number) => ({
+  doctor_id: doctorId,
+  patient_id: patientUserId,
+  status: { in: [...PATIENT_HISTORY_ACCESS_STATUSES] },
+});
+
+export const hasAcceptedAppointmentWithPatient = async (doctorId: number, patientUserId: number) =>
+  (await prisma.appointment.findFirst({
+    where: patientHistoryAppointmentWhere(doctorId, patientUserId),
+    select: { id: true },
+  })) !== null;
+
+/** Unique patients whose histories this doctor may access. */
+export const listPatientHistoryAccessIdsForDoctor = (doctorId: number) =>
+  prisma.appointment.findMany({
+    where: {
+      doctor_id: doctorId,
+      status: { in: [...PATIENT_HISTORY_ACCESS_STATUSES] },
+    },
+    distinct: ["patient_id"],
+    select: { patient_id: true },
+  });
+
 /* -------------------------------- Reminders -------------------------------- */
 
 export const createReminderIfAbsent = (

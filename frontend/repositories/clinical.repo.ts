@@ -159,9 +159,9 @@ export const listPatientUserIdsForDoctor = (doctorId: number) =>
     select: { patient_id: true },
   });
 
-export const listVisitHistory = async (doctorId: number, patientId: number) =>
+export const listPatientVisitHistory = async (patientId: number) =>
   prisma.appointment.findMany({
-    where: { patient_id: patientId, doctor_id: doctorId },
+    where: { patient_id: patientId },
     include: {
       doctor: { include: { user: { select: { first_name: true, last_name: true, username: true } } } },
       patient: { select: { id: true, first_name: true, last_name: true, email: true, phone: true } },

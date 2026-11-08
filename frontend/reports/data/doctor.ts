@@ -3,12 +3,13 @@
  * their patients, containing the patient's full information.
  *
  * Authorization is enforced here, not in the route: the doctor must be the
- * signed-in doctor AND must actually be linked to the requested patient
- * (appointment, treatment, prescription, vital, lab order or shared health
- * record). A doctor can never assemble a chart for a stranger.
+ * signed-in doctor AND must have an accepted, in-progress, or completed
+ * appointment with the requested patient. Pending requests do not expose the
+ * patient's prior chart.
  */
 import { prisma } from "@/lib/db";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
+import { hasAcceptedAppointmentWithPatient } from "@/repositories/appointments.repo";
 import { collectClinicalHistory, type ClinicalHistory } from "./clinical";
 import { isoDayInTimezone } from "./format";
 import {
@@ -42,21 +43,6 @@ export interface DoctorReportData {
 
 const count = (value: number): string => value.toLocaleString("en-GB");
 
-/** True when the doctor has any clinical relationship with the patient. */
-async function isLinked(doctorId: number, patientId: number): Promise<boolean> {
-  const [appointments, treatments, prescriptions, vitals, labs, records] = await Promise.all([
-    prisma.appointment.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-    prisma.medicalTreatment.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-    prisma.prescription.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-    prisma.vital.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-    prisma.labOrder.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-    prisma.healthRecord.count({ where: { doctor_id: doctorId, patient_id: patientId } }),
-  ]);
-  return (
-    appointments + treatments + prescriptions + vitals + labs + records > 0
-  );
-}
-
 export interface DoctorReportQuery extends PeriodQuery {
   /** Patient **user** id — the id the app already uses everywhere. */
   patient?: string | number | null | undefined;
@@ -86,8 +72,8 @@ export async function collectDoctorReport(
   });
   if (!patient || patient.role !== "patient") throw notFound();
 
-  if (!(await isLinked(doctor.id, patient.id))) {
-    throw forbidden("You do not have any recorded activity with this patient.");
+  if (!(await hasAcceptedAppointmentWithPatient(doctor.id, patient.id))) {
+    throw forbidden("Accept an appointment with this patient before viewing their history.");
   }
 
   const appointmentId = query.appointmentId == null ? undefined : Number(query.appointmentId);

@@ -16,6 +16,8 @@ import {
   OPEN_APPOINTMENT_STATUSES,
   isAppointmentStatus,
   openAppointmentWhere,
+  patientHistoryAppointmentWhere,
+  PATIENT_HISTORY_ACCESS_STATUSES,
 } from "@/repositories/appointments.repo";
 import { appointmentActionSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
@@ -125,6 +127,23 @@ describe("one open appointment per patient", () => {
     expect(isAppointmentStatus("expired")).toBe(true);
     expect(isAppointmentStatus("confirmed")).toBe(false);
     expect(isAppointmentStatus("completed")).toBe(false);
+  });
+});
+
+describe("patient history access", () => {
+  it("grants full history after accept, during consultation, and after completion for any appointment type", () => {
+    expect([...PATIENT_HISTORY_ACCESS_STATUSES]).toEqual(["accepted", "in_progress", "done"]);
+    expect(patientHistoryAppointmentWhere(42, 7)).toEqual({
+      doctor_id: 42,
+      patient_id: 7,
+      status: { in: ["accepted", "in_progress", "done"] },
+    });
+  });
+
+  it("does not grant history access from pending, rejected, cancelled, or expired appointments", () => {
+    for (const status of ["pending", "rejected", "cancelled", "expired"]) {
+      expect(PATIENT_HISTORY_ACCESS_STATUSES as readonly string[]).not.toContain(status);
+    }
   });
 });
 

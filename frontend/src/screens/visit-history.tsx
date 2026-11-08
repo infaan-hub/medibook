@@ -112,6 +112,7 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
   const statusColors: Record<string, string> = {
     done: "var(--color-status-done)",
     accepted: "var(--color-status-accepted)",
+    in_progress: "var(--color-status-accepted)",
     pending: "var(--color-status-pending)",
     cancelled: "var(--color-status-cancelled)",
     rejected: "var(--color-status-rejected)",
@@ -135,8 +136,9 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
 
         <div className="visit-card-field">
           <span className="visit-field-label"><Calendar size={12} /> Appointment</span>
-          <span className="visit-field-value">{entry.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {entry.reason || "No reason recorded"}{entry.hospital_name ? ` · ${entry.hospital_name}` : ""}</span>
+          <span className="visit-field-value">{entry.appointment_type === "EMERGENCY" ? "Emergency" : entry.appointment_type === "HOME_SERVICE" ? "Home Service" : "Normal"} · {entry.reason || "No reason recorded"}{entry.hospital_name ? ` · ${entry.hospital_name}` : ""}</span>
         </div>
+        <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> Treating doctor</span><span className="visit-field-value">Dr. {[entry.doctor_first_name, entry.doctor_last_name].filter(Boolean).join(" ") || "Doctor"}</span></div>
         {entry.booked_at && <div className="visit-card-field"><span className="visit-field-label"><Clock size={12} /> Booked</span><span className="visit-field-value">{new Date(entry.booked_at).toLocaleString()}</span></div>}
         {entry.notes && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Appointment notes</span><span className="visit-field-value">{entry.notes}</span></div>}
         {entry.cancel_reason && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Cancellation / deletion reason</span><span className="visit-field-value">{entry.cancel_reason}</span></div>}
@@ -366,7 +368,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
               <option value="">Select the visit</option>
               {visits.filter((visit) => !visit.deleted_at).map((visit) => (
                 <option key={visit.appointment_id} value={visit.appointment_id}>
-                  {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {visit.status}
+                  {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : visit.appointment_type === "HOME_SERVICE" ? "Home Service" : "Normal"} · {visit.status}
                 </option>
               ))}
             </select>
@@ -576,7 +578,7 @@ export default function VisitHistoryPage() {
         <EmptyState
           icon={<Calendar size={28} />}
           title="No visits yet"
-          description="This patient has no appointment history with you."
+          description="There are no saved visits in this patient’s history yet."
         />
       ) : (
         <div className="visit-timeline">
