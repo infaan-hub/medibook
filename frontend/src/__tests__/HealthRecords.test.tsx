@@ -462,4 +462,33 @@ describe("doctor /doctor/visit-history/:patientId — health records", () => {
     expect(deleteHealthRecord).toHaveBeenCalledWith(12);
     await waitFor(() => expect(screen.queryByText("Blood pressure log")).not.toBeInTheDocument());
   });
+
+  it("shows appointment-linked vitals, labs and reports and uploads a report against its selected visit", async () => {
+    const user = userEvent.setup();
+    getVisitHistory.mockResolvedValue(envelope([{
+      ...visit,
+      vitals: [{ id: 3, recorded_at: "2026-08-12T09:35:00.000Z", blood_pressure: "120/80", pulse_bpm: 72, temperature_c: 37, glucose_mg_dl: null, weight_kg: null, height_cm: null, bmi: null, spo2_percent: 98, notes: "Stable" }],
+      lab_orders: [{ id: 4, status: "resulted", test_name: "CBC", result_due_date: "2026-08-14", unit: "g/dL", reference_min: 12, reference_max: 17, result_value: "14", result_notes: "Normal", notes: "", ordered_at: "2026-08-12T09:40:00Z", resulted_at: "2026-08-13T09:00:00Z" }],
+      patient_reports: [{ id: 5, record_type: "lab_report", title: "CBC report", description: "Clinic report", created_at: "2026-08-13T09:00:00Z", file_name: "cbc.pdf", file_content_type: "application/pdf" }],
+    }]));
+    getPatientProfileById.mockResolvedValue(envelope(patientProfile()));
+    getHealthRecords.mockResolvedValue(paginated([]));
+    uploadHealthRecord.mockResolvedValue(envelope(healthRecord({ appointment: 9 })));
+
+    renderHistory();
+
+    await user.click(await screen.findByRole("button", { name: /view treatment details/i }));
+    expect(screen.getByText(/BP 120\/80/)).toBeInTheDocument();
+    expect(screen.getByText(/CBC · resulted/)).toBeInTheDocument();
+    expect(screen.getByText(/lab report · CBC report/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /upload record/i }));
+    await user.type(screen.getByLabelText(/title/i), "Visit discharge summary");
+    await user.selectOptions(screen.getByLabelText(/appointment/i), "9");
+    await user.click(screen.getByRole("button", { name: /^upload$/i }));
+    await waitFor(() => expect(uploadHealthRecord).toHaveBeenCalledTimes(1));
+    const body = uploadHealthRecord.mock.calls[0][0] as FormData;
+    expect(body.get("appointment")).toBe("9");
+    expect(body.get("title")).toBe("Visit discharge summary");
+  });
 });

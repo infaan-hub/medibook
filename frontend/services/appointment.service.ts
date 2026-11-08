@@ -137,7 +137,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     });
   }
 
-  const patientSnapshot = await patientSnapshotForAppointment(user.id);
+  const patientSnapshot = await patientSnapshotForAppointment(user.id, user);
   const appointment = await createWithSlotGuard(() =>
     appointments.createAppointment({
       patient_id: user.id,

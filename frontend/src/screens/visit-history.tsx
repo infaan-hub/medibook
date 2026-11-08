@@ -107,7 +107,7 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
 
 function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewReport: (entry: VisitHistoryEntry) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description || entry.reason || entry.notes || entry.patient || entry.treatments?.length;
+  const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description || entry.reason || entry.notes || entry.patient || entry.treatments?.length || entry.vitals?.length || entry.lab_orders?.length || entry.patient_reports?.length;
 
   const statusColors: Record<string, string> = {
     done: "var(--color-status-done)",
@@ -198,6 +198,25 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
                 <div className="visit-detail-field"><span className="visit-detail-label"><Calendar size={12} /> Follow-up</span><span>{treatment.follow_up_date ? `${fmtDate(treatment.follow_up_date)}${treatment.follow_up_time ? ` at ${treatment.follow_up_time.slice(0, 5)}` : ""}` : "Not scheduled"}</span></div>
               </div>
             ))}
+            {entry.vitals?.length ? <div className="visit-detail-group"><h4>Vitals</h4>{entry.vitals.map((vital) => <div key={vital.id} className="visit-detail-field"><span className="visit-detail-label">{new Date(vital.recorded_at).toLocaleString()}</span><span>{[
+              vital.blood_pressure ? `BP ${vital.blood_pressure}` : "",
+              vital.pulse_bpm != null ? `Pulse ${vital.pulse_bpm} bpm` : "",
+              vital.temperature_c != null ? `Temp ${vital.temperature_c} °C` : "",
+              vital.glucose_mg_dl != null ? `Glucose ${vital.glucose_mg_dl} mg/dL` : "",
+              vital.weight_kg != null ? `Weight ${vital.weight_kg} kg` : "",
+              vital.height_cm != null ? `Height ${vital.height_cm} cm` : "",
+              vital.bmi != null ? `BMI ${vital.bmi}` : "",
+              vital.spo2_percent != null ? `SpO₂ ${vital.spo2_percent}%` : "",
+              vital.notes,
+            ].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
+            {entry.lab_orders?.length ? <div className="visit-detail-group"><h4>Lab orders and results</h4>{entry.lab_orders.map((lab) => <div key={lab.id} className="visit-detail-field"><span className="visit-detail-label">{lab.test_name} · {lab.status.replaceAll("_", " ")}</span><span>{[
+              lab.result_value ? `Result: ${lab.result_value}${lab.unit ? ` ${lab.unit}` : ""}` : "Result pending",
+              lab.result_notes,
+              lab.notes,
+              lab.result_due_date ? `Due ${fmtDate(lab.result_due_date)}` : "",
+              lab.reference_min != null || lab.reference_max != null ? `Reference ${lab.reference_min ?? "—"}–${lab.reference_max ?? "—"}${lab.unit ? ` ${lab.unit}` : ""}` : "",
+            ].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
+            {entry.patient_reports?.length ? <div className="visit-detail-group"><h4>Patient reports and attached records</h4>{entry.patient_reports.map((report) => <div key={report.id} className="visit-detail-field"><span className="visit-detail-label">{report.record_type.replaceAll("_", " ")} · {report.title}</span><span>{[report.description, report.file_name ? `File: ${report.file_name}` : "No file attached", new Date(report.created_at).toLocaleString()].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
             {!entry.treatments?.length && <div className="visit-detail-field">
               <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
               <span>
@@ -228,7 +247,7 @@ const RECORD_TYPE_OPTIONS = [
   { value: "other", label: "Other" },
 ] as const;
 
-function HealthRecordsSection({ patientId }: { patientId: number }) {
+function HealthRecordsSection({ patientId, visits }: { patientId: number; visits: VisitHistoryEntry[] }) {
   const { notify } = useToast();
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,6 +257,7 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
   const [form, setForm] = useState({ title: "", description: "", record_type: "other" });
   const [file, setFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [appointmentId, setAppointmentId] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -256,6 +276,10 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
       setError("Title is required.");
       return;
     }
+    if (!appointmentId) {
+      setError("Select the appointment this patient report belongs to.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -264,11 +288,13 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
       fd.append("title", form.title.trim());
       fd.append("description", form.description.trim());
       fd.append("record_type", form.record_type);
+      fd.append("appointment", appointmentId);
       if (file) fd.append("file", file);
       await uploadHealthRecord(fd);
       notify("success", "Health record uploaded.");
       setForm({ title: "", description: "", record_type: "other" });
       setFile(null);
+      setAppointmentId("");
       setShowForm(false);
       load();
     } catch (reason) {
@@ -331,6 +357,17 @@ function HealthRecordsSection({ patientId }: { patientId: number }) {
             >
               {RECORD_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="treat-pf">
+            <label htmlFor="hr-appointment">Appointment *</label>
+            <select id="hr-appointment" className="field__input" value={appointmentId} onChange={(e) => setAppointmentId(e.target.value)} required>
+              <option value="">Select the visit</option>
+              {visits.filter((visit) => !visit.deleted_at).map((visit) => (
+                <option key={visit.appointment_id} value={visit.appointment_id}>
+                  {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {visit.status}
+                </option>
               ))}
             </select>
           </div>
@@ -533,7 +570,7 @@ export default function VisitHistoryPage() {
         </Button>
       </div>
 
-      {patientId && <HealthRecordsSection patientId={Number(patientId)} />}
+      {patientId && <HealthRecordsSection patientId={Number(patientId)} visits={history} />}
 
       {history.length === 0 ? (
         <EmptyState

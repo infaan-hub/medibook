@@ -9,8 +9,8 @@
  *     only along accept → in-progress → done. Patients can never set those
  *     statuses, and neither can a second tab replaying a stale transition.
  *  3. The notification kinds stay inside the DB's NotificationType enum.
- *  4. An `expired` row survives 24 hours as history and is then purged with
- *     the same realtime `appointment.deleted` contract as a manual delete.
+ *  4. An `expired` row is archived from live queues after 24 hours while its
+ *     appointment and clinical history remain stored.
  *
  * Pure tests (no database) — same style as tests/emergency.test.ts.
  */
@@ -558,13 +558,15 @@ describe("cancelEmergencyAppointment", () => {
 /* ======================= 6. delete a finished emergency ======================= */
 
 describe("deleteEmergencyAppointment", () => {
-  it("deletes a DONE emergency and tells patient + doctor over the socket", async () => {
+  it("archives a DONE emergency and tells patient + doctor over the socket", async () => {
     repo.findAppointmentById.mockResolvedValue(emergencyRow("done"));
+    repo.updateAppointment.mockResolvedValue(emergencyRow("done", { deleted_at: T }));
 
     await deleteEmergencyAppointment(account(12, "doctor"), 9);
 
-    expect(repo.deleteAppointment).toHaveBeenCalledWith(9);
-    expect(pushRaw).toHaveBeenCalledWith("appointment.deleted", { id: 9 }, [7, 12]);
+    expect(repo.updateAppointment).toHaveBeenCalledWith(9, { deleted_at: expect.any(Date) });
+    expect(repo.deleteAppointment).not.toHaveBeenCalled();
+    expect(pushRaw).toHaveBeenCalledWith("appointment.deleted", expect.objectContaining({ id: 9 }), [7, 12]);
   });
 
   it("refuses while the request is still live, and deletes nothing", async () => {
@@ -648,17 +650,20 @@ describe("purgeExpiredAppointments — 24h retention", () => {
     expect(EXPIRED_RETENTION_MS).toBe(24 * 60 * 60 * 1000);
   });
 
-  it("purges rows whose expiry passed more than a day ago and broadcasts each", async () => {
+  it("archives rows whose expiry passed more than a day ago and broadcasts each", async () => {
     repo.purgeExpiredEmergencies.mockResolvedValue([
       { id: 9, patient_id: 7, doctor: { user_id: 12 } },
       { id: 10, patient_id: 7, doctor: { user_id: 12 } },
     ]);
+    repo.updateAppointment.mockImplementation(async (id: number) => ({ id }));
 
     const removed = await purgeExpiredAppointments();
 
     expect(removed).toBe(2);
     const cutoff = repo.purgeExpiredEmergencies.mock.calls[0][0] as Date;
     expect(Math.abs(cutoff.getTime() - (Date.now() - EXPIRED_RETENTION_MS))).toBeLessThan(10_000);
+    expect(repo.updateAppointment).toHaveBeenNthCalledWith(1, 9, { deleted_at: expect.any(Date) });
+    expect(repo.updateAppointment).toHaveBeenNthCalledWith(2, 10, { deleted_at: expect.any(Date) });
     expect(pushRaw).toHaveBeenCalledTimes(2);
     expect(pushRaw).toHaveBeenNthCalledWith(1, "appointment.deleted", { id: 9 }, [7, 12]);
     expect(pushRaw).toHaveBeenNthCalledWith(2, "appointment.deleted", { id: 10 }, [7, 12]);

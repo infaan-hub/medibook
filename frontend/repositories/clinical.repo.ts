@@ -160,12 +160,18 @@ export const listVisitHistory = async (doctorId: number, patientId: number) =>
   prisma.appointment.findMany({
     where: { patient_id: patientId, doctor_id: doctorId },
     include: {
-      doctor: { include: { user: true } },
-      patient: true,
-      hospital: true,
+      doctor: { include: { user: { select: { first_name: true, last_name: true, username: true } } } },
+      patient: { select: { id: true, first_name: true, last_name: true, email: true, phone: true } },
+      hospital: { select: { name: true } },
       treatments: {
         orderBy: { created_at: "desc" },
         include: { prescriptions: { include: { items: { orderBy: { sort_order: "asc" } } } } },
+      },
+      vitals: { orderBy: { recorded_at: "desc" } },
+      lab_orders: { orderBy: { ordered_at: "desc" } },
+      health_records: {
+        orderBy: { created_at: "desc" },
+        include: { file: { select: { filename: true, contentType: true } } },
       },
     },
     orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],

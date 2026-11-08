@@ -363,6 +363,14 @@ function AppointmentRow({
       </div>
 
       <div className="appt-card__actions">
+        {appointment.status === "in_progress" && (
+          <Link
+            to={`/doctor/medical-treatment?patient=${appointment.patient}&appointment=${appointment.id}`}
+            className="btn btn--secondary"
+          >
+            <Stethoscope size={14} /> Visit record
+          </Link>
+        )}
         {queue &&
           (appointment.status === "pending" || appointment.status === "accepted") &&
           !queue.checked_in && (

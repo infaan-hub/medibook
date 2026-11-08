@@ -638,7 +638,7 @@ export async function createEmergencyAppointment(req: Request, user: AuthUser, b
           emergency_location_accuracy: input.emergency_location_accuracy ?? null,
           emergency_requested_at: requestedAt,
           emergency_accepted_at: autoDispatched ? requestedAt : null,
-          patient_snapshot: await patientSnapshotForAppointment(user.id),
+          patient_snapshot: await patientSnapshotForAppointment(user.id, user),
         },
         tx
       );
@@ -963,8 +963,8 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
 /**
  * Run the 30-minute sweep before anyone reads a queue: a request whose window
  * closed without the doctor reaching IN_PROGRESS drops out of the live list
- * (the row itself is kept as history — but only for 24h; after that
- * purgeExpiredAppointments deletes it entirely). Server-side, so a closed
+ * (the row itself is retained as history while it is archived from live queues).
+ * Server-side, so a closed
  * browser or a stale tab never keeps a dead request alive (§18).
  *
  * Exported because EVERY surface that can show an emergency queue has to sweep
@@ -980,9 +980,8 @@ export async function sweepTimedOutEmergencies(): Promise<void> {
 export const EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /**
- * 24-hour auto-delete for the emergency history: remove `expired` rows whose
- * window closed more than a day ago (sweepTimedOutEmergencies only flips the
- * status; this deletes the row so history doesn't grow forever).
+ * 24-hour archival for emergency history: preserve expired rows while marking
+ * them deleted from active appointment views.
  *
  * Broadcasts `appointment.deleted` per row — the same realtime contract as a
  * manual delete — so open doctor/patient screens drop them without a reload.

@@ -83,6 +83,20 @@ export interface VisitHistoryEntry {
     follow_up_time: string | null;
     prescriptions?: Array<{ id: number; notes: string; created_at: string; items: Array<{ medication: string; dosage: string; frequency: string; route: string; duration_days: number | null; instructions: string }> }>;
   }>;
+  vitals?: Array<{
+    id: number; recorded_at: string; blood_pressure: string | null; pulse_bpm: number | null;
+    temperature_c: number | null; glucose_mg_dl: number | null; weight_kg: number | null;
+    height_cm: number | null; bmi: number | null; spo2_percent: number | null; notes: string;
+  }>;
+  lab_orders?: Array<{
+    id: number; status: string; test_name: string; result_due_date: string | null; unit: string;
+    reference_min: number | null; reference_max: number | null; result_value: string;
+    result_notes: string; notes: string; ordered_at: string; resulted_at: string | null;
+  }>;
+  patient_reports?: Array<{
+    id: number; record_type: string; title: string; description: string; created_at: string;
+    file_name: string | null; file_content_type: string | null;
+  }>;
   diagnosis: string | null;
   treatment_notes: string | null;
   doctor_description: string | null;

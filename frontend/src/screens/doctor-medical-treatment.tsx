@@ -224,9 +224,10 @@ function numOrNull(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function vitalFormPayload(patientId: number, form: VitalForm): CreateVitalPayload {
+function vitalFormPayload(patientId: number, form: VitalForm, appointmentId: number): CreateVitalPayload {
   return {
     patient: patientId,
+    appointment: appointmentId,
     systolic_bp: numOrNull(form.systolic_bp),
     diastolic_bp: numOrNull(form.diastolic_bp),
     pulse_bpm: numOrNull(form.pulse_bpm),
@@ -470,9 +471,10 @@ const EMPTY_LAB: LabForm = {
   result_due_date: "",
 };
 
-function labPayload(patientId: number, form: LabForm): CreateLabOrderPayload {
+function labPayload(patientId: number, form: LabForm, appointmentId: number): CreateLabOrderPayload {
   return {
     patient: patientId,
+    appointment: appointmentId,
     test_name: form.test_name.trim(),
     result_due_date: form.result_due_date.trim(),
   };
@@ -969,7 +971,17 @@ export function DoctorMedicalTreatmentScreen() {
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [initialVisitContext] = useState(() => {
+    if (typeof window === "undefined") return { patientId: null as number | null, appointmentId: null as number | null };
+    const params = new URLSearchParams(window.location.search);
+    const patientId = Number(params.get("patient"));
+    const appointmentId = Number(params.get("appointment"));
+    return {
+      patientId: Number.isInteger(patientId) && patientId > 0 ? patientId : null,
+      appointmentId: Number.isInteger(appointmentId) && appointmentId > 0 ? appointmentId : null,
+    };
+  });
+  const [selectedId, setSelectedId] = useState<number | null>(initialVisitContext.patientId);
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [treatments, setTreatments] = useState<MedicalTreatment[]>([]);
   const [records, setRecords] = useState<HealthRecord[]>([]);
@@ -978,12 +990,8 @@ export function DoctorMedicalTreatmentScreen() {
   // Appointment the treatment belongs to. The emergency queue passes its id in
   // the URL so the report can label the doctor description "Emergency"; a
   // normal visit stays "Normal".
-  const [contextAppointmentId, setContextAppointmentId] = useState<number | null>(() => {
-    if (typeof window === "undefined") return null;
-    const id = Number(new URLSearchParams(window.location.search).get("appointment"));
-    return Number.isInteger(id) && id > 0 ? id : null;
-  });
-  const [contextPatientId, setContextPatientId] = useState<number | null>(null);
+  const [contextAppointmentId, setContextAppointmentId] = useState<number | null>(initialVisitContext.appointmentId);
+  const [contextPatientId, setContextPatientId] = useState<number | null>(initialVisitContext.patientId);
   const [emergencyRoute] = useState(
     () => typeof window !== "undefined" && window.location.pathname.includes("/doctor/medical-treatment/emergency")
   );
@@ -1076,7 +1084,14 @@ export function DoctorMedicalTreatmentScreen() {
         .then(([profileRes, txRes, vhRes]) => {
           setProfile(profileRes.data);
           setTreatments(txRes.data);
-          setPatientHistory(vhRes.data ?? []);
+          const history = vhRes.data ?? [];
+          setPatientHistory(history);
+          setContextAppointmentId((current) => {
+            if (current && history.some((visit) => visit.appointment_id === current && !visit.deleted_at)) return current;
+            const activeVisit = history.find((visit) => visit.status === "in_progress" && !visit.deleted_at);
+            return activeVisit?.appointment_id ?? null;
+          });
+          setContextPatientId(id);
         })
         .catch((e) => setDetailError(msg(e)))
         .finally(() => setDetailLoading(false));
@@ -1130,7 +1145,7 @@ export function DoctorMedicalTreatmentScreen() {
   });
 
   function handleNew() {
-    const visitId = contextAppointmentId ?? patientHistory.find((row) => !row.deleted_at)?.appointment_id;
+    const visitId = contextAppointmentId ?? patientHistory.find((row) => row.status === "in_progress" && !row.deleted_at)?.appointment_id;
     if (!visitId) {
       notify("error", "Choose an appointment from Patient History before adding treatment.");
       return;
@@ -1260,6 +1275,10 @@ export function DoctorMedicalTreatmentScreen() {
 
   async function handleSaveVital() {
     if (!selectedId) return;
+    if (!contextAppointmentId) {
+      notify("error", "Select the active appointment before recording vitals.");
+      return;
+    }
     const invalid = vitalValidationError(vitalForm);
     if (invalid) {
       notify("error", invalid);
@@ -1267,7 +1286,7 @@ export function DoctorMedicalTreatmentScreen() {
     }
     setVitalSaving(true);
     try {
-      await createVital(vitalFormPayload(selectedId, vitalForm));
+      await createVital(vitalFormPayload(selectedId, vitalForm, contextAppointmentId));
       notify("success", "Vitals recorded.");
       handleCancelVital();
       loadVitals(selectedId);
@@ -1302,6 +1321,10 @@ export function DoctorMedicalTreatmentScreen() {
 
   async function handleSaveLab() {
     if (!selectedId) return;
+    if (!contextAppointmentId) {
+      notify("error", "Select the active appointment before placing a lab order.");
+      return;
+    }
     if (!labForm.test_name.trim()) {
       notify("error", "Test name is required.");
       return;
@@ -1312,7 +1335,7 @@ export function DoctorMedicalTreatmentScreen() {
     }
     setLabSaving(true);
     try {
-      await createLabOrder(labPayload(selectedId, labForm));
+      await createLabOrder(labPayload(selectedId, labForm, contextAppointmentId));
       notify("success", "Lab order placed.");
       handleCancelLab();
       loadLabs(selectedId);
@@ -1396,9 +1419,9 @@ export function DoctorMedicalTreatmentScreen() {
                     // Clicking a different patient leaves the emergency
                     // appointment behind, so its id must not leak into the
                     // new treatment.
-                    if (contextPatientId !== null && p.id !== contextPatientId) {
+                    if (contextPatientId !== p.id) {
                       setContextAppointmentId(null);
-                      setContextPatientId(null);
+                      setContextPatientId(p.id);
                     }
                   }}
                 >
@@ -1457,6 +1480,28 @@ export function DoctorMedicalTreatmentScreen() {
       {!detailLoading && profile && (
         <>
           <PatientInfo profile={profile} />
+
+          <Card className="visit-records-card">
+            <div className="treat-pf">
+              <label htmlFor="clinical-visit-appointment">Appointment for clinical records</label>
+              <select
+                id="clinical-visit-appointment"
+                className="field__input"
+                value={contextAppointmentId ?? ""}
+                onChange={(event) => setContextAppointmentId(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">Select an in-progress or completed appointment</option>
+                {patientHistory
+                  .filter((visit) => !visit.deleted_at && (visit.status === "in_progress" || visit.status === "done"))
+                  .map((visit) => (
+                    <option key={visit.appointment_id} value={visit.appointment_id}>
+                      {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {visit.status}
+                    </option>
+                  ))}
+              </select>
+              <p className="form-note">Vitals, lab orders, treatment and attached patient reports will be saved to this visit.</p>
+            </div>
+          </Card>
 
           {/* Vitals — readings taken for this patient (phase 2). */}
           <VitalsCard
