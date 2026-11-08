@@ -1204,6 +1204,20 @@ export function AppointmentDetailScreen() {
             <span className="appt-detail__label">Time</span>
             {formatTime(appointment.start_time)} – {formatTime(appointment.end_time)}
           </div>
+          <div className="appt-detail__field appt-detail__location">
+            <span className="appt-detail__label">Hospital location</span>
+            <strong>Dhuran Special Need Centre</strong>
+            <span>Jambiani Main Road, Kibigija, Tanzania</span>
+            <span>MGPW+2C Jambiani, Tanzania</span>
+            <a
+              className="btn btn--secondary appt-detail__directions"
+              href="https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MapPin size={16} /> Get directions in Google Maps
+            </a>
+          </div>
           {appointment.reason && (
             <div className="appt-detail__field">
               <span className="appt-detail__label">Reason</span>
