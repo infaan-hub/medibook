@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   cancelAppointment,
+  completeAppointment,
   createAppointment,
   deleteAppointment,
   getAppointment,
@@ -16,6 +17,7 @@ import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
 import { getQueue, checkIn, startConsultation, type QueueSlot } from "../api/queue";
+import { respondToEmergency } from "../api/emergency";
 import type {
   Appointment,
   AppointmentStatus,
@@ -74,6 +76,11 @@ function formatTime(t: string): string {
 function formatDate(d: string): string {
   const dt = new Date(d + "T00:00:00");
   return dt.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+
+function localDayKey(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
@@ -866,23 +873,31 @@ export function RescheduleScreen() {
 
 export function AppointmentsListScreen() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
-  const load = useCallback(() => {
-    setError(null);
-    listMyAppointments()
-      .then((r) => setAppointments(r.data.results))
-      .catch((e) => setError(message(e)));
+  const loadRows = useCallback(async (showError: boolean) => {
+    if (showError) setError(null);
+    try {
+      const response = await listMyAppointments();
+      const rows = response.data.results;
+      setAppointments(rows);
+      const dates = [...new Set(rows.filter((row) => row.status === "accepted" && row.checked_in_at).map((row) => row.appointment_date))];
+      const batches = await Promise.all(dates.map((date) => getQueue(date).then((result) => result.data).catch(() => [])));
+      const next = new Map<number, QueueSlot>();
+      for (const entry of batches.flat()) if (entry.queue) next.set(entry.id, entry.queue);
+      setQueueByAppointment(next);
+    } catch (e) {
+      if (showError) setError(message(e));
+    }
   }, []);
+
+  const load = useCallback(() => { void loadRows(true); }, [loadRows]);
 
   useEffect(() => { load(); }, [load]);
 
-  const refresh = useCallback(() => {
-    listMyAppointments()
-      .then((r) => setAppointments(r.data.results))
-      .catch(() => {});
-  }, []);
+  const refresh = useCallback(() => { void loadRows(false); }, [loadRows]);
 
   useRealtimeSync({
     refresh,
@@ -898,7 +913,7 @@ export function AppointmentsListScreen() {
     }
   });
 
-  const now = new Date().toISOString().slice(0, 10);
+  const now = localDayKey();
   const upcoming = appointments.filter(
     (a) => a.appointment_date >= now && (a.status === "pending" || a.status === "accepted")
   );
@@ -982,6 +997,8 @@ export function AppointmentsListScreen() {
                       >
                         {sc.icon} {STATUS_LABELS[a.status]}
                       </span>
+                      {queueByAppointment.get(a.id)?.being_seen && <span className="queue-badge queue-badge--live">In consultation</span>}
+                      {(queueByAppointment.get(a.id)?.position ?? null) !== null && <span className="queue-badge">Queue #{queueByAppointment.get(a.id)?.position}</span>}
                     </div>
                   </div>
                   {a.reason && (
@@ -1037,10 +1054,11 @@ export function AppointmentDetailScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Waiting room (phase 11): keep this appointment's position fresh while it
-  // is still live (check-ins and consults started by others move the line).
+  // Queue refresh is event-driven: check-ins and consultation starts broadcast
+  // appointment.updated to both the doctor and patient.
   useEffect(() => {
     if (!appointment) return;
+    if (appointment.appointment_type === "EMERGENCY") return;
     if (appointment.status !== "pending" && appointment.status !== "accepted") return;
     let cancelled = false;
     const loadQueue = () => {
@@ -1053,12 +1071,8 @@ export function AppointmentDetailScreen() {
         .catch(() => {});
     };
     loadQueue();
-    const timer = window.setInterval(loadQueue, 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [appointment?.id, appointment?.appointment_date, appointment?.status, queueTick]);
+    return () => { cancelled = true; };
+  }, [appointment?.id, appointment?.appointment_date, appointment?.status, appointment?.checked_in_at, appointment?.consultation_started_at, queueTick]);
 
   async function handleCheckIn() {
     if (!appointment) return;
@@ -1079,10 +1093,18 @@ export function AppointmentDetailScreen() {
     if (!appointment) return;
     setQueueBusy(true);
     try {
+      if (appointment.appointment_type === "EMERGENCY") {
+        await respondToEmergency(appointment.id, "in-progress");
+        notify("success", "Emergency consultation started.");
+        load();
+        navigate(`/doctor/medical-treatment/emergency?patient=${appointment.patient}&appointment=${appointment.id}`);
+        return;
+      }
       await startConsultation(appointment.id);
       notify("success", "Consultation started.");
       load();
       setQueueTick((tick) => tick + 1);
+      if (isDoctor) navigate(`/doctor/medical-treatment?patient=${appointment.patient}&appointment=${appointment.id}`);
     } catch (e) {
       notify("error", message(e));
     } finally {
@@ -1092,7 +1114,10 @@ export function AppointmentDetailScreen() {
 
   // Live detail: reflect confirm/cancel/complete the moment the other side acts.
   useRealtimeEvent((event, payload) => {
-    if (event === "appointment.updated" && Number(payload.id) === Number(id)) load();
+    if (event === "appointment.updated" && Number(payload.id) === Number(id)) {
+      load();
+      setQueueTick((tick) => tick + 1);
+    }
     if (event === "appointment.deleted" && Number(payload.id) === Number(id)) {
       notify("info", "This appointment was deleted.");
       navigate("/appointments");
@@ -1157,6 +1182,7 @@ export function AppointmentDetailScreen() {
 
   const canCancel = appointment.status === "pending" || appointment.status === "accepted";
   const canReschedule = canCancel;
+  const isAppointmentDay = appointment.appointment_date === localDayKey();
 
   return (
     <div className="page">
@@ -1203,8 +1229,31 @@ export function AppointmentDetailScreen() {
         </div>
       </Card>
 
+      {appointment.appointment_type === "EMERGENCY" && isDoctor && (appointment.status === "accepted" || appointment.status === "in_progress") && (
+        <Card className="queue-card">
+          <div className="queue-card__head"><span className="queue-card__title"><Users size={16} /> Emergency consultation</span></div>
+          {appointment.status === "accepted" ? (
+            <Button variant="primary" loading={queueBusy} onClick={() => void handleStartConsultation()}>
+              <Play size={14} /> Start emergency consultation
+            </Button>
+          ) : (
+            <Button variant="primary" loading={queueBusy} onClick={async () => {
+              setQueueBusy(true);
+              try {
+                await completeAppointment(appointment.id);
+                notify("success", "Emergency appointment completed.");
+                load();
+              } catch (e) { notify("error", message(e)); }
+              finally { setQueueBusy(false); }
+            }}>
+              <CheckCircle2 size={14} /> Done
+            </Button>
+          )}
+        </Card>
+      )}
+
       {/* Waiting room (phase 11) — live position for a today's appointment. */}
-      {queueSlot !== null && (
+      {appointment.appointment_type !== "EMERGENCY" && queueSlot !== null && (
         <Card className="queue-card">
           <div className="queue-card__head">
             <span className="queue-card__title">
@@ -1246,9 +1295,9 @@ export function AppointmentDetailScreen() {
           )}
 
           <div className="queue-card__acts">
-            {!queueSlot.checked_in && canCancel && (
-              <Button variant="primary" loading={queueBusy} onClick={() => void handleCheckIn()}>
-                <UserCheck size={14} /> {isDoctor ? "Check patient in" : "Check in"}
+            {!queueSlot.checked_in && appointment.status === "accepted" && canCancel && (
+              <Button variant="primary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleCheckIn()}>
+                <UserCheck size={14} /> {isAppointmentDay ? (isDoctor ? "Check patient in" : "Check in") : "Check in on appointment day"}
               </Button>
             )}
             {isDoctor && queueSlot.checked_in && !queueSlot.being_seen && (

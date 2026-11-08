@@ -611,6 +611,8 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
       start_time: appointment.start_time,
       end_time: appointment.end_time,
       status: appointment.status,
+      checked_in_at: appointment.checked_in_at?.toISOString() ?? null,
+      consultation_started_at: appointment.consultation_started_at?.toISOString() ?? null,
       deleted_at: appointment.deleted_at?.toISOString() ?? null,
       booked_at: appointment.created_at.toISOString(),
       updated_at: appointment.updated_at.toISOString(),

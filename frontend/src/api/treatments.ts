@@ -66,6 +66,8 @@ export interface VisitHistoryEntry {
   start_time: string;
   end_time: string;
   status: string;
+  checked_in_at?: string | null;
+  consultation_started_at?: string | null;
   deleted_at?: string | null;
   booked_at?: string;
   updated_at?: string;

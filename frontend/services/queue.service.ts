@@ -21,7 +21,9 @@ import type { AuthUser } from "@/lib/auth";
 /* ------------------------------- Pure helpers ------------------------------ */
 
 /** Statuses that keep an appointment in the waiting room. */
-export const QUEUE_STATUSES = ["pending", "accepted"] as const;
+export const QUEUE_STATUSES = ["accepted"] as const;
+
+export const canCheckInAppointment = (status: string): boolean => status === "accepted";
 
 /** The fields `buildQueue` needs — a plain projection of an Appointment row. */
 export interface QueueRow {
@@ -163,9 +165,9 @@ export async function checkIn(user: AuthUser, body: unknown) {
     throw forbidden("You do not have permission to check in for this appointment.");
   }
 
-  if (appointment.status !== "pending" && appointment.status !== "accepted") {
+  if (!canCheckInAppointment(appointment.status)) {
     throw new ValidationError({
-      non_field_errors: ["Only upcoming appointments can be checked in."],
+      non_field_errors: ["The doctor must accept this appointment before check-in."],
     });
   }
   if (appointment.checked_in_at) {
@@ -186,6 +188,8 @@ export async function checkIn(user: AuthUser, body: unknown) {
   const updated = await appointments.updateAppointment(appointment.id, {
     checked_in_at: new Date(),
   });
+  const doctor = await doctors.findDoctorById(updated.doctor_id);
+  broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, doctor?.user_id]);
   return { data: appointmentDto(updated), message: "Checked in." };
 }
 

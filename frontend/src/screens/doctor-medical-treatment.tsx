@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { completeAppointment } from "../api/appointments";
 import { getPatientProfileById } from "../api/patients";
 import {
   listDoctorPatients,
@@ -61,6 +62,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  Check,
 } from "lucide-react";
 
 function msg(error: unknown): string {
@@ -1122,6 +1124,8 @@ function HcRecord({ record, appointmentId, onAttach }: { record: HealthRecord; a
 
 export function DoctorMedicalTreatmentScreen() {
   const { notify } = useToast();
+  const navigate = useNavigate();
+  const [finishingVisit, setFinishingVisit] = useState(false);
 
   const [patients, setPatients] = useState<PatientProfile[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
@@ -1152,6 +1156,7 @@ export function DoctorMedicalTreatmentScreen() {
     () => typeof window !== "undefined" && window.location.pathname.includes("/doctor/medical-treatment/emergency")
   );
   const [patientHistory, setPatientHistory] = useState<VisitHistoryEntry[]>([]);
+  const contextVisit = patientHistory.find((visit) => visit.appointment_id === contextAppointmentId);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MedicalTreatment | null>(null);
@@ -1299,6 +1304,24 @@ export function DoctorMedicalTreatmentScreen() {
     reconcileOnFocus: false,
     enabled: selectedId !== null,
   });
+
+  async function handleFinishVisit() {
+    if (!contextAppointmentId) return;
+    if (showForm || showVitalForm || showLabForm || saving || vitalSaving || labSaving) {
+      notify("error", "Save or close the open clinical form before finishing this visit.");
+      return;
+    }
+    setFinishingVisit(true);
+    try {
+      await completeAppointment(contextAppointmentId);
+      notify("success", "Appointment completed and saved to patient history.");
+      navigate("/doctor/appointments?tab=done");
+    } catch (e) {
+      notify("error", msg(e));
+    } finally {
+      setFinishingVisit(false);
+    }
+  }
 
   function handleNew() {
     const visitId = contextAppointmentId ?? patientHistory.find((row) => row.status === "in_progress" && !row.deleted_at)?.appointment_id;
@@ -1652,6 +1675,14 @@ export function DoctorMedicalTreatmentScreen() {
           <p>Manage diagnosis, prescriptions, and follow-ups.</p>
         </div>
         <div className="treat-actions-row">
+          {contextVisit && !contextVisit.deleted_at && (
+            (contextVisit.status === "accepted" && Boolean(contextVisit.consultation_started_at)) ||
+            (contextVisit.appointment_type === "EMERGENCY" && contextVisit.status === "in_progress")
+          ) && (
+            <Button variant="primary" loading={finishingVisit} onClick={() => void handleFinishVisit()}>
+              <Check size={14} /> Done
+            </Button>
+          )}
           {!showForm && (
             <Button variant="primary" onClick={handleNew}>
               <Stethoscope size={14} /> New Treatment
@@ -1682,12 +1713,12 @@ export function DoctorMedicalTreatmentScreen() {
                 value={contextAppointmentId ?? ""}
                 onChange={(event) => setContextAppointmentId(event.target.value ? Number(event.target.value) : null)}
               >
-                <option value="">Select an in-progress or completed appointment</option>
+                <option value="">Select the appointment for this clinical record</option>
                 {patientHistory
-                  .filter((visit) => !visit.deleted_at && (visit.status === "in_progress" || visit.status === "done"))
+                  .filter((visit) => !visit.deleted_at && (visit.consultation_started_at || visit.status === "in_progress" || visit.status === "done"))
                   .map((visit) => (
                     <option key={visit.appointment_id} value={visit.appointment_id}>
-                      {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {visit.status}
+                      {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · {visit.consultation_started_at ? "in consultation" : visit.status}
                     </option>
                   ))}
               </select>

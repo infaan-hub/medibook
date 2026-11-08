@@ -199,7 +199,9 @@ describe("startConsultation", () => {
 
 describe("runAction done", () => {
   it("notifies the patient exactly as before when the doctor completes the visit", async () => {
-    repo.findAppointmentById.mockResolvedValue(normalRow("accepted"));
+    repo.findAppointmentById.mockResolvedValue(normalRow("accepted", {
+      consultation_started_at: new Date("2099-01-05T08:55:00.000Z"),
+    }));
     repo.updateAppointment.mockResolvedValue(normalRow("done"));
 
     await runAction(REQUEST(), account(12, "doctor"), 9, "done", {});
@@ -214,7 +216,9 @@ describe("runAction done", () => {
   });
 
   it("also notifies the owning doctor when an admin closes the visit", async () => {
-    repo.findAppointmentById.mockResolvedValue(normalRow("accepted"));
+    repo.findAppointmentById.mockResolvedValue(normalRow("accepted", {
+      consultation_started_at: new Date("2099-01-05T08:55:00.000Z"),
+    }));
     repo.updateAppointment.mockResolvedValue(normalRow("done"));
     doctorsRepo.findDoctorByUserId.mockResolvedValue(null); // admins own no doctor profile
 

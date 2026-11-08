@@ -3,7 +3,7 @@
  * dates and the check-in payload. Pure helpers only.
  */
 import { describe, expect, it } from "vitest";
-import { buildQueue, localDateString, type QueueRow } from "@/services/queue.service";
+import { buildQueue, canCheckInAppointment, localDateString, type QueueRow } from "@/services/queue.service";
 import { queueCheckInSchema } from "@/validators/misc";
 import { parse } from "@/validators/base";
 import { ValidationError } from "@/lib/errors";
@@ -87,8 +87,13 @@ describe("buildQueue", () => {
       ],
       now
     );
-    expect(slots.map((slot) => slot.appointment)).toEqual([4]);
-    expect(slots[0].position).toBe(1);
+    expect(slots.map((slot) => slot.appointment)).toEqual([]);
+  });
+
+  it("starts check-in only after a doctor accepts", () => {
+    expect(canCheckInAppointment("accepted")).toBe(true);
+    expect(canCheckInAppointment("pending")).toBe(false);
+    expect(canCheckInAppointment("done")).toBe(false);
   });
 
   it("reports whole minutes waited, never negative", () => {

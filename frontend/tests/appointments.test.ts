@@ -8,6 +8,7 @@ import {
   actionTargetStatus,
   activeAppointmentMessage,
   canTransition,
+  canCompleteNormalAppointment,
   isKnownAction,
 } from "@/services/appointment.service";
 import {
@@ -21,6 +22,14 @@ import { parse } from "@/validators/base";
 import { ValidationError } from "@/lib/errors";
 
 describe("appointment actions", () => {
+  it("allows completion only after check-in and consultation start", () => {
+    const stamp = new Date("2026-11-08T10:00:00Z");
+    expect(canCompleteNormalAppointment(null, null)).toBe(false);
+    expect(canCompleteNormalAppointment(stamp, null)).toBe(false);
+    expect(canCompleteNormalAppointment(null, stamp)).toBe(false);
+    expect(canCompleteNormalAppointment(stamp, stamp)).toBe(true);
+  });
+
   it("turns an accepted request into `accepted` — not `confirmed`", () => {
     expect(actionTargetStatus("accept")).toBe("accepted");
     expect(actionTargetStatus("confirm")).toBe("accepted");

@@ -403,6 +403,11 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   rejected: [],
 };
 
+export const canCompleteNormalAppointment = (
+  checkedInAt: Date | null,
+  consultationStartedAt: Date | null
+): boolean => checkedInAt !== null && consultationStartedAt !== null;
+
 /** True when `from` may legally move to `to` (pure — used by the tests too). */
 export const canTransition = (from: string, to: string): boolean =>
   (STATUS_TRANSITIONS[from] ?? []).includes(to);
@@ -484,6 +489,12 @@ export async function runAction(
 
   // State machine: reject illegal transitions (e.g. confirm a cancelled appointment).
   assertTransition(appointment.status, config.status);
+
+  if (config.status === "done" && !canCompleteNormalAppointment(appointment.checked_in_at, appointment.consultation_started_at)) {
+    throw new ValidationError({
+      non_field_errors: ["Check the patient in and start the consultation before marking the appointment done."],
+    });
+  }
 
   const { appointmentActionSchema } = await import("@/validators/misc");
   const rawBody = (body ?? {}) as Record<string, unknown>;
