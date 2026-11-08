@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost } from "../api/client";
-import { Card, Button, TextField } from "../components/ui";
+import { Card, Button } from "../components/ui";
 
 export function TrainingRequestScreen() {
   const navigate = useNavigate();
@@ -36,43 +36,48 @@ export function TrainingRequestScreen() {
   }
 
   return (
-    <div className="page">
-      <h1 className="page__title">Request training</h1>
-      <Card>
-        <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-          <label>Audience
-            <select value={audience} onChange={(e:any)=>setAudience(e.target.value)} style={{ width: "100%" }}>
+    <div className="page admin-form-page">
+      <div className="doctor-page-header">
+        <div>
+          <p className="doctor-eyebrow">Training service</p>
+          <h1>Request training</h1>
+          <p>Fill in the details and a coordinator will assign a specialist.</p>
+        </div>
+      </div>
+      <Card className="admin-form-card">
+        <form onSubmit={submit} className="admin-form-grid">
+          <div className="admin-field">
+            <label htmlFor="audience">Audience</label>
+            <select id="audience" value={audience} onChange={(e:any)=>setAudience(e.target.value)}>
               <option value="individual">Individual</option>
               <option value="company">Company</option>
             </select>
-          </label>
+          </div>
           {audience === "company" && (
             <>
-              <TextField id="companyName" label="Company name" value={companyName} onChange={(e:any)=>setCompanyName(e.target.value)} required />
-              <TextField id="contactName" label="Contact name" value={contactName} onChange={(e:any)=>setContactName(e.target.value)} required />
-              <TextField id="contactEmail" label="Contact email" type="email" value={contactEmail} onChange={(e:any)=>setContactEmail(e.target.value)} required />
-              <TextField id="contactPhone" label="Contact phone" value={contactPhone} onChange={(e:any)=>setContactPhone(e.target.value)} />
+              <div className="admin-field"><label htmlFor="companyName">Company name</label><input id="companyName" value={companyName} onChange={(e:any)=>setCompanyName(e.target.value)} required /></div>
+              <div className="admin-field"><label htmlFor="contactName">Contact name</label><input id="contactName" value={contactName} onChange={(e:any)=>setContactName(e.target.value)} required /></div>
+              <div className="admin-field"><label htmlFor="contactEmail">Contact email</label><input id="contactEmail" type="email" value={contactEmail} onChange={(e:any)=>setContactEmail(e.target.value)} required /></div>
+              <div className="admin-field"><label htmlFor="contactPhone">Contact phone</label><input id="contactPhone" value={contactPhone} onChange={(e:any)=>setContactPhone(e.target.value)} /></div>
             </>
           )}
-          <TextField id="topic" label="Training topic" value={topic} onChange={(e:any)=>setTopic(e.target.value)} required />
-          <TextField id="startDate" label="Preferred start date" type="date" value={startDate} onChange={(e:any)=>setStartDate(e.target.value)} required />
-          <label>Number of days
-            <input type="number" min={1} max={30} value={days} onChange={(e:any)=>setDays(Number(e.target.value))} style={{ width: "100%" }} />
-          </label>
-          <label>Delivery mode
-            <select value={mode} onChange={(e:any)=>setMode(e.target.value)} style={{ width: "100%" }}>
+          <div className="admin-field admin-field--wide"><label htmlFor="topic">Training topic</label><input id="topic" value={topic} onChange={(e:any)=>setTopic(e.target.value)} required /></div>
+          <div className="admin-field"><label htmlFor="startDate">Preferred start date</label><input id="startDate" type="date" value={startDate} onChange={(e:any)=>setStartDate(e.target.value)} required /></div>
+          <div className="admin-field"><label htmlFor="days">Number of days</label><input id="days" type="number" min={1} max={30} value={days} onChange={(e:any)=>setDays(Number(e.target.value))} /></div>
+          <div className="admin-field"><label htmlFor="mode">Delivery mode</label>
+            <select id="mode" value={mode} onChange={(e:any)=>setMode(e.target.value)}>
               <option value="online">Online meeting</option>
               <option value="onsite">Onsite</option>
             </select>
-          </label>
+          </div>
           {mode === "onsite" && (
-            <TextField id="location" label="Location" value={location} onChange={(e:any)=>setLocation(e.target.value)} required placeholder="Enter location" />
+            <div className="admin-field admin-field--wide"><label htmlFor="location">Location</label><input id="location" value={location} onChange={(e:any)=>setLocation(e.target.value)} required placeholder="Enter location" /></div>
           )}
-          <label>Notes
-            <textarea value={notes} onChange={(e:any)=>setNotes(e.target.value)} style={{ width: "100%" }} />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <Button type="submit" loading={saving}>Request training</Button>
+          <div className="admin-field admin-field--wide"><label htmlFor="notes">Notes</label><textarea id="notes" value={notes} onChange={(e:any)=>setNotes(e.target.value)} /></div>
+          {error && <p className="form-note form-note--error admin-field--wide">{error}</p>}
+          <div className="admin-form-actions admin-field--wide">
+            <Button type="submit" loading={saving}>Request training</Button>
+          </div>
         </form>
       </Card>
     </div>
