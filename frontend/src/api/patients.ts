@@ -27,9 +27,17 @@ export function getLinkedDoctors(): Promise<Envelope<LinkedDoctor[]>> {
   return apiGet<LinkedDoctor[]>("/patients/linked-doctors/");
 }
 
-/** PATCH /api/patients/profile/ — update clinical/contact details. */
+/** PATCH /api/patients/profile/ — update the signed-in patient's own profile. */
 export function updatePatientProfile(
   patch: UpdatePatientProfilePayload
 ): Promise<Envelope<PatientProfile>> {
   return apiPatch<PatientProfile>("/patients/profile/", patch);
+}
+
+/** PATCH /api/patients/<userId>/ — doctor updates a patient's medical details. */
+export function updatePatientProfileById(
+  userId: number,
+  patch: UpdatePatientProfilePayload
+): Promise<Envelope<PatientProfile>> {
+  return apiPatch<PatientProfile>(`/patients/${userId}/`, patch);
 }

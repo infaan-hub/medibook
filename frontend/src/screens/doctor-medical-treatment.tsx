@@ -22,7 +22,7 @@ import {
 } from "../api/vitals";
 import type { Gender, PatientProfile } from "../api/types";
 import { getHealthRecords, attachHealthRecordToAppointment, type HealthRecord } from "../api/health-records";
-import { updatePatientProfile } from "../api/patients";
+import { updatePatientProfile, updatePatientProfileById } from "../api/patients";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { nearestAreaName } from "../lib/zanzibar";
 import { vitalChips } from "../lib/vitals";
@@ -752,7 +752,7 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
   const handleSaveMedical = async () => {
     setSavingMedical(true);
     try {
-      await updatePatientProfile({
+      await updatePatientProfileById(profile.id, {
         gender: medicalForm.gender || undefined,
         blood_group: medicalForm.blood_group.trim() || undefined,
         date_of_birth: medicalForm.date_of_birth || undefined,
