@@ -28,6 +28,7 @@ import {
   normaliseEmergencyAction,
   purgeExpiredAppointments,
   runEmergencyAction,
+  sweepTimedOutEmergencies,
   startEmergencyInProgress,
   type EmergencyEligibility,
 } from "@/services/emergency.service";
@@ -454,6 +455,21 @@ describe("getEmergencyEligibility", () => {
     expect(result.canCreateEmergency).toBe(false);
     expect(result.reason).toBe("EMERGENCY_ACTIVE");
     expect(result.availableAt).toBe(new Date(T.getTime() + 30 * MINUTE).toISOString());
+  });
+});
+
+describe("sweepTimedOutEmergencies", () => {
+  it("scopes dashboard cleanup to the requesting doctor's emergencies", async () => {
+    repo.expireTimedOutEmergencies.mockResolvedValue([]);
+
+    await sweepTimedOutEmergencies(42);
+
+    expect(repo.expireTimedOutEmergencies).toHaveBeenCalledWith(
+      expect.any(Date),
+      undefined,
+      undefined,
+      42
+    );
   });
 });
 

@@ -971,9 +971,16 @@ export async function getPatientEmergencyAppointment(user: AuthUser) {
  * first — the emergency screens do, and so does the doctor's appointments list,
  * which otherwise kept showing timed-out requests as still `accepted`.
  */
-export async function sweepTimedOutEmergencies(): Promise<void> {
+export async function sweepTimedOutEmergencies(doctorId?: number): Promise<void> {
   const cutoff = new Date(Date.now() - EMERGENCY_TIMEOUT_MS);
-  await appointments.expireTimedOutEmergencies(cutoff);
+  if (doctorId === undefined) {
+    await appointments.expireTimedOutEmergencies(cutoff);
+    return;
+  }
+  // A doctor's appointment list only needs to sweep that doctor's emergency
+  // requests. Avoid scanning and updating stale rows for every doctor on each
+  // dashboard refresh.
+  await appointments.expireTimedOutEmergencies(cutoff, undefined, undefined, doctorId);
 }
 
 /** Expired rows are hidden from the live queue after one day, but retained in history. */

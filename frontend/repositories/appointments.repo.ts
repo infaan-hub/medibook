@@ -291,11 +291,13 @@ export const findPatientEmergencyAppointment = (patientId: number, db: Appointme
 export const expireTimedOutEmergencies = async (
   cutoff: Date,
   patientId?: number,
-  db: AppointmentDb = prisma
+  db: AppointmentDb = prisma,
+  doctorId?: number
 ) => {
   const stale = await db.appointment.findMany({
     where: {
       ...(patientId !== undefined ? { patient_id: patientId } : {}),
+      ...(doctorId !== undefined ? { doctor_id: doctorId } : {}),
       appointment_type: "EMERGENCY",
       status: { in: ["pending", "accepted"] },
       // COALESCE: rows written before emergency_requested_at existed still time out.

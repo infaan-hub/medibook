@@ -16,7 +16,7 @@ export const GET = handler(async (ctx) => {
   // 30-minute sweep first — otherwise a request the doctor never started keeps
   // showing here as `accepted` long after the patient was released and their
   // slot was re-dispatched to someone else.
-  await sweepTimedOutEmergencies();
+  await sweepTimedOutEmergencies(doctor.id);
 
   const raw = new URL(ctx.req.url).searchParams.get("status") ?? undefined;
   if (raw !== undefined && !isAppointmentStatus(raw)) {
