@@ -7,6 +7,7 @@
  */
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { labOrderDto } from "@/lib/serializers";
+import { broadcastPlatformDataUpdated } from "@/lib/notify";
 import { labOrderCreateSchema, labOrderPatchSchema } from "@/validators/clinical";
 import { parse } from "@/validators/base";
 import * as labs from "@/repositories/lab-orders.repo";
@@ -146,6 +147,7 @@ export async function createLabOrder(user: AuthUser, body: unknown) {
     reference_max: input.reference_max ?? null,
     notes: input.notes ?? "",
   });
+  broadcastPlatformDataUpdated("patient-history");
   return { data: labOrderDto(row), message: "Lab order placed." };
 }
 
@@ -176,6 +178,7 @@ export async function patchLabOrder(user: AuthUser, id: number, body: unknown) {
     ...(input.notes !== undefined ? { notes: input.notes } : {}),
     resulted_at: stampResultedAt(status, row.resulted_at, new Date()),
   });
+  broadcastPlatformDataUpdated("patient-history");
   return { data: labOrderDto(updated), message: "Lab order updated." };
 }
 
@@ -185,6 +188,7 @@ export async function destroyLabOrder(user: AuthUser, id: number) {
   const row = doctor ? await labs.findLabOrderOwned(id, doctor.id) : null;
   if (!row) return { data: null, message: "Lab order not found." };
   await labs.deleteLabOrder(id);
+  broadcastPlatformDataUpdated("patient-history");
   return { data: null as null, message: "Lab order deleted." };
 }
 

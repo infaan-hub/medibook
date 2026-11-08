@@ -8,6 +8,7 @@
  */
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { vitalDto } from "@/lib/serializers";
+import { broadcastPlatformDataUpdated } from "@/lib/notify";
 import { vitalsCreateSchema, vitalAppointmentPatchSchema } from "@/validators/clinical";
 import { parse } from "@/validators/base";
 import * as vitals from "@/repositories/vitals.repo";
@@ -168,6 +169,7 @@ export async function createVital(user: AuthUser, body: unknown) {
     spo2_percent: input.spo2_percent ?? null,
     notes: input.notes ?? "",
   });
+  broadcastPlatformDataUpdated("patient-history");
   return { data: vitalDto(row), message: "Vitals recorded." };
 }
 
@@ -183,6 +185,7 @@ export async function attachVitalToAppointment(user: AuthUser, id: number, body:
     throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
   }
   const updated = await vitals.updateVital(id, { appointment_id: appointment.id });
+  broadcastPlatformDataUpdated("patient-history");
   return { data: vitalDto(updated), message: "Vital reading attached to appointment." };
 }
 
@@ -192,6 +195,7 @@ export async function destroyVital(user: AuthUser, id: number) {
   const row = doctor ? await vitals.findVitalOwned(id, doctor.id) : null;
   if (!row) return { data: null, message: "Vital reading not found." };
   await vitals.deleteVital(id);
+  broadcastPlatformDataUpdated("patient-history");
   return { data: null as null, message: "Vital reading deleted." };
 }
 

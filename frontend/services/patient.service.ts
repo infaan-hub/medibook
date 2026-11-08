@@ -8,6 +8,7 @@ import { hasAppointmentsWithPatient } from "@/repositories/appointments.repo";
 import { patientProfileSchema } from "@/validators/doctor";
 import { parse } from "@/validators/base";
 import { patientDto } from "@/lib/serializers";
+import { broadcastPlatformDataUpdated } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
 
 /** GET /api/patients/profile/ — creates the profile row on first access. */
@@ -45,6 +46,7 @@ export async function updateProfile(user: AuthUser, body: unknown) {
       input.latitude === null || input.longitude === null ? null : new Date();
   }
   const profile = await updateProfileRow(user.id, data);
+  broadcastPlatformDataUpdated("patient-history");
   return patientDto(profile);
 }
 

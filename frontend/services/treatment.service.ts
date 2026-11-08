@@ -12,6 +12,7 @@ import { todayIso, normalizeTime, secondsToTime, timeToSeconds } from "@/lib/dat
 import {
   broadcastAppointmentEvent,
   broadcastAvailabilityUpdated,
+  broadcastPlatformDataUpdated,
   broadcastTreatmentUpdated,
   notify,
 } from "@/lib/notify";
@@ -409,6 +410,8 @@ export async function createTreatment(user: AuthUser, body: unknown) {
     return treatment;
   });
 
+  broadcastPlatformDataUpdated("patient-history");
+
   // Follow-up Date is a real booking, not just a printed note: the patient
   // receives a normal appointment with this doctor on that date.
   // Runs in the background so saving the treatment never blocks on slot
@@ -511,6 +514,8 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
     return treatment;
   });
 
+  broadcastPlatformDataUpdated("patient-history");
+
   // Follow-up schedule changes use the same exact-time booking worker as new
   // treatments. It creates the replacement first, then cancels the old slot.
   if (shouldHandleFollowUp) {
@@ -566,6 +571,7 @@ export async function destroyTreatment(user: AuthUser, id: number) {
   const row = doctor ? await clinical.findTreatmentOwned(id, doctor.id) : null;
   if (!row) return { data: null, message: "Treatment not found." };
   await clinical.deleteTreatment(id);
+  broadcastPlatformDataUpdated("patient-history");
   return { data: null as null, message: "Treatment deleted." };
 }
 
@@ -862,7 +868,7 @@ export async function createHealthRecord(user: AuthUser, body: unknown, file?: F
     });
     fileId = media.id;
   }
-  return clinical.createHealthRecord({
+  const record = await clinical.createHealthRecord({
     patient_id: patientId,
     doctor_id: doctorId,
     appointment_id: input.appointment ?? null,
@@ -871,6 +877,8 @@ export async function createHealthRecord(user: AuthUser, body: unknown, file?: F
     title: input.title,
     description: input.description ?? "",
   });
+  broadcastPlatformDataUpdated("patient-history");
+  return record;
 }
 
 /** Attach a doctor-owned report to the visit explicitly selected in the chart. */
@@ -885,6 +893,7 @@ export async function attachHealthRecordToAppointment(user: AuthUser, id: number
     throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
   }
   const updated = await clinical.updateHealthRecord(id, { appointment_id: appointment.id });
+  broadcastPlatformDataUpdated("patient-history");
   return { data: healthRecordDto(updated, req), message: "Report attached to appointment." };
 }
 
@@ -902,6 +911,7 @@ export async function destroyHealthRecord(user: AuthUser, id: number): Promise<v
     await clinical.deleteHealthRecord(id, tx);
     await deleteMediaIfUnreferenced(row.file_id, tx);
   });
+  broadcastPlatformDataUpdated("patient-history");
 }
 
 export { healthRecordDto };

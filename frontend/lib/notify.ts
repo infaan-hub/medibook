@@ -141,6 +141,7 @@ export function broadcastAppointmentEvent(
     version: versionOf(appointment.updated_at),
     entityId: appointment.id,
   });
+  broadcastPlatformDataUpdated("appointments");
 }
 
 /** After a booking changes occupancy, refresh open slots for connected clients. */
@@ -153,6 +154,7 @@ export function broadcastAvailabilityUpdated(
     { doctor_id: doctorId, date },
     { version: Date.now(), entityId: `doctor-${doctorId}-${date}` }
   );
+  broadcastPlatformDataUpdated("doctor-availability");
 }
 
 /** Tell connected clients a treatment's follow-up booking state has changed. */
@@ -167,6 +169,16 @@ export function broadcastTreatmentUpdated(
     "treatment.updated",
     { id: treatmentId, follow_up_booking_status: status },
     { version: Date.now(), entityId: `treatment-${treatmentId}` }
+  );
+  broadcastPlatformDataUpdated("patient-history");
+}
+
+/** Signal every open screen to fetch fresh data after a successful write. */
+export function broadcastPlatformDataUpdated(resource: string): void {
+  pushEventAll(
+    "platform.data.updated",
+    { resource },
+    { version: Date.now() }
   );
 }
 

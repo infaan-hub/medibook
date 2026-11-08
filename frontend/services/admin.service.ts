@@ -6,6 +6,7 @@ import { ValidationError, notFound, badRequest } from "@/lib/errors";
 import { purgeExpiredAuditEvents } from "@/lib/audit";
 import { userPayload } from "@/lib/serializers";
 import { mediaUrl } from "@/lib/serialize";
+import { broadcastPlatformDataUpdated } from "@/lib/notify";
 import { hashPassword, validateNewPassword } from "@/lib/password";
 import { paginate } from "@/lib/pagination";
 import { adminDoctorCreateSchema, adminUserCreateSchema } from "@/validators/more";
@@ -81,6 +82,7 @@ export async function createUser(req: Request, actor: AuthUser, body: unknown) {
     role: input.role,
   });
   await admin.recordAudit(actor.id, "user.created", user.username, `Created ${user.role} account`);
+  broadcastPlatformDataUpdated("users");
   return userPayload(user, req);
 }
 
@@ -119,6 +121,7 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
   });
   const fullName = `${input.first_name ?? ""} ${input.last_name ?? ""}`.trim();
   await admin.recordAudit(actor.id, "doctor.created", String(profile.id), `Created Dr. ${fullName}`);
+  broadcastPlatformDataUpdated("doctors");
   const { doctorDto } = await import("@/lib/serializers");
   const refreshed = await doctors.findDoctorById(profile.id);
   return doctorDto(refreshed!, req);
@@ -139,6 +142,7 @@ export async function deleteUser(actor: AuthUser, targetId: number) {
   const username = target.username;
   await users.deleteUser(targetId); // cascades: profile, appointments, reviews…
   await admin.recordAudit(actor.id, "user.deleted", username, `Deleted ${role} account (${label})`);
+  broadcastPlatformDataUpdated(role === "patient" ? "patients" : "users");
   return { id: targetId };
 }
 
@@ -149,6 +153,7 @@ export async function deleteDoctor(actor: AuthUser, doctorId: number) {
   const label = `${doctor.user.first_name} ${doctor.user.last_name}`.trim() || doctor.user.username;
   await users.deleteUser(doctor.user_id); // cascades to the Doctor profile
   await admin.recordAudit(actor.id, "doctor.deleted", String(doctorId), `Deleted Dr. ${label} and their account`);
+  broadcastPlatformDataUpdated("doctors");
   return { id: doctorId };
 }
 

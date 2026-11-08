@@ -52,12 +52,12 @@ export function CoordinatorScreen() {
     finally { setLoading(false); }
   },[section,date,search,selectedPatientId]);
   useEffect(()=>{void load();},[load]);
-  useRealtimeSync({ refresh:()=>{void load();}, events:["appointment.created","appointment.updated","appointment.deleted","appointment.emergency_accepted","appointment.emergency_in_progress","appointment.emergency_completed","doctor.availability.updated"], polling:true });
+  useRealtimeSync({ refresh:()=>{void load();}, events:["platform.data.updated"], polling:false, reconcileOnFocus:false });
 
   async function reassign(item:CoordinatorAppointment, emergency=false) {
     const doctor_id=targets[item.id]; if(!doctor_id){notify("error","Select a doctor first.");return;}
     setSavingId(item.id);
-    try { await reassignCoordinatorAppointment(item.id,doctor_id,emergency); notify("success",emergency?"Emergency transferred. The new doctor must accept it.":"Appointment reassigned. The new doctor must accept it."); await load(); }
+    try { const response = await reassignCoordinatorAppointment(item.id,doctor_id,emergency); setAppointments((current)=>current.map((appointment)=>appointment.id===item.id?response.data:appointment)); notify("success",emergency?"Emergency transferred. The new doctor must accept it.":"Appointment reassigned. The new doctor must accept it."); }
     catch(e){notify("error",errorText(e));}
     finally{setSavingId(null);}
   }

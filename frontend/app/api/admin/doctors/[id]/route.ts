@@ -1,3 +1,4 @@
+import { broadcastPlatformDataUpdated } from "@/lib/notify";
 /** GET/PATCH/DELETE /api/admin/doctors/{id}/ */
 import { handler, ok, readJson, intParam, notFound, requireAdmin } from "@/lib/route";
 import * as doctors from "@/repositories/doctors.repo";
@@ -26,6 +27,7 @@ export const PATCH = handler(async (ctx) => {
   await applyDoctorWrite(id, input);
   await adminRepo.recordAudit(actor.id, "doctor.updated", String(id), "Updated doctor profile");
   const refreshed = await doctors.findDoctorById(id);
+  broadcastPlatformDataUpdated("doctors");
   return ok(doctorDto(refreshed ?? doctor, ctx.req), "Doctor updated.");
 });
 

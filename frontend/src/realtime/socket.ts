@@ -6,7 +6,7 @@
  * - Legacy frames {event, payload} are accepted and treated as versionless.
  * - Dedup by envelope id; drop stale versions per entity key (entity type from event prefix).
  * - Connection status: connected | connecting | disconnected | reconnecting | offline.
- * - Polling is a FALLBACK only (useRealtimeSync): low-frequency, offline/visibility aware.
+ * - UI synchronization is driven by authenticated realtime events, not periodic polling.
  * - Jittered exponential backoff reconnect (1s → 30s), ping keepalive every 25s.
  *
  * Events (no chat):
@@ -108,16 +108,6 @@ function resolveOrigin(configured: string | undefined): { host: string; secure: 
     host: window.location.host,
     secure: window.location.protocol === "https:",
   };
-}
-
-/**
- * Hosts that cannot terminate a WebSocket upgrade (serverless platforms keep
- * the HTTP request in a function, the `101 Switching Protocols` answer never
- * comes back). Realtime there rides the SSE route — app/ws/notifications/… —
- * with API polling underneath.
- */
-function isServerlessHost(host: string): boolean {
-  return host.endsWith(".vercel.app");
 }
 
 function entityKey(event: string, entityId: string | number | null | undefined): string | null {
@@ -364,8 +354,7 @@ class RealtimeClient {
       return;
     }
 
-    // Production may host the persistent WS on another origin (Vercel HTTP
-    // cannot host long-lived sockets). Prefer NEXT_PUBLIC_WS_URL when set;
+    // Production may host the WS on another origin. Prefer NEXT_PUBLIC_WS_URL when set;
     // otherwise same-origin /ws/notifications/. The origin is already
     // normalised (bare host, no scheme, no path — see parseRealtimeOrigin), so
     // the scheme is applied exactly once: prefixing a value that still carried
@@ -373,10 +362,9 @@ class RealtimeClient {
     const configuredWs = process.env.NEXT_PUBLIC_WS_URL as string | undefined;
     const { host: realtimeHost, secure } = resolveOrigin(configuredWs);
 
-    // A serverless host never completes the upgrade, and after a failed WS
-    // transport every retry goes straight to SSE instead of flip-flopping.
-    // useRealtimeSync's API polling backs both.
-    if (this.preferSse || isServerlessHost(realtimeHost)) {
+    // Prefer WebSocket. If the deployment rejects the upgrade, use the
+    // realtime SSE fallback; screens never compensate with periodic polling.
+    if (this.preferSse) {
       this.openSSE();
       return;
     }
@@ -581,16 +569,14 @@ export function useRealtimeStatus(): RealtimeStatus {
  * React hook: connection-aware sync.
  *
  * - Realtime events matching `events` → immediate silent refresh.
- * - WS reconnect / browser online / tab visible → reconciliation refresh.
- * - Polling runs ONLY as a fallback while WS is disconnected and online
- *   (never when connected — WS is the primary transport).
+ * - No background polling or focus-triggered API reconciliation.
  */
 export function useRealtimeSync({
   refresh,
   events = [],
   interval = FALLBACK_POLL_INTERVAL_MS,
-  polling = true,
-  reconcileOnFocus = true,
+  polling = false,
+  reconcileOnFocus = false,
   enabled = true,
 }: {
   refresh: () => void;
@@ -633,17 +619,17 @@ export function useRealtimeSync({
   }, [safeRefresh, interval, enabled, polling, connected]);
 
   useRealtimeEvent((event) => {
-    if (events.length === 0 || events.includes(event)) {
+    if (event === "platform.data.updated" || events.length === 0 || events.includes(event)) {
       safeRefresh(true);
     }
   });
 
   useEffect(() => {
-    if (connected && !wasConnected.current) {
+    if (reconcileOnFocus && connected && !wasConnected.current) {
       safeRefresh();
     }
     wasConnected.current = connected;
-  }, [connected, safeRefresh]);
+  }, [connected, safeRefresh, reconcileOnFocus]);
 
   useEffect(() => {
     if (!reconcileOnFocus) return;
