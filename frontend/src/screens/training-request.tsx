@@ -5,7 +5,7 @@ import { Card, Button } from "../components/ui";
 
 export function TrainingRequestScreen() {
   const navigate = useNavigate();
-  const [audience, setAudience] = useState("individual");
+  const [audience, setAudience] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -13,8 +13,11 @@ export function TrainingRequestScreen() {
   const [topic, setTopic] = useState("");
   const [startDate, setStartDate] = useState("");
   const [days, setDays] = useState(1);
-  const [mode, setMode] = useState("online");
+  const [mode, setMode] = useState("");
   const [location, setLocation] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +31,7 @@ export function TrainingRequestScreen() {
         contact_email: contactEmail, contact_phone: contactPhone,
         training_topic: topic, preferred_start_date: startDate,
         preferred_days: days, delivery_mode: mode, location, notes,
+        latitude, longitude, location_accuracy: accuracy,
       });
       navigate("/training/success");
     } catch (err: any) {
@@ -48,7 +52,8 @@ export function TrainingRequestScreen() {
         <form onSubmit={submit} className="admin-form-grid">
           <div className="admin-field">
             <label htmlFor="audience">Audience</label>
-            <select id="audience" value={audience} onChange={(e:any)=>setAudience(e.target.value)}>
+            <select id="audience" value={audience} onChange={(e:any)=>setAudience(e.target.value)} required>
+              <option value="">Select audience</option>
               <option value="individual">Individual</option>
               <option value="company">Company</option>
             </select>
@@ -65,13 +70,26 @@ export function TrainingRequestScreen() {
           <div className="admin-field"><label htmlFor="startDate">Preferred start date</label><input id="startDate" type="date" value={startDate} onChange={(e:any)=>setStartDate(e.target.value)} required /></div>
           <div className="admin-field"><label htmlFor="days">Number of days</label><input id="days" type="number" min={1} max={30} value={days} onChange={(e:any)=>setDays(Number(e.target.value))} /></div>
           <div className="admin-field"><label htmlFor="mode">Delivery mode</label>
-            <select id="mode" value={mode} onChange={(e:any)=>setMode(e.target.value)}>
+            <select id="mode" value={mode} onChange={(e:any)=>setMode(e.target.value)} required>
+              <option value="">Select delivery mode</option>
               <option value="online">Online meeting</option>
               <option value="onsite">Onsite</option>
             </select>
           </div>
           {mode === "onsite" && (
-            <div className="admin-field admin-field--wide"><label htmlFor="location">Location</label><input id="location" value={location} onChange={(e:any)=>setLocation(e.target.value)} required placeholder="Enter location" /></div>
+            <div className="admin-field admin-field--wide">
+              <label htmlFor="location">Location</label>
+              <input id="location" value={location} onChange={(e:any)=>setLocation(e.target.value)} required placeholder="Enter location" />
+              <button type="button" onClick={() => {
+                if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+                navigator.geolocation.getCurrentPosition((pos) => {
+                  setLocation(`Current location (${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)})`);
+                  setLatitude(pos.coords.latitude);
+                  setLongitude(pos.coords.longitude);
+                  setAccuracy(pos.coords.accuracy);
+                }, () => alert("Unable to get location"));
+              }} style={{ marginTop: 4 }}>Use current location</button>
+            </div>
           )}
           <div className="admin-field admin-field--wide"><label htmlFor="notes">Notes</label><textarea id="notes" value={notes} onChange={(e:any)=>setNotes(e.target.value)} /></div>
           {error && <p className="form-note form-note--error admin-field--wide">{error}</p>}
