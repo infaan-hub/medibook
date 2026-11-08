@@ -19,13 +19,16 @@ export const findDoctorById = (id: number) =>
 
 export const findDoctorByUserId = (userId: number) =>
   prisma.doctor.findUnique({ where: { user_id: userId }, include: DOCTOR_INCLUDE });
-/** Whether this patient has a non-deleted appointment with the doctor. */
-export const patientHasAppointmentWithDoctor = async (doctorId: number, patientId: number) =>
+/** Whether this patient owns this exact non-deleted appointment with the doctor. */
+export const patientHasAppointmentWithDoctor = async (
+  doctorId: number,
+  patientId: number,
+  appointmentId: number
+) =>
   (await prisma.appointment.findFirst({
-    where: { doctor_id: doctorId, patient_id: patientId, deleted_at: null },
+    where: { id: appointmentId, doctor_id: doctorId, patient_id: patientId, deleted_at: null },
     select: { id: true },
   })) !== null;
-
 export const createDoctor = (userId: number) =>
   prisma.doctor.create({ data: { user_id: userId }, include: DOCTOR_INCLUDE });
 

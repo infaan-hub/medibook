@@ -111,12 +111,18 @@ export async function retrieveDoctor(req: Request, id: number) {
   const doctor = await doctors.findDoctorById(id);
   if (!doctor || !doctor.user.is_active) throw notFound();
   const viewer = await optionalAuth(req);
+  const requestedAppointmentId = Number(new URL(req.url).searchParams.get("appointment_id"));
   const canSeeContact = Boolean(
     viewer &&
       (viewer.is_superuser || viewer.role === "admin" ||
         doctor.user_id === viewer.id ||
-        (viewer.role === "patient" &&
-          (await doctors.patientHasAppointmentWithDoctor(doctor.id, viewer.id))))
+        (viewer.role === "patient" && Number.isInteger(requestedAppointmentId) &&
+          requestedAppointmentId > 0 &&
+          (await doctors.patientHasAppointmentWithDoctor(
+            doctor.id,
+            viewer.id,
+            requestedAppointmentId
+          ))))
   );
   const todayIds = await availableTodayIds([doctor.id]);
   const dto = doctorDto(doctor, req);

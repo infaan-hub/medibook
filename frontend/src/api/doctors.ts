@@ -51,8 +51,9 @@ export function listDoctors(params: ListDoctorsParams = {}): Promise<
 }
 
 /** GET /api/doctors/:id/ â€” a single doctor's public professional profile. */
-export function getDoctor(id: number): Promise<Envelope<DoctorProfile>> {
-  return apiGet<DoctorProfile>(`/doctors/${id}/`);
+export function getDoctor(id: number, appointmentId?: number): Promise<Envelope<DoctorProfile>> {
+  const query = appointmentId ? `?appointment_id=${appointmentId}` : "";
+  return apiGet<DoctorProfile>(`/doctors/${id}/${query}`);
 }
 
 /** GET /api/doctors/:id/availability/?date=YYYY-MM-DD â€” available slots. */

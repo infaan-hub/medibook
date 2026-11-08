@@ -106,13 +106,14 @@ function DoctorName({ doctorId }: { doctorId: number | null }) {
   return <>{name}</>;
 }
 
-/* Doctor phone field for appointment detail and booking screen */
-function DoctorPhone({ doctorId }: { doctorId: number | null }) {
+/* Doctor phone is only requested from a specific appointment detail. */
+function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; appointmentId: number }) {
   const [phone, setPhone] = useState<string | null>(null);
   useEffect(() => {
     if (!doctorId) return;
-    getDoctor(doctorId).then((r) => setPhone(r.data.phone ?? null)).catch(() => {});
-  }, [doctorId]);
+    setPhone(null);
+    getDoctor(doctorId, appointmentId).then((r) => setPhone(r.data.phone ?? null)).catch(() => {});
+  }, [doctorId, appointmentId]);
   if (!phone) return null;
   return (
     <div className="appt-detail__field">
@@ -1193,7 +1194,7 @@ export function AppointmentDetailScreen() {
           <div className="appt-detail__field">
             <span className="appt-detail__label">Doctor</span>
             <DoctorName doctorId={appointment.doctor} />
-            <DoctorPhone doctorId={appointment.doctor} />
+            <DoctorPhone doctorId={appointment.doctor} appointmentId={appointment.id} />
           </div>
           <div className="appt-detail__field">
             <span className="appt-detail__label">Date</span>
