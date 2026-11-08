@@ -20,8 +20,9 @@ import {
   type Vital,
   type CreateVitalPayload,
 } from "../api/vitals";
-import type { PatientProfile } from "../api/types";
+import type { Gender, PatientProfile } from "../api/types";
 import { getHealthRecords, attachHealthRecordToAppointment, type HealthRecord } from "../api/health-records";
+import { updatePatientProfile } from "../api/patients";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { nearestAreaName } from "../lib/zanzibar";
 import { vitalChips } from "../lib/vitals";
@@ -730,6 +731,54 @@ function LabOrdersCard({
    ====================================== */
 
 function PatientInfo({ profile }: { profile: PatientProfile }) {
+  const { notify } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [medicalForm, setMedicalForm] = useState({
+    gender: profile.gender ?? "",
+    blood_group: profile.blood_group ?? "",
+    date_of_birth: profile.date_of_birth ?? "",
+    allergies: profile.allergies ?? "",
+    medical_history: profile.medical_history ?? "",
+  });
+  const [savingMedical, setSavingMedical] = useState(false);
+
+  const genderOptions: { value: Gender; label: string }[] = [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "other", label: "Other" },
+    { value: "", label: "Not specified" },
+  ];
+
+  const handleSaveMedical = async () => {
+    setSavingMedical(true);
+    try {
+      await updatePatientProfile({
+        gender: medicalForm.gender || undefined,
+        blood_group: medicalForm.blood_group.trim() || undefined,
+        date_of_birth: medicalForm.date_of_birth || undefined,
+        allergies: medicalForm.allergies.trim() || undefined,
+        medical_history: medicalForm.medical_history.trim() || undefined,
+      });
+      setEditing(false);
+      notify("success", "Patient medical details updated.");
+    } catch (e) {
+      notify("error", msg(e));
+    } finally {
+      setSavingMedical(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setMedicalForm({
+      gender: profile.gender ?? "",
+      blood_group: profile.blood_group ?? "",
+      date_of_birth: profile.date_of_birth ?? "",
+      allergies: profile.allergies ?? "",
+      medical_history: profile.medical_history ?? "",
+    });
+    setEditing(false);
+  };
+
   return (
     <Card className="treat-patient-card">
       <div className="treat-patient-hdr">
@@ -740,39 +789,128 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
           <h3>{profile.first_name || profile.last_name ? `${profile.first_name} ${profile.last_name}`.trim() : profile.email}</h3>
           <span>{fmtGender(profile.gender)} &middot; {profile.blood_group || "No blood group"} &middot; {fmtDate(profile.date_of_birth)}</span>
         </div>
+        <div className="treat-patient-actions">
+          {!editing ? (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Edit3 size={14} /> Edit medical details
+            </Button>
+          ) : (
+            <div className="treat-actions-row">
+              <Button variant="secondary" loading={savingMedical} onClick={handleSaveMedical}>
+                Save changes
+              </Button>
+              <Button variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="treat-patient-fields">
-        <div className="treat-pf">
-          <span>Email</span>
-          <strong>{profile.email}</strong>
-        </div>
-        <div className="treat-pf">
-          <span>Gender</span>
-          <strong>{fmtGender(profile.gender)}</strong>
-        </div>
-        <div className="treat-pf">
-          <span>Blood Group</span>
-          <strong>{profile.blood_group || "—"}</strong>
-        </div>
-        <div className="treat-pf">
-          <span>Date of Birth</span>
-          <strong>{fmtDate(profile.date_of_birth)}</strong>
-        </div>
-        <div className="treat-pf">
-          <span>Location</span>
-          <strong>{nearestAreaName(profile) ?? (profile.has_location ? "Location shared" : "—")}</strong>
-        </div>
-        {profile.allergies && (
-          <div className="treat-pf treat-pf--warn">
-            <span>Allergies</span>
-            <strong>{profile.allergies}</strong>
-          </div>
+        {!editing && (
+          <>
+            <div className="treat-pf">
+              <span>Email</span>
+              <strong>{profile.email}</strong>
+            </div>
+            <div className="treat-pf">
+              <span>Gender</span>
+              <strong>{fmtGender(profile.gender)}</strong>
+            </div>
+            <div className="treat-pf">
+              <span>Blood Group</span>
+              <strong>{profile.blood_group || "—"}</strong>
+            </div>
+            <div className="treat-pf">
+              <span>Date of Birth</span>
+              <strong>{fmtDate(profile.date_of_birth)}</strong>
+            </div>
+            <div className="treat-pf">
+              <span>Location</span>
+              <strong>{nearestAreaName(profile) ?? (profile.has_location ? "Location shared" : "—")}</strong>
+            </div>
+            {profile.allergies && (
+              <div className="treat-pf treat-pf--warn">
+                <span>Allergies</span>
+                <strong>{profile.allergies}</strong>
+              </div>
+            )}
+            {profile.medical_history && (
+              <div className="treat-pf">
+                <span>Medical History</span>
+                <strong>{profile.medical_history}</strong>
+              </div>
+            )}
+          </>
         )}
-        {profile.medical_history && (
-          <div className="treat-pf">
-            <span>Medical History</span>
-            <strong>{profile.medical_history}</strong>
-          </div>
+        {editing && (
+          <>
+            <div className="treat-pf">
+              <label className="field__label">Email (read-only)</label>
+              <input className="field__input" type="text" value={profile.email} readOnly />
+            </div>
+            <div className="treat-pf">
+              <label className="field__label">Gender</label>
+              <select
+                className="field__input"
+                value={medicalForm.gender}
+                onChange={(e) => setMedicalForm((current) => ({ ...current, gender: e.target.value as Gender }))}
+              >
+                {genderOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="treat-pf">
+              <label className="field__label">Blood Group</label>
+              <input
+                className="field__input"
+                type="text"
+                value={medicalForm.blood_group}
+                onChange={(e) => setMedicalForm((current) => ({ ...current, blood_group: e.target.value }))}
+                placeholder="e.g. O+, A-, AB+"
+              />
+            </div>
+            <div className="treat-pf">
+              <label className="field__label">Date of Birth</label>
+              <input
+                className="field__input"
+                type="date"
+                value={medicalForm.date_of_birth}
+                onChange={(e) => setMedicalForm((current) => ({ ...current, date_of_birth: e.target.value }))}
+              />
+            </div>
+            <div className="treat-pf">
+              <label className="field__label">Location</label>
+              <span className="field__input">{nearestAreaName(profile) ?? (profile.has_location ? "Location shared" : "—")}</span>
+              <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
+                Update the patient&rsquo;s location from {"/doctor/medical-treatment"} is not supported here —
+                ask the patient to update it from their profile, or edit it from the doctor availability settings.
+              </p>
+            </div>
+            <div className="treat-pf treat-pf--wide">
+              <label className="field__label">Allergies</label>
+              <textarea
+                className="field__input"
+                rows={3}
+                value={medicalForm.allergies}
+                onChange={(e) => setMedicalForm((current) => ({ ...current, allergies: e.target.value }))}
+                placeholder="e.g. Penicillin, peanuts, shellfish"
+              />
+            </div>
+            <div className="treat-pf treat-pf--wide">
+              <label className="field__label">Medical History</label>
+              <textarea
+                className="field__input"
+                rows={4}
+                value={medicalForm.medical_history}
+                onChange={(e) => setMedicalForm((current) => ({ ...current, medical_history: e.target.value }))}
+                placeholder="e.g. Diabetes, hypertension, asthma"
+              />
+            </div>
+          </>
         )}
       </div>
     </Card>
