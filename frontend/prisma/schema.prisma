@@ -876,6 +876,7 @@ model TrainingRequest {
   @@index([status, created_at])
   @@index([patient_id])
   @@index([doctor_id])
+  @@index([preferred_start_date])
   @@map("training_request")
 }
 
