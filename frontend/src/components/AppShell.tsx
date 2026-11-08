@@ -79,7 +79,7 @@ export function navItemsFor(user: User | null): NavItem[] {
   }
   if (user?.role === "coordinator") {
     return [
-      { to: "/coordinator/dashboard", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/dashboard", label: "Coordinator dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
@@ -122,7 +122,7 @@ export function bottomNavItemsFor(user: User | null): NavItem[] {
   }
   if (user?.role === "coordinator") {
     return [
-      { to: "/coordinator/dashboard", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/dashboard", label: "Coordinator dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },

@@ -18,7 +18,25 @@ export const canReassignEmergency = (status: string, consultationStartedAt: Date
   canReassignAppointment(status, consultationStartedAt) && emergencyStartedAt === null;
 
 export async function overview() {
-  const [totalUsers, patients, doctors, coordinators, appointmentCount, byStatus, byType, todayCount] = await Promise.all([
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const weekStart = new Date(today);
+  weekStart.setUTCDate(today.getUTCDate() - 6);
+
+  const [
+    totalUsers,
+    patients,
+    doctors,
+    coordinators,
+    appointmentCount,
+    byStatus,
+    byType,
+    todayCount,
+    availableDoctors,
+    todayByStatus,
+    weekRows,
+    activeEmergencies,
+  ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { role: "patient" } }),
     prisma.doctor.count(),
@@ -26,13 +44,50 @@ export async function overview() {
     prisma.appointment.count({ where: { deleted_at: null } }),
     prisma.appointment.groupBy({ by: ["status"], _count: { _all: true }, where: { deleted_at: null } }),
     prisma.appointment.groupBy({ by: ["appointment_type"], _count: { _all: true }, where: { deleted_at: null } }),
-    prisma.appointment.count({ where: { deleted_at: null, appointment_date: new Date(`${new Date().toISOString().slice(0,10)}T00:00:00Z`) } }),
+    prisma.appointment.count({ where: { deleted_at: null, appointment_date: today } }),
+    prisma.doctor.count({ where: { is_available: true } }),
+    prisma.appointment.groupBy({ by: ["status"], _count: { _all: true }, where: { deleted_at: null, appointment_date: today } }),
+    prisma.appointment.findMany({
+      where: { deleted_at: null, appointment_date: { gte: weekStart, lte: today } },
+      select: { appointment_date: true },
+    }),
+    prisma.appointment.count({
+      where: {
+        deleted_at: null,
+        appointment_type: "EMERGENCY",
+        status: { in: ["pending", "accepted", "in_progress"] },
+      },
+    }),
   ]);
+
+  const dailyCounts = new Map<string, number>();
+  for (const row of weekRows) {
+    const key = row.appointment_date.toISOString().slice(0, 10);
+    dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + 1);
+  }
+  const last7Days = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekStart);
+    day.setUTCDate(weekStart.getUTCDate() + index);
+    const key = day.toISOString().slice(0, 10);
+    return {
+      date: key,
+      label: day.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
+      count: dailyCounts.get(key) ?? 0,
+    };
+  });
+
   return {
     users: { total: totalUsers, patients, doctors, coordinators },
-    appointments: { total: appointmentCount, today: todayCount,
+    availability: { total_doctors: doctors, available_doctors: availableDoctors },
+    emergency: { active: activeEmergencies },
+    appointments: {
+      total: appointmentCount,
+      today: todayCount,
       by_status: Object.fromEntries(byStatus.map((r) => [r.status, r._count._all])),
-      by_service: Object.fromEntries(byType.map((r) => [r.appointment_type, r._count._all])) },
+      by_service: Object.fromEntries(byType.map((r) => [r.appointment_type, r._count._all])),
+      today_by_status: Object.fromEntries(todayByStatus.map((r) => [r.status, r._count._all])),
+      last_7_days: last7Days,
+    },
     services: [
       { key: "NORMAL", label: "Hospital appointments", count: byType.find((r) => r.appointment_type === "NORMAL")?._count._all ?? 0 },
       { key: "EMERGENCY", label: "Emergency", count: byType.find((r) => r.appointment_type === "EMERGENCY")?._count._all ?? 0 },

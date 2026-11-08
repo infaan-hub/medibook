@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Activity, Calendar, Clock3, RefreshCw, Search, Stethoscope, Users, UserRound, ArrowLeft } from "lucide-react";
+import { Activity, RefreshCw, Search, UserRound, ArrowLeft } from "lucide-react";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { getCoordinatorAppointments, getCoordinatorDoctors, getCoordinatorOverview, getCoordinatorPatientHistory, getCoordinatorPatients, reassignCoordinatorAppointment, type CoordinatorAppointment, type CoordinatorDoctor, type CoordinatorHistory, type CoordinatorPatient, type CoordinatorStats } from "../api/coordinator";
+import { CoordinatorDashboard } from "./coordinator-dashboard";
+import { CoordinatorDoctors } from "./coordinator-doctors";
 
 const cardStyle: React.CSSProperties = { padding: 20, border: "1px solid var(--border-color, #e5e7eb)", borderRadius: 16, background: "var(--surface, #fff)" };
 const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 16, margin: "20px 0" };
@@ -12,22 +14,6 @@ const headingStyle: React.CSSProperties = { display: "flex", justifyContent: "sp
 const muted: React.CSSProperties = { color: "var(--muted, #64748b)" };
 function errorText(e: unknown) { return e instanceof Error ? e.message : "Unable to load data."; }
 function formatDate(date: string) { return new Date(`${date.slice(0,10)}T00:00:00`).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}); }
-
-function freeIntervals(doctor: CoordinatorDoctor) {
-  if (!doctor.is_available || doctor.exceptions.some(x=>x.start_time===null||x.end_time===null)) return [] as string[];
-  const toMin=(time:string)=>{const [h,m]=time.split(":").map(Number);return h*60+m;};
-  const fmt=(n:number)=>`${String(Math.floor(n/60)).padStart(2,"0")}:${String(n%60).padStart(2,"0")}`;
-  return doctor.windows.flatMap((window)=>{
-    const start=toMin(window.start_time),end=toMin(window.end_time);
-    const occupied=[...doctor.exceptions.filter(x=>x.start_time&&x.end_time).map(x=>({start:toMin(x.start_time!),end:toMin(x.end_time!)})),...window.breaks.map(b=>({start:toMin(b.start_time),end:toMin(b.end_time)})),...doctor.appointments.map(a=>({start:toMin(a.start_time),end:toMin(a.end_time)}))].filter(x=>x.start<end&&x.end>start).map(x=>({start:Math.max(start,x.start),end:Math.min(end,x.end)})).sort((a,b)=>a.start-b.start);
-    const merged:{start:number;end:number}[]=[];
-    for(const range of occupied){const tail=merged[merged.length-1];if(tail&&range.start<=tail.end)tail.end=Math.max(tail.end,range.end);else merged.push({...range});}
-    let cursor=start;const free:string[]=[];
-    for(const range of merged){if(range.start>cursor)free.push(`${fmt(cursor)}–${fmt(range.start)}`);cursor=Math.max(cursor,range.end);}
-    if(cursor<end)free.push(`${fmt(cursor)}–${fmt(end)}`);
-    return free;
-  });
-}
 
 function labelType(type: string) { return type === "NORMAL" ? "Hospital appointment" : type === "EMERGENCY" ? "Emergency" : "Home service"; }
 function labelStatus(status: string) { return status.replaceAll("_"," ").replace(/^./, (c) => c.toUpperCase()); }
@@ -43,7 +29,7 @@ export function CoordinatorScreen() {
   const load = useCallback(async () => {
     setError(null); setLoading(true);
     try {
-      if(section==="dashboard") { const r=await getCoordinatorOverview(); setStats(r.data); }
+      if(section==="dashboard") { const [overview, recent] = await Promise.allSettled([getCoordinatorOverview(), getCoordinatorAppointments()]); if(overview.status==="rejected") throw overview.reason; setStats(overview.value.data); setAppointments(recent.status==="fulfilled"?recent.value.data:[]); }
       else if(section==="doctors") { const r=await getCoordinatorDoctors(date); setDoctors(r.data); }
       else if(section==="appointments"||section==="emergency") { const r=await getCoordinatorAppointments(section==="emergency"?"EMERGENCY":undefined); setAppointments(r.data.filter((a)=>section==="emergency"?a.appointment_type==="EMERGENCY":a.appointment_type!=="EMERGENCY")); const d=await getCoordinatorDoctors(date); setDoctors(d.data); }
       else if(selectedPatientId) { const r=await getCoordinatorPatientHistory(selectedPatientId); setHistory(r.data); }
@@ -62,22 +48,21 @@ export function CoordinatorScreen() {
     finally{setSavingId(null);}
   }
 
-  const title = section==="dashboard"?"Coordinator overview":section==="doctors"?"Doctors and availability":section==="appointments"?"Appointments":section==="emergency"?"Emergency coordination":"Patients and history";
-  const description = section==="dashboard"?"A live view of care services and platform activity.":section==="doctors"?"Review working hours, bookings, breaks, and open time for a selected date.":section==="appointments"?"Transfer an unstarted appointment to another doctor when coordination is needed.":section==="emergency"?"Route an emergency to another available doctor before care starts.":"Find a patient and review the full visit history across doctors.";
+  if (section === "dashboard") {
+    return <CoordinatorDashboard stats={stats} appointments={appointments} loading={loading} error={error} onRefresh={()=>void load()} />;
+  }
+
+  if (section === "doctors") {
+    return <CoordinatorDoctors doctors={doctors} date={date} onDateChange={setDate} loading={loading} error={error} onRetry={()=>void load()} />;
+  }
+
+  const title = section==="appointments"?"Appointments":section==="emergency"?"Emergency coordination":"Patients and history";
+  const description = section==="appointments"?"Transfer an unstarted appointment to another doctor when coordination is needed.":section==="emergency"?"Route an emergency to another available doctor before care starts.":"Find a patient and review the full visit history across doctors.";
 
   return <main style={{padding:"clamp(16px,3vw,32px)",maxWidth:1440,margin:"0 auto"}}>
     <header style={headingStyle}><div><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{color:"#0f766e"}}><Activity size={24}/></span><h1 style={{margin:0,fontSize:"clamp(24px,3vw,32px)"}}>{title}</h1></div><p style={{...muted,margin:"8px 0 0"}}>{description}</p></div><button className="btn btn--secondary" onClick={()=>void load()}><RefreshCw size={16}/> Refresh</button></header>
     {error&&<ErrorState message={error} onRetry={()=>void load()}/>}
     {loading&&!error&&<Card><Skeleton lines={5}/></Card>}
-    {!loading&&!error&&section==="dashboard"&&stats&&<>
-      <div style={gridStyle}>{[["Patients",stats.users.patients,Users],["Doctors",stats.users.doctors,Stethoscope],["Appointments",stats.appointments.total,Calendar],["Today",stats.appointments.today,Clock3]].map(([name,value,Icon]:any)=><Card key={name} style={cardStyle}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={muted}>{name}</span><Icon size={20} color="#0f766e"/></div><strong style={{display:"block",fontSize:32,marginTop:14}}>{value}</strong></Card>)}</div>
-      <Card style={{...cardStyle,marginBottom:16}}><h2 style={{marginTop:0}}>Appointments by service</h2><div style={{display:"grid",gap:18}}>{stats.services.map((service)=>{const max=Math.max(1,...stats.services.map(x=>x.count));return <div key={service.key}><div style={{display:"flex",justifyContent:"space-between",gap:12,marginBottom:7}}><span>{service.label}</span><b>{service.count}</b></div><div style={{height:10,borderRadius:99,background:"#e2e8f0",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.max(service.count?5:0,service.count/max*100)}%`,background:service.key==="EMERGENCY"?"#ef4444":service.key==="HOME_SERVICE"?"#8b5cf6":"#0f766e",borderRadius:99}}/></div></div>})}</div></Card>
-      <Card style={cardStyle}><h2 style={{marginTop:0}}>Appointment status</h2><div style={gridStyle}>{Object.entries(stats.appointments.by_status).map(([key,value])=><div key={key} style={{padding:14,background:"#f8fafc",borderRadius:12}}><span style={muted}>{labelStatus(key)}</span><b style={{display:"block",fontSize:22,marginTop:5}}>{value}</b></div>)}</div></Card>
-    </>}
-    {!loading&&!error&&section==="doctors"&&<>
-      <div style={{marginBottom:16,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}><label>Date <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{marginLeft:8,padding:10,borderRadius:9,border:"1px solid #cbd5e1"}}/></label><span style={muted}>Free time is calculated from active working windows after breaks and pending or accepted appointments.</span></div>
-      {doctors.length===0?<EmptyState title="No doctors" description="There are no doctor profiles to display."/>:<div style={gridStyle}>{doctors.map((doctor)=><Card key={doctor.id} style={cardStyle}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div><h2 style={{margin:"0 0 4px",fontSize:19}}>Dr. {doctor.name}</h2><small style={muted}>{doctor.email}</small></div><span style={{alignSelf:"start",padding:"5px 9px",borderRadius:99,background:!doctor.is_available?"#fee2e2":doctor.exceptions.some(x=>x.start_time===null)?"#fef3c7":"#dcfce7",color:!doctor.is_available?"#991b1b":doctor.exceptions.some(x=>x.start_time===null)?"#92400e":"#166534"}}>{!doctor.is_available?"Unavailable":doctor.exceptions.some(x=>x.start_time===null)?"Closed today":doctor.windows.length?"Available":"Off day"}</span></div><h3 style={{fontSize:15,marginBottom:8}}>Working hours</h3>{doctor.windows.length?doctor.windows.map((w,i)=><div key={i} style={{fontSize:14,marginBottom:5}}>{w.start_time.slice(0,5)}–{w.end_time.slice(0,5)}{w.breaks.length?` · break ${w.breaks.map(b=>`${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)}`).join(", ")}`:""}</div>):<p style={muted}>No working hours for this weekday.</p>}<h3 style={{fontSize:15,marginBottom:8}}>Free times</h3>{freeIntervals(doctor).length?freeIntervals(doctor).map((range,i)=><span key={i} style={{display:"inline-block",padding:"5px 8px",margin:"0 5px 6px 0",borderRadius:8,background:"#ecfeff",color:"#155e75",fontSize:13}}>{range}</span>):<p style={muted}>No free working time on this date.</p>}<h3 style={{fontSize:15,marginBottom:8}}>Appointments · {doctor.appointments.length}</h3>{doctor.appointments.length?doctor.appointments.map(a=><div key={a.id} style={{padding:"8px 0",borderTop:"1px solid #eef2f7",fontSize:14}}><b>{a.start_time.slice(0,5)}–{a.end_time.slice(0,5)}</b> · {a.patient_name}<br/><span style={muted}>#{a.id} · {labelType(a.type)} · {labelStatus(a.status)}</span></div>):<p style={muted}>No booked appointments on this date.</p>}</Card>)}</div>}
-    </>}
     {!loading&&!error&&(section==="appointments"||section==="emergency")&&<div style={{display:"grid",gap:14}}>{appointments.length===0?<EmptyState title={section==="emergency"?"No emergency requests":"No appointments"} description="There are no matching appointments."/>:appointments.map(item=>{const eligible=section==="emergency"?["pending","accepted"].includes(item.status)&&!item.consultation_started_at:["pending","accepted"].includes(item.status)&&!item.consultation_started_at&&item.appointment_type!=="EMERGENCY";return <Card key={item.id} style={cardStyle}><div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}><div><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><b>#{item.id} · {labelType(item.appointment_type)}</b><span style={{padding:"4px 9px",borderRadius:99,background:item.status==="accepted"?"#dcfce7":"#fef3c7"}}>{labelStatus(item.status)}</span></div><p style={{margin:"8px 0 3px"}}><b>{formatDate(item.appointment_date)}</b> · {item.start_time.slice(0,5)}–{item.end_time.slice(0,5)}</p><p style={{...muted,margin:"0 0 4px"}}>Patient #{item.patient} · Doctor #{item.doctor}</p><p style={{margin:"6px 0 0"}}>{item.reason||"No reason provided."}</p>{item.consultation_started_at&&<p style={{color:"#b91c1c",margin:"8px 0 0"}}>Consultation has started; reassignment is locked.</p>}</div>{eligible&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><select value={targets[item.id]??""} onChange={e=>setTargets(v=>({...v,[item.id]:Number(e.target.value)}))} style={{padding:10,borderRadius:9,border:"1px solid #cbd5e1",maxWidth:230}}><option value="">Choose available doctor</option>{doctors.filter(d=>d.is_available&&d.id!==item.doctor).map(d=><option key={d.id} value={d.id}>Dr. {d.name}</option>)}</select><button className="btn btn--primary" disabled={savingId===item.id||!targets[item.id]} onClick={()=>void reassign(item,section==="emergency")}>{savingId===item.id?"Transferring…":section==="emergency"?"Transfer emergency":"Reassign"}</button></div>}</div></Card>})}</div>}
     {!loading&&!error&&section==="patients"&&!selectedPatientId&&<>
       <div style={{...cardStyle,display:"flex",gap:10,alignItems:"center",marginBottom:16}}><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patient name, username or email" style={{border:0,outline:0,width:"100%",fontSize:16}}/></div>
