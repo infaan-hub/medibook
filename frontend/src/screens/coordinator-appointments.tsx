@@ -11,6 +11,8 @@ import {
   UserRound,
 } from "lucide-react";
 import {
+  getCoordinatorDoctors,
+  isCoordinatorDoctorAvailableFor,
   reassignCoordinatorAppointment,
   type CoordinatorAppointment,
   type CoordinatorDoctor,
@@ -75,9 +77,28 @@ function AppointmentCard({
   const { notify } = useToast();
   const [target, setTarget] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
-  const availableDoctors = doctors.filter((doctor) => doctor.is_available && doctor.id !== appointment.doctor);
-  const currentDoctor = doctors.find((doctor) => doctor.id === appointment.doctor);
+  const [dateDoctors, setDateDoctors] = useState<CoordinatorDoctor[] | null>(null);
+  const [loadingDateDoctors, setLoadingDateDoctors] = useState(false);
+  const [doctorLoadError, setDoctorLoadError] = useState<string | null>(null);
+  const currentDoctor = (dateDoctors ?? doctors).find((doctor) => doctor.id === appointment.doctor);
+  const availableDoctors = (dateDoctors ?? []).filter((doctor) =>
+    isCoordinatorDoctorAvailableFor(doctor, appointment)
+  );
   const reassignable = canReassign(appointment);
+
+  async function loadDateDoctors() {
+    if (dateDoctors || loadingDateDoctors) return;
+    setLoadingDateDoctors(true);
+    setDoctorLoadError(null);
+    try {
+      const response = await getCoordinatorDoctors(appointment.appointment_date);
+      setDateDoctors(response.data);
+    } catch (error) {
+      setDoctorLoadError(message(error));
+    } finally {
+      setLoadingDateDoctors(false);
+    }
+  }
 
   async function transfer() {
     if (!target) {
@@ -148,35 +169,44 @@ function AppointmentCard({
 
       {reassignable && (
         <div className="coordinator-appointment-card__reassign">
-          {availableDoctors.length > 0 ? (
-            <>
-              <div className="coordinator-appointment-select">
-                <Stethoscope size={15} />
-                <select
-                  value={target}
-                  aria-label={`Choose a doctor for appointment ${appointment.id}`}
-                  onChange={(event) => setTarget(event.target.value ? Number(event.target.value) : "")}
-                >
-                  <option value="">Choose available doctor</option>
-                  {availableDoctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>Dr. {doctor.name}</option>
-                  ))}
-                </select>
-              </div>
-              <Button
-                variant="primary"
-                loading={saving}
-                disabled={!target}
-                onClick={() => void transfer()}
-              >
-                <ArrowRightLeft size={14} /> Transfer
-              </Button>
-            </>
-          ) : (
+          <div className="coordinator-appointment-select">
+            <Stethoscope size={15} />
+            <select
+              value={target}
+              aria-label={`Choose a doctor for appointment ${appointment.id}`}
+              onFocus={() => void loadDateDoctors()}
+              onChange={(event) => setTarget(event.target.value ? Number(event.target.value) : "")}
+            >
+              <option value="">
+                {loadingDateDoctors
+                  ? "Checking availability for appointment date…"
+                  : doctorLoadError
+                    ? "Could not check availability — focus to retry"
+                    : dateDoctors
+                      ? availableDoctors.length
+                        ? "Choose doctor available at this date and time"
+                        : "No doctors free at this date and time"
+                      : "Check availability for this appointment"}
+              </option>
+              {availableDoctors.map((doctor) => (
+                <option key={doctor.id} value={doctor.id}>Dr. {doctor.name}</option>
+              ))}
+            </select>
+          </div>
+          <Button
+            variant="primary"
+            loading={saving}
+            disabled={!target || !dateDoctors || loadingDateDoctors}
+            onClick={() => void transfer()}
+          >
+            <ArrowRightLeft size={14} /> Transfer
+          </Button>
+          {dateDoctors && availableDoctors.length === 0 && (
             <div className="coordinator-appointment-card__closed">
-              <Stethoscope size={14} /> No other available doctors to transfer to right now.
+              <Stethoscope size={14} /> No other doctor is available for this appointment's date and time.
             </div>
           )}
+          {doctorLoadError && <div className="coordinator-appointment-card__closed"><Stethoscope size={14} /> {doctorLoadError}</div>}
         </div>
       )}
 

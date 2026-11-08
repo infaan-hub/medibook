@@ -1,12 +1,15 @@
 /** System Coordinator APIs: overview, operations, doctor roster and patient history. */
 import { handler, ok, readJson, badRequest } from "@/lib/route";
-import { requireAuth } from "@/lib/auth";
-import { forbidden } from "@/lib/errors";
+import { forbidden, unauthorized } from "@/lib/errors";
+import type { AuthUser } from "@/lib/auth";
 import * as coordinator from "@/services/coordinator.service";
 
-function assertCoordinator(role: string) { if (role !== "coordinator") throw forbidden("This action is available to system coordinators only."); }
-export const GET = handler(async ({ req }) => {
-  const user = await requireAuth(req); assertCoordinator(user.role);
+function assertCoordinator(user: AuthUser | null): asserts user is AuthUser {
+  if (!user) throw unauthorized();
+  if (user.role !== "coordinator") throw forbidden("This action is available to system coordinators only.");
+}
+export const GET = handler(async ({ req, user }) => {
+  assertCoordinator(user);
   const qs = new URL(req.url).searchParams; const view = qs.get("view") ?? "overview";
   if (view === "overview") return ok(await coordinator.overview());
   if (view === "doctors") return ok(await coordinator.doctorSchedule(qs.get("date") ?? new Date().toISOString().slice(0,10)));
@@ -16,8 +19,8 @@ export const GET = handler(async ({ req }) => {
   throw badRequest("Select a valid coordinator view.");
 });
 
-export const POST = handler(async ({ req }) => {
-  const user = await requireAuth(req); assertCoordinator(user.role);
+export const POST = handler(async ({ req, user }) => {
+  assertCoordinator(user);
   const qs = new URL(req.url).searchParams; const action = qs.get("action");
   const body = await readJson(req) as { doctor_id?: number };
   const appointmentId = Number(qs.get("appointment"));

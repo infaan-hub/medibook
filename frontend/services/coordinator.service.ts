@@ -113,8 +113,64 @@ export async function doctorSchedule(date: string) {
 }
 
 export async function listAppointments(type?: string) {
-  const rows = await prisma.appointment.findMany({ where: { deleted_at: null, ...(type ? { appointment_type: type as "NORMAL" | "EMERGENCY" | "HOME_SERVICE" } : {}) }, include: appointments.APPOINTMENT_INCLUDE, orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }], take: 250 });
-  return rows.map(appointmentDto);
+  // The coordinator queue only needs card fields. Loading each patient's and
+  // doctor's full profile for up to 250 rows made this endpoint unnecessarily
+  // slow and could exceed the serverless request deadline.
+  const rows = await prisma.appointment.findMany({
+    where: { deleted_at: null, ...(type ? { appointment_type: type as "NORMAL" | "EMERGENCY" | "HOME_SERVICE" } : {}) },
+    select: {
+      id: true,
+      patient_id: true,
+      doctor_id: true,
+      hospital_id: true,
+      appointment_date: true,
+      start_time: true,
+      end_time: true,
+      status: true,
+      appointment_type: true,
+      reason: true,
+      notes: true,
+      cancel_reason: true,
+      deleted_at: true,
+      checked_in_at: true,
+      consultation_started_at: true,
+      emergency_reason: true,
+      emergency_description: true,
+      emergency_requested_at: true,
+      emergency_accepted_at: true,
+      emergency_in_progress_at: true,
+      emergency_completed_at: true,
+      emergency_expired_at: true,
+      patient: { select: { email: true } },
+    },
+    orderBy: [{ appointment_date: "desc" }, { start_time: "desc" }],
+    take: 250,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    patient: row.patient_id,
+    patient_email: row.patient.email,
+    doctor: row.doctor_id,
+    hospital: row.hospital_id,
+    appointment_date: row.appointment_date.toISOString().slice(0, 10),
+    start_time: row.start_time,
+    end_time: row.end_time,
+    status: row.status,
+    appointment_type: row.appointment_type,
+    reason: row.reason,
+    notes: row.notes,
+    cancel_reason: row.cancel_reason,
+    deleted_at: row.deleted_at?.toISOString() ?? null,
+    checked_in_at: row.checked_in_at?.toISOString() ?? null,
+    consultation_started_at: row.consultation_started_at?.toISOString() ?? null,
+    emergency_reason: row.emergency_reason,
+    emergency_description: row.emergency_description,
+    emergency_requested_at: row.emergency_requested_at?.toISOString() ?? null,
+    emergency_accepted_at: row.emergency_accepted_at?.toISOString() ?? null,
+    emergency_in_progress_at: row.emergency_in_progress_at?.toISOString() ?? null,
+    emergency_completed_at: row.emergency_completed_at?.toISOString() ?? null,
+    emergency_expired_at: row.emergency_expired_at?.toISOString() ?? null,
+  }));
 }
 
 export async function listPatients(search = "") {
@@ -146,12 +202,16 @@ export async function reassignAppointment(actor: AuthUser, appointmentId: number
   const next = await prisma.doctor.findUnique({ where: { id: doctorId }, include: { user: true } });
   if (!next || !next.is_available) throw badRequest("Choose an active, available doctor.");
   if (doctorId === current.doctor_id) throw badRequest("Choose a different doctor.");
-  if (!(await isSlotAvailable(doctorId, current.appointment_date.toISOString().slice(0,10), current.start_time, current.end_time))) throw conflict("The selected doctor is not free at this appointment time. Choose another doctor.");
+  const date = current.appointment_date.toISOString().slice(0, 10);
+  if (!(await isSlotAvailable(doctorId, date, current.start_time, current.end_time))) {
+    throw conflict("The selected doctor is not available for this appointment date and time. Choose another doctor.");
+  }
   const oldDoctor = current.doctor;
-  const date = current.appointment_date.toISOString().slice(0,10);
   let updated;
   try {
     updated = await appointments.withDoctorDateLocks([{ doctorId: current.doctor_id, date }, { doctorId, date }], async (tx) => {
+      // Recheck competing bookings under the calendar lock; the date-specific
+      // hours, breaks and exceptions were validated immediately before lock.
       const overlap = await tx.appointment.findFirst({ where: { doctor_id: doctorId, appointment_date: new Date(`${date}T00:00:00Z`), start_time: { lt: current.end_time }, end_time: { gt: current.start_time }, status: { notIn: ["cancelled", "rejected"] }, deleted_at: null }, select: { id: true } });
       if (overlap) throw conflict("The selected doctor is not free at this appointment time. Choose another doctor.");
       const changed = await tx.appointment.updateMany({ where: { id: appointmentId, doctor_id: current.doctor_id, status: { in: ["pending", "accepted"] }, consultation_started_at: null, deleted_at: null }, data: { doctor_id: doctorId, status: "pending", checked_in_at: null } });
@@ -160,12 +220,20 @@ export async function reassignAppointment(actor: AuthUser, appointmentId: number
       return tx.appointment.findUniqueOrThrow({ where: { id: appointmentId }, include: appointments.APPOINTMENT_INCLUDE });
     });
   } catch (error) { if ((error as { code?: string })?.code === "P2002") throw conflict("The selected doctor was just booked at this time."); throw error; }
-  await notify(next.user_id, "appointment_request", `Appointment #${updated.id} has been assigned to you by a system coordinator. Please review and accept or reject it.`, updated.id, "Appointment reassigned");
-  await notify(updated.patient_id, "appointment_request", `Your appointment has been reassigned from ${doctorName(oldDoctor)} to ${doctorName(next)}. It is waiting for the new doctor's acceptance.`, updated.id, "Doctor changed");
-  await admin.recordAudit(actor.id, "appointment.reassigned", String(updated.id), `Doctor ${current.doctor_id} → ${doctorId}; new doctor approval required.`);
+  // The reassignment is already committed. Push delivery and audit storage are
+  // secondary effects; a failure there must not report a false 500 and prompt
+  // the coordinator to submit the transfer again.
   broadcastAppointmentEvent(updated, "appointment.updated", [updated.patient_id, oldDoctor.user_id, next.user_id]);
   broadcastAvailabilityUpdated(current.doctor_id, date);
   broadcastAvailabilityUpdated(doctorId, date);
+  const sideEffects = await Promise.allSettled([
+    notify(next.user_id, "appointment_request", `Appointment #${updated.id} has been assigned to you by a system coordinator. Please review and accept or reject it.`, updated.id, "Appointment reassigned"),
+    notify(updated.patient_id, "appointment_request", `Your appointment has been reassigned from ${doctorName(oldDoctor)} to ${doctorName(next)}. It is waiting for the new doctor's acceptance.`, updated.id, "Doctor changed"),
+    admin.recordAudit(actor.id, "appointment.reassigned", String(updated.id), `Doctor ${current.doctor_id} → ${doctorId}; new doctor approval required.`),
+  ]);
+  sideEffects.forEach((result) => {
+    if (result.status === "rejected") console.error("[coordinator] reassignment side effect failed", result.reason);
+  });
   return appointmentDto(updated);
 }
 

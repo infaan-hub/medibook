@@ -90,16 +90,18 @@ export async function isSlotAvailable(
   startTime: string,
   endTime: string
 ): Promise<boolean> {
-  const doctor = await doctors.findDoctorById(doctorId);
+  const weekday = isoWeekday(date);
+  const [doctor, exceptions, windows, booked] = await Promise.all([
+    doctors.findDoctorById(doctorId),
+    doctors.listExceptionsForDate(doctorId, date),
+    doctors.listActiveWindowsForWeekday(doctorId, weekday),
+    bookedSlotKeysForDate(doctorId, date),
+  ]);
   if (!doctor || !doctor.is_available) return false;
-
-  const exceptions = await doctors.listExceptionsForDate(doctorId, date);
   if (exceptions.some((item) => item.start_time === null)) return false;
 
   const startSec = timeToSeconds(startTime);
   const endSec = timeToSeconds(endTime);
-  const weekday = isoWeekday(date);
-  const windows = await doctors.listActiveWindowsForWeekday(doctorId, weekday);
 
   // Must fall within at least one active window.
   const inWindow = windows.some((w) => {
@@ -115,7 +117,6 @@ export async function isSlotAvailable(
   const exceptionRanges = exceptions
     .filter((item) => item.start_time && item.end_time)
     .map((item) => ({ start: timeToSeconds(item.start_time as string), end: timeToSeconds(item.end_time as string) }));
-  const booked = await bookedSlotKeysForDate(doctorId, date);
   const bookedRanges = [...booked].map((key) => {
     const [start = "00:00:00", end = "00:00:00"] = key.split("|");
     return { start: timeToSeconds(start), end: timeToSeconds(end) };
