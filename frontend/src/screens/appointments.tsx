@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   cancelAppointment,
   completeAppointment,
@@ -32,10 +32,10 @@ import { LocationPrompt } from "../components/LocationPrompt";
 import { NotificationPrompt } from "../components/NotificationPrompt";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
-import type { CapturedFix } from "../lib/location";
+import { captureFix, type CapturedFix } from "../lib/location";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play, House } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -129,6 +129,8 @@ function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; app
 
 export function BookingScreen() {
   const { id } = useParams<{ id: string }>();
+  const route = useLocation();
+  const isHomeService = route.pathname.startsWith("/home-visit");
   const navigate = useNavigate();
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
   const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
@@ -242,6 +244,14 @@ export function BookingScreen() {
   async function handleBook(event: FormEvent) {
     event.preventDefault();
     if (!id || !selectedTime || !selectedDate) return;
+    const homeServiceLocation = isHomeService && patientProfile?.latitude != null && patientProfile.longitude != null
+      ? { latitude: patientProfile.latitude, longitude: patientProfile.longitude, accuracy: patientProfile.location_accuracy }
+      : null;
+    if (isHomeService && !homeServiceLocation) {
+      setGateOverride("patient");
+      setError("Share your current location for the home visit.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -256,6 +266,12 @@ export function BookingScreen() {
     try {
       const result = await createAppointment({
         doctor: Number(id),
+        ...(homeServiceLocation ? {
+          appointment_type: "HOME_SERVICE" as const,
+          home_service_latitude: homeServiceLocation.latitude,
+          home_service_longitude: homeServiceLocation.longitude,
+          home_service_location_accuracy: homeServiceLocation.accuracy,
+        } : {}),
         appointment_date: selectedDate,
         start_time: startTime,
         end_time: endTime,
@@ -266,7 +282,7 @@ export function BookingScreen() {
       if (!result.success) {
         throw new ApiError(result.message || "Booking failed.", 409, result.errors);
       }
-      navigate("/booking/success");
+      navigate(isHomeService ? "/home-visit/success" : "/booking/success");
     } catch (e) {
       // Location refused → open the guided prompt instead of a raw error line.
       const gate = locationGateFromError(e);
@@ -338,9 +354,9 @@ export function BookingScreen() {
   if (openAppointment) {
     return (
       <div className="page">
-        <Link to={`/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
+        <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
         <Card className="card--fit">
-          <h1 className="page__title">Book appointment</h1>
+          <h1 className="page__title">{isHomeService ? "Book a Home Service visit" : "Book appointment"}</h1>
           <p className="page__subtitle">
             Dr. {doctor.first_name} {doctor.last_name}
           </p>
@@ -367,10 +383,10 @@ export function BookingScreen() {
 
   return (
     <div className="page">
-      <Link to={`/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
+      <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
 
       <Card className="card--fit">
-        <h1 className="page__title">Book appointment</h1>
+        <h1 className="page__title">{isHomeService ? "Book a Home Service visit" : "Book appointment"}</h1>
         <p className="page__subtitle">
           Dr. {doctor.first_name} {doctor.last_name}
           {doctor.specialties && doctor.specialties.length > 0
@@ -379,6 +395,19 @@ export function BookingScreen() {
         </p>
       </Card>
 
+      {isHomeService && (
+        <Card className="booking-home-location">
+          <h2>Home visit location</h2>
+          <p className="page__subtitle">The doctor will visit your saved current location. Confirm or refresh it before booking.</p>
+          {patientProfile?.latitude != null && patientProfile.longitude != null ? (
+            <p className="booking-home-location__coords">{patientProfile.latitude.toFixed(5)}, {patientProfile.longitude.toFixed(5)}</p>
+          ) : <p className="form-note--error">Share your current location to continue.</p>}
+          <Button variant="secondary" disabled={!patientProfile} loading={savingLocation} onClick={async () => {
+            try { await savePatientLocation(await captureFix()); }
+            catch (reason) { setError(message(reason)); }
+          }}><MapPin size={15} /> Use current location</Button>
+        </Card>
+      )}
       {/* Patient medical info preview */}
       {patientProfile && (
         <Card className="booking-medical-card">
@@ -525,7 +554,7 @@ export function BookingScreen() {
 
           <form className="form" onSubmit={handleBook}>
             <div className="field">
-              <label className="field__label" htmlFor="book-reason">Reason for visit (optional)</label>
+              <label className="field__label" htmlFor="book-reason">{isHomeService ? "Reason for home visit (optional)" : "Reason for visit (optional)"}</label>
               <textarea
                 id="book-reason"
                 className="field__input"
@@ -549,10 +578,10 @@ export function BookingScreen() {
         open={locationGate === "patient"}
         saving={savingLocation}
         onCaptured={savePatientLocation}
-        title="Set your location to book"
-        description={`Dr. ${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
+        title={isHomeService ? "Set your home visit location" : "Set your location to book"}
+        description={isHomeService ? `Dr. ${doctor.first_name} ${doctor.last_name} needs your current location for the home visit.` : `Dr. ${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
         actionLabel="Share my location"
-        privacyNote="Stored on your profile. Visible only to the doctor you book with."
+        privacyNote={isHomeService ? "Your visit location is saved on this appointment and shared only with the doctor you book." : "Stored on your profile. Visible only to the doctor you book with."}
       />
 
       {/* Location gate — doctor side. Nothing the patient can fix, so the only
@@ -592,6 +621,7 @@ export function BookingScreen() {
    ====================================== */
 
 export function BookingSuccessScreen() {
+  const isHomeService = useLocation().pathname.startsWith("/home-visit");
   const { status, user } = useSession();
   const userId = status === "authed" && user ? user.id : null;
   const push = usePushNotifications(userId);
@@ -622,13 +652,15 @@ export function BookingSuccessScreen() {
       <Card className="card--fit">
         <div className="booking-success">
           <div className="booking-success__icon"><CheckCircle2 size={48} /></div>
-          <h1 className="page__title">Appointment requested</h1>
+          <h1 className="page__title">{isHomeService ? "Home Service requested" : "Appointment requested"}</h1>
           <p className="page__subtitle">
-            Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects the request.
+            {isHomeService
+              ? "Your Home Service visit has been submitted. The doctor will review it and you will be notified when it is accepted or rejected."
+              : "Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects the request."}
           </p>
           <div className="booking-success__actions">
             <Link to="/appointments"><Button>View my appointments</Button></Link>
-            <Link to="/doctors"><Button variant="secondary">Find another doctor</Button></Link>
+            <Link to={isHomeService ? "/home-visit/doctor" : "/doctors"}><Button variant="secondary">Find another doctor</Button></Link>
           </div>
         </div>
       </Card>
@@ -879,7 +911,7 @@ export function AppointmentsListScreen() {
       const response = await listMyAppointments();
       const rows = response.data.results;
       setAppointments(rows);
-      const dates = [...new Set(rows.filter((row) => row.status === "accepted" && row.checked_in_at).map((row) => row.appointment_date))];
+      const dates = [...new Set(rows.filter((row) => row.appointment_type !== "HOME_SERVICE" && row.status === "accepted" && row.checked_in_at).map((row) => row.appointment_date))];
       const batches = await Promise.all(dates.map((date) => getQueue(date).then((result) => result.data).catch(() => [])));
       const next = new Map<number, QueueSlot>();
       for (const entry of batches.flat()) if (entry.queue) next.set(entry.id, entry.queue);
@@ -982,11 +1014,12 @@ export function AppointmentsListScreen() {
                     </div>
                     <div className="patient-appt-card__info">
                       <div className="patient-appt-card__doctor">
-                        <DoctorName doctorId={a.doctor} />
+                        {a.appointment_type === "HOME_SERVICE" ? "Home Service with " : ""}<DoctorName doctorId={a.doctor} />
                       </div>
                       <div className="patient-appt-card__time">
                         {formatTime(a.start_time)} – {formatTime(a.end_time)}
                       </div>
+                      {a.appointment_type === "HOME_SERVICE" && <span className="badge badge--accepted">Home Service</span>}
                       <span
                         className="patient-appt-card__status"
                         style={{ color: sc.color, background: sc.bg }}
@@ -1039,6 +1072,7 @@ export function AppointmentDetailScreen() {
   const [queueTick, setQueueTick] = useState(0);
 
   const isDoctor = user?.role === "doctor";
+  const isHomeService = appointment?.appointment_type === "HOME_SERVICE";
 
   const load = useCallback(() => {
     if (!id) return;
@@ -1054,7 +1088,7 @@ export function AppointmentDetailScreen() {
   // appointment.updated to both the doctor and patient.
   useEffect(() => {
     if (!appointment) return;
-    if (appointment.appointment_type === "EMERGENCY") return;
+    if (appointment.appointment_type === "EMERGENCY" || appointment.appointment_type === "HOME_SERVICE") return;
     if (appointment.status !== "pending" && appointment.status !== "accepted") return;
     let cancelled = false;
     const loadQueue = () => {
@@ -1186,7 +1220,7 @@ export function AppointmentDetailScreen() {
 
       <Card>
         <div className="appt-detail__header">
-          <h1 className="page__title">Appointment details</h1>
+          <h1 className="page__title">{isHomeService ? "Home Service details" : "Appointment details"}</h1>
           <StatusBadge status={appointment.status} />
         </div>
 
@@ -1204,20 +1238,28 @@ export function AppointmentDetailScreen() {
             <span className="appt-detail__label">Time</span>
             {formatTime(appointment.start_time)} – {formatTime(appointment.end_time)}
           </div>
-          <div className="appt-detail__field appt-detail__location">
-            <span className="appt-detail__label">Hospital location</span>
-            <strong>Dhuran Special Need Centre</strong>
-            <span>Jambiani Main Road, Kibigija, Tanzania</span>
-            <span>MGPW+2C Jambiani, Tanzania</span>
-            <a
-              className="btn btn--secondary appt-detail__directions"
-              href="https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <MapPin size={16} /> Get directions in Google Maps
-            </a>
-          </div>
+          {isHomeService ? (
+            appointment.home_service_latitude != null && appointment.home_service_longitude != null && (
+              <div className="appt-detail__field appt-detail__location">
+                <span className="appt-detail__label">Patient home location</span>
+                <strong>Saved for this appointment</strong>
+                <span>{appointment.home_service_latitude.toFixed(5)}, {appointment.home_service_longitude.toFixed(5)}</span>
+                <a className="btn btn--secondary appt-detail__directions" href={`https://www.google.com/maps/dir/?api=1&destination=${appointment.home_service_latitude},${appointment.home_service_longitude}`} target="_blank" rel="noreferrer">
+                  <MapPin size={16} /> Open patient location in Google Maps
+                </a>
+              </div>
+            )
+          ) : (
+            <div className="appt-detail__field appt-detail__location">
+              <span className="appt-detail__label">Hospital location</span>
+              <strong>Dhuran Special Need Centre</strong>
+              <span>Jambiani Main Road, Kibigija, Tanzania</span>
+              <span>MGPW+2C Jambiani, Tanzania</span>
+              <a className="btn btn--secondary appt-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402" target="_blank" rel="noreferrer">
+                <MapPin size={16} /> Get directions in Google Maps
+              </a>
+            </div>
+          )}
           {appointment.reason && (
             <div className="appt-detail__field">
               <span className="appt-detail__label">Reason</span>
@@ -1238,6 +1280,16 @@ export function AppointmentDetailScreen() {
           )}
         </div>
       </Card>
+
+      {isHomeService && isDoctor && appointment.status === "accepted" && (
+        <Card className="queue-card">
+          <div className="queue-card__head"><span className="queue-card__title"><House size={16} /> Home Service consultation</span></div>
+          <p className="queue-card__msg">Start the visit on its scheduled date. The saved patient location is shown below.</p>
+          <Button variant="primary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleStartConsultation()}>
+            <Play size={14} /> {isAppointmentDay ? "Start consultation" : "Start on appointment day"}
+          </Button>
+        </Card>
+      )}
 
       {appointment.appointment_type === "EMERGENCY" && isDoctor && (appointment.status === "accepted" || appointment.status === "in_progress") && (
         <Card className="queue-card">
@@ -1263,7 +1315,7 @@ export function AppointmentDetailScreen() {
       )}
 
       {/* Waiting room (phase 11) — live position for a today's appointment. */}
-      {appointment.appointment_type !== "EMERGENCY" && queueSlot !== null && (
+      {appointment.appointment_type === "NORMAL" && queueSlot !== null && (
         <Card className="queue-card">
           <div className="queue-card__head">
             <span className="queue-card__title">

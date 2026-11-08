@@ -61,6 +61,7 @@ vi.mock("@/services/schedule.service", () => ({ availableSlots, isSlotAvailable 
 
 vi.mock("@/services/location.service", () => ({
   assertBookingLocation: vi.fn().mockResolvedValue(undefined),
+  assertHomeServiceLocation: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/notify", () => ({

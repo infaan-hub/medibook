@@ -38,6 +38,10 @@ export function getAppointment(id: number): Promise<Envelope<Appointment>> {
 export function createAppointment(
   payload: {
     doctor: number;
+    appointment_type?: "NORMAL" | "HOME_SERVICE";
+    home_service_latitude?: number;
+    home_service_longitude?: number;
+    home_service_location_accuracy?: number | null;
     appointment_date: string;
     start_time: string;
     end_time: string;

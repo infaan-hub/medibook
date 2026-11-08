@@ -11,6 +11,10 @@ export const appointmentCreateSchema = z
   .object({
     doctor: drfInteger(),
     hospital: drfInteger().nullable().optional(),
+    appointment_type: z.enum(["NORMAL", "HOME_SERVICE"]).optional(),
+    home_service_latitude: z.number().min(-90).max(90).nullable().optional(),
+    home_service_longitude: z.number().min(-180).max(180).nullable().optional(),
+    home_service_location_accuracy: z.number().min(0).nullable().optional(),
     appointment_date: drfDate(),
     start_time: drfTime(),
     end_time: drfTime(),
@@ -27,6 +31,9 @@ export const appointmentCreateSchema = z
       const trimmed = t.trim();
       return (/^\d:\d/.test(trimmed) ? `0${trimmed}` : trimmed);
     };
+    if (data.appointment_type === "HOME_SERVICE" && (data.home_service_latitude == null || data.home_service_longitude == null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["home_service_latitude"], message: "A home visit location is required." });
+    }
     if (norm(data.end_time) <= norm(data.start_time)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["end_time"], message: "End time must be after start time." });
     }

@@ -507,6 +507,11 @@ export function appointmentDto(
     checked_in_at: iso(appointment.checked_in_at),
     consultation_started_at: iso(appointment.consultation_started_at),
     appointment_type: appointment.appointment_type,
+    ...(appointment.appointment_type === "HOME_SERVICE" ? {
+      home_service_latitude: appointment.home_service_latitude,
+      home_service_longitude: appointment.home_service_longitude,
+      home_service_location_accuracy: appointment.home_service_location_accuracy,
+    } : {}),
     ...(appointment.appointment_type === "EMERGENCY"
       ? {
           emergency_reason: appointment.emergency_reason,

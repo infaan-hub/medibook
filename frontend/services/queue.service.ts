@@ -213,7 +213,16 @@ export async function startConsultation(user: AuthUser, id: number) {
       non_field_errors: ["Only upcoming appointments can be started."],
     });
   }
-  if (!appointment.checked_in_at) {
+  if (appointment.appointment_type === "HOME_SERVICE") {
+    if (appointment.status !== "accepted") {
+      throw new ValidationError({ non_field_errors: ["Accept the home service appointment before starting it."] });
+    }
+    const profile = await getPatientProfile(appointment.patient_id).catch(() => null);
+    const today = localDateString(new Date(), profile?.timezone || "UTC");
+    if (appointment.appointment_date.toISOString().slice(0, 10) !== today) {
+      throw new ValidationError({ non_field_errors: ["Home service consultation can start on the scheduled day."] });
+    }
+  } else if (!appointment.checked_in_at) {
     throw new ValidationError({ non_field_errors: ["Check the patient in first."] });
   }
   if (appointment.consultation_started_at) {

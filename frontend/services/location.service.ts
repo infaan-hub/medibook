@@ -59,6 +59,13 @@ export async function assertBookingLocation(user: AuthUser, doctorId: number): P
   if (missing) throw locationRequiredError(missing);
 }
 
+/** Home visits use the patient's address as the destination; a clinic location
+ * on the doctor's profile is not required for this service. */
+export async function assertHomeServiceLocation(user: AuthUser): Promise<void> {
+  const patient = await getPatientProfile(user.id).catch(() => null);
+  if (!patient || !hasLocation(patient)) throw locationRequiredError("patient");
+}
+
 /**
  * Emergency booking: the patient's own position arrives with the request as a
  * live GPS fix, so only the doctor's practice location has to be on file —

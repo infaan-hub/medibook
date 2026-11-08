@@ -1,4 +1,4 @@
-﻿/**
+/**
  * App shell (Â§22.6 responsive layout): sticky header, phone bottom nav,
  * tablet+ sidebar rail, update prompt, offline banner. The A2HS install CTA
  * lives in `components/InstallAppBarge.tsx` (Â§69) — a right-edge barge plus a
@@ -44,6 +44,7 @@ import {
   Newspaper,
   Siren,
   Download,
+  House,
 } from "lucide-react";
 
 const DESKTOP_BP = 1200;
@@ -71,6 +72,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
       { to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/admin/home-visit", label: "Home Service", icon: <House size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
     ];
@@ -80,6 +82,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
       { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
       { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/home-visit", label: "Home Service", icon: <House size={20} /> },
       { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
       { to: "/doctor/health-tips", label: "Health Tips", icon: <Newspaper size={20} /> },
@@ -89,6 +92,7 @@ export function navItemsFor(user: User | null): NavItem[] {
   return [
     { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
     { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+    { to: "/home-visit/doctor", label: "Home Service", icon: <House size={20} /> },
     { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
     { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
@@ -299,10 +303,12 @@ function ProfileNavIcon({ user, icon }: { user?: User | null; icon: ReactNode })
 export function activeNavTo(items: NavItem[], pathname: string): string | null {
   let best: string | null = null;
   for (const item of items) {
-    const matched =
+    const homeServiceChild = item.to === "/home-visit/doctor" &&
+      ["/home-visit/doctors/", "/home-visit/booking/", "/home-visit/success"].some((prefix) => pathname.startsWith(prefix));
+    const matched = homeServiceChild || (
       item.to === "/"
         ? pathname === "/"
-        : pathname === item.to || pathname.startsWith(`${item.to}/`);
+        : pathname === item.to || pathname.startsWith(`${item.to}/`));
     if (matched && (best === null || item.to.length > best.length)) best = item.to;
   }
   return best;

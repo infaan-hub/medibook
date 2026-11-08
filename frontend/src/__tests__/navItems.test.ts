@@ -53,6 +53,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
     expect(sidebarByRole.patient).toEqual([
       "/dashboard",
       "/doctors",
+      "/home-visit/doctor",
       "/appointments",
       "/emergency",
       "/settings",
@@ -62,6 +63,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
       "/doctor/dashboard",
       "/doctor/personal",
       "/doctor/appointments",
+      "/doctor/home-visit",
       "/doctor/emergency",
       "/doctor/medical-treatment",
       "/doctor/health-tips",
@@ -74,6 +76,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
       "/admin/doctors",
       "/admin/doctors/new",
       "/admin/appointments",
+      "/admin/home-visit",
       "/notifications",
       "/admin/audit",
     ]);
@@ -132,6 +135,7 @@ describe("activeNavTo — exactly one active item per route", () => {
       "/admin/doctors",
       "/admin/doctors/new",
       "/admin/appointments",
+      "/admin/home-visit",
       "/admin/audit",
       "/notifications",
     ];
@@ -153,7 +157,10 @@ describe("activeNavTo — exactly one active item per route", () => {
 
   it("patient and doctor detail routes keep their parent item active", () => {
     expect(activeNavTo(navItemsFor(patient), "/doctors/42")).toBe("/doctors");
+    expect(activeNavTo(navItemsFor(patient), "/home-visit/doctors/42")).toBe("/home-visit/doctor");
     expect(activeNavTo(navItemsFor(doctor), "/doctor/visit-history/7")).toBeNull();
+    expect(activeNavTo(navItemsFor(doctor), "/doctor/home-visit")).toBe("/doctor/home-visit");
+    expect(activeNavTo(navItemsFor(admin), "/admin/home-visit")).toBe("/admin/home-visit");
     expect(activeNavTo(navItemsFor(patient), "/appointments/9")).toBe("/appointments");
   });
 });

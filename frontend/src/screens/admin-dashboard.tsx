@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FilePlus2, FileText, Lock, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Activity, ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, Clock3, FilePlus2, FileText, House, Lock, MapPin, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserPlus, Users, XCircle } from "lucide-react";
 import { approveDoctor, clearAuditEvents, createAdminDoctor, createAdminUser, deleteAdminDoctor, deleteAdminUser, getAdminStats, listAdminUsers, listAuditEvents, unlockAdminUser, type AdminStats } from "../api/admin";
 import { deleteAppointment, listAllAppointments } from "../api/appointments";
 import { listDoctors } from "../api/doctors";
@@ -44,7 +44,7 @@ export function AdminDashboardScreen() {
     <AdminHeader title="Overview" description="A clear view of your healthcare platform." action={<div className="admin-header-actions"><Link to="/admin/audit" className="admin-outline-button"><Activity size={16} /> Audit log</Link><Link to="/admin/users/new" className="admin-primary-button"><Plus size={16} /> Add user</Link></div>} />
     <div className="admin-metrics"><MetricCard label="Total users" value={stats.users} detail="Across all roles" tone="admin-metric__icon--blue" icon={<Users size={19} />} /><MetricCard label="Patients" value={stats.patients} detail="Registered patients" tone="admin-metric__icon--teal" icon={<ShieldCheck size={19} />} /><MetricCard label="Doctors" value={stats.doctors} detail="Active profiles" tone="admin-metric__icon--violet" icon={<Stethoscope size={19} />} /><MetricCard label="Appointments" value={stats.appointments} detail="All-time bookings" tone="admin-metric__icon--amber" icon={<Clock3 size={19} />} /></div>
     <div className="admin-dashboard-grid"><Card className="admin-chart-card"><div className="admin-card-heading"><div><h2>Appointment activity</h2><p>Distribution by current status</p></div><span className="admin-chart-caption"><Activity size={15} /> Live data</span></div><div className="admin-bar-chart">{statuses.length ? statuses.map(([status, count]) => <div className="admin-bar-row" key={status}><span>{status}</span><div><i style={{ width: `${Math.max((count / maxStatus) * 100, count ? 8 : 0)}%` }} /></div><strong>{count}</strong></div>) : <EmptyState title="No appointment activity" />}</div></Card><Card className="admin-chart-card admin-breakdown"><div className="admin-card-heading"><div><h2>Platform health</h2><p>At-a-glance operating mix</p></div><CircleDollarSign size={19} /></div><div className="admin-donut" style={{ "--donut": `${stats.users ? (stats.patients / stats.users) * 100 : 0}%` } as React.CSSProperties}><span>{stats.users ? Math.round((stats.patients / stats.users) * 100) : 0}%<small>patients</small></span></div><div className="admin-legend"><span><i className="admin-dot admin-dot--teal" /> Patients <b>{stats.patients}</b></span><span><i className="admin-dot admin-dot--violet" /> Doctors <b>{stats.doctors}</b></span></div></Card></div>
-    <div className="admin-dashboard-grid admin-dashboard-grid--lower"><Card className="admin-quick-card"><div className="admin-card-heading"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div className="admin-action-grid"><Link to="/admin/users/new"><UserPlus size={18} /><span><b>Add a user</b><small>Create a patient or staff account</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors/new"><FilePlus2 size={18} /><span><b>Add a doctor</b><small>Set up a professional profile</small></span><ChevronRight size={15} /></Link><Link to="/admin/users"><Users size={18} /><span><b>Review users</b><small>Search and filter accounts</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors"><Stethoscope size={18} /><span><b>Review doctors</b><small>Approve or suspend profiles</small></span><ChevronRight size={15} /></Link><Link to="/admin/appointments"><Clock3 size={18} /><span><b>Manage appointments</b><small>View, filter, and delete bookings</small></span><ChevronRight size={15} /></Link><Link to="/admin/reports"><FileText size={18} /><span><b>Reports</b><small>Generate admin, doctor & patient reports</small></span><ChevronRight size={15} /></Link></div></Card><Card className="admin-activity-card"><div className="admin-card-heading"><div><h2>Recent activity</h2><p>Latest activity across the platform</p></div><Link to="/admin/audit">View all <ArrowUpRight size={15} /></Link></div>{events.length ? <div className="admin-activity-list">{events.slice(0, 5).map((event) => <div key={event.id}><span className="admin-activity-icon"><CheckCircle2 size={15} /></span><span><b>{event.action.replace(/[._]/g, " ")}</b><small>{activityLine(event)} Â· {formatTime(event.created_at)}</small></span></div>)}</div> : <EmptyState title="No activity yet" description="Logins, bookings and admin actions will appear here." />}</Card></div>
+    <div className="admin-dashboard-grid admin-dashboard-grid--lower"><Card className="admin-quick-card"><div className="admin-card-heading"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div className="admin-action-grid"><Link to="/admin/users/new"><UserPlus size={18} /><span><b>Add a user</b><small>Create a patient or staff account</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors/new"><FilePlus2 size={18} /><span><b>Add a doctor</b><small>Set up a professional profile</small></span><ChevronRight size={15} /></Link><Link to="/admin/users"><Users size={18} /><span><b>Review users</b><small>Search and filter accounts</small></span><ChevronRight size={15} /></Link><Link to="/admin/doctors"><Stethoscope size={18} /><span><b>Review doctors</b><small>Approve or suspend profiles</small></span><ChevronRight size={15} /></Link><Link to="/admin/appointments"><Clock3 size={18} /><span><b>Manage appointments</b><small>View, filter, and delete bookings</small></span><ChevronRight size={15} /></Link><Link to="/admin/home-visit"><House size={18} /><span><b>Home Service</b><small>View and manage home visits</small></span><ChevronRight size={15} /></Link><Link to="/admin/reports"><FileText size={18} /><span><b>Reports</b><small>Generate admin, doctor & patient reports</small></span><ChevronRight size={15} /></Link></div></Card><Card className="admin-activity-card"><div className="admin-card-heading"><div><h2>Recent activity</h2><p>Latest activity across the platform</p></div><Link to="/admin/audit">View all <ArrowUpRight size={15} /></Link></div>{events.length ? <div className="admin-activity-list">{events.slice(0, 5).map((event) => <div key={event.id}><span className="admin-activity-icon"><CheckCircle2 size={15} /></span><span><b>{event.action.replace(/[._]/g, " ")}</b><small>{activityLine(event)} Â· {formatTime(event.created_at)}</small></span></div>)}</div> : <EmptyState title="No activity yet" description="Logins, bookings and admin actions will appear here." />}</Card></div>
   </div>;
 }
 
@@ -235,6 +235,8 @@ export function AdminAuditScreen() {
 }
 
 export function AdminAppointmentsScreen() {
+  const route = useLocation();
+  const isHomeVisitPage = route.pathname === "/admin/home-visit";
   const { notify } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +280,8 @@ export function AdminAppointmentsScreen() {
     }
   }
 
-  const filtered = appointments.filter((a) => {
+  const serviceAppointments = appointments.filter((a) => isHomeVisitPage ? a.appointment_type === "HOME_SERVICE" : a.appointment_type !== "HOME_SERVICE");
+  const filtered = serviceAppointments.filter((a) => {
     if (statusFilter && a.status !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -293,18 +296,18 @@ export function AdminAppointmentsScreen() {
   });
 
   const statusCounts = {
-    all: appointments.length,
-    pending: appointments.filter((a) => a.status === "pending").length,
-    accepted: appointments.filter((a) => a.status === "accepted").length,
-    done: appointments.filter((a) => a.status === "done").length,
-    cancelled: appointments.filter((a) => a.status === "cancelled" || a.status === "rejected").length,
+    all: serviceAppointments.length,
+    pending: serviceAppointments.filter((a) => a.status === "pending").length,
+    accepted: serviceAppointments.filter((a) => a.status === "accepted").length,
+    done: serviceAppointments.filter((a) => a.status === "done").length,
+    cancelled: serviceAppointments.filter((a) => a.status === "cancelled" || a.status === "rejected").length,
   };
 
   return (
     <div className="admin-workspace">
       <AdminHeader
-        title="Appointments"
-        description="View and manage all platform appointments."
+        title={isHomeVisitPage ? "Home Service" : "Appointments"}
+        description={isHomeVisitPage ? "View and manage all Home Service visits." : "View and manage all platform appointments."}
         action={<Link to="/admin" className="admin-outline-button">Back to overview</Link>}
       />
       <Card className="admin-table-card">
@@ -339,7 +342,7 @@ export function AdminAppointmentsScreen() {
         {loading ? (
           <Skeleton lines={6} />
         ) : filtered.length === 0 ? (
-          <EmptyState title="No appointments found" description="Try a different search or filter." />
+          <EmptyState title={isHomeVisitPage ? "No Home Service visits found" : "No appointments found"} description="Try a different search or filter." />
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
@@ -349,6 +352,7 @@ export function AdminAppointmentsScreen() {
                   <th>Patient</th>
                   <th>Doctor</th>
                   <th>Date & Time</th>
+                  {isHomeVisitPage && <th>Visit location</th>}
                   <th>Status</th>
                   <th>Reason</th>
                   <th>Actions</th>
@@ -365,6 +369,13 @@ export function AdminAppointmentsScreen() {
                       <br />
                       <small>{a.start_time?.slice(0, 5)} – {a.end_time?.slice(0, 5)}</small>
                     </td>
+                    {isHomeVisitPage && <td>
+                      {a.home_service_latitude != null && a.home_service_longitude != null ? (
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${a.home_service_latitude},${a.home_service_longitude}`} target="_blank" rel="noreferrer">
+                          <MapPin size={14} /> Open map
+                        </a>
+                      ) : "Location unavailable"}
+                    </td>}
                     <td><span className={`admin-role admin-role--${a.status === "pending" ? "patient" : a.status === "accepted" ? "doctor" : a.status === "done" ? "admin" : "patient"}`}>{a.status}</span></td>
                     <td><small>{a.reason || "—"}</small></td>
                     <td>

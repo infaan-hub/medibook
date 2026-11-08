@@ -154,7 +154,10 @@ export const createAppointment = (
     end_time: string;
     reason?: string;
     status?: "pending" | "accepted";
-    appointment_type?: "NORMAL" | "EMERGENCY";
+    appointment_type?: "NORMAL" | "EMERGENCY" | "HOME_SERVICE";
+    home_service_latitude?: number | null;
+    home_service_longitude?: number | null;
+    home_service_location_accuracy?: number | null;
     patient_snapshot?: Prisma.InputJsonValue;
   },
   db: AppointmentDb = prisma
@@ -171,6 +174,11 @@ export const createAppointment = (
       ...(data.patient_snapshot ? { patient_snapshot: data.patient_snapshot } : {}),
       ...(data.status ? { status: data.status } : {}),
       ...(data.appointment_type ? { appointment_type: data.appointment_type } : {}),
+      ...(data.appointment_type === "HOME_SERVICE" ? {
+        home_service_latitude: data.home_service_latitude ?? null,
+        home_service_longitude: data.home_service_longitude ?? null,
+        home_service_location_accuracy: data.home_service_location_accuracy ?? null,
+      } : {}),
     },
     include: APPOINTMENT_INCLUDE,
   });

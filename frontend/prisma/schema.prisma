@@ -57,6 +57,7 @@ enum AppointmentStatus {
 enum AppointmentType {
   NORMAL
   EMERGENCY
+  HOME_SERVICE
 }
 
 /// Lifecycle of a lab order (phase 3): ordered → in_progress → resulted,
@@ -387,6 +388,9 @@ model Appointment {
   end_time               String            @db.VarChar(8)
   status                 AppointmentStatus @default(pending)
   appointment_type       AppointmentType   @default(NORMAL)
+  home_service_latitude Float?
+  home_service_longitude Float?
+  home_service_location_accuracy Float?
   reason                 String            @default("")
   notes                  String            @default("")
   cancel_reason          String            @default("")

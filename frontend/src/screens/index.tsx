@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { listMyAppointments } from "../api/appointments";
 import { reasonLabel, statusLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
@@ -22,6 +22,7 @@ import {
   MapPin,
   Search,
   Newspaper,
+  House,
 } from "lucide-react";
 
 /** Radius used by the directory's "Near me" toggle (matches the API default). */
@@ -270,6 +271,10 @@ function PatientHome({ user }: { user: User | null }) {
 
       {/* Quick actions */}
       <div className="home__quick-actions">
+        <Link to="/home-visit/doctor" className="home__quick-action">
+          <House size={20} />
+          <span>Home Service</span>
+        </Link>
         <Link to="/blog" className="home__quick-action">
           <Newspaper size={20} />
           <span>Health Tips</span>
@@ -300,6 +305,8 @@ export function HomeScreen() {
  */
 export function DoctorsPage() {
   const { user } = useSession();
+  const route = useLocation();
+  const isHomeVisit = route.pathname.startsWith("/home-visit");
   const [search, setSearch] = useState("");
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [nearMe, setNearMe] = useState(false);
@@ -399,7 +406,7 @@ export function DoctorsPage() {
 
   return (
     <div className="page doctors-page">
-      <h1 className="page__title">Find a doctor</h1>
+      <h1 className="page__title">{isHomeVisit ? "Find a nearby doctor" : "Find a doctor"}</h1>
       <Card className="doctors__filters">
         <div className="field">
           <label className="field__label" htmlFor="doctor-search">Name</label>
@@ -440,7 +447,7 @@ export function DoctorsPage() {
       {!loading && !!results?.length && (
         <div className="home__doctor-list doctors__grid">
           {results.map((doctor) => (
-            <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
+            <Link key={doctor.id} to={isHomeVisit ? `/home-visit/doctors/${doctor.id}` : `/doctors/${doctor.id}`} className="home__doctor-card">
               <DoctorImage
                 src={doctorCardImage(doctor)}
                 alt={formatDoctorName(doctor)}

@@ -82,6 +82,7 @@ async function createWithSlotGuard<T>(fn: () => Promise<T>): Promise<T> {
 /** POST /api/appointments/ — patient books a slot (201 "Appointment requested."). */
 export async function bookAppointment(req: Request, user: AuthUser, body: unknown) {
   const input = parse(appointmentCreateSchema, body);
+  const appointmentType = input.appointment_type ?? "NORMAL";
 
   // One open appointment per patient: until the doctor closes the last visit
   // (`done`) the patient already holds a slot and may not book a second one.
@@ -107,8 +108,12 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
   // Hard gate: no appointment without a real location on BOTH sides. The
   // booking screen prompts for it first, so this only fires when the client is
   // bypassed (curl, a stale tab, a doctor who cleared their location).
-  const { assertBookingLocation } = await import("@/services/location.service");
-  await assertBookingLocation(user, doctor.id);
+  const { assertBookingLocation, assertHomeServiceLocation } = await import("@/services/location.service");
+  if (appointmentType === "HOME_SERVICE") {
+    await assertHomeServiceLocation(user);
+  } else {
+    await assertBookingLocation(user, doctor.id);
+  }
   if (input.hospital !== undefined && input.hospital !== null) {
     const { findHospital } = await import("@/repositories/content.repo");
     if (!(await findHospital(input.hospital))) {
@@ -142,7 +147,13 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     appointments.createAppointment({
       patient_id: user.id,
       doctor_id: doctor.id,
-      hospital_id: input.hospital ?? null,
+      hospital_id: appointmentType === "HOME_SERVICE" ? null : input.hospital ?? null,
+      appointment_type: appointmentType,
+      ...(appointmentType === "HOME_SERVICE" ? {
+        home_service_latitude: input.home_service_latitude,
+        home_service_longitude: input.home_service_longitude,
+        home_service_location_accuracy: input.home_service_location_accuracy ?? null,
+      } : {}),
       appointment_date: date,
       start_time: start,
       end_time: end,
@@ -168,7 +179,9 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
   await notify(
     doctor.user_id,
     "appointment_request",
-    isReschedule
+    appointmentType === "HOME_SERVICE"
+      ? `New Home Service request from ${user.email}.`
+      : isReschedule
       ? `Appointment rescheduled by ${user.email} to ${date} at ${start.slice(0, 5)}–${end.slice(0, 5)}. Confirm the new time.`
       : `New appointment request from ${user.email}.`,
     appointment.id
@@ -405,8 +418,9 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
 
 export const canCompleteNormalAppointment = (
   checkedInAt: Date | null,
-  consultationStartedAt: Date | null
-): boolean => checkedInAt !== null && consultationStartedAt !== null;
+  consultationStartedAt: Date | null,
+  homeService = false
+): boolean => consultationStartedAt !== null && (homeService || checkedInAt !== null);
 
 /** True when `from` may legally move to `to` (pure — used by the tests too). */
 export const canTransition = (from: string, to: string): boolean =>
@@ -490,7 +504,7 @@ export async function runAction(
   // State machine: reject illegal transitions (e.g. confirm a cancelled appointment).
   assertTransition(appointment.status, config.status);
 
-  if (config.status === "done" && !canCompleteNormalAppointment(appointment.checked_in_at, appointment.consultation_started_at)) {
+  if (config.status === "done" && !canCompleteNormalAppointment(appointment.checked_in_at, appointment.consultation_started_at, appointment.appointment_type === "HOME_SERVICE")) {
     throw new ValidationError({
       non_field_errors: ["Check the patient in and start the consultation before marking the appointment done."],
     });

@@ -176,7 +176,7 @@ export type AppointmentStatus =
   | "rejected"
   | "expired";
 
-export type AppointmentType = "NORMAL" | "EMERGENCY";
+export type AppointmentType = "NORMAL" | "EMERGENCY" | "HOME_SERVICE";
 
 export type EmergencyReason =
   | "severe_pain"
@@ -200,6 +200,9 @@ export interface Appointment {
   end_time: string;
   status: AppointmentStatus;
   appointment_type: AppointmentType;
+  home_service_latitude?: number | null;
+  home_service_longitude?: number | null;
+  home_service_location_accuracy?: number | null;
   reason: string;
   notes: string;
   cancel_reason: string;

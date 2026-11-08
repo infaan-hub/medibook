@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   cancelAppointment,
   completeAppointment,
@@ -52,6 +52,8 @@ import {
   Play,
   Eye,
   Download,
+  House,
+  MapPin,
 } from "lucide-react";
 
 function message(error: unknown): string {
@@ -254,6 +256,7 @@ function AppointmentRow({
 
   /* Emergency rows keep their dedicated accept → in-progress → done lifecycle. */
   const isEmergency = appointment.appointment_type === "EMERGENCY";
+  const isHomeService = appointment.appointment_type === "HOME_SERVICE";
   const canDelete = !isEmergency || appointment.status === "done";
 
   const statusConfig = {
@@ -298,6 +301,14 @@ function AppointmentRow({
           <div className="appt-card__reason">
             <span className="appt-card__reason-label">Reason</span>
             <span className="appt-card__reason-text">{appointment.reason}</span>
+          </div>
+        )}
+        {isHomeService && appointment.home_service_latitude != null && appointment.home_service_longitude != null && (
+          <div className="appt-card__reason">
+            <span className="appt-card__reason-label">Home visit location</span>
+            <a href={`https://www.google.com/maps/dir/?api=1&destination=${appointment.home_service_latitude},${appointment.home_service_longitude}`} target="_blank" rel="noreferrer">
+              <MapPin size={13} /> Open patient location in Google Maps
+            </a>
           </div>
         )}
         {appointment.notes && (
@@ -373,18 +384,19 @@ function AppointmentRow({
             <Stethoscope size={14} /> Visit record
           </Link>
         ) : null}
-        {!isEmergency && appointment.status === "accepted" && !appointment.checked_in_at && (
+        {!isEmergency && !isHomeService && appointment.status === "accepted" && !appointment.checked_in_at && (
           <Button variant="secondary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleCheckIn()}>
             <UserCheck size={14} /> {isAppointmentDay ? "Check in" : "Check in on appointment day"}
           </Button>
         )}
-        {!isEmergency && appointment.status === "accepted" && appointment.checked_in_at && !consultationStarted && (
+        {!isEmergency && appointment.status === "accepted" && (isHomeService || appointment.checked_in_at) && !consultationStarted && (
             <Button
               variant="primary"
+              disabled={isHomeService && !isAppointmentDay}
               loading={queueBusy}
               onClick={() => void handleStartConsultation()}
             >
-              <Play size={14} /> Start consultation
+              <Play size={14} /> {isHomeService ? isAppointmentDay ? "Start home visit consultation" : "Start consultation on visit day" : "Start consultation"}
             </Button>
         )}
         {isEmergency && appointment.status === "accepted" && (
@@ -757,7 +769,7 @@ export function DoctorDashboardScreen() {
         {summaryError && <p className="form-note form-note--error">{summaryError}</p>}
       </Card>
 
-      <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link></div>
+      <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/home-visit"><House size={18} /><span><b>Manage Home Service</b><small>Review and run home visits</small></span><ArrowUpRight size={15} /></Link></div>
     </div>
   );
 }
@@ -769,6 +781,8 @@ export function DoctorDashboardScreen() {
 type Tab = "pending" | "accepted" | "done";
 
 export function DoctorAppointmentsScreen() {
+  const route = useLocation();
+  const isHomeVisitPage = route.pathname === "/doctor/home-visit";
   const { notify } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -863,20 +877,21 @@ export function DoctorAppointmentsScreen() {
     }
   }
 
-  const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: "pending", label: "Pending", count: appointments.filter((a) => a.status === "pending").length },
-    { key: "accepted", label: "Accepted", count: appointments.filter((a) => a.status === "accepted").length },
-    { key: "done", label: "Done", count: appointments.filter((a) => a.status === "done").length },
-  ];
+  const serviceAppointments = appointments.filter((a) => isHomeVisitPage ? a.appointment_type === "HOME_SERVICE" : a.appointment_type !== "HOME_SERVICE");
 
-  const filtered = appointments.filter((a) => a.status === activeTab);
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: "pending", label: "Pending", count: serviceAppointments.filter((a) => a.status === "pending").length },
+    { key: "accepted", label: "Accepted", count: serviceAppointments.filter((a) => a.status === "accepted").length },
+    { key: "done", label: "Done", count: serviceAppointments.filter((a) => a.status === "done").length },
+  ];
+  const filtered = serviceAppointments.filter((a) => a.status === activeTab);
 
   if (error) return <div className="page"><ErrorState message={error} onRetry={load} /></div>;
 
   return (
     <div className="page">
       <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
-      <h1 className="page__title">Appointments</h1>
+      <h1 className="page__title">{isHomeVisitPage ? "Home Service" : "Appointments"}</h1>
 
       {/* Tabs */}
       <div className="tabs">
@@ -896,7 +911,7 @@ export function DoctorAppointmentsScreen() {
         <Skeleton lines={4} />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={`No ${activeTab} appointments`}
+          title={`No ${activeTab} ${isHomeVisitPage ? "home service visits" : "appointments"}`}
           description={
             activeTab === "pending"
               ? "No new appointment requests to review."

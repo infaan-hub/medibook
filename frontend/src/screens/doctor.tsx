@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -46,6 +46,8 @@ function specialtyMeaning(s: Specialty): string {
 
 export function DoctorProfileScreen() {
   const { id } = useParams<{ id: string }>();
+  const route = useLocation();
+  const isHomeVisit = route.pathname.startsWith("/home-visit");
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +62,7 @@ export function DoctorProfileScreen() {
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
   return (
     <div className="page">
-      <Link to="/doctors"><ArrowLeft size={16} /> Back to doctors</Link>
+      <Link to={isHomeVisit ? "/home-visit/doctor" : "/doctors"}><ArrowLeft size={16} /> Back to {isHomeVisit ? "Home Service doctors" : "doctors"}</Link>
       <Card className="card--fit">
         <DoctorImage
           src={doctor.profile_image}
@@ -117,7 +119,7 @@ export function DoctorProfileScreen() {
           </>
         ) : (
           <div style={{ marginTop: "var(--space-4)" }}>
-            <Link to={`/booking/${id}`}><Button>Book appointment</Button></Link>
+            <Link to={isHomeVisit ? `/home-visit/booking/${id}` : `/booking/${id}`}><Button>{isHomeVisit ? "Request home service" : "Book appointment"}</Button></Link>
           </div>
         )}
       </Card>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MediBook root (PHASE 5 â€” React Authentication).
  * Providers â†’ routes. Guest-only screens render without the app shell;
  * every app screen sits behind RequireSession (+ RequireRole/RequirePatient
@@ -293,6 +293,10 @@ export default function App() {
                 }
               >
                 <Route path="/doctors" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
+                <Route path="/home-visit/doctor" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
+                <Route path="/home-visit/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
+                <Route path="/home-visit/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
+                <Route path="/home-visit/success" element={<RequirePatient><BookingSuccessScreen /></RequirePatient>} />
                 <Route path="/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
                 <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
                 <Route path="/booking/success" element={<RequirePatient><BookingSuccessScreen /></RequirePatient>} />
@@ -307,6 +311,7 @@ export default function App() {
                 <Route path="/doctor/dashboard" element={<RequireRole role="doctor"><DoctorDashboardScreen /></RequireRole>} />
                 <Route path="/doctor/personal" element={<RequireRole role="doctor"><DoctorPersonalScreen /></RequireRole>} />
                 <Route path="/doctor/appointments" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
+                <Route path="/doctor/home-visit" element={<RequireRole role="doctor"><DoctorAppointmentsScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
                 <Route path="/doctor/medical-treatment/emergency" element={<RequireRole role="doctor"><DoctorMedicalTreatmentScreen /></RequireRole>} />
 <Route path="/doctor/health-tips" element={<RequireRole role="doctor"><DoctorHealthTipsScreen /></RequireRole>} />
@@ -331,6 +336,7 @@ export default function App() {
                 <Route path="/admin/doctors/new" element={<RequireRole role="admin"><AdminCreateDoctorScreen /></RequireRole>} />
                 <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAuditScreen /></RequireRole>} />
                 <Route path="/admin/appointments" element={<RequireRole role="admin"><AdminAppointmentsScreen /></RequireRole>} />
+                <Route path="/admin/home-visit" element={<RequireRole role="admin"><AdminAppointmentsScreen /></RequireRole>} />
                 <Route path="/specialties" element={<SpecialtyListPage />} />
                 <Route path="/specialties/:id" element={<SpecialtyDetailPage />} />
                 <Route path="/hospitals" element={<HospitalListPage />} />
