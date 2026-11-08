@@ -3,7 +3,7 @@
  * design tokens — no hardcoded colours, spacing or radii.
  */
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode } from "react";
 
 /* ---------------- Spinner (§21 loading state) ---------------- */
 
@@ -81,8 +81,8 @@ export function TextField({ label, error, hint, id, className = "", ...rest }: T
 
 /* ---------------- Card ---------------- */
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`card ${className}`.trim()}>{children}</section>;
+export function Card({ children, className = "", style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
+  return <section className={`card ${className}`.trim()} style={style}>{children}</section>;
 }
 
 /* ---------------- Badge (appointment status colours, §9) ---------------- */

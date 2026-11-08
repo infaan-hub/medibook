@@ -43,7 +43,7 @@ export interface CreateUserPayload {
   first_name?: string;
   last_name?: string;
   phone?: string;
-  role: "patient" | "doctor";
+  role: "patient" | "doctor" | "coordinator";
 }
 
 export interface CreateDoctorPayload {

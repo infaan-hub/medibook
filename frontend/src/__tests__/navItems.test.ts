@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Navigation entries per role â€” sidebar (`navItemsFor`) and mobile bottom bar
  * (`bottomNavItemsFor`).
  *
@@ -29,6 +29,7 @@ const base: User = {
 const patient: User = base;
 const doctor: User = { ...base, id: 3, username: "doctor", role: "doctor" };
 const admin: User = { ...base, id: 1, username: "admin", role: "admin", is_superuser: true };
+const coordinator: User = { ...base, id: 4, username: "coordinator", role: "coordinator" };
 
 const sidebarByRole = {
   patient: navItemsFor(patient).map((i) => i.to),
@@ -41,12 +42,21 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
     expect(guestNavItemsFor().map((item) => item.to)).toEqual(["/dashboard", "/doctors"]);
   });
 
-  it("drops the Lucide-icon Profile entry for admin, doctor and patient", () => {
-    for (const user of [patient, doctor, admin]) {
+  it("drops the Lucide-icon Profile entry for every role", () => {
+    for (const user of [patient, doctor, admin, coordinator]) {
       const items = navItemsFor(user);
       expect(items.some((i) => i.to === "/profile"), `${user.role} sidebar route`).toBe(false);
       expect(items.some((i) => i.label === "Profile"), `${user.role} sidebar label`).toBe(false);
     }
+  });
+
+  it("gives system coordinators only coordination tools", () => {
+    expect(navItemsFor(coordinator).map((item) => item.to)).toEqual([
+      "/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient",
+    ]);
+    expect(bottomNavItemsFor(coordinator).map((item) => item.to)).toEqual([
+      "/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient",
+    ]);
   });
 
   it("keeps every other sidebar entry for each role", () => {

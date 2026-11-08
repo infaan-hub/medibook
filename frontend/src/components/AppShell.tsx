@@ -77,6 +77,15 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
     ];
   }
+  if (user?.role === "coordinator") {
+    return [
+      { to: "/coordinator/dashboard", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+      { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
+      { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
+    ];
+  }
   if (user?.role === "doctor") {
     return [
       { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
@@ -109,6 +118,15 @@ export function bottomNavItemsFor(user: User | null): NavItem[] {
       { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
       { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    ];
+  }
+  if (user?.role === "coordinator") {
+    return [
+      { to: "/coordinator/dashboard", label: "Overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+      { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
+      { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
+      { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
     ];
   }
   if (user?.role === "doctor") {

@@ -18,7 +18,7 @@ import { useSession, type SessionStatus } from "../state/app-context";
 
 export const LOGIN_PATH = "/login";
 
-export type Role = "patient" | "doctor" | "admin";
+export type Role = "patient" | "doctor" | "admin" | "coordinator";
 
 export interface RoleUser {
   role: Role;
@@ -80,6 +80,7 @@ export function homeForRole(user: RoleUser): string {
   // An unfinished doctor starts — and restarts — at first-login setup.
   if (doctorOnboardingIncomplete(user)) return DOCTOR_ONBOARDING_PATH;
   if (user.role === "doctor") return "/doctor/dashboard";
+  if (user.role === "coordinator") return "/coordinator/dashboard";
   if (user.role === "admin" && user.is_superuser) return "/admin";
   // Admin without superuser (or patient) — shared profile is always safe
   // and never loops through RequirePatient.
@@ -116,6 +117,9 @@ export function roleOwnsPath(pathname: string, user: RoleUser): boolean {
   }
   if (pathname.startsWith("/doctor/")) {
     return user.role === "doctor";
+  }
+  if (pathname.startsWith("/coordinator/")) {
+    return user.role === "coordinator";
   }
   // Appointment detail pages are shared by every signed-in role. The list,
   // booking, and rescheduling routes below remain patient-only.

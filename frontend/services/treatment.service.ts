@@ -595,20 +595,7 @@ export async function listLinkedDoctors(user: AuthUser) {
   }));
 }
 
-/** GET /api/treatments/visit-history/?patient= — timeline with treatments. */
-export async function visitHistory(user: AuthUser, patientId?: string) {
-  const doctor = await ownDoctor(user);
-  if (!doctor) return { data: [] as unknown[], message: "Doctor profile not found." };
-  if (!patientId) return { data: [] as unknown[], message: "Patient ID is required." };
-  const parsedPatientId = Number(patientId);
-  if (!Number.isInteger(parsedPatientId) || parsedPatientId <= 0) {
-    throw new ValidationError({ patient: ["Select a valid patient."] });
-  }
-  if (!(await appointments.hasAcceptedAppointmentWithPatient(doctor.id, parsedPatientId))) {
-    throw forbidden("Accept an appointment with this patient before viewing their history.");
-  }
-  const rows = await clinical.listPatientVisitHistory(parsedPatientId);
-  if (rows.length === 0) return { data: [] as unknown[], message: "No history is available for this patient." };
+export function serializeVisitHistoryRows(rows: Awaited<ReturnType<typeof clinical.listPatientVisitHistory>>) {
   const data = rows.map((appointment) => {
     const visitTreatments = appointment.treatments;
     const treatment = visitTreatments[0];
@@ -719,6 +706,28 @@ export async function visitHistory(user: AuthUser, patientId?: string) {
     };
   });
   return { data: data as unknown[], message: "" };
+}
+
+export async function coordinatorVisitHistory(patientId: number) {
+  const rows = await clinical.listPatientVisitHistory(patientId);
+  return serializeVisitHistoryRows(rows);
+}
+
+/** GET /api/treatments/visit-history/?patient= — timeline with treatments. */
+export async function visitHistory(user: AuthUser, patientId?: string) {
+  const doctor = await ownDoctor(user);
+  if (!doctor) return { data: [] as unknown[], message: "Doctor profile not found." };
+  if (!patientId) return { data: [] as unknown[], message: "Patient ID is required." };
+  const parsedPatientId = Number(patientId);
+  if (!Number.isInteger(parsedPatientId) || parsedPatientId <= 0) {
+    throw new ValidationError({ patient: ["Select a valid patient."] });
+  }
+  if (!(await appointments.hasAcceptedAppointmentWithPatient(doctor.id, parsedPatientId))) {
+    throw forbidden("Accept an appointment with this patient before viewing their history.");
+  }
+  const rows = await clinical.listPatientVisitHistory(parsedPatientId);
+  if (rows.length === 0) return { data: [] as unknown[], message: "No history is available for this patient." };
+  return serializeVisitHistoryRows(rows);
 }
 
 /* ----------------------------- Health records ------------------------------ */

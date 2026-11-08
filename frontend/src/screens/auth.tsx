@@ -73,7 +73,7 @@ function freshHomeForRole(): string {
     const raw = localStorage.getItem("mb.auth.user");
     if (raw) {
       const stored = JSON.parse(raw) as { role?: string; is_superuser?: boolean };
-      if (stored.role === "doctor" || stored.role === "admin" || stored.role === "patient") {
+      if (stored.role === "doctor" || stored.role === "admin" || stored.role === "patient" || stored.role === "coordinator") {
         return homeForRole({
           role: stored.role,
           is_superuser: Boolean(stored.is_superuser),
@@ -93,7 +93,7 @@ function canReturnTo(path: string): boolean {
     const raw = localStorage.getItem("mb.auth.user");
     if (!raw) return false;
     const stored = JSON.parse(raw) as { role?: string; is_superuser?: boolean };
-    if (stored.role !== "doctor" && stored.role !== "admin" && stored.role !== "patient") {
+    if (stored.role !== "doctor" && stored.role !== "admin" && stored.role !== "patient" && stored.role !== "coordinator") {
       return false;
     }
     return roleOwnsPath(path, {

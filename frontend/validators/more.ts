@@ -18,7 +18,7 @@ export const adminUserCreateSchema = z
     first_name: z.string().optional(),
     last_name: z.string().optional(),
     phone: z.string().optional(),
-    role: z.enum(["patient", "doctor"]),
+    role: z.enum(["patient", "doctor", "coordinator"]),
   })
   .passthrough();
 

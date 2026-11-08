@@ -8,7 +8,7 @@
  * loser receives the same 409 the Django IntegrityError path produced.
  */
 import { Prisma } from "@prisma/client";
-import { conflict, forbidden, notFound, badRequest, ValidationError } from "@/lib/errors";
+import { ApiError, conflict, forbidden, notFound, badRequest, ValidationError } from "@/lib/errors";
 import { combineDateTime, normalizeTime, todayIso } from "@/lib/dates";
 import { appointmentDto } from "@/lib/serializers";
 import { broadcastAppointmentEvent, broadcastAvailabilityUpdated, notify, pushRaw } from "@/lib/notify";
@@ -59,11 +59,26 @@ export function activeAppointmentConflict(appointment: OpenAppointment) {
   return conflict(message, { non_field_errors: [message] });
 }
 
-/** Serializable-transaction retry around the unique-slot insert. */
-async function createWithSlotGuard<T>(fn: () => Promise<T>): Promise<T> {
+/** Transaction-locked overlap check for appointment creation and rescheduling. */
+async function createWithSlotGuard<T>(
+  doctorId: number,
+  date: string,
+  start: string,
+  end: string,
+  excludeId: number | undefined,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
   try {
-    return await fn();
+    return await appointments.withDoctorDateLocks([{ doctorId, date }], async (tx) => {
+      const overlap = await tx.appointment.findFirst({
+        where: { doctor_id: doctorId, appointment_date: new Date(`${date}T00:00:00Z`), start_time: { lt: end }, end_time: { gt: start }, status: { notIn: ["cancelled", "rejected"] }, deleted_at: null, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
+        select: { id: true },
+      });
+      if (overlap) throw SLOT_TAKEN();
+      return fn(tx);
+    });
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       (error.code === "P2002" || error.meta?.constraint === "uniq_live_doctor_slot")
@@ -143,7 +158,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
   }
 
   const patientSnapshot = await patientSnapshotForAppointment(user.id, user);
-  const appointment = await createWithSlotGuard(() =>
+  const appointment = await createWithSlotGuard(doctor.id, date, start, end, undefined, (tx) =>
     appointments.createAppointment({
       patient_id: user.id,
       doctor_id: doctor.id,
@@ -159,7 +174,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
       end_time: end,
       reason: input.reason ?? "",
       patient_snapshot: patientSnapshot,
-    })
+    }, tx)
   );
 
   // A patient "reschedule" is cancel + rebook on the client. When the client
@@ -258,6 +273,9 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
   const input = parse(appointmentPatchSchema, body);
   const changingTime =
     raw.appointment_date !== undefined || raw.start_time !== undefined || raw.end_time !== undefined;
+  const newDate = input.appointment_date ?? appointment.appointment_date.toISOString().slice(0, 10);
+  const newStart = input.start_time ? normalizeTime(input.start_time) : appointment.start_time;
+  const newEnd = input.end_time ? normalizeTime(input.end_time) : appointment.end_time;
 
   const role = user.role;
   const isOwnerDoctor = role === "doctor" && appointment.doctor_id === (await ownDoctorId(user));
@@ -273,9 +291,6 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
     if (!isOwnerDoctor && !isAdmin) {
       throw forbidden("Only the doctor who owns this appointment can reschedule it.");
     }
-    const newDate = input.appointment_date ?? before.date;
-    const newStart = input.start_time ? normalizeTime(input.start_time) : before.start;
-    const newEnd = input.end_time ? normalizeTime(input.end_time) : before.end;
     if (newDate < todayIso()) {
       throw badRequest("The new appointment date must be today or later.", {
         appointment_date: ["Choose a future date."],
@@ -315,7 +330,9 @@ export async function patchAppointment(req: Request, user: AuthUser, id: number,
     data.end_time = input.end_time ? normalizeTime(input.end_time) : before.end;
   }
 
-  const updated = await createWithSlotGuard(() => appointments.updateAppointment(id, data));
+  const updated = await createWithSlotGuard(appointment.doctor_id, newDate, newStart, newEnd, id, (tx) =>
+    tx.appointment.update({ where: { id }, data, include: appointments.APPOINTMENT_INCLUDE })
+  );
 
   const after = {
     date: updated.appointment_date.toISOString().slice(0, 10),
@@ -513,11 +530,18 @@ export async function runAction(
   const { appointmentActionSchema } = await import("@/validators/misc");
   const rawBody = (body ?? {}) as Record<string, unknown>;
   const payload = parse(appointmentActionSchema, { ...rawBody, status: config.status });
-  const updated = await appointments.updateAppointment(id, {
-    status: config.status as never,
-    ...(payload.cancel_reason ? { cancel_reason: payload.cancel_reason } : {}),
-    ...(payload.notes ? { notes: payload.notes } : {}),
-  });
+  // Coordinator transfers may change the owner between the initial read and
+  // this write. Match the assignment and lifecycle version so an old doctor's
+  // stale browser cannot accept/update the appointment after reassignment.
+  const updated = await appointments.updateAppointment(
+    id,
+    {
+      status: config.status as never,
+      ...(payload.cancel_reason ? { cancel_reason: payload.cancel_reason } : {}),
+      ...(payload.notes ? { notes: payload.notes } : {}),
+    },
+    { doctorId: appointment.doctor_id, status: appointment.status, consultationStartedAt: appointment.consultation_started_at }
+  );
 
   // Auto-create 1h/24h/1w reminders when an appointment is accepted.
   if (config.status === "accepted") await createReminders(updated);

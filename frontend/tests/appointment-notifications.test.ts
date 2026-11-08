@@ -35,6 +35,7 @@ const repo = vi.hoisted(() => ({
   createReminderIfAbsent: vi.fn(),
   findLiveConsultation: vi.fn(),
   deleteAppointment: vi.fn(),
+  withDoctorDateLocks: vi.fn(),
 }));
 
 const doctorsRepo = vi.hoisted(() => ({
@@ -138,6 +139,12 @@ beforeEach(() => {
   repo.findOpenAppointmentForPatient.mockResolvedValue(null);
   repo.liveAppointmentOverlapExists.mockResolvedValue(false);
   repo.findLiveConsultation.mockResolvedValue(null);
+  repo.withDoctorDateLocks.mockImplementation(async (_keys: unknown, work: (tx: unknown) => Promise<unknown>) => work({
+    appointment: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockImplementation(({ where, data }: { where: { id: number }; data: unknown }) => repo.updateAppointment(where.id, data)),
+    },
+  }));
   doctorsRepo.findDoctorById.mockResolvedValue(DOCTOR_PROFILE);
   doctorsRepo.findDoctorByUserId.mockResolvedValue({ id: 4, user_id: 12 });
   availableSlots.mockResolvedValue([{ start_time: "09:00:00", end_time: "09:30:00" }]);

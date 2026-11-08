@@ -13,11 +13,13 @@ describe("role isolation rules", () => {
   const doctor = { role: "doctor" as const, is_superuser: false };
   const admin = { role: "admin" as const, is_superuser: true };
   const staffAdmin = { role: "admin" as const, is_superuser: false };
+  const coordinator = { role: "coordinator" as const, is_superuser: false };
 
   it("homes each role to its own dashboard only", () => {
     expect(homeForRole(patient)).toBe("/dashboard");
     expect(homeForRole(doctor)).toBe("/doctor/dashboard");
     expect(homeForRole(admin)).toBe("/admin");
+    expect(homeForRole(coordinator)).toBe("/coordinator/dashboard");
     // Non-superuser admin never lands in patient /dashboard (avoids redirect loops).
     expect(homeForRole(staffAdmin)).toBe("/profile");
   });
@@ -35,6 +37,15 @@ describe("role isolation rules", () => {
     expect(roleOwnsPath("/doctor/personal", doctor)).toBe(true);
     expect(roleOwnsPath("/doctor/dashboard", patient)).toBe(false);
     expect(roleOwnsPath("/doctor/dashboard", admin)).toBe(false);
+  });
+
+  it("keeps coordinator tools isolated to system coordinators", () => {
+    for (const path of ["/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient"]) {
+      expect(roleOwnsPath(path, coordinator)).toBe(true);
+      expect(roleOwnsPath(path, patient)).toBe(false);
+      expect(roleOwnsPath(path, doctor)).toBe(false);
+      expect(roleOwnsPath(path, admin)).toBe(false);
+    }
   });
 
   it("keeps patient booking/search paths patient-only", () => {
@@ -69,6 +80,7 @@ describe("launchPath (root route destination)", () => {
   const patient = { role: "patient" as const, is_superuser: false };
   const doctor = { role: "doctor" as const, is_superuser: false };
   const admin = { role: "admin" as const, is_superuser: true };
+  const coordinator = { role: "coordinator" as const, is_superuser: false };
 
   it("keeps the splash while the session boot probe is running", () => {
     expect(launchPath("booting", null, true)).toBeNull();
@@ -79,6 +91,7 @@ describe("launchPath (root route destination)", () => {
     expect(launchPath("authed", patient, true)).toBe("/dashboard");
     expect(launchPath("authed", doctor, true)).toBe("/doctor/dashboard");
     expect(launchPath("authed", admin, true)).toBe("/admin");
+    expect(launchPath("authed", coordinator, true)).toBe("/coordinator/dashboard");
     // A live session wins even on a first-ever visit (shared link + auto-login).
     expect(launchPath("authed", patient, false)).toBe("/dashboard");
   });

@@ -106,7 +106,7 @@ export function appointmentListWhere(scope: Pick<AppointmentListScope, "role" | 
   const where: Prisma.AppointmentWhereInput = {};
   if (scope.role === "doctor") {
     where.doctor_id = scope.doctorProfileId ?? -1;
-  } else if (scope.role !== "admin") {
+  } else if (scope.role !== "admin" && scope.role !== "coordinator") {
     where.patient_id = scope.userId;
   }
   if (scope.status) where.status = scope.status as AppointmentStatus;
@@ -202,10 +202,19 @@ export const findLiveAppointmentForPatientOnDate = (
     include: APPOINTMENT_INCLUDE,
   });
 
-export const updateAppointment = (
+export const updateAppointment = async (
   id: number,
-  data: Prisma.AppointmentUncheckedUpdateInput
-) => prisma.appointment.update({ where: { id }, data, include: APPOINTMENT_INCLUDE });
+  data: Prisma.AppointmentUncheckedUpdateInput,
+  expected?: { doctorId: number; status: AppointmentStatus; consultationStartedAt: Date | null }
+) => {
+  if (!expected) return prisma.appointment.update({ where: { id }, data, include: APPOINTMENT_INCLUDE });
+  const changed = await prisma.appointment.updateMany({
+    where: { id, doctor_id: expected.doctorId, status: expected.status, consultation_started_at: expected.consultationStartedAt, deleted_at: null },
+    data,
+  });
+  if (changed.count !== 1) throw new (await import("@/lib/errors")).ApiError(409, "This appointment changed while you were updating it. Refresh and try again.");
+  return prisma.appointment.findUniqueOrThrow({ where: { id }, include: APPOINTMENT_INCLUDE });
+};
 
 export const deleteAppointment = (id: number) => prisma.appointment.delete({ where: { id } });
 
@@ -274,6 +283,25 @@ export const markReminderSent = (id: number) =>
  * it calls must accept the transaction handle.
  */
 export type AppointmentDb = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Serialize writes that occupy the same doctor's calendar date. Every booking,
+ * reschedule, and coordinator transfer uses this transaction lock, then checks
+ * interval overlap while holding it, closing the stale-availability race.
+ */
+export async function withDoctorDateLocks<T>(
+  keys: Array<{ doctorId: number; date: string }>,
+  work: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  const uniqueKeys = [...new Set(keys.map(({ doctorId, date }) => `${doctorId}:${date}`))].sort();
+  return prisma.$transaction(async (tx) => {
+    for (const key of uniqueKeys) {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:doctor-date:${key}`}))`;
+    }
+    return work(tx);
+  }, { isolationLevel: "ReadCommitted" });
+}
+
 
 /**
  * Statuses that count as an ACTIVE emergency: the patient is still waiting for

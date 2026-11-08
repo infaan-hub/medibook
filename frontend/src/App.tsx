@@ -117,6 +117,7 @@ const DoctorAvailabilityScreen = lazyWithRetry(() => import("./screens").then((m
 const DoctorPersonalScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorPersonalScreen })));
 const DoctorOnboardingScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorOnboardingScreen })));
 const NotificationsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
+const CoordinatorScreen = lazyWithRetry(() => import("./screens/coordinator").then((m) => ({ default: m.CoordinatorScreen })));
 const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
@@ -329,6 +330,11 @@ export default function App() {
                     </RequirePatient>
                   }
                 />
+                <Route path="/coordinator/dashboard" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
+                <Route path="/coordinator/doctors" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
+                <Route path="/coordinator/appointment" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
+                <Route path="/coordinator/emergency" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
+                <Route path="/coordinator/patient" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
                 <Route path="/admin" element={<RequireRole role="admin"><AdminDashboardScreen /></RequireRole>} />
                 <Route path="/admin/users" element={<RequireRole role="admin"><AdminUsersScreen /></RequireRole>} />
                 <Route path="/admin/doctors" element={<RequireRole role="admin"><AdminDoctorsScreen /></RequireRole>} />
