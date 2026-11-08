@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRightLeft,
@@ -258,7 +258,7 @@ export function CoordinatorAppointments({
   ];
 
   const query = search.trim().toLowerCase();
-  const filtered = rows.filter((appointment) => {
+  const filtered = useMemo(() => rows.filter((appointment) => {
     const matchesFilter =
       filter === "all"
         ? true
@@ -270,7 +270,7 @@ export function CoordinatorAppointments({
     return `${appointment.id} ${appointment.patient_email} ${appointment.reason} ${appointment.doctor} ${labelType(appointment.appointment_type)}`
       .toLowerCase()
       .includes(query);
-  });
+  }), [rows, filter, query]);
 
   return (
     <div className="page doctor-workspace">

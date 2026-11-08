@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -78,7 +78,7 @@ function EmergencyCard({
   const { notify } = useToast();
   const [target, setTarget] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
-  const availableDoctors = doctors.filter((doctor) => doctor.is_available && doctor.id !== appointment.doctor);
+  const availableDoctors = useMemo(() => doctors.filter((doctor) => doctor.is_available && doctor.id !== appointment.doctor), [doctors, appointment.doctor]);
   const currentDoctor = doctors.find((doctor) => doctor.id === appointment.doctor);
   const transferable = canTransfer(appointment);
   const started = appointment.emergency_in_progress_at || appointment.consultation_started_at || appointment.status === "in_progress";

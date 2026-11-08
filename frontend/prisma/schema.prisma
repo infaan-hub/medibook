@@ -449,6 +449,9 @@ model Appointment {
   @@index([created_at])
   @@index([appointment_type])
   @@index([deleted_at])
+  @@index([deleted_at, appointment_type, appointment_date], map: "appt_del_type_date_idx")
+  @@index([deleted_at, appointment_date], map: "appt_del_date_idx")
+  @@index([appointment_type, status, deleted_at], map: "appt_type_status_del_idx")
   @@map("appointments_appointment")
 }
 

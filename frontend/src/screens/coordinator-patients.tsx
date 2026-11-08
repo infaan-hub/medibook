@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -222,6 +222,9 @@ function PatientCard({ patient }: { patient: CoordinatorPatient }) {
           src={avatarSrc}
           alt={name}
           className="coordinator-patient-avatar"
+          width={46}
+          height={46}
+          loading="lazy"
           onError={() => setBrokenSrc(avatarSrc)}
         />
       ) : (
@@ -514,9 +517,9 @@ function PatientDirectory({
     { key: "with" as const, label: "With visits", count: withVisits },
     { key: "without" as const, label: "No visits", count: withoutVisits },
   ];
-  const visible = patients.filter((patient) =>
+  const visible = useMemo(() => patients.filter((patient) =>
     filter === "all" ? true : filter === "with" ? patient.appointment_count > 0 : patient.appointment_count === 0
-  );
+  ), [patients, filter]);
   const query = search.trim();
 
   return (
@@ -726,6 +729,9 @@ function PatientHistoryView({
                   src={avatarSrc}
                   alt={name}
                   className="coordinator-patient-avatar"
+                  width={46}
+                  height={46}
+                  loading="lazy"
                   onError={() => setBrokenSrc(avatarSrc)}
                 />
               ) : (

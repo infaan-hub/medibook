@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Stethoscope } from "lucide-react";
 import type { CoordinatorDoctor } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
@@ -77,7 +78,7 @@ function exceptionLabel(doctor: CoordinatorDoctor) {
 }
 
 function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
-  const free = freeIntervals(doctor);
+  const free = useMemo(() => freeIntervals(doctor), [doctor]);
   const state = doctorState(doctor);
 
   return (
@@ -186,9 +187,10 @@ export function CoordinatorDoctors({
   error: string | null;
   onRetry: () => void;
 }) {
+  const freeByDoctor = useMemo(() => doctors.map((doctor) => freeIntervals(doctor)), [doctors]);
   const available = doctors.filter((doctor) => doctorState(doctor).tone === "available").length;
   const booked = doctors.reduce((sum, doctor) => sum + doctor.appointments.length, 0);
-  const openSlots = doctors.reduce((sum, doctor) => sum + freeIntervals(doctor).length, 0);
+  const openSlots = freeByDoctor.reduce((sum, free) => sum + free.length, 0);
 
   return (
     <div className="page doctor-workspace">
