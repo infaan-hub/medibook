@@ -149,14 +149,29 @@ export function envelope<T>(body: unknown, url: string, status: number): Envelop
   return body as Envelope<T>;
 }
 
-/** GET returning the unwrapped §28 envelope. */
+const TRAINING_CACHE_TTL = 15_000;
+const trainingCache = new Map<string, { data: unknown; ts: number }>();
+
+export function invalidateTrainingCache() {
+  trainingCache.clear();
+}
 export async function apiGet<T>(url: string, params?: Record<string, unknown>): Promise<Envelope<T>> {
+  const cacheKey = url.includes("/training") ? `GET:${url}:${JSON.stringify(params ?? {})}` : null;
+  if (cacheKey) {
+    const hit = trainingCache.get(cacheKey);
+    if (hit && Date.now() - hit.ts < TRAINING_CACHE_TTL) {
+      return hit.data as Envelope<T>;
+    }
+  }
   const { data } = await http.get<Envelope<T>>(url, { params });
-  return envelope<T>(data, url, 200);
+  const result = envelope<T>(data, url, 200);
+  if (cacheKey) trainingCache.set(cacheKey, { data: result, ts: Date.now() });
+  return result;
 }
 
 /** POST returning the unwrapped §28 envelope. */
 export async function apiPost<T>(url: string, body?: unknown): Promise<Envelope<T>> {
+  if (url.includes("/training")) invalidateTrainingCache();
   const { data } = await http.post<Envelope<T>>(url, body ?? {});
   return envelope<T>(data, url, 200);
 }
