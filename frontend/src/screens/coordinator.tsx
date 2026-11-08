@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useRealtimeSync } from "../realtime/socket";
-import { getCoordinatorAppointments, getCoordinatorDoctors, getCoordinatorOverview, getCoordinatorPatientHistory, getCoordinatorPatients, type CoordinatorAppointment, type CoordinatorDoctor, type CoordinatorHistory, type CoordinatorPatient, type CoordinatorStats } from "../api/coordinator";
+import { getCoordinatorAppointments, getCoordinatorDoctors, getCoordinatorOverview, getCoordinatorPatientHistory, getCoordinatorPatients, invalidateCoordinatorCache, type CoordinatorAppointment, type CoordinatorDoctor, type CoordinatorHistory, type CoordinatorPatient, type CoordinatorStats } from "../api/coordinator";
 import { CoordinatorDashboard } from "./coordinator-dashboard";
 import { CoordinatorDoctors } from "./coordinator-doctors";
 import { CoordinatorAppointments } from "./coordinator-appointments";
@@ -30,7 +30,7 @@ export function CoordinatorScreen() {
     finally { setLoading(false); }
   },[section,date,search,selectedPatientId]);
   useEffect(()=>{void load();},[load]);
-  useRealtimeSync({ refresh:()=>{void load();}, events:["platform.data.updated"], polling:false, reconcileOnFocus:false });
+  useRealtimeSync({ refresh:()=>{ invalidateCoordinatorCache(); void load(); }, events:["platform.data.updated"], polling:false, reconcileOnFocus:false });
 
   if (section === "dashboard") {
     return <CoordinatorDashboard stats={stats} appointments={appointments} loading={loading} error={error} onRefresh={()=>void load()} />;

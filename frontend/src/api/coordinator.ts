@@ -1,6 +1,24 @@
 import { apiGet, apiPost } from "./client";
 import type { Envelope } from "./types";
 
+const CACHE_TTL = 15_000;
+const cache = new Map<string, { data: Envelope<unknown>; ts: number }>();
+
+function cached<T>(key: string, fetcher: () => Promise<Envelope<T>>): Promise<Envelope<T>> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) {
+    return Promise.resolve(hit.data as Envelope<T>);
+  }
+  return fetcher().then((result) => {
+    cache.set(key, { data: result as Envelope<unknown>, ts: Date.now() });
+    return result;
+  });
+}
+
+export function invalidateCoordinatorCache() {
+  cache.clear();
+}
+
 export interface CoordinatorDailyCount { date: string; label: string; count: number }
 export interface CoordinatorStats {
   users: { total: number; patients: number; doctors: number; coordinators: number };
@@ -21,12 +39,15 @@ export interface CoordinatorAppointment { id: number; patient: number; patient_e
 export interface CoordinatorPatient { id: number; username: string; email: string; first_name: string; last_name: string; phone: string; profile_image: string | null; profile: Record<string, unknown> | null; appointment_count: number }
 export interface CoordinatorHistory { patient: CoordinatorPatient; visits: Array<Record<string, any>> }
 const root = "/coordinator/";
-export function getCoordinatorOverview() { return apiGet<CoordinatorStats>(root, { view: "overview" }); }
-export function getCoordinatorDoctors(date: string) { return apiGet<CoordinatorDoctor[]>(root, { view: "doctors", date }); }
-export function getCoordinatorAppointments(type?: string) { return apiGet<CoordinatorAppointment[]>(root, { view: "appointments", ...(type ? { type } : {}) }); }
-export function getCoordinatorPatients(search?: string) { return apiGet<CoordinatorPatient[]>(root, { view: "patients", ...(search ? { search } : {}) }); }
-export function getCoordinatorPatientHistory(id: number) { return apiGet<CoordinatorHistory>(root, { view: "history", patient: id }); }
-export function reassignCoordinatorAppointment(id: number, doctor_id: number, emergency = false) { return apiPost<CoordinatorAppointment>(`${root}?action=${emergency ? "reassign-emergency" : "reassign-appointment"}&appointment=${id}`, { doctor_id }); }
+export function getCoordinatorOverview() { return cached("overview", () => apiGet<CoordinatorStats>(root, { view: "overview" })); }
+export function getCoordinatorDoctors(date: string) { return cached(`doctors:${date}`, () => apiGet<CoordinatorDoctor[]>(root, { view: "doctors", date })); }
+export function getCoordinatorAppointments(type?: string) { return cached(`appointments:${type ?? "all"}`, () => apiGet<CoordinatorAppointment[]>(root, { view: "appointments", ...(type ? { type } : {}) })); }
+export function getCoordinatorPatients(search?: string) { return cached(`patients:${search ?? ""}`, () => apiGet<CoordinatorPatient[]>(root, { view: "patients", ...(search ? { search } : {}) })); }
+export function getCoordinatorPatientHistory(id: number) { return cached(`history:${id}`, () => apiGet<CoordinatorHistory>(root, { view: "history", patient: id })); }
+export function reassignCoordinatorAppointment(id: number, doctor_id: number, emergency = false) {
+  invalidateCoordinatorCache();
+  return apiPost<CoordinatorAppointment>(`${root}?action=${emergency ? "reassign-emergency" : "reassign-appointment"}&appointment=${id}`, { doctor_id });
+}
 
 /** True only when this doctor can cover the appointment's complete interval. */
 export function isCoordinatorDoctorAvailableFor(
