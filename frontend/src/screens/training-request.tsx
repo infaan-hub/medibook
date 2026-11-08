@@ -79,7 +79,7 @@ export function TrainingRequestScreen() {
           {mode === "onsite" && (
             <div className="admin-field admin-field--wide">
               <label htmlFor="location">Location</label>
-              <input id="location" value={location} onChange={(e:any)=>{ setLocation(e.target.value); setLatitude(null); setLongitude(null); setAccuracy(null); }} required placeholder="Enter address or use current location" />
+              <input id="location" value={location} readOnly required placeholder="Use current location to capture coordinates" />
               <div style={{ marginTop: 8 }}>
                 <Button type="button" variant="secondary" onClick={() => {
                   if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
