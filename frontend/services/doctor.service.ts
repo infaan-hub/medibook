@@ -4,6 +4,7 @@
  * (port of doctors/views.py).
  */
 import { ValidationError, notFound, forbidden } from "@/lib/errors";
+import { optionalAuth } from "@/lib/auth";
 import { todayIso, isoWeekday } from "@/lib/dates";
 import { doctorDto } from "@/lib/serializers";
 import { doctorWriteSchema } from "@/validators/doctor";
@@ -109,9 +110,22 @@ export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput
 export async function retrieveDoctor(req: Request, id: number) {
   const doctor = await doctors.findDoctorById(id);
   if (!doctor || !doctor.user.is_active) throw notFound();
+  const viewer = await optionalAuth(req);
+  const canSeeContact = Boolean(
+    viewer &&
+      (viewer.is_superuser || viewer.role === "admin" ||
+        doctor.user_id === viewer.id ||
+        (viewer.role === "patient" &&
+          (await doctors.patientHasAppointmentWithDoctor(doctor.id, viewer.id))))
+  );
   const todayIds = await availableTodayIds([doctor.id]);
+  const dto = doctorDto(doctor, req);
+  if (!canSeeContact) {
+    dto.phone = "";
+    dto.phone_secondary = "";
+  }
   return {
-    ...doctorDto(doctor, req),
+    ...dto,
     available_today: doctor.is_available && todayIds.has(doctor.id),
   };
 }

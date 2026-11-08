@@ -21,7 +21,6 @@ import {
   Crosshair,
   MapPin,
   Search,
-  Phone,
   Newspaper,
 } from "lucide-react";
 
@@ -214,7 +213,6 @@ function PatientHome({ user }: { user: User | null }) {
                       </a>
                     </span>
                   )}
-{doctor.phone && <span className="home__doctor-phone"><Phone size={13} fill="currentColor" /> <a href={`tel:${doctor.phone}`} style={{color: "inherit", textDecoration: "none"}}>{doctor.phone}</a></span>}
                   <AvailabilityChip doctor={doctor} />
                 </span>
                 <ChevronRight size={17} />

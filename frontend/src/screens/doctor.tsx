@@ -75,11 +75,6 @@ export function DoctorProfileScreen() {
         <p className="doctor-profile__location">
           <LocationLine point={doctor} accuracy={doctor.location_accuracy} />
         </p>
-        {doctor.phone && (
-          <p className="doctor-profile__phone">
-            <Phone size={14} /> <a href={`tel:${doctor.phone}`}>{doctor.phone}</a>
-          </p>
-        )}
         {doctor.specialties && doctor.specialties.length > 0 ? (
           <p>
             <strong>{doctor.specialties[0].name}</strong>

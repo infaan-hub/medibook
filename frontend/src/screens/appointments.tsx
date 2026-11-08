@@ -375,11 +375,6 @@ export function BookingScreen() {
           {doctor.specialties && doctor.specialties.length > 0
             ? ` — ${doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}`
             : ""}
-          {doctor.phone && (
-            <span>
-              <Phone size={13} /> <a href={`tel:${doctor.phone}`}>{doctor.phone}</a>
-            </span>
-          )}
         </p>
       </Card>
 
@@ -1369,30 +1364,28 @@ export function AppointmentDetailScreen() {
 
       <Card>
         <h2>Manage appointment</h2>
-        {(canCancel || canReschedule) && (
-          <div className="form__row form__row--actions">
-            {canReschedule && (
-              <Link to={`/appointments/${id}/reschedule`}>
-                <Button variant="secondary">Reschedule</Button>
-              </Link>
-            )}
-            {canCancel && !showCancelForm && (
-              <Button variant="danger" onClick={() => setShowCancelForm(true)}>
-                Cancel appointment
-              </Button>
-            )}
-          </div>
-        )}
-        {!showDeleteConfirm && (
-          <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-            Delete appointment
-          </Button>
-        )}
+        <div className="appt-manage-actions">
+          {canReschedule && (
+            <Link className="btn btn--secondary appt-manage-actions__link" to={`/appointments/${id}/reschedule`}>
+              Reschedule
+            </Link>
+          )}
+          {canCancel && !showCancelForm && (
+            <Button variant="danger" onClick={() => setShowCancelForm(true)}>
+              Cancel appointment
+            </Button>
+          )}
+          {!showDeleteConfirm && (
+            <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+              Delete appointment
+            </Button>
+          )}
+        </div>
         {showDeleteConfirm && (
           <div className="appt-delete-confirm">
             <p>Are you sure you want to permanently delete this appointment?</p>
             {error && <p className="form-note--error">{error}</p>}
-            <div className="form__row form__row--actions">
+            <div className="form__row form__row--actions appt-manage-confirm-actions">
               <Button variant="danger" loading={deleting} onClick={handleDelete}>
                 Yes, delete
               </Button>
@@ -1415,7 +1408,7 @@ export function AppointmentDetailScreen() {
               />
             </div>
             {error && <p className="form-note--error">{error}</p>}
-            <div className="form__row form__row--actions">
+            <div className="form__row form__row--actions appt-manage-confirm-actions">
               <Button variant="danger" loading={cancelling}>Confirm cancellation</Button>
               <Button variant="secondary" onClick={() => setShowCancelForm(false)} type="button">Keep appointment</Button>
             </div>

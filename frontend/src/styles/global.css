@@ -3337,6 +3337,34 @@ a { color: var(--color-primary); }
 .med-edit-actions { display: flex; gap: 10px; padding-top: var(--space-4); }
 
 /* ---- Appointment Delete Confirm ---- */
+.appt-manage-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.appt-manage-actions > .btn,
+.appt-manage-actions__link {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+}
+.appt-manage-actions__link { text-decoration: none; }
+.appt-manage-confirm-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.appt-manage-confirm-actions > .btn { flex: 1 1 180px; }
+@media (max-width: 760px) {
+  .appt-manage-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .appt-manage-actions { grid-template-columns: 1fr; gap: 10px; }
+  .appt-manage-actions > .btn,
+  .appt-manage-actions__link { width: 100%; }
+  .appt-manage-confirm-actions { display: grid; grid-template-columns: 1fr; }
+}
 .appt-delete-confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 8px; }
 .appt-delete-confirm p { margin: 0; font-size: 13px; color: #94a3b8; width: 100%; }
 .appt-card__actions .appt-delete-confirm { width: 100%; }

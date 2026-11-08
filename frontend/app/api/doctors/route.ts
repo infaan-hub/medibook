@@ -29,6 +29,10 @@ async function withAvailableToday(
   const todayIds = await availableTodayIds(rows.map((row) => row.id));
   return rows.map((row) => ({
     ...doctorDto(row, req, origin),
+    // Contact details are shared after a patient has an appointment, not in
+    // public directory and dashboard doctor cards.
+    phone: "",
+    phone_secondary: "",
     available_today: row.is_available && todayIds.has(row.id),
   }));
 }
