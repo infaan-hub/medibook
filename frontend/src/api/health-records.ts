@@ -1,4 +1,4 @@
-import { apiGet, apiDelete, http } from "./client";
+import { apiGet, apiPatch, apiDelete, http } from "./client";
 import type { Envelope, Paginated } from "./types";
 
 export interface HealthRecord {
@@ -40,6 +40,10 @@ export function uploadHealthRecord(data: FormData): Promise<Envelope<HealthRecor
       headers: { "Content-Type": "multipart/form-data" },
     })
     .then((r) => r.data);
+}
+
+export function attachHealthRecordToAppointment(id: number, appointment: number): Promise<Envelope<HealthRecord>> {
+  return apiPatch<HealthRecord>(`/health-records/${id}/`, { appointment });
 }
 
 export function deleteHealthRecord(id: number) {

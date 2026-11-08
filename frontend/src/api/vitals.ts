@@ -1,7 +1,7 @@
 /**
  * Vitals API — readings recorded by doctors for a patient (phase 2).
  */
-import { apiGet, apiPost, apiDelete } from "./client";
+import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
 import type { Envelope } from "./types";
 
 export interface Vital {
@@ -54,6 +54,11 @@ export function myVitals(): Promise<Envelope<Vital[]>> {
 /** POST /api/vitals/ — doctor records a reading (server derives BMI). */
 export function createVital(payload: CreateVitalPayload): Promise<Envelope<Vital>> {
   return apiPost<Vital>("/vitals/", payload);
+}
+
+/** PATCH /api/vitals/<id>/ — attach an existing reading to a visit. */
+export function attachVitalToAppointment(id: number, appointment: number): Promise<Envelope<Vital>> {
+  return apiPatch<Vital>(`/vitals/${id}/`, { appointment });
 }
 
 /** DELETE /api/vitals/<id>/ — remove a reading. */

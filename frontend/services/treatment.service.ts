@@ -20,6 +20,7 @@ import {
   treatmentCreateSchema,
   treatmentPatchSchema,
 } from "@/validators/misc";
+import { healthRecordAppointmentPatchSchema } from "@/validators/clinical";
 import { MISSING, parse } from "@/validators/base";
 import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
@@ -444,6 +445,12 @@ export async function patchTreatment(user: AuthUser, id: number, body: unknown) 
   const row = await clinical.findTreatmentOwned(id, doctor.id);
   if (!row) return { data: null, message: "Treatment not found." };
   const input = parse(treatmentPatchSchema, body);
+  if (input.appointment !== undefined && input.appointment !== null) {
+    const appointment = await appointments.findAppointmentById(input.appointment);
+    if (!appointment || appointment.doctor_id !== doctor.id || appointment.patient_id !== row.patient_id) {
+      throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
+    }
+  }
   const data: Record<string, unknown> = {};
   for (const key of ["diagnosis", "treatment_notes", "doctor_description", "prescription", "follow_up_notes"] as const) {
     if (input[key] !== undefined) data[key] = input[key];
@@ -843,6 +850,21 @@ export async function createHealthRecord(user: AuthUser, body: unknown, file?: F
     title: input.title,
     description: input.description ?? "",
   });
+}
+
+/** Attach a doctor-owned report to the visit explicitly selected in the chart. */
+export async function attachHealthRecordToAppointment(user: AuthUser, id: number, body: unknown, req: Request) {
+  const doctor = await ownDoctor(user);
+  if (!doctor) throw notFound("Record not found.");
+  const row = await clinical.findHealthRecord(id, doctor.id);
+  if (!row) throw notFound("Record not found.");
+  const { appointment: appointmentId } = parse(healthRecordAppointmentPatchSchema, body);
+  const appointment = await appointments.findAppointmentById(appointmentId);
+  if (!appointment || appointment.doctor_id !== doctor.id || appointment.patient_id !== row.patient_id) {
+    throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
+  }
+  const updated = await clinical.updateHealthRecord(id, { appointment_id: appointment.id });
+  return { data: healthRecordDto(updated, req), message: "Report attached to appointment." };
 }
 
 /** DELETE /api/health-records/{id}/ — owning doctor only (204). */

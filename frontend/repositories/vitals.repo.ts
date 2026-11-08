@@ -51,6 +51,9 @@ export const findVitalOwned = (id: number, doctorId?: number) =>
     include: VITAL_INCLUDE,
   });
 
+export const updateVital = (id: number, data: Prisma.VitalUncheckedUpdateInput) =>
+  prisma.vital.update({ where: { id }, data, include: VITAL_INCLUDE });
+
 export const countVitals = (where: Prisma.VitalWhereInput) =>
   prisma.vital.count({ where });
 

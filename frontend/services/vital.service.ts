@@ -8,7 +8,7 @@
  */
 import { forbidden, notFound, ValidationError } from "@/lib/errors";
 import { vitalDto } from "@/lib/serializers";
-import { vitalsCreateSchema } from "@/validators/clinical";
+import { vitalsCreateSchema, vitalAppointmentPatchSchema } from "@/validators/clinical";
 import { parse } from "@/validators/base";
 import * as vitals from "@/repositories/vitals.repo";
 import * as appointments from "@/repositories/appointments.repo";
@@ -169,6 +169,21 @@ export async function createVital(user: AuthUser, body: unknown) {
     notes: input.notes ?? "",
   });
   return { data: vitalDto(row), message: "Vitals recorded." };
+}
+
+/** Attach a legacy reading to a visit explicitly selected by its doctor. */
+export async function attachVitalToAppointment(user: AuthUser, id: number, body: unknown) {
+  const doctor = await ownDoctor(user);
+  if (!doctor) throw notFound("Doctor profile not found.");
+  const row = await vitals.findVitalOwned(id, doctor.id);
+  if (!row) throw notFound("Vital reading not found.");
+  const { appointment: appointmentId } = parse(vitalAppointmentPatchSchema, body);
+  const appointment = await appointments.findAppointmentById(appointmentId);
+  if (!appointment || appointment.doctor_id !== doctor.id || appointment.patient_id !== row.patient_id) {
+    throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
+  }
+  const updated = await vitals.updateVital(id, { appointment_id: appointment.id });
+  return { data: vitalDto(updated), message: "Vital reading attached to appointment." };
 }
 
 /** DELETE /api/vitals/{id}/ — the doctor who took it (204). */

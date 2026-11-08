@@ -42,6 +42,7 @@ export interface CreateLabOrderPayload {
 }
 
 export interface UpdateLabOrderPayload {
+  appointment?: number | null;
   status?: LabOrderStatus;
   result_value?: string;
   result_notes?: string;

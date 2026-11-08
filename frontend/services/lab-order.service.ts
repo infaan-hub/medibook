@@ -156,12 +156,20 @@ export async function createLabOrder(user: AuthUser, body: unknown) {
  */
 export async function patchLabOrder(user: AuthUser, id: number, body: unknown) {
   const doctor = await ownDoctor(user);
-  const row = doctor ? await labs.findLabOrderOwned(id, doctor.id) : null;
+  if (!doctor) return { data: null, message: "Lab order not found." };
+  const row = await labs.findLabOrderOwned(id, doctor.id);
   if (!row) return { data: null, message: "Lab order not found." };
 
   const input = parse(labOrderPatchSchema, body);
+  if (input.appointment !== undefined && input.appointment !== null) {
+    const appointment = await appointments.findAppointmentById(input.appointment);
+    if (!appointment || appointment.doctor_id !== doctor.id || appointment.patient_id !== row.patient_id) {
+      throw new ValidationError({ appointment: ["Choose an appointment for this patient with you."] });
+    }
+  }
   const status = (input.status ?? row.status) as LabOrderStatus;
   const updated = await labs.updateLabOrder(id, {
+    ...(input.appointment !== undefined ? { appointment_id: input.appointment } : {}),
     ...(input.status !== undefined ? { status } : {}),
     ...(input.result_value !== undefined ? { result_value: input.result_value } : {}),
     ...(input.result_notes !== undefined ? { result_notes: input.result_notes } : {}),

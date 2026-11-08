@@ -118,6 +118,9 @@ export const findHealthRecord = (id: number, doctorId?: number) =>
     where: doctorId === undefined ? { id } : { id, doctor_id: doctorId },
   });
 
+export const updateHealthRecord = (id: number, data: Prisma.HealthRecordUncheckedUpdateInput) =>
+  prisma.healthRecord.update({ where: { id }, data, include: { doctor: { include: { user: true } }, file: true } });
+
 export const createHealthRecord = (
   data: {
     patient_id: number;

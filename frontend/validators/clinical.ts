@@ -275,6 +275,7 @@ export const labOrderCreateSchema = z
 
 export const labOrderPatchSchema = z
   .object({
+    appointment: drfInteger().nullable().optional(),
     status: z.enum(LAB_ORDER_STATUSES).optional(),
     result_value: z
       .string()
@@ -284,3 +285,6 @@ export const labOrderPatchSchema = z
     notes: z.string().max(1000, "Ensure this string has at most 1000 characters.").optional(),
   })
   .passthrough();
+
+export const vitalAppointmentPatchSchema = z.object({ appointment: drfInteger() }).strict();
+export const healthRecordAppointmentPatchSchema = z.object({ appointment: drfInteger() }).strict();

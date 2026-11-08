@@ -48,6 +48,7 @@ export interface CreateTreatmentPayload {
 }
 
 export interface UpdateTreatmentPayload {
+  appointment?: number | null;
   diagnosis?: string;
   treatment_notes?: string;
   doctor_description?: string;

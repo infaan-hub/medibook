@@ -15,12 +15,13 @@ import type { PrescriptionItemInput } from "../api/prescriptions";
 import {
   listVitals,
   createVital,
+  attachVitalToAppointment,
   deleteVital,
   type Vital,
   type CreateVitalPayload,
 } from "../api/vitals";
 import type { PatientProfile } from "../api/types";
-import { getHealthRecords, type HealthRecord } from "../api/health-records";
+import { getHealthRecords, attachHealthRecordToAppointment, type HealthRecord } from "../api/health-records";
 import { downloadMediaFile, mediaDownloadName, openMediaFile } from "../lib/files";
 import { nearestAreaName } from "../lib/zanzibar";
 import { vitalChips } from "../lib/vitals";
@@ -303,6 +304,8 @@ function VitalsCard({
   onSave,
   onCancel,
   onDelete,
+  appointmentId,
+  onAttach,
 }: {
   vitals: Vital[];
   loading: boolean;
@@ -314,6 +317,8 @@ function VitalsCard({
   onSave: () => void;
   onCancel: () => void;
   onDelete: (id: number) => void;
+  appointmentId: number | null;
+  onAttach: (id: number) => void;
 }) {
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
@@ -414,6 +419,7 @@ function VitalsCard({
                 <span className="vit-row__by">
                   {vital.recorded_by ? `Recorded by Dr. ${vital.recorded_by}` : ""}
                 </span>
+                {!vital.appointment && appointmentId && <Button variant="ghost" onClick={() => onAttach(vital.id)}>Attach to selected visit</Button>}
                 {confirmId === vital.id ? (
                   <span className="treat-confirm-del">
                     Confirm?
@@ -493,6 +499,8 @@ function LabOrdersCard({
   onAdvance,
   onSaveResult,
   onDelete,
+  appointmentId,
+  onAttach,
 }: {
   orders: LabOrder[];
   loading: boolean;
@@ -506,6 +514,8 @@ function LabOrdersCard({
   onAdvance: (id: number, status: LabOrderStatus) => void;
   onSaveResult: (id: number, payload: { result_value: string; result_notes: string }) => void;
   onDelete: (id: number) => void;
+  appointmentId: number | null;
+  onAttach: (id: number) => void;
 }) {
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [resultId, setResultId] = useState<number | null>(null);
@@ -598,6 +608,7 @@ function LabOrdersCard({
                   <span className={`lab-status lab-status--${order.status}`}>
                     {statusLabel(order.status)}
                   </span>
+                  {!order.appointment && appointmentId && <Button variant="ghost" onClick={() => onAttach(order.id)}>Attach to selected visit</Button>}
                   {flag && (
                     <span className={`lab-flag lab-flag--${order.flag}`}>{flag}</span>
                   )}
@@ -778,12 +789,16 @@ function TxRecord({
   onEdit,
   onDelete,
   onCancelFollowUp,
+  appointmentId,
+  onAttach,
 }: {
   record: MedicalTreatment;
   isCurrent?: boolean;
   onEdit: (r: MedicalTreatment) => void;
   onDelete: (id: number) => void;
   onCancelFollowUp?: (r: MedicalTreatment) => void;
+  appointmentId?: number | null;
+  onAttach?: (id: number) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -805,6 +820,7 @@ function TxRecord({
           {isCurrent && <span className="badge badge--accepted">Current</span>}
         </div>
         <div className="treat-rec-acts">
+          {!record.appointment && appointmentId && onAttach && <Button variant="ghost" onClick={() => onAttach(record.id)}>Attach to selected visit</Button>}
           {confirmDel && (
             <span className="treat-confirm-del">
               Confirm?
@@ -905,7 +921,7 @@ function TxRecord({
    HEALTH RECORD (patient + doctor uploads)
    ====================================== */
 
-function HcRecord({ record }: { record: HealthRecord }) {
+function HcRecord({ record, appointmentId, onAttach }: { record: HealthRecord; appointmentId?: number | null; onAttach?: (id: number) => void }) {
   const { notify } = useToast();
   const typeLabel = record.record_type.replace(/_/g, " ");
   return (
@@ -928,6 +944,7 @@ function HcRecord({ record }: { record: HealthRecord }) {
       <div className="treat-rec-footer">
         <span>Added {fmtDate(record.created_at)}</span>
         {record.doctor_name && <span>Dr. {record.doctor_name}</span>}
+        {!record.appointment && appointmentId && onAttach && <Button variant="ghost" onClick={() => onAttach(record.id)}>Attach to selected visit</Button>}
         {!record.file && <span>No file attached</span>}
         <button
           type="button"
@@ -1308,6 +1325,15 @@ export function DoctorMedicalTreatmentScreen() {
     }
   }
 
+  async function handleAttachVital(id: number) {
+    if (!selectedId || !contextAppointmentId) return;
+    try {
+      await attachVitalToAppointment(id, contextAppointmentId);
+      notify("success", "Vital reading attached to the selected visit.");
+      loadPatient(selectedId);
+    } catch (e) { notify("error", msg(e)); }
+  }
+
   /* ---- Lab orders (phase 3) ---- */
 
   function setLabField(key: keyof LabForm, value: string) {
@@ -1355,6 +1381,33 @@ export function DoctorMedicalTreatmentScreen() {
     } catch (e) {
       notify("error", msg(e));
     }
+  }
+
+  async function handleAttachLab(id: number) {
+    if (!selectedId || !contextAppointmentId) return;
+    try {
+      await updateLabOrder(id, { appointment: contextAppointmentId });
+      notify("success", "Lab order attached to the selected visit.");
+      loadPatient(selectedId);
+    } catch (e) { notify("error", msg(e)); }
+  }
+
+  async function handleAttachTreatment(id: number) {
+    if (!selectedId || !contextAppointmentId) return;
+    try {
+      await updateTreatment(id, { appointment: contextAppointmentId });
+      notify("success", "Treatment attached to the selected visit.");
+      loadPatient(selectedId);
+    } catch (e) { notify("error", msg(e)); }
+  }
+
+  async function handleAttachReport(id: number) {
+    if (!selectedId || !contextAppointmentId) return;
+    try {
+      await attachHealthRecordToAppointment(id, contextAppointmentId);
+      notify("success", "Report attached to the selected visit.");
+      loadPatient(selectedId);
+    } catch (e) { notify("error", msg(e)); }
   }
 
   async function handleSaveLabResult(
@@ -1518,6 +1571,8 @@ export function DoctorMedicalTreatmentScreen() {
             onSave={() => void handleSaveVital()}
             onCancel={handleCancelVital}
             onDelete={(id) => void handleDeleteVital(id)}
+            appointmentId={contextAppointmentId}
+            onAttach={(id) => void handleAttachVital(id)}
           />
 
           {/* Lab orders — tests ordered and results recorded (phase 3). */}
@@ -1537,6 +1592,8 @@ export function DoctorMedicalTreatmentScreen() {
             onAdvance={(id, status) => void handleAdvanceLab(id, status)}
             onSaveResult={(id, payload) => void handleSaveLabResult(id, payload)}
             onDelete={(id) => void handleDeleteLab(id)}
+            appointmentId={contextAppointmentId}
+            onAttach={(id) => void handleAttachLab(id)}
           />
 
           {/* Health records — documents/images the patient shared with this
@@ -1559,7 +1616,7 @@ export function DoctorMedicalTreatmentScreen() {
             ) : (
               <div className="treat-patient-list">
                 {records.map((record) => (
-                  <HcRecord key={record.id} record={record} />
+                  <HcRecord key={record.id} record={record} appointmentId={contextAppointmentId} onAttach={(id) => void handleAttachReport(id)} />
                 ))}
               </div>
             )}
@@ -1835,6 +1892,8 @@ export function DoctorMedicalTreatmentScreen() {
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onCancelFollowUp={(r) => void handleCancelFollowUp(r)}
+                    appointmentId={contextAppointmentId}
+                    onAttach={(id) => void handleAttachTreatment(id)}
                   />
                 ))}
             </div>

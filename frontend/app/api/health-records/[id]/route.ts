@@ -1,6 +1,6 @@
 /** GET/DELETE /api/health-records/{id}/ */
-import { handler, ok, noContent, intParam, notFound, requireAuth, requireDoctor } from "@/lib/route";
-import { destroyHealthRecord } from "@/services/treatment.service";
+import { handler, ok, noContent, intParam, notFound, requireAuth, requireDoctor, readJson } from "@/lib/route";
+import { destroyHealthRecord, attachHealthRecordToAppointment } from "@/services/treatment.service";
 import * as clinical from "@/repositories/clinical.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import { healthRecordDto } from "@/lib/serializers";
@@ -28,4 +28,12 @@ export const DELETE = handler(async (ctx) => {
   if (id === null) throw notFound();
   await destroyHealthRecord(user, id);
   return noContent();
+});
+
+export const PATCH = handler(async (ctx) => {
+  const user = await requireDoctor(ctx.req);
+  const id = intParam(ctx.params.id);
+  if (id === null) throw notFound();
+  const result = await attachHealthRecordToAppointment(user, id, await readJson(ctx.req), ctx.req);
+  return ok(result.data, result.message);
 });
