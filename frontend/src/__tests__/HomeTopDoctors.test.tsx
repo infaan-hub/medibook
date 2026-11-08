@@ -198,6 +198,33 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
 }
 
 describe("patient home — upcoming appointments clarify emergencies", () => {
+  it("hides the whole upcoming section when there are no live upcoming appointments", async () => {
+    listDoctors.mockResolvedValue(envelope([]));
+    listMyAppointments.mockResolvedValue(envelope([
+      appointment({ id: 30, status: "cancelled" }),
+      appointment({ id: 31, status: "rejected" }),
+      appointment({ id: 32, status: "done" }),
+      appointment({ id: 33, status: "accepted", deleted_at: "2026-11-08T10:00:00.000Z" }),
+    ]));
+
+    const { container } = renderHome();
+
+    expect(await screen.findByText("Top Doctors")).toBeInTheDocument();
+    expect(container.querySelector(".home__appointments-section")).toBeNull();
+    expect(screen.queryByText("Upcoming Appointments")).not.toBeInTheDocument();
+    expect(screen.queryByText("No upcoming appointments")).not.toBeInTheDocument();
+  });
+
+  it("shows the upcoming section while a pending appointment remains", async () => {
+    listDoctors.mockResolvedValue(envelope([]));
+    listMyAppointments.mockResolvedValue(envelope([appointment({ id: 34, status: "pending" })]));
+
+    const { container } = renderHome();
+
+    expect(await screen.findByText("Doctor appointment")).toBeInTheDocument();
+    expect(container.querySelector(".home__appointments-section")).toBeInTheDocument();
+  });
+
   it("marks an emergency request red: date box, title, badge and reason", async () => {
     listDoctors.mockResolvedValue(envelope([]));
     listMyAppointments.mockResolvedValue(

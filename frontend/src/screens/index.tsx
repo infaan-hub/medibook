@@ -16,7 +16,6 @@ import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
 import {
-  Calendar,
   ChevronRight,
   Crosshair,
   MapPin,
@@ -124,11 +123,11 @@ function PatientHome({ user }: { user: User | null }) {
 
   useRealtimeSync({
     refresh: refreshAppointments,
-    events: ["appointment.created", "appointment.updated"],
+    events: ["appointment.created", "appointment.updated", "appointment.deleted"],
   });
 
   const upcoming = appointments
-    ?.filter((item) => item.status === "pending" || item.status === "accepted")
+    ?.filter((item) => !item.deleted_at && (item.status === "pending" || item.status === "accepted"))
     .sort((a, b) => (a.appointment_date + a.start_time).localeCompare(b.appointment_date + b.start_time)) ?? [];
 
   return (
@@ -223,13 +222,12 @@ function PatientHome({ user }: { user: User | null }) {
         )}
       </section>
 
-      {user && (<section className="home__section home__appointments-section">
+      {user && upcoming.length > 0 && (<section className="home__section home__appointments-section">
         <div className="home__section-heading">
           <h2>Upcoming Appointments</h2>
           <Link to="/appointments">See all <ChevronRight size={15} /></Link>
         </div>
-        {appointments === null ? <Skeleton lines={3} /> : upcoming.length > 0 ? (
-          <div className="home__appointment-list">
+        <div className="home__appointment-list">
             {upcoming.slice(0, 3).map((appt) => {
               const emergency = appt.appointment_type === "EMERGENCY";
               return (
@@ -263,10 +261,7 @@ function PatientHome({ user }: { user: User | null }) {
                 </Link>
               );
             })}
-          </div>
-        ) : (
-          <EmptyState icon={<Calendar size={28} />} title="No upcoming appointments" description="Find a doctor to book your next visit." action={<Link to="/doctors">Find a doctor</Link>} />
-        )}
+        </div>
       </section>)}
 
       {/* Quick actions */}
