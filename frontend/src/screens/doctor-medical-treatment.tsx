@@ -1248,6 +1248,9 @@ export function DoctorMedicalTreatmentScreen() {
           const history = vhRes.data ?? [];
           setPatientHistory(history);
           setContextAppointmentId((current) => {
+            if (initialVisitContext.patientId === id && initialVisitContext.appointmentId) {
+              return initialVisitContext.appointmentId;
+            }
             if (current && history.some((visit) => visit.appointment_id === current && !visit.deleted_at)) return current;
             const activeVisit = history.find((visit) => visit.status === "in_progress" && !visit.deleted_at);
             return activeVisit?.appointment_id ?? null;
@@ -1722,7 +1725,20 @@ export function DoctorMedicalTreatmentScreen() {
                     </option>
                   ))}
               </select>
-              <p className="form-note">Vitals, lab orders, treatment and attached patient reports will be saved to this visit.</p>
+              {contextVisit ? (
+                <p className="form-note">
+                  <strong>Selected visit: Appointment #{contextVisit.appointment_id}</strong>
+                  {` · ${contextVisit.appointment_date} · ${contextVisit.start_time.slice(0, 5)}–${contextVisit.end_time.slice(0, 5)} · ${contextVisit.appointment_type === "EMERGENCY" ? "Emergency" : "Normal"} · `}
+                  {contextVisit.consultation_started_at ? "Consultation in progress" : contextVisit.status === "done" ? "Completed visit" : contextVisit.status}
+                  {". Vitals, lab orders, treatment and attached reports will be saved to this appointment."}
+                </p>
+              ) : contextAppointmentId ? (
+                <p className="form-note">
+                  Appointment #{contextAppointmentId} was opened from Start consultation. Clinical records will be attached to this visit.
+                </p>
+              ) : (
+                <p className="form-note">Select an appointment to attach vitals, lab orders, treatment and reports to its patient-history record.</p>
+              )}
             </div>
           </Card>
 
