@@ -730,7 +730,7 @@ function LabOrdersCard({
    PATIENT INFO CARD
    ====================================== */
 
-function PatientInfo({ profile }: { profile: PatientProfile }) {
+function PatientInfo({ profile, onUpdated }: { profile: PatientProfile; onUpdated: (profile: PatientProfile) => void }) {
   const { notify } = useToast();
   const [editing, setEditing] = useState(false);
   const [medicalForm, setMedicalForm] = useState({
@@ -752,13 +752,14 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
   const handleSaveMedical = async () => {
     setSavingMedical(true);
     try {
-      await updatePatientProfileById(profile.id, {
+      const result = await updatePatientProfileById(profile.id, {
         gender: medicalForm.gender || undefined,
         blood_group: medicalForm.blood_group.trim() || undefined,
         date_of_birth: medicalForm.date_of_birth || undefined,
         allergies: medicalForm.allergies.trim() || undefined,
         medical_history: medicalForm.medical_history.trim() || undefined,
       });
+      onUpdated(result.data);
       setEditing(false);
       notify("success", "Patient medical details updated.");
     } catch (e) {
@@ -1670,7 +1671,7 @@ export function DoctorMedicalTreatmentScreen() {
 
       {!detailLoading && profile && (
         <>
-          <PatientInfo profile={profile} />
+          <PatientInfo profile={profile} onUpdated={setProfile} />
 
           <Card className="visit-records-card">
             <div className="treat-pf">

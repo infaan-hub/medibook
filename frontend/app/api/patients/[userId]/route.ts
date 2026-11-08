@@ -11,6 +11,16 @@ import { parse } from "@/validators/base";
 import { patientDto } from "@/lib/serializers";
 import type { AuthUser } from "@/lib/auth";
 
+/** GET /api/patients/<userId>/ — doctor reads a linked patient's profile. */
+export const GET = handler(async (ctx) => {
+  const user = await requireDoctor(ctx.req);
+  const targetUserId = Number(ctx.params.userId);
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) throw notFound("Patient not found.");
+  const result = await patients.getPatientDetail(user, targetUserId);
+  if (!result.data) throw forbidden(result.message || "Access denied.");
+  return ok(result.data, result.message);
+});
+
 export const PATCH = handler(async (ctx) => {
   const user = await requireDoctor(ctx.req);
   const doctor = await import("@/repositories/doctors.repo").then((m) =>
