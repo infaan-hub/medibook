@@ -134,6 +134,7 @@ model User {
   push_subscriptions   PushSubscription[]
   given_reviews        Review[]
   patient_appointments Appointment[]        @relation("UserPatientAppointments")
+  training_requests    TrainingRequest[]    @relation("TrainingRequests")
   treatments           MedicalTreatment[]
   health_records       HealthRecord[]
   prescriptions        Prescription[]
@@ -248,6 +249,7 @@ model Doctor {
   availabilities      Availability[]
   schedule_exceptions ScheduleException[]
   appointments        Appointment[]
+  training_assignments TrainingRequest[] @relation("TrainingDoctor")
   reviews             Review[]
   treatments          MedicalTreatment[]
   health_records      HealthRecord[]
@@ -842,4 +844,65 @@ model MediaFile {
 
   @@index([owner_id])
   @@map("media_file")
+}
+
+
+/// Training service requests submitted by patients/companies.
+model TrainingRequest {
+  id                    Int      @id @default(autoincrement())
+  patient_id            Int
+  patient               User     @relation("TrainingRequests", fields: [patient_id], references: [id], onDelete: Cascade)
+  audience              String
+  company_name          String?
+  contact_name          String?
+  contact_email         String?
+  contact_phone         String?
+  training_topic        String
+  preferred_start_date  DateTime
+  preferred_days        Int      @default(1)
+  delivery_mode         String
+  location              String?
+  latitude              Float?
+  longitude             Float?
+  location_accuracy     Float?
+  notes                 String?
+  status                String   @default("pending")
+  doctor_id             Int?
+  doctor                Doctor?  @relation("TrainingDoctor", fields: [doctor_id], references: [id], onDelete: SetNull)
+  sessions              TrainingSession[]
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([status, created_at])
+  @@index([patient_id])
+  @@index([doctor_id])
+  @@map("training_request")
+}
+
+model TrainingSession {
+  id                    Int      @id @default(autoincrement())
+  training_request_id   Int
+  training              TrainingRequest @relation(fields: [training_request_id], references: [id], onDelete: Cascade)
+  session_number        Int
+  session_date          DateTime
+  status                String   @default("pending")
+  started_at            DateTime?
+  completed_at          DateTime?
+  questions             TrainingQuestion[]
+  created_at            DateTime @default(now())
+
+  @@index([training_request_id, session_number])
+  @@map("training_session")
+}
+
+model TrainingQuestion {
+  id                    Int      @id @default(autoincrement())
+  session_id            Int
+  session               TrainingSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  question              String
+  challenge             String?
+  created_at            DateTime @default(now())
+
+  @@index([session_id])
+  @@map("training_question")
 }

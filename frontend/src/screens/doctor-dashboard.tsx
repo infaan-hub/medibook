@@ -27,6 +27,7 @@ import {
 } from "../api/reports";
 import type { Appointment, DoctorProfile, PatientProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { GraduationCap } from "lucide-react";
 import { useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import {
@@ -713,6 +714,7 @@ export function DoctorDashboardScreen() {
         <div className="doctor-header-actions">
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
+          <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> Training</Link>
         </div>
       </div>
 

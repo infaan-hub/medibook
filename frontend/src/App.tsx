@@ -118,6 +118,11 @@ const DoctorPersonalScreen = lazyWithRetry(() => import("./screens").then((m) =>
 const DoctorOnboardingScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorOnboardingScreen })));
 const NotificationsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotificationsScreen })));
 const CoordinatorScreen = lazyWithRetry(() => import("./screens/coordinator").then((m) => ({ default: m.CoordinatorScreen })));
+const TrainingScreen = lazyWithRetry(() => import("./screens/training").then((m) => ({ default: m.TrainingScreen })));
+const TrainingRequestScreen = lazyWithRetry(() => import("./screens/training-request").then((m) => ({ default: m.TrainingRequestScreen })));
+const TrainingSuccessScreen = lazyWithRetry(() => import("./screens/training-success").then((m) => ({ default: m.TrainingSuccessScreen })));
+const CoordinatorTrainingScreen = lazyWithRetry(() => import("./screens/coordinator-training").then((m) => ({ default: m.CoordinatorTrainingScreen })));
+const DoctorTrainingScreen = lazyWithRetry(() => import("./screens/doctor-training").then((m) => ({ default: m.DoctorTrainingScreen })));
 const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
@@ -302,6 +307,9 @@ export default function App() {
                 <Route path="/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />
                 <Route path="/booking/success" element={<RequirePatient><BookingSuccessScreen /></RequirePatient>} />
                 <Route path="/appointments" element={<RequirePatient><AppointmentsListScreen /></RequirePatient>} />
+<Route path="/training" element={<RequirePatient><TrainingScreen /></RequirePatient>} />
+<Route path="/training/request" element={<RequirePatient><TrainingRequestScreen /></RequirePatient>} />
+<Route path="/training/success" element={<RequirePatient><TrainingSuccessScreen /></RequirePatient>} />
                 <Route path="/appointments/:id" element={<AppointmentDetailScreen />} />
                 <Route path="/appointments/:id/reschedule" element={<RequirePatient><RescheduleScreen /></RequirePatient>} />
                 {/* First-login setup: gates every other /doctor/* route until
@@ -319,6 +327,7 @@ export default function App() {
                 <Route path="/doctor/visit-history/:patientId" element={<RequireRole role="doctor"><VisitHistoryPage /></RequireRole>} />
                 <Route path="/doctor/availability" element={<RequireRole role="doctor"><DoctorAvailabilityScreen /></RequireRole>} />
           <Route path="/doctor/emergency" element={<RequireRole role="doctor"><DoctorEmergencyScreen /></RequireRole>} />
+<Route path="/doctor/training" element={<RequireRole role="doctor"><DoctorTrainingScreen /></RequireRole>} />
                 <Route path="/notifications" element={<NotificationsScreen />} />
           <Route path="/emergency" element={<RequirePatient><PatientEmergencyScreen /></RequirePatient>} />
                 <Route path="/profile" element={<ProfileScreen />} />
@@ -335,6 +344,7 @@ export default function App() {
                 <Route path="/coordinator/appointment" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
                 <Route path="/coordinator/emergency" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
                 <Route path="/coordinator/patient" element={<RequireRole role="coordinator"><CoordinatorScreen /></RequireRole>} />
+<Route path="/coordinator/training" element={<RequireRole role="coordinator"><CoordinatorTrainingScreen /></RequireRole>} />
                 <Route path="/admin" element={<RequireRole role="admin"><AdminDashboardScreen /></RequireRole>} />
                 <Route path="/admin/users" element={<RequireRole role="admin"><AdminUsersScreen /></RequireRole>} />
                 <Route path="/admin/doctors" element={<RequireRole role="admin"><AdminDoctorsScreen /></RequireRole>} />

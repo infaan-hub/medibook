@@ -1,16 +1,17 @@
 import type { CSSProperties } from "react";
-import { Link } from "react-router-dom";
 import {
   Activity,
   ArrowUpRight,
   CalendarDays,
   Clock3,
+  GraduationCap,
   RefreshCw,
   Siren,
   Stethoscope,
   UserRound,
   Users,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { CoordinatorAppointment, CoordinatorStats } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
 
@@ -317,6 +318,11 @@ export function CoordinatorDashboard({
         <Link to="/coordinator/patient">
           <UserRound size={18} />
           <span><b>Patient history</b><small>Search {stats.users.patients} patient records</small></span>
+          <ArrowUpRight size={15} />
+        </Link>
+        <Link to="/coordinator/training">
+          <GraduationCap size={18} />
+          <span><b>Manage training</b><small>Review and assign training requests</small></span>
           <ArrowUpRight size={15} />
         </Link>
       </div>
