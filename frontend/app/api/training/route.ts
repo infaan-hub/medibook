@@ -64,6 +64,16 @@ export const POST = handler(async ({ req, user }) => {
     const sessionId = Number(body.session_id);
     return ok(await training.nextSession(user, id, sessionId));
   }
+  if (action === "cancel") {
+    if (user.role !== "patient" && user.role !== "doctor" && user.role !== "coordinator" && user.role !== "admin") throw forbidden();
+    const id = Number(new URL(req.url).searchParams.get("id"));
+    return ok(await training.cancelTraining(user, id));
+  }
+  if (action === "reschedule") {
+    if (user.role !== "patient" && user.role !== "doctor" && user.role !== "coordinator" && user.role !== "admin") throw forbidden();
+    const id = Number(new URL(req.url).searchParams.get("id"));
+    return ok(await training.rescheduleTraining(user, id, body.preferred_start_date, body.preferred_days));
+  }
   if (action === "complete") {
     if (user.role !== "doctor" && user.role !== "admin") throw forbidden();
     const id = Number(new URL(req.url).searchParams.get("id"));

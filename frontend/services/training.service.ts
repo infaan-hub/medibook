@@ -133,6 +133,63 @@ export async function nextSession(actor: AuthUser, trainingId: number, sessionId
   return session.training;
 }
 
+export async function rescheduleTraining(actor: AuthUser, id: number, newStartDate: string, days?: number) {
+  const req = await prisma.trainingRequest.findUnique({ where: { id }, include: { sessions: true } });
+  if (!req) throw notFound("Training request not found.");
+  if (req.status === "completed" || req.status === "cancelled") throw conflict("Cannot reschedule a completed or cancelled training.");
+  if (req.doctor_id !== null && actor.role === "doctor") {
+    const doctor = await doctorsRepo.findDoctorByUserId(actor.id);
+    if (!doctor || req.doctor_id !== doctor.id) throw forbidden("Not assigned.");
+  }
+  if (actor.role === "patient" && req.patient_id !== actor.id) throw forbidden("Not your training.");
+  const d = days ?? req.preferred_days;
+  if (d < 1 || d > 30) throw badRequest("Days must be between 1 and 30.");
+  const start = new Date(newStartDate);
+  if (Number.isNaN(start.getTime())) throw badRequest("Invalid date.");
+  // remove unstarted sessions
+  await prisma.trainingSession.deleteMany({ where: { training_request_id: id, status: { in: ["pending"] } } });
+  // recreate if needed
+  const existing = await prisma.trainingSession.count({ where: { training_request_id: id } });
+  for (let i = existing; i < d; i++) {
+    const dd = new Date(start); dd.setUTCDate(start.getUTCDate() + i);
+    await prisma.trainingSession.create({ data: { training_request_id: id, session_number: i + 1, session_date: dd, status: "pending" } });
+  }
+  // update dates for existing sessions
+  const sessions = await prisma.trainingSession.findMany({ where: { training_request_id: id }, orderBy: { session_number: "asc" } });
+  for (let i = 0; i < sessions.length; i++) {
+    const dd = new Date(start); dd.setUTCDate(start.getUTCDate() + i);
+    await prisma.trainingSession.update({ where: { id: sessions[i].id }, data: { session_date: dd } });
+  }
+  const updated = await prisma.trainingRequest.update({
+    where: { id },
+    data: { preferred_start_date: start, preferred_days: d, status: req.status === "pending" ? "pending" : "accepted" },
+  });
+  await notify(req.patient_id, "appointment_request", `Your training "${req.training_topic}" has been rescheduled to ${start.toLocaleDateString()}.`, null, "Training rescheduled");
+  broadcastPlatformDataUpdated("training");
+  return updated;
+}
+
+export async function cancelTraining(actor: AuthUser, id: number) {
+  const req = await prisma.trainingRequest.findUnique({ where: { id } });
+  if (!req) throw notFound("Training request not found.");
+  if (req.status === "completed" || req.status === "cancelled") throw conflict("Cannot cancel this training.");
+  if (actor.role === "patient" && req.patient_id !== actor.id) throw forbidden("Not your training.");
+  if (actor.role === "doctor") {
+    const doctor = await doctorsRepo.findDoctorByUserId(actor.id);
+    if (!doctor || req.doctor_id !== doctor.id) throw forbidden("Not assigned.");
+  }
+  if (actor.role !== "patient" && actor.role !== "doctor" && actor.role !== "coordinator" && actor.role !== "admin") throw forbidden();
+  const updated = await prisma.trainingRequest.update({ where: { id }, data: { status: "cancelled" } });
+  await notify(req.patient_id, "appointment_request", `Your training "${req.training_topic}" has been cancelled.`, null, "Training cancelled");
+  if (req.doctor_id) {
+    const doc = await prisma.doctor.findUnique({ where: { id: req.doctor_id }, include: { user: true } });
+    if (doc) await notify(doc.user.id, "appointment_request", `Training "${req.training_topic}" has been cancelled.`, null, "Training cancelled");
+  }
+  broadcastPlatformDataUpdated("training");
+  return updated;
+}
+
+
 export async function completeTraining(actor: AuthUser, trainingId: number, sessionId: number) {
   const doctor = actor.role === "doctor" ? await doctorsRepo.findDoctorByUserId(actor.id) : null;
   const doctorId = doctor?.id ?? null;
@@ -141,7 +198,7 @@ export async function completeTraining(actor: AuthUser, trainingId: number, sess
   if (session.training.doctor_id !== doctorId && actor.role !== "admin") throw forbidden("Not assigned.");
   await prisma.trainingSession.update({ where: { id: sessionId }, data: { status: "completed", completed_at: new Date() } });
   await prisma.trainingRequest.update({ where: { id: trainingId }, data: { status: "completed" } });
-  await notify(session.training.patient_id, "appointment_request", `Your training "${session.training.training_topic}" has been completed.`, null, "Training completed");
+  await notify(session.training.patient_id, "appointment_request", "Your training has been completed.", null, "Training completed");
   broadcastPlatformDataUpdated("training");
   return session.training;
 }
