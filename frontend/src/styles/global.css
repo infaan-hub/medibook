@@ -4395,3 +4395,75 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 /* Coordinator account role on admin user forms and directory. */
 .admin-field small#admin-role-hint { color: #687d8b; font-size: 11px; font-weight: 400; line-height: 1.45; }
 .admin-role--coordinator { background: #e0f2fe; color: #0369a1; }
+
+/* Doctor psychotherapy case cards */
+.psych-case-card { display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px; padding: 22px !important; border: 1px solid #e3eaf0; border-radius: 16px; box-shadow: 0 4px 18px rgb(38 71 92 / .05); }
+.psych-case-card__head, .psych-case-card__title, .psych-case-people, .psych-case-person, .psych-section-heading, .psych-case-actions { display: flex; align-items: center; }
+.psych-case-card__head { justify-content: space-between; gap: 14px; }
+.psych-case-card__title { min-width: 0; gap: 12px; }
+.psych-case-card__icon, .psych-case-person__icon, .psych-section-heading > span { display: grid; place-items: center; flex: 0 0 auto; width: 42px; height: 42px; border-radius: 12px; background: #e4f8f5; color: #087f79; }
+.psych-case-card__eyebrow { display: block; margin-bottom: 3px; color: #82909d; font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.psych-case-card__title h2 { margin: 0; color: #17384a; font-size: 20px; line-height: 1.2; }
+.psych-case-status { display: inline-flex; align-items: center; padding: 6px 11px; border-radius: 99px; background: #fff3db; color: #a86200; font-size: 12px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
+.psych-case-status--accepted, .psych-case-status--completed { background: #e4f8ee; color: #16805d; }
+.psych-case-status--in_progress, .psych-case-status--follow_up { background: #eaf1ff; color: #2563eb; }
+.psych-case-people { flex-wrap: wrap; gap: 12px; padding: 15px; border: 1px solid #edf1f4; border-radius: 12px; background: #fbfdfd; }
+.psych-case-person { min-width: min(100%, 220px); flex: 1; gap: 10px; }
+.psych-case-person__icon { width: 34px; height: 34px; border-radius: 10px; }
+.psych-case-person > div, .psych-section-heading > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.psych-case-person small, .psych-plan-summary small { color: #82909d; font-size: 11px; font-weight: 600; }
+.psych-case-person strong { overflow: hidden; color: #17384a; font-size: 13px; text-overflow: ellipsis; }
+.psych-plan-form, .psych-plan-summary, .psych-history { display: flex; flex-direction: column; gap: 17px; padding: 20px; border: 1px solid #e5ecef; border-radius: 14px; background: #fff; }
+.psych-section-heading { gap: 11px; }
+.psych-section-heading > span { width: 36px; height: 36px; border-radius: 10px; }
+.psych-section-heading h3 { margin: 0; color: #17384a; font-size: 15px; font-weight: 650; }
+.psych-section-heading p { margin: 0; color: #82909d; font-size: 12px; line-height: 1.4; }
+.psych-plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 18px; }
+.psych-plan-field { gap: 7px; color: #365365; font-size: 12px; font-weight: 600; }
+.psych-plan-field input, .psych-plan-field select, .psych-plan-field textarea { min-height: 44px; padding: 0 13px; border: 1px solid #dce6eb; border-radius: 10px; background: #fff; color: #17384a; font-size: 14px; }
+.psych-plan-field textarea { min-height: 92px; padding: 11px 13px; resize: vertical; }
+.psych-plan-field input:focus, .psych-plan-field select:focus, .psych-plan-field textarea:focus { border-color: #09a99e; box-shadow: 0 0 0 3px rgb(9 169 158 / .11); }
+.psych-plan-field--wide { grid-column: 1 / -1; }
+.psych-plan-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: 2px; }
+.psych-plan-actions .btn, .psych-case-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; border-radius: 10px; }
+.psych-plan-summary { gap: 15px; background: #fbfdfd; }
+.psych-plan-summary__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.psych-plan-summary__grid > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px; border: 1px solid #edf1f4; border-radius: 10px; background: #fff; }
+.psych-plan-summary__grid strong { color: #17384a; font-size: 13px; overflow-wrap: anywhere; }
+.psych-plan-summary__goals { padding-top: 13px; border-top: 1px solid #e7eef2; }
+.psych-plan-summary__goals p { margin: 5px 0 0; color: #536b7a; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.psych-case-section { display: flex; flex-direction: column; gap: 12px; }
+.psych-session-card { display: flex; flex-direction: column; gap: 11px; padding: 15px !important; border: 1px solid #e7eef2; border-left: 3px solid #dce6eb; border-radius: 12px; box-shadow: none; }
+.psych-session-card--in_progress { border-left-color: #2563eb; }
+.psych-session-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.psych-session-card__head > strong { color: #17384a; font-size: 14px; }
+.psych-session-card .psych-case-status { padding: 4px 9px; font-size: 11px; }
+.psych-session-card__time { display: flex; align-items: center; gap: 7px; margin: 0; color: #536b7a; font-size: 13px; }
+.psych-session-card__time svg { color: #0a9f94; }
+.psych-session-workspace { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid #edf1f4; }
+.psych-session-workspace > label { display: flex; flex-direction: column; gap: 7px; color: #365365; font-size: 12px; font-weight: 600; }
+.psych-session-workspace > label textarea { min-height: 90px; padding: 11px 13px; border: 1px solid #dce6eb; border-radius: 10px; color: #17384a; font: inherit; font-size: 13px; resize: vertical; }
+.psych-session-workspace .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border-radius: 10px; }
+.psych-session-tool-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.psych-medication-form { gap: 12px; padding: 14px; border: 1px solid #e5ecef; border-radius: 12px; background: #fbfdfd; }
+.psych-medication-form .admin-field input, .psych-medication-form .admin-field textarea { min-height: 40px; border-color: #dce6eb; border-radius: 9px; background: #fff; }
+.psych-medication-form .admin-field textarea { min-height: 74px; padding: 10px 12px; }
+.psych-session-saved { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 9px; background: #e4f8ee; color: #16805d; font-size: 12px; line-height: 1.45; }
+.psych-session-saved svg { flex: 0 0 auto; }
+.psych-followup-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; padding-top: 13px; border-top: 1px solid #edf1f4; }
+.psych-followup-form .admin-field { gap: 6px; color: #365365; }
+.psych-followup-form .admin-field input { min-height: 40px; border-color: #dce6eb; border-radius: 9px; background: #fff; }
+.psych-followup-form .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border-radius: 10px; white-space: nowrap; }
+.psych-session-notes { padding: 12px; border-radius: 10px; background: #f6f9fa; color: #536b7a; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+.psych-case-actions { flex-wrap: wrap; gap: 9px; padding-top: 15px; border-top: 1px solid #edf1f4; }
+.psych-case-actions .btn:first-child { margin-right: auto; }
+.psych-history { background: #fbfdfd; }
+.psych-history__empty { margin: 0; padding: 14px; border-radius: 10px; background: #fff; color: #718294; font-size: 13px; }
+.psych-history-item { display: flex; flex-direction: column; gap: 12px; padding: 14px !important; border: 1px solid #e7eef2; border-radius: 11px; box-shadow: none; }
+.psych-history-item__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #edf1f4; }
+.psych-history-item__head strong { color: #17384a; font-size: 13px; }
+.psych-history-item__head span { color: #82909d; font-size: 12px; }
+.psych-history-item__body { display: grid; gap: 10px; }
+.psych-history-item__body p { display: flex; flex-direction: column; gap: 3px; margin: 0; color: #536b7a; font-size: 13px; line-height: 1.5; }
+.psych-history-item__body b { color: #365365; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+@media (max-width: 640px) { .psych-case-card { padding: 16px !important; gap: 15px; }.psych-plan-form, .psych-plan-summary, .psych-history { padding: 15px; }.psych-plan-grid, .psych-plan-summary__grid { grid-template-columns: 1fr; }.psych-plan-field--wide, .psych-plan-actions { grid-column: auto; }.psych-plan-actions .btn { width: 100%; }.psych-case-actions { align-items: stretch; flex-direction: column; }.psych-case-actions .btn, .psych-case-actions .btn:first-child { width: 100%; margin-right: 0; }.psych-case-card__head { align-items: flex-start; }.psych-case-status { padding: 5px 9px; }.psych-followup-form { grid-template-columns: 1fr; }.psych-followup-form .btn { width: 100%; } }
