@@ -14,6 +14,12 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   completed: { label: "Done", color: "#059669", bg: "#d1fae5" },
 };
 
+const SESSION_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  scheduled: { label: "Scheduled", color: "#0a9f94", bg: "#e4f8f5" },
+  in_progress: { label: "In progress", color: "#2563eb", bg: "#dbeafe" },
+  completed: { label: "Completed", color: "#059669", bg: "#d1fae5" },
+};
+
 export function PsychotherapyScreen() {
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
@@ -55,53 +61,74 @@ export function PsychotherapyScreen() {
         <Link to="/psychotherapy/request"><Button>Request Therapy session</Button></Link>
       </div>
 
-      {items.length === 0 && <EmptyState title="No psychotherapy requests" description="Request a psychotherapy session to get started." />}
+      {items.length === 0 && (
+        <EmptyState title="No psychotherapy requests" description="Request a psychotherapy session to get started." />
+      )}
 
       {items.map((r) => {
         const st = STATUS[r.status] ?? { label: r.status, color: "#6b7280", bg: "#f3f4f6" };
         return (
-          <Card key={r.id} style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <strong>Psychotherapy #{r.id}</strong>
-              <span style={{ background: st.bg, color: st.color, padding: "2px 8px", borderRadius: 999, fontSize: 12 }}>{st.label}</span>
-            </div>
-            <p><strong>Mode:</strong> {r.session_mode === "in_person" ? "In person" : "Online"}</p>
-            <p><strong>Urgency:</strong> {r.urgency}</p>
-            <p><strong>Preferred start:</strong> {String(r.preferred_start_date).slice(0, 10)}</p>
-            {r.doctor && <p><strong>Psychologist:</strong> {r.doctor.user.first_name} {r.doctor.user.last_name}</p>}
-            {r.plan_approach && <p><strong>Approach:</strong> {r.plan_approach}</p>}
-            {r.plan_goals && <p><strong>Goals:</strong> {r.plan_goals}</p>}
-            {r.plan_frequency && <p><strong>Frequency:</strong> {r.plan_frequency}</p>}
-            {r.plan_session_duration && <p><strong>Session duration:</strong> {r.plan_session_duration} min</p>}
-            {r.plan_total_sessions && <p><strong>Planned sessions:</strong> {r.plan_total_sessions}</p>}
-            {r.plan_start_date && <p><strong>Plan start:</strong> {String(r.plan_start_date).slice(0, 10)} {r.plan_start_time?.slice(0, 5)}</p>}
-            {r.plan_review_after && <p><strong>Review after:</strong> {r.plan_review_after} session(s)</p>}
+          <Card key={r.id} className="patient-appt-card" style={{ marginBottom: 16 }}>
+            <div className="patient-appt-card__accent" style={{ background: st.color }} />
+            <div className="patient-appt-card__content">
+              <div className="patient-appt-card__top">
+                <div className="patient-appt-card__info">
+                  <div className="patient-appt-card__doctor">
+                    Psychotherapy #{r.id}
+                  </div>
+                  <div className="patient-appt-card__time">
+                    {r.doctor ? `Psychologist: ${r.doctor.user.first_name} ${r.doctor.user.last_name}` : "Awaiting assignment"}
+                  </div>
+                  <span
+                    className="patient-appt-card__status"
+                    style={{ color: st.color, background: st.bg }}
+                  >
+                    {st.label}
+                  </span>
+                </div>
+              </div>
 
-            {r.sessions?.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <h4>Sessions</h4>
-                <ul style={{ listStyle: "none", padding: 0 }}>
+              <div className="appt-detail__field"><span className="appt-detail__label">Mode</span><span>{r.session_mode === "in_person" ? "In person" : "Online"}</span></div>
+              <div className="appt-detail__field"><span className="appt-detail__label">Urgency</span><span>{r.urgency}</span></div>
+              <div className="appt-detail__field"><span className="appt-detail__label">Preferred start</span><span>{String(r.preferred_start_date).slice(0, 10)}</span></div>
+              {r.plan_approach && <div className="appt-detail__field"><span className="appt-detail__label">Approach</span><span>{r.plan_approach}</span></div>}
+              {r.plan_goals && <div className="appt-detail__field"><span className="appt-detail__label">Goals</span><span>{r.plan_goals}</span></div>}
+              {r.plan_frequency && <div className="appt-detail__field"><span className="appt-detail__label">Frequency</span><span>{r.plan_frequency}</span></div>}
+              {r.plan_session_duration && <div className="appt-detail__field"><span className="appt-detail__label">Session duration</span><span>{r.plan_session_duration} min</span></div>}
+              {r.plan_total_sessions && <div className="appt-detail__field"><span className="appt-detail__label">Planned sessions</span><span>{r.plan_total_sessions}</span></div>}
+              {r.plan_start_date && <div className="appt-detail__field"><span className="appt-detail__label">Plan start</span><span>{String(r.plan_start_date).slice(0, 10)} {r.plan_start_time?.slice(0, 5)}</span></div>}
+              {r.plan_review_after && <div className="appt-detail__field"><span className="appt-detail__label">Review after</span><span>{r.plan_review_after} session(s)</span></div>}
+
+              {r.sessions?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <h4 style={{ marginBottom: 8 }}>Sessions</h4>
                   {r.sessions.map((s: any) => {
-                    const ss = STATUS[s.status] ?? { label: s.status, color: "#6b7280", bg: "#f3f4f6" };
+                    const ss = SESSION_STATUS[s.status] ?? { label: s.status, color: "#6b7280", bg: "#f3f4f6" };
                     return (
-                      <li key={s.id} style={{ padding: 8, border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 6 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span>Session #{s.session_number} — {String(s.scheduled_date).slice(0, 10)} {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}</span>
-                          <span style={{ background: ss.bg, color: ss.color, padding: "2px 8px", borderRadius: 999, fontSize: 12 }}>{ss.label}</span>
+                      <div key={s.id} className="patient-appt-card" style={{ marginBottom: 8 }}>
+                        <div className="patient-appt-card__accent" style={{ background: ss.color }} />
+                        <div className="patient-appt-card__content">
+                          <div className="patient-appt-card__top">
+                            <div className="patient-appt-card__info">
+                              <div className="patient-appt-card__doctor">Session #{s.session_number}</div>
+                              <div className="patient-appt-card__time">{String(s.scheduled_date).slice(0, 10)} {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}</div>
+                              <span className="patient-appt-card__status" style={{ color: ss.color, background: ss.bg }}>{ss.label}</span>
+                            </div>
+                          </div>
                         </div>
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
-              </div>
-            )}
+                </div>
+              )}
 
-            {r.status === "completed" && (
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <Button variant="secondary" onClick={() => void viewReport(r.id)}>View report</Button>
-                <Button variant="secondary" onClick={() => void downloadReport(r.id)}>Download report</Button>
-              </div>
-            )}
+              {r.status === "completed" && (
+                <div className="patient-appt-card__footer" style={{ marginTop: 12 }}>
+                  <Button variant="secondary" onClick={() => void viewReport(r.id)}>View report</Button>
+                  <Button variant="secondary" onClick={() => void downloadReport(r.id)}>Download report</Button>
+                </div>
+              )}
+            </div>
           </Card>
         );
       })}
