@@ -43,7 +43,7 @@ export function CoordinatorPsychotherapyScreen() {
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
   if (error) return <div className="page"><ErrorState message={error} onRetry={() => void load()} /></div>;
 
-  const availableDoctors = doctors.filter((d: any) => d.is_available);
+  const availableDoctors = doctors.length ? doctors : [];
 
   return (
     <div className="page doctor-workspace">
