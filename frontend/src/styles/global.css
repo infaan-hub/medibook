@@ -1489,6 +1489,90 @@ a { color: var(--color-primary); }
   text-decoration: none;
 }
 
+/* Doctor-side training cards — same shell, typography and spacing as .appt-card */
+.training-card__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+.training-card__session {
+  display: grid;
+  gap: 6px;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt, rgba(15, 23, 42, 0.03));
+}
+.training-card__session-head,
+.training-card__session-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.training-card__session-count,
+.training-card__session-percent {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.training-card__session-title {
+  color: var(--color-text, #16191e);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.training-card__progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-border, rgba(15, 23, 42, 0.08));
+}
+.training-card__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+.training-card__panel {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--color-border, rgba(15, 23, 42, 0.15));
+}
+.training-card__panel-title {
+  margin: 0;
+  color: var(--color-text, #16191e);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.training-card__form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.training-card__panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 800px) {
+  .training-card__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .training-card__facts,
+  .training-card__form-grid {
+    grid-template-columns: 1fr;
+  }
+  .training-card__panel-actions .btn {
+    flex: 1;
+  }
+}
+
 /* Card list container */
 .appt-card-list {
   display: flex;

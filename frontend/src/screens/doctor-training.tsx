@@ -1,13 +1,80 @@
 import { useEffect, useState } from "react";
+import { Ban, CalendarClock, CheckCircle2, Download, FileText, Play } from "lucide-react";
 import { apiGet, apiPost } from "../api/client";
 import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, TextField, EmptyState, Skeleton, ErrorState } from "../components/ui";
+
+/**
+ * Training status → the same visual language as doctor appointment cards:
+ * a coloured status dot/label, a `.badge`, a card accent and a mapped badge
+ * class (`completed` shares the green "done" treatment).
+ */
+const STATUS: Record<
+  string,
+  { label: string; card: string; tone: string; badge: string; text: string }
+> = {
+  pending: {
+    label: "Pending",
+    card: "pending",
+    tone: "var(--color-status-pending)",
+    badge: "badge--pending",
+    text: "#16191e",
+  },
+  accepted: {
+    label: "Accepted",
+    card: "accepted",
+    tone: "var(--color-status-accepted)",
+    badge: "badge--accepted",
+    text: "#ffffff",
+  },
+  scheduled: {
+    label: "Scheduled",
+    card: "accepted",
+    tone: "var(--color-status-accepted)",
+    badge: "badge--accepted",
+    text: "#ffffff",
+  },
+  in_progress: {
+    label: "In progress",
+    card: "in_progress",
+    tone: "var(--color-status-in-progress)",
+    badge: "badge--in_progress",
+    text: "#16191e",
+  },
+  completed: {
+    label: "Completed",
+    card: "done",
+    tone: "var(--color-status-done)",
+    badge: "badge--done",
+    text: "#ffffff",
+  },
+  cancelled: {
+    label: "Cancelled",
+    card: "cancelled",
+    tone: "var(--color-status-cancelled)",
+    badge: "badge--cancelled",
+    text: "#ffffff",
+  },
+};
+
+const statusOf = (status: string) => STATUS[status] ?? STATUS.pending;
+
+/** Stored date/ISO timestamp → "Mon, 9 Nov 2026" (calendar date, never shifted). */
+function formatDay(value: string | null | undefined): string {
+  if (!value) return "—";
+  const day = String(value).slice(0, 10);
+  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export function DoctorTrainingScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [active, setActive] = useState<any>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [question, setQuestion] = useState("");
   const [challenge, setChallenge] = useState("");
@@ -27,11 +94,22 @@ export function DoctorTrainingScreen() {
   }
   useEffect(() => { void load(); }, []);
 
-  async function start(s: any) {
+  // Keep a running session reachable after a refresh: adopt the training's
+  // in-progress session when the page did not start it in this tab.
+  useEffect(() => {
+    if (sessionId !== null) return;
+    const running = items
+      .flatMap((training) => training.sessions ?? [])
+      .find((session: any) => session.status === "in_progress");
+    if (running) setSessionId(running.id);
+  }, [items, sessionId]);
+
+  async function start(training: any, session: any) {
     setSaving(true);
     try {
-      await apiPost(`/training/?action=start-session&id=${s.training_request_id}`, { session_id: s.id });
-      setSessionId(s.id); setActive(s);
+      await apiPost(`/training/?action=start-session&id=${training.id}`, { session_id: session.id });
+      setSessionId(session.id);
+      setQuestion(""); setChallenge("");
       await load();
     } catch (e: any) { alert(e?.message); }
     finally { setSaving(false); }
@@ -48,23 +126,23 @@ export function DoctorTrainingScreen() {
     finally { setSaving(false); }
   }
 
-  async function next() {
-    if (!active) return;
+  async function next(trainingId: number) {
+    if (!sessionId) return;
     setSaving(true);
     try {
-      await apiPost(`/training/?action=next-session&id=${active.training_request_id}`, { session_id: sessionId });
-      setSessionId(null); setActive(null);
+      await apiPost(`/training/?action=next-session&id=${trainingId}`, { session_id: sessionId });
+      setSessionId(null);
       await load();
     } catch (e: any) { alert(e?.message); }
     finally { setSaving(false); }
   }
 
-  async function done() {
-    if (!active || !sessionId) return;
+  async function done(trainingId: number) {
+    if (!sessionId) return;
     setSaving(true);
     try {
-      await apiPost(`/training/?action=complete&id=${active.training_request_id}`, { session_id: sessionId });
-      setSessionId(null); setActive(null);
+      await apiPost(`/training/?action=complete&id=${trainingId}`, { session_id: sessionId });
+      setSessionId(null);
       await load();
     } catch (e: any) { alert(e?.message); }
     finally { setSaving(false); }
@@ -91,6 +169,16 @@ export function DoctorTrainingScreen() {
     finally { setSaving(false); }
   }
 
+  function toggleReschedule(t: any) {
+    if (rescheduleId === t.id) {
+      setRescheduleId(null);
+      return;
+    }
+    setRescheduleId(t.id);
+    setNewDate(String(t.preferred_start_date ?? "").slice(0, 10));
+    setNewDays(Number(t.preferred_days) || 1);
+  }
+
   async function downloadReport(t: any) {
     setReporting(t.id);
     try { await downloadTrainingReport(t.id); }
@@ -105,15 +193,6 @@ export function DoctorTrainingScreen() {
     finally { setReporting(null); }
   }
 
-  const statusTone = (status: string) => {
-    if (status === "completed") return "#0a9f94";
-    if (status === "pending") return "#f3a629";
-    if (status === "accepted" || status === "scheduled") return "#7c3aed";
-    if (status === "in_progress") return "#2563eb";
-    if (status === "cancelled") return "#a9b6bf";
-    return "#a9b6bf";
-  };
-
   if (loading) return <Skeleton lines={6} />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
@@ -127,73 +206,214 @@ export function DoctorTrainingScreen() {
         </div>
       </div>
 
-      {items.length === 0 ? <EmptyState title="No training assignments" description="Assigned training sessions will appear here." /> :
-       <div style={{ display: "grid", gap: 12 }}>
+      {items.length === 0 ? (
+        <EmptyState
+          title="No training assignments"
+          description="Assigned training sessions will appear here."
+        />
+      ) : (
+        <div className="appt-card-list">
           {items.map((t: any) => {
-            const sessions = t.sessions || [];
-            const currentSession = sessions.find((s: any) => s.status !== "completed") || sessions[sessions.length - 1];
+            const sessions: any[] = t.sessions ?? [];
+            const currentSession =
+              sessions.find((s) => s.status !== "completed") ?? sessions[sessions.length - 1] ?? null;
+            const completedSessions = sessions.filter((s) => s.status === "completed").length;
             const isLast = (currentSession?.session_number ?? 0) >= sessions.length;
-            const tone = statusTone(t.status);
+            const status = statusOf(t.status);
+            const currentStatus = currentSession ? statusOf(currentSession.status) : status;
+            const progress =
+              sessions.length > 0 ? Math.round((completedSessions / sessions.length) * 100) : 0;
+            const patient =
+              `${t.patient?.first_name ?? ""} ${t.patient?.last_name ?? ""}`.trim() || "Patient";
+            const specialist = t.doctor?.user
+              ? `Dr. ${t.doctor.user.first_name ?? ""} ${t.doctor.user.last_name ?? ""}`.trim()
+              : "Not yet assigned";
+            const canManage = t.status !== "completed" && t.status !== "cancelled";
+            const canStart = canManage && currentSession?.status === "pending";
+            const sessionRunning =
+              currentSession?.status === "in_progress" &&
+              (sessionId === null || sessionId === currentSession.id);
+
             return (
-              <Card key={t.id} style={{ borderLeft: `4px solid ${tone}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <h2 style={{ margin: 0, fontSize: 18, color: "#17384a" }}>{t.training_topic}</h2>
-                  <span style={{ padding: "4px 10px", borderRadius: 99, background: tone + "1a", color: tone, fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{t.status}</span>
+              <Card key={t.id} className={`appt-card appt-card--${status.card}`}>
+                <div className="appt-card__top">
+                  <div className="appt-card__status-line">
+                    <span
+                      className="appt-card__status-dot"
+                      style={{ background: status.tone }}
+                    />
+                    <span className="appt-card__status-label">{status.label}</span>
+                    <span
+                      className={`badge ${status.badge}`}
+                      style={{ background: status.tone, color: status.text }}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+                  <div className="appt-card__time">
+                    <CalendarClock size={14} />
+                    <span>
+                      {t.preferred_days} day{t.preferred_days === 1 ? "" : "s"}
+                    </span>
+                    <span className="appt-card__time-sep">·</span>
+                    <span style={{ textTransform: "capitalize" }}>{t.delivery_mode}</span>
+                  </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, fontSize: 13, color: "#405563", marginBottom: 10 }}>
-                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Patient</b><div>{t.patient.first_name} {t.patient.last_name}</div></div>
-                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Days · Delivery</b><div>{t.preferred_days} day{t.preferred_days === 1 ? "" : "s"} · {t.delivery_mode}</div></div>
-                  <div><b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Specialist</b><div>Dr. {t.doctor.user.first_name} {t.doctor.user.last_name}</div></div>
-                </div>
-                {currentSession && (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ marginBottom: 6, fontSize: 13, color: "#405563" }}>
-                      <b style={{ color: "#82909d", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>Session</b>
-                      <div>Session {currentSession.session_number} of {sessions.length} — {currentSession.status}</div>
+
+                <div className="appt-card__body">
+                  <div className="appt-card__patient">
+                    <span className="appt-card__patient-label">Training topic</span>
+                    <span className="appt-card__patient-name">{t.training_topic}</span>
+                  </div>
+
+                  <div className="training-card__facts">
+                    <div className="appt-card__reason">
+                      <span className="appt-card__reason-label">Patient</span>
+                      <span className="appt-card__reason-text">{patient}</span>
                     </div>
-                    {currentSession.status === "pending" && (
-                      <Button loading={saving} onClick={() => start(currentSession)}>Start session</Button>
-                    )}
-                    {currentSession.status === "in_progress" && sessionId === currentSession.id && (
-                      <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                        <TextField id="question" label="Question asked" value={question} onChange={(e:any)=>setQuestion(e.target.value)} />
-                        <TextField id="challenge" label="Challenge/notes" value={challenge} onChange={(e:any)=>setChallenge(e.target.value)} />
-                        <Button loading={saving} onClick={saveQuestion} disabled={!question.trim()}>Save question</Button>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {!isLast && <Button loading={saving} onClick={next}>Next session</Button>}
-                          {isLast && <Button loading={saving} onClick={done}>Done</Button>}
-                        </div>
+                    <div className="appt-card__reason">
+                      <span className="appt-card__reason-label">Specialist</span>
+                      <span className="appt-card__reason-text">{specialist}</span>
+                    </div>
+                    <div className="appt-card__reason">
+                      <span className="appt-card__reason-label">Starts</span>
+                      <span className="appt-card__reason-text">{formatDay(t.preferred_start_date)}</span>
+                    </div>
+                  </div>
+
+                  <div className="training-card__session">
+                    <div className="training-card__session-head">
+                      <span className="appt-card__reason-label">Session progress</span>
+                      <span className="training-card__session-count">
+                        {completedSessions} of {sessions.length} complete
+                      </span>
+                    </div>
+                    <div className="training-card__session-line">
+                      <span className="training-card__session-title">
+                        {currentSession
+                          ? `Session ${currentSession.session_number} of ${sessions.length} — ${currentStatus.label}`
+                          : "No sessions scheduled yet"}
+                      </span>
+                      <span className="training-card__session-percent">{progress}%</span>
+                    </div>
+                    <div className="training-card__progress" aria-hidden="true">
+                      <span style={{ width: `${progress}%`, background: status.tone }} />
+                    </div>
+                  </div>
+
+                  {t.notes && (
+                    <div className="appt-card__notes">
+                      <span className="appt-card__notes-label">Request notes</span>
+                      <span className="appt-card__notes-text">{t.notes}</span>
+                    </div>
+                  )}
+
+                  {sessionRunning && (
+                    <div className="training-card__panel">
+                      <p className="training-card__panel-title">
+                        Record a question from session {currentSession.session_number}
+                      </p>
+                      <div className="training-card__form-grid">
+                        <TextField
+                          id={`question-${t.id}`}
+                          label="Question asked"
+                          value={question}
+                          onChange={(e: any) => setQuestion(e.target.value)}
+                        />
+                        <TextField
+                          id={`challenge-${t.id}`}
+                          label="Challenge / notes"
+                          value={challenge}
+                          onChange={(e: any) => setChallenge(e.target.value)}
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
-                {t.status !== "completed" && t.status !== "cancelled" && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                    <Button variant="secondary" onClick={() => { setRescheduleId(t.id); setNewDate(t.preferred_start_date?.slice(0,10) || ""); setNewDays(t.preferred_days); }}>Reschedule</Button>
-                    <Button variant="secondary" onClick={() => cancel(t)} loading={saving}>Cancel</Button>
-                  </div>
-                )}
-                {rescheduleId === t.id && (
-                  <div style={{ display: "grid", gap: 8, marginTop: 8, padding: 10, border: "1px solid #eef2f5", borderRadius: 8 }}>
-                    <input type="date" value={newDate} onChange={(e:any)=>setNewDate(e.target.value)} style={{ minHeight: 42, padding: "0 14px", border: "1px solid #c2e0df", borderRadius: 10 }} />
-                    <input type="number" min={1} max={30} value={newDays} onChange={(e:any)=>setNewDays(Number(e.target.value))} style={{ minHeight: 42, padding: "0 14px", border: "1px solid #c2e0df", borderRadius: 10 }} />
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Button loading={saving} onClick={() => reschedule(t)}>Save reschedule</Button>
-                      <Button variant="secondary" onClick={() => setRescheduleId(null)}>Close</Button>
+                      <div className="training-card__panel-actions">
+                        <Button loading={saving} onClick={saveQuestion} disabled={!question.trim()}>
+                          Save question
+                        </Button>
+                        {!isLast && (
+                          <Button variant="secondary" loading={saving} onClick={() => next(t.id)}>
+                            Next session
+                          </Button>
+                        )}
+                        {isLast && (
+                          <Button variant="secondary" loading={saving} onClick={() => done(t.id)}>
+                            <CheckCircle2 size={14} /> Done
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {t.status === "completed" && (
-                  <p style={{ marginTop: 8, fontSize: 13, color: "#405563" }}>Training completed. The PDF report is ready below.</p>
-                )}
-                <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #eef2f5", flexWrap: "wrap" }}>
-                  <Button variant="secondary" loading={reporting === t.id} onClick={() => viewReport(t)}>View report</Button>
-                  <Button loading={reporting === t.id} onClick={() => downloadReport(t)}>Download PDF</Button>
+                  )}
+
+                  {rescheduleId === t.id && (
+                    <div className="training-card__panel">
+                      <p className="training-card__panel-title">Reschedule this training</p>
+                      <div className="training-card__form-grid">
+                        <TextField
+                          id={`reschedule-date-${t.id}`}
+                          type="date"
+                          label="New start date"
+                          value={newDate}
+                          onChange={(e: any) => setNewDate(e.target.value)}
+                        />
+                        <TextField
+                          id={`reschedule-days-${t.id}`}
+                          type="number"
+                          label="Days"
+                          min={1}
+                          max={30}
+                          value={newDays}
+                          onChange={(e: any) => setNewDays(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="training-card__panel-actions">
+                        <Button loading={saving} onClick={() => reschedule(t)}>
+                          Save reschedule
+                        </Button>
+                        <Button variant="secondary" onClick={() => setRescheduleId(null)}>
+                          Close
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="appt-card__actions">
+                  {canStart && (
+                    <Button loading={saving} onClick={() => start(t, currentSession)}>
+                      <Play size={14} /> Start session
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button variant="secondary" onClick={() => toggleReschedule(t)}>
+                      <CalendarClock size={14} /> {rescheduleId === t.id ? "Close" : "Reschedule"}
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button variant="danger" loading={saving} onClick={() => cancel(t)}>
+                      <Ban size={14} /> Cancel
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    loading={reporting === t.id}
+                    onClick={() => viewReport(t)}
+                  >
+                    <FileText size={14} /> View report
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    loading={reporting === t.id}
+                    onClick={() => downloadReport(t)}
+                  >
+                    <Download size={14} /> Download PDF
+                  </Button>
                 </div>
               </Card>
             );
           })}
-        </div>}
+        </div>
+      )}
     </div>
   );
 }
