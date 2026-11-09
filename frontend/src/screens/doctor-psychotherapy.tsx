@@ -157,13 +157,17 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   const sessions = r.sessions ?? [];
 
   return (
-    <Card style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong>Psychology service #{r.id}</strong>
-        <span>{r.status}</span>
+    <Card className="patient-appt-card" style={{ marginBottom: 20 }}>
+      <div className="patient-appt-card__accent" style={{ background: "#0a9f94" }} />
+      <div className="patient-appt-card__content">
+      <div className="patient-appt-card__top">
+        <div className="patient-appt-card__info">
+          <div className="patient-appt-card__doctor">Psychology service #{r.id}</div>
+          <div className="patient-appt-card__time">{r.status}</div>
+        </div>
       </div>
-      <p>Patient: {r.patient?.first_name} {r.patient?.last_name}</p>
-      {r.doctor && <p>Psychologist: {r.doctor.user.first_name} {r.doctor.user.last_name}</p>}
+      <div className="appt-detail__field"><span className="appt-detail__label">Patient</span><span>{r.patient?.first_name} {r.patient?.last_name}</span></div>
+      {r.doctor && <div className="appt-detail__field"><span className="appt-detail__label">Psychologist</span><span>{r.doctor.user.first_name} {r.doctor.user.last_name}</span></div>}
 
       {r.status === "assigned" && (
         <form onSubmit={submitPlan} className="admin-form-card" style={{ marginTop: 12 }}>
@@ -277,6 +281,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
           ))}
         </div>
       )}
+      </div>
     </Card>
   );
 }
