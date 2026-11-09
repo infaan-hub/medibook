@@ -145,7 +145,7 @@ export function CoordinatorDashboard({
             <CalendarDays size={16} /> Appointment desk
           </Link>
           <Link to="/coordinator/psychotherapy" className="doctor-outline-button">
-            <Brain size={16} /> Manage psychotherapy
+            <Brain size={16} /> Manage psychology service
           </Link>
         </div>
       </div>
@@ -339,7 +339,7 @@ export function CoordinatorDashboard({
         </Link>
         <Link to="/coordinator/psychotherapy">
           <Brain size={18} />
-          <span><b>Manage psychotherapy</b><small>{psycho.filter((p) => p.status === "completed").length} completed · {psycho.length} total</small></span>
+          <span><b>Manage psychology service</b><small>{psycho.filter((p) => p.status === "completed").length} completed · {psycho.length} total</small></span>
           <ArrowUpRight size={15} />
         </Link>
       </div>

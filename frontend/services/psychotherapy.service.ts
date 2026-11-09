@@ -129,24 +129,27 @@ export async function createPsychotherapyRequest(actor: AuthUser, body: any) {
   const language = String(body?.language_preference ?? "english");
   if (!LANGUAGES.includes(language)) throw badRequest("Invalid language preference.");
 
-  const active = await prisma.psychotherapyRequest.findFirst({
-    where: { patient_id: actor.id, status: { in: ACTIVE_STATUSES } },
-  });
-  if (active) throw conflict("You already have an active psychotherapy request. Complete it before requesting another.");
-
-  const request = await prisma.psychotherapyRequest.create({
-    data: {
-      patient_id: actor.id,
-      session_mode: sessionMode,
-      preferred_start_date: preferred,
-      urgency,
-      confidentiality_accepted: true,
-      gender_preference: gender,
-      language_preference: language,
-      notes: body?.notes ? String(body.notes).trim() : null,
-      status: "pending",
-    },
-    include: includeFull(),
+  const request = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:psychotherapy-patient:${actor.id}`}))`;
+    const active = await tx.psychotherapyRequest.findFirst({
+      where: { patient_id: actor.id, status: { in: ACTIVE_STATUSES } },
+      select: { id: true },
+    });
+    if (active) throw conflict("You already have an active psychotherapy request. Complete it before requesting another.");
+    return tx.psychotherapyRequest.create({
+      data: {
+        patient_id: actor.id,
+        session_mode: sessionMode,
+        preferred_start_date: preferred,
+        urgency,
+        confidentiality_accepted: true,
+        gender_preference: gender,
+        language_preference: language,
+        notes: body?.notes ? String(body.notes).trim().slice(0, 5000) : null,
+        status: "pending",
+      },
+      include: includeFull(),
+    });
   });
   broadcastPlatformDataUpdated("psychotherapy");
   return serializeRequest(request, actor, null);
@@ -193,11 +196,12 @@ export async function assignPsychotherapyDoctor(actor: AuthUser, id: number, doc
   if (req.status !== "pending") throw conflict("This psychotherapy request is no longer pending.");
   const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, include: { user: true } });
   if (!doctor || !doctor.is_available) throw badRequest("Choose an available psychologist.");
-  const updated = await prisma.psychotherapyRequest.update({
-    where: { id },
+  const changed = await prisma.psychotherapyRequest.updateMany({
+    where: { id, status: "pending", doctor_id: null },
     data: { status: "assigned", doctor_id: doctorId, assigned_at: new Date() },
-    include: includeFull(),
   });
+  if (changed.count !== 1) throw conflict("This psychotherapy request was assigned or changed already. Refresh the request.");
+  const updated = await prisma.psychotherapyRequest.findUniqueOrThrow({ where: { id }, include: includeFull() });
   broadcastPlatformDataUpdated("psychotherapy");
   const effects = await Promise.allSettled([
     notify(req.patient_id, "appointment_confirmed", `Your psychotherapy request has been assigned to Dr. ${doctor.user.first_name} ${doctor.user.last_name}.`, null, "Psychotherapy assigned"),
@@ -254,6 +258,11 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   const endTime = secondsToTime(endSec);
 
   const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:psychotherapy-request:${id}`}))`;
+    const current = await tx.psychotherapyRequest.findUnique({ where: { id }, select: { doctor_id: true, status: true } });
+    if (!current || current.doctor_id !== doctorId || current.status !== "assigned") {
+      throw conflict("This psychotherapy request is no longer ready for a plan.");
+    }
     // Remove any previously planned sessions (none expected here, but safe).
     await tx.psychotherapySession.deleteMany({ where: { psychotherapy_request_id: id, status: "scheduled" } });
     for (let i = 0; i < dates.length; i++) {
@@ -324,6 +333,7 @@ export async function startPsychotherapySession(actor: AuthUser, requestId: numb
   }
 
   const updatedSession = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:psychotherapy-request:${requestId}`}))`;
     const otherActive = await tx.psychotherapySession.findFirst({
       where: { psychotherapy_request_id: requestId, status: "in_progress", id: { not: sessionId } },
       select: { id: true },

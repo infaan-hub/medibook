@@ -87,7 +87,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
       { to: "/coordinator/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/coordinator/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
+      { to: "/coordinator/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
     ];
   }
   if (user?.role === "doctor") {

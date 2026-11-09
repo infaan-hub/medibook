@@ -50,12 +50,12 @@ export function CoordinatorPsychotherapyScreen() {
       <div className="doctor-page-header">
         <div>
           <p className="doctor-eyebrow">Coordinator</p>
-          <h1>Manage psychotherapy</h1>
+          <h1>Manage psychology service</h1>
           <p>Review incoming requests and assign an available doctor to plan the therapy sessions.</p>
         </div>
       </div>
 
-      {items.length === 0 && <EmptyState title="No psychotherapy requests" description="Patient requests will appear here." />}
+      {items.length === 0 && <EmptyState title="No psychology service requests" description="Patient requests will appear here." />}
 
       {items.map((r) => (
         <PsychotherapyCard key={r.id} r={r} doctors={availableDoctors} onChanged={() => void load()} />
@@ -80,7 +80,7 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
     setSaving(true);
     try {
       await apiPost("/psychotherapy/?action=assign", { id: r.id, doctor_id: Number(doctorId) });
-      notify("success", "Psychotherapy request sent to the psychologist.");
+      notify("success", "Psychology service request sent to the psychologist.");
       setDoctorId("");
       onChanged();
     } catch (e: any) { notify("error", e?.message || "Unable to proceed."); }
@@ -92,7 +92,7 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
       <div className="coordinator-appointment-card__head">
         <div className="coordinator-appointment-card__reference">
           <span className="coordinator-appointment-card__dot" style={{ background: status.tone }} />
-          <span className="coordinator-appointment-card__type">Psychotherapy</span>
+          <span className="coordinator-appointment-card__type">Psychology service</span>
           <span className="coordinator-appointment-card__id">#{r.id}</span>
         </div>
         <span className={`badge ${status.badge}`} style={{ background: status.tone, color: status.text }}>
