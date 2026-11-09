@@ -328,7 +328,7 @@ function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, 
           )}
           {s.medication_record && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
-              <strong>Psychotherapy treatment saved:</strong> {s.medication_record.diagnosis || "Medication / treatment details"}
+              <strong>Psychology service treatment saved:</strong> {s.medication_record.diagnosis || "Medication / treatment details"}
             </div>
           )}
           <div style={{ marginTop: 8 }}>

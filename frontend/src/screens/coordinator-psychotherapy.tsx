@@ -136,7 +136,7 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
           <div className="coordinator-appointment-select coordinator-psychotherapy-select">
             <select
               value={doctorId}
-              aria-label={`Select psychologist for psychotherapy request ${r.id}`}
+              aria-label={`Select psychologist for psychology service request ${r.id}`}
               onChange={(e) => setDoctorId(e.target.value)}
             >
               <option value="">Select psychologist</option>
