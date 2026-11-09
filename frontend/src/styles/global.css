@@ -3594,6 +3594,80 @@ a { color: var(--color-primary); }
   .patient-appt-card__status { margin-left: auto; }
 }
 
+/* ---- Patient Training Cards (patient appointment card system) ---- */
+.patient-training-card {
+  padding: 0 !important;
+  align-items: stretch;
+  cursor: default;
+}
+.patient-training-card:hover {
+  border-color: #e8edf2;
+  transform: none;
+  box-shadow: var(--shadow-1);
+}
+.patient-training-card .patient-appt-card__content { gap: 14px; }
+.patient-training-card__status { gap: 6px; }
+.patient-training-card__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.patient-training-card__meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.patient-training-card__meta span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.patient-training-card__meta b {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.patient-training-card .training-card__session {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.patient-training-card__notes {
+  white-space: normal;
+  line-height: 1.55;
+  color: #475569;
+}
+.patient-training-card__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.patient-training-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.patient-training-card__actions .btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .patient-training-card__meta { grid-template-columns: 1fr; }
+  .patient-training-card__footer { justify-content: stretch; }
+  .patient-training-card__actions { width: 100%; }
+  .patient-training-card__actions .btn { flex: 1; justify-content: center; }
+}
+
 /* ---- Medical Detail Card ---- */
 .med-page { max-width: 720px; margin: 0 auto; }
 .med-page__header { margin-bottom: var(--space-5); }
