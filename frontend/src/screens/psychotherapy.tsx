@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
+import { useRealtimeSync } from "../realtime/socket";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 import { Card, Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -37,6 +38,7 @@ export function PsychotherapyScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSync({ refresh: () => { void load(); }, events: ["platform.data.updated"] });
 
   async function viewReport(id: number) {
     try { await viewPsychotherapyReport(id); }
@@ -91,6 +93,10 @@ export function PsychotherapyScreen() {
               <div className="appt-detail__field"><span className="appt-detail__label">Mode</span><span>{r.session_mode === "in_person" ? "In person" : "Online"}</span></div>
               <div className="appt-detail__field"><span className="appt-detail__label">Urgency</span><span>{r.urgency}</span></div>
               <div className="appt-detail__field"><span className="appt-detail__label">Preferred start</span><span>{String(r.preferred_start_date).slice(0, 10)}</span></div>
+              <div className="appt-detail__field"><span className="appt-detail__label">Psychologist preference</span><span>{r.gender_preference === "any" ? "Any gender" : r.gender_preference}</span></div>
+              <div className="appt-detail__field"><span className="appt-detail__label">Language</span><span>{r.language_preference}</span></div>
+              {r.notes && <div className="appt-detail__field"><span className="appt-detail__label">Your request notes</span><span>{r.notes}</span></div>}
+              <div className="appt-detail__field"><span className="appt-detail__label">Sessions completed</span><span>{r.sessions?.filter((s: any) => s.status === "completed").length ?? 0} of {r.sessions?.length ?? r.plan_total_sessions ?? 0}</span></div>
               {r.plan_approach && <div className="appt-detail__field"><span className="appt-detail__label">Approach</span><span>{r.plan_approach}</span></div>}
               {r.plan_goals && <div className="appt-detail__field"><span className="appt-detail__label">Goals</span><span>{r.plan_goals}</span></div>}
               {r.plan_frequency && <div className="appt-detail__field"><span className="appt-detail__label">Frequency</span><span>{r.plan_frequency}</span></div>}
@@ -111,7 +117,7 @@ export function PsychotherapyScreen() {
                           <div className="patient-appt-card__top">
                             <div className="patient-appt-card__info">
                               <div className="patient-appt-card__doctor">Session #{s.session_number}</div>
-                              <div className="patient-appt-card__time">{String(s.scheduled_date).slice(0, 10)} {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}</div>
+                              <div className="patient-appt-card__time">{String(s.scheduled_date).slice(0, 10)} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)} · {s.duration_minutes} min</div>
                               <span className="patient-appt-card__status" style={{ color: ss.color, background: ss.bg }}>{ss.label}</span>
                             </div>
                           </div>

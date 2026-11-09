@@ -572,11 +572,15 @@ export function DoctorDashboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [psycho, setPsycho] = useState<any[]>([]);
-  useEffect(() => {
-    let active = true;
-    apiGet<any[]>("/psychotherapy").then((res) => { if (active) setPsycho(res.data ?? []); }).catch(() => {});
-    return () => { active = false; };
+  const refreshPsychotherapy = useCallback(() => {
+    void apiGet<any[]>("/psychotherapy").then((res) => setPsycho(res.data ?? [])).catch(() => {});
   }, []);
+  useEffect(() => {
+    refreshPsychotherapy();
+  }, [refreshPsychotherapy]);
+  useRealtimeEvent((event) => {
+    if (event === "platform.data.updated") refreshPsychotherapy();
+  });
 
   /* ---- Practice summary report (§34) ---- */
   const [summaryBusy, setSummaryBusy] = useState<"download" | "view" | null>(null);
@@ -708,6 +712,12 @@ export function DoctorDashboardScreen() {
   const cancelled = appointments.filter((a) => a.status === "cancelled" || a.status === "rejected");
   const statusTotal = Math.max(appointments.length, 1);
   const visibleAppointments = [...todayAppts, ...pending.filter((item) => !todayAppts.some((today) => today.id === item.id))].slice(0, 5);
+  const psychotherapySessions = psycho.flatMap((item) => item.sessions ?? []);
+  const completedPsychotherapySessions = psychotherapySessions.filter((session: any) => session.status === "completed").length;
+  const upcomingPsychotherapySessions = psychotherapySessions.filter((session: any) => session.status === "scheduled").length;
+  const psychotherapyProgress = psychotherapySessions.length
+    ? Math.round((completedPsychotherapySessions / psychotherapySessions.length) * 100)
+    : 0;
 
   return (
     <div className="page doctor-workspace">
@@ -721,7 +731,7 @@ export function DoctorDashboardScreen() {
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
           <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> Training</Link>
-          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychology service</Link>
+          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychotherapy</Link>
         </div>
       </div>
 
@@ -733,7 +743,10 @@ export function DoctorDashboardScreen() {
       </div>
 
       <Card className="doctor-chart-card" style={{ marginBottom: 16 }}>
-        <div className="doctor-card-heading"><div><h3>Psychology service</h3><p>{psycho.length} assigned case(s) · {psycho.filter((p) => p.status === "completed").length} completed</p></div><Brain size={18} /></div>
+        <div className="doctor-card-heading"><div><h3>Psychotherapy</h3><p>{psycho.length} assigned case(s) · {completedPsychotherapySessions} session(s) completed · {upcomingPsychotherapySessions} upcoming</p></div><Brain size={18} /></div>
+        <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of psychotherapy sessions completed`}>
+          <span style={{ width: `${psychotherapyProgress}%` }} />
+        </div>
       </Card>
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">

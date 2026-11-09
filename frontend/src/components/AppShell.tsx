@@ -87,7 +87,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
       { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
       { to: "/coordinator/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/coordinator/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
+      { to: "/coordinator/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
     ];
   }
   if (user?.role === "doctor") {
@@ -100,7 +100,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
       { to: "/doctor/health-tips", label: "Health Tips", icon: <Newspaper size={20} /> },
       { to: "/doctor/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/doctor/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
+      { to: "/doctor/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
     ];
   }
@@ -112,7 +112,7 @@ export function navItemsFor(user: User | null): NavItem[] {
     { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/training", label: "Training", icon: <GraduationCap size={20} /> },
-    { to: "/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
+    { to: "/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
   ];
 }

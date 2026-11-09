@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "../api/client";
 import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { useRealtimeSync } from "../realtime/socket";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 
 const APPROACHES = ["CBT", "DBT", "ACT", "supportive", "psychodynamic"];
@@ -22,6 +23,7 @@ export function DoctorPsychotherapyScreen() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useRealtimeSync({ refresh: () => { void load(); }, events: ["platform.data.updated"] });
 
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
   if (error) return <div className="page"><ErrorState message={error} onRetry={() => void load()} /></div>;

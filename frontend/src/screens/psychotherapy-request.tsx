@@ -55,7 +55,7 @@ export function PsychotherapyRequestScreen() {
           </div>
           <div className="admin-field">
             <label htmlFor="preferredDate">Preferred start date</label>
-            <input id="preferredDate" type="date" value={preferredDate} onChange={(e:any)=>setPreferredDate(e.target.value)} required />
+            <input id="preferredDate" type="date" min={new Date().toISOString().slice(0, 10)} value={preferredDate} onChange={(e:any)=>setPreferredDate(e.target.value)} required />
           </div>
           <div className="admin-field">
             <label htmlFor="urgency">Urgency</label>
@@ -89,7 +89,7 @@ export function PsychotherapyRequestScreen() {
           <div className="admin-field admin-field--wide">
             <label>
               <input type="checkbox" checked={confidentiality} onChange={(e:any)=>setConfidentiality(e.target.checked)} required />{" "}
-              I understand psychology service is confidential and agree to the confidentiality notice.
+              I agree to the confidentiality notice. The coordinator can review my request details to assign a doctor; confidential session notes and psychotherapy medication records are restricted to my assigned psychologist and are not added to general medical history.
             </label>
           </div>
           <div className="admin-field admin-field--wide"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" value={notes} onChange={(e:any)=>setNotes(e.target.value)} /></div>

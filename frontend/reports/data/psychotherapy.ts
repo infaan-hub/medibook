@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { forbidden, notFound } from "@/lib/errors";
+import { forbidden, notFound, conflict } from "@/lib/errors";
 import type { AuthUser } from "@/lib/auth";
 import { branding } from "../design/tokens";
 import { formatDateTime, formatIsoDate, notProvided, personName, titleCase } from "./format";
@@ -85,10 +85,7 @@ export async function collectPsychotherapyReport(actor: AuthUser, requestId: num
   } else if (actor.role !== "patient") {
     throw forbidden();
   }
-  if (req.status !== "completed") {
-    // Allow assigned doctor to print? Requirement report after done. We'll allow only completed for patient/coordinator; doctor can print anytime? Keep completed gate for all to match "Done enables report".
-    // But tests may call with completed status. We'll not hard-block here; frontend gates. Leave as is.
-  }
+  if (req.status !== "completed") throw conflict("The psychotherapy report is available after all sessions are marked Done.");
 
   const sessions: PsychotherapyReportSession[] = req.sessions.map((s) => {
     let medication: string = branding.notProvided;

@@ -13,7 +13,7 @@ import { badRequest, notFound, conflict, forbidden } from "@/lib/errors";
 import { notify, broadcastPlatformDataUpdated } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
 import * as doctorsRepo from "@/repositories/doctors.repo";
-import { normalizeTime, timeToSeconds, secondsToTime } from "@/lib/dates";
+import { normalizeTime, timeToSeconds, secondsToTime, todayIso } from "@/lib/dates";
 import { treatmentDto } from "@/lib/serializers";
 import { Prisma } from "@prisma/client";
 
@@ -119,8 +119,11 @@ export async function createPsychotherapyRequest(actor: AuthUser, body: any) {
   if (actor.role !== "patient") throw forbidden();
   const sessionMode = String(body?.session_mode ?? "");
   if (!SESSION_MODES.includes(sessionMode)) throw badRequest("Choose a session mode.");
-  const preferred = body?.preferred_start_date ? new Date(body.preferred_start_date) : null;
-  if (!preferred || Number.isNaN(preferred.getTime())) throw badRequest("Preferred start date is required.");
+  const preferredText = String(body?.preferred_start_date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(preferredText)) throw badRequest("Preferred start date is required.");
+  const preferred = new Date(`${preferredText}T00:00:00.000Z`);
+  if (Number.isNaN(preferred.getTime()) || preferred.toISOString().slice(0, 10) !== preferredText) throw badRequest("Choose a valid preferred start date.");
+  if (preferredText < todayIso()) throw badRequest("Preferred start date cannot be in the past.");
   const urgency = String(body?.urgency ?? "routine");
   if (!URGENCIES.includes(urgency)) throw badRequest("Invalid urgency.");
   if (!body?.confidentiality_accepted) throw badRequest("You must accept the confidentiality notice.");
@@ -461,6 +464,7 @@ export async function completePsychotherapySession(actor: AuthUser, requestId: n
   }
 
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:psychotherapy-request:${requestId}`}))`;
     const changed = await tx.psychotherapySession.updateMany({
       where: { id: sessionId, psychotherapy_request_id: requestId, status: "in_progress" },
       data: {

@@ -13,8 +13,9 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "../api/client";
+import { useRealtimeSync } from "../realtime/socket";
 import type { CoordinatorAppointment, CoordinatorStats } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
 
@@ -75,11 +76,13 @@ export function CoordinatorDashboard({
   onRefresh: () => void;
 }) {
   const [psycho, setPsycho] = useState<any[]>([]);
-  useEffect(() => {
-    let active = true;
-    apiGet<any[]>("/psychotherapy").then((res) => { if (active) setPsycho(res.data ?? []); }).catch(() => {});
-    return () => { active = false; };
+  const loadPsychotherapy = useCallback(() => {
+    void apiGet<any[]>("/psychotherapy").then((res) => setPsycho(res.data ?? [])).catch(() => {});
   }, []);
+  useEffect(() => {
+    loadPsychotherapy();
+  }, [loadPsychotherapy]);
+  useRealtimeSync({ refresh: loadPsychotherapy, events: ["platform.data.updated"] });
   if (error && !stats) {
     return (
       <div className="page doctor-workspace">
@@ -108,6 +111,13 @@ export function CoordinatorDashboard({
   const totalDoctors = stats.availability?.total_doctors ?? stats.users.doctors;
   const availableDoctors = stats.availability?.available_doctors ?? totalDoctors;
   const todayPending = todayByStatus.pending ?? 0;
+  const psychotherapySessions = psycho.flatMap((item) => item.sessions ?? []);
+  const psychotherapyCompletedSessions = psychotherapySessions.filter((session: any) => session.status === "completed").length;
+  const psychotherapyUpcomingSessions = psychotherapySessions.filter((session: any) => session.status === "scheduled").length;
+  const psychotherapyTotalSessions = psychotherapySessions.length;
+  const psychotherapyProgress = psychotherapyTotalSessions
+    ? Math.round((psychotherapyCompletedSessions / psychotherapyTotalSessions) * 100)
+    : 0;
 
   const pipeline = [
     { key: "accepted", label: "Accepted", value: accepted, color: statusColors.accepted },
@@ -339,7 +349,7 @@ export function CoordinatorDashboard({
         </Link>
         <Link to="/coordinator/psychotherapy">
           <Brain size={18} />
-          <span><b>Manage psychology service</b><small>{psycho.filter((p) => p.status === "completed").length} completed · {psycho.length} total</small></span>
+          <span><b>Manage psychotherapy</b><small>{psychotherapyCompletedSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming</small></span>
           <ArrowUpRight size={15} />
         </Link>
       </div>
@@ -348,8 +358,11 @@ export function CoordinatorDashboard({
         <div className="doctor-card-heading">
           <div>
             <h3>Psychotherapy schedule</h3>
-            <p>Upcoming sessions across cases.</p>
+            <p>{psychotherapyCompletedSessions} of {psychotherapyTotalSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming.</p>
           </div>
+        </div>
+        <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of scheduled psychotherapy sessions completed`}>
+          <span style={{ width: `${psychotherapyProgress}%` }} />
         </div>
         {psycho.flatMap((p) => (p.sessions ?? []).filter((s: any) => s.status === "scheduled")).slice(0, 8).length === 0 ? (
           <EmptyState title="No upcoming sessions" description="Scheduled psychotherapy sessions will appear here." />
