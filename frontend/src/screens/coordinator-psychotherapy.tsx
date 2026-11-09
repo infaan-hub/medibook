@@ -4,6 +4,23 @@ import { getCoordinatorDoctors } from "../api/coordinator";
 import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui";
 import { useToast } from "../state/app-context";
 
+const STATUS: Record<string, { label: string; tone: string; badge: string; text: string }> = {
+  pending: { label: "Pending", tone: "#f3a629", badge: "badge--pending", text: "#16191e" },
+  assigned: { label: "Assigned", tone: "#0a9f94", badge: "badge--accepted", text: "#ffffff" },
+  accepted: { label: "Accepted", tone: "#0a9f94", badge: "badge--accepted", text: "#ffffff" },
+  in_progress: { label: "In progress", tone: "#7c3aed", badge: "badge--in_progress", text: "#ffffff" },
+  follow_up: { label: "Follow-up", tone: "#7c3aed", badge: "badge--in_progress", text: "#ffffff" },
+  completed: { label: "Completed", tone: "#2563eb", badge: "badge--done", text: "#ffffff" },
+};
+
+function formatDay(value: string | null | undefined): string {
+  if (!value) return "—";
+  const day = String(value).slice(0, 10);
+  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  });
+}
+
 export function CoordinatorPsychotherapyScreen() {
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
@@ -26,11 +43,10 @@ export function CoordinatorPsychotherapyScreen() {
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
   if (error) return <div className="page"><ErrorState message={error} onRetry={() => void load()} /></div>;
 
-  const pending = items.filter((r) => r.status === "pending");
   const availableDoctors = doctors.filter((d: any) => d.is_available);
 
   return (
-    <div className="page">
+    <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
           <p className="doctor-eyebrow">Coordinator</p>
@@ -41,25 +57,9 @@ export function CoordinatorPsychotherapyScreen() {
 
       {items.length === 0 && <EmptyState title="No psychotherapy requests" description="Patient requests will appear here." />}
 
-      {pending.map((r) => (
+      {items.map((r) => (
         <PsychotherapyCard key={r.id} r={r} doctors={availableDoctors} onChanged={() => void load()} />
       ))}
-
-      {items.filter((r) => r.status !== "pending").length > 0 && (
-        <>
-          <h3 style={{ marginTop: 24 }}>Assigned / active cases</h3>
-          {items.filter((r) => r.status !== "pending").map((r) => (
-            <Card key={r.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <strong>Psychotherapy #{r.id}</strong>
-                <span>{r.status}</span>
-              </div>
-              <p>Patient: {r.patient?.first_name} {r.patient?.last_name}</p>
-              {r.doctor && <p>Psychologist: {r.doctor.user.first_name} {r.doctor.user.last_name}</p>}
-            </Card>
-          ))}
-        </>
-      )}
     </div>
   );
 }
@@ -68,6 +68,12 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
   const { notify } = useToast();
   const [doctorId, setDoctorId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const status = STATUS[r.status] ?? STATUS.pending;
+  const patient = `${r.patient?.first_name ?? ""} ${r.patient?.last_name ?? ""}`.trim() || "Patient";
+  const specialist = r.doctor?.user
+    ? `Dr. ${r.doctor.user.first_name ?? ""} ${r.doctor.user.last_name ?? ""}`.trim()
+    : null;
 
   async function proceed() {
     if (!doctorId) { notify("error", "Select a psychologist first."); return; }
@@ -82,30 +88,68 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
   }
 
   return (
-    <Card style={{ marginBottom: 16, borderLeft: "4px solid #f3a629" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong>Psychotherapy #{r.id}</strong>
-        <span style={{ background: "#fef3c7", color: "#d97706", padding: "2px 8px", borderRadius: 999, fontSize: 12 }}>Pending</span>
+    <Card className="coordinator-appointment-card" style={{ borderLeftColor: status.tone, marginBottom: 16 }}>
+      <div className="coordinator-appointment-card__head">
+        <div className="coordinator-appointment-card__reference">
+          <span className="coordinator-appointment-card__dot" style={{ background: status.tone }} />
+          <span className="coordinator-appointment-card__type">Psychotherapy</span>
+          <span className="coordinator-appointment-card__id">#{r.id}</span>
+        </div>
+        <span className={`badge ${status.badge}`} style={{ background: status.tone, color: status.text }}>
+          {status.label}
+        </span>
       </div>
-      <p><strong>Patient:</strong> {r.patient?.first_name} {r.patient?.last_name}</p>
-      <p><strong>Mode:</strong> {r.session_mode === "in_person" ? "In person" : "Online"}</p>
-      <p><strong>Urgency:</strong> {r.urgency}</p>
-      <p><strong>Preferred start:</strong> {String(r.preferred_start_date).slice(0, 10)}</p>
-      <p><strong>Gender preference:</strong> {r.gender_preference}</p>
-      <p><strong>Language:</strong> {r.language_preference}</p>
-      {r.notes && <p><strong>Notes:</strong> {r.notes}</p>}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
-        <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} style={{ flex: 1 }}>
-          <option value="">Select psychologist</option>
-          {doctors.map((d: any) => (
-            <option key={d.id} value={d.id}>{d.user?.first_name} {d.user?.last_name}</option>
-          ))}
-        </select>
-        <Button loading={saving} onClick={() => void proceed()} disabled={!doctorId}>
-          Proceed psychotherapy
-        </Button>
+      <div className="coordinator-appointment-card__when">
+        <span><strong>Patient:</strong> {patient}</span>
+        <span><strong>Mode:</strong> {r.session_mode === "in_person" ? "In person" : "Online"}</span>
+        <span><strong>Urgency:</strong> {r.urgency}</span>
+        <span><strong>Preferred start:</strong> {formatDay(r.preferred_start_date)}</span>
       </div>
+
+      <div className="coordinator-appointment-card__details">
+        <div className="coordinator-training-card__person">
+          <span>Gender preference</span>
+          <b style={{ textTransform: "capitalize" }}>{r.gender_preference}</b>
+        </div>
+        <div className="coordinator-training-card__person">
+          <span>Language</span>
+          <b style={{ textTransform: "capitalize" }}>{r.language_preference}</b>
+        </div>
+        <div className="coordinator-training-card__person">
+          <span>Psychologist</span>
+          <b>{specialist ?? "Not yet assigned"}</b>
+          <small>{r.doctor?.user?.email ?? "Assign one below to start delivery"}</small>
+        </div>
+        {r.notes && (
+          <div className="coordinator-appointment-card__reason">
+            <span>Request notes</span>
+            <p>{r.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {r.status === "pending" && (
+        <div className="coordinator-appointment-card__reassign">
+          <div className="coordinator-appointment-select">
+            <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+              <option value="">Select psychologist</option>
+              {doctors.map((d: any) => (
+                <option key={d.id} value={d.id}>{d.user?.first_name} {d.user?.last_name}</option>
+              ))}
+            </select>
+          </div>
+          <Button loading={saving} disabled={!doctorId} onClick={() => void proceed()}>
+            Proceed psychotherapy
+          </Button>
+        </div>
+      )}
+
+      {r.status !== "pending" && specialist && (
+        <div className="coordinator-appointment-card__checked">
+          Assigned to {specialist}
+        </div>
+      )}
     </Card>
   );
 }
