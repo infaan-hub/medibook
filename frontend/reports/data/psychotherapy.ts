@@ -32,14 +32,12 @@ export interface PsychotherapyReportData {
     notes: string;
     requestedOn: string;
     preferredStartDate: string;
-    planApproach: string;
     planGoals: string;
     planFrequency: string;
     planSessionDuration: string;
     planTotalSessions: string;
     planStartDate: string;
     planStartTime: string;
-    planReviewAfter: string;
   };
   /** Alias kept for compatibility with report fixtures/tests. */
   psychotherapy?: PsychotherapyReportData["request"];
@@ -134,14 +132,12 @@ export async function collectPsychotherapyReport(actor: AuthUser, requestId: num
       notes: notProvided(req.notes),
       requestedOn: formatDateTime(req.created_at),
       preferredStartDate: formatIsoDate(req.preferred_start_date),
-      planApproach: notProvided(req.plan_approach),
       planGoals: notProvided(req.plan_goals),
       planFrequency: notProvided(req.plan_frequency),
       planSessionDuration: req.plan_session_duration ? `${req.plan_session_duration} min` : branding.notProvided,
       planTotalSessions: req.plan_total_sessions ? String(req.plan_total_sessions) : branding.notProvided,
       planStartDate: formatIsoDate(req.plan_start_date),
       planStartTime: req.plan_start_time ? req.plan_start_time.slice(0, 5) : branding.notProvided,
-      planReviewAfter: req.plan_review_after ? `After ${req.plan_review_after} session(s)` : branding.notProvided,
     },
     patient,
     doctor,

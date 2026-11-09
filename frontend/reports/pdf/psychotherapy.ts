@@ -29,7 +29,7 @@ export function psychotherapyChrome(data: PsychotherapyReportData): ReportChrome
   const request = (data.request ?? data.psychotherapy)!;
   return {
     title: PSYCHOTHERAPY_REPORT_TITLE,
-    subtitle: `${request.planApproach !== branding.notProvided ? request.planApproach : "Psychotherapy"} \u2014 ${data.patient.name}`,
+    subtitle: `Psychology service \u2014 ${data.patient.name}`,
     periodLine: `${data.request.planStartDate} \u00b7 ${data.request.planSessionDuration}`,
     rightLine: data.doctor?.name ?? "Psychologist not yet assigned",
     footerNote: branding.confidentialPsychotherapy,
@@ -43,7 +43,7 @@ function summaryCardsFor(data: PsychotherapyReportData): SummaryCard[] {
   return [
     { label: "Sessions", value: String(totals.sessions), detail: `${totals.completed} completed`, tone: "primary" },
     { label: "Progress", value: totals.progress, detail: `${totals.completed} of ${totals.sessions} sessions delivered`, tone: complete ? "success" : "info" },
-    { label: "Approach", value: request.planApproach, detail: request.planFrequency, tone: "violet" },
+    { label: "Frequency", value: request.planFrequency, detail: "Sessions", tone: "violet" },
     { label: "Duration", value: request.planSessionDuration, detail: "Per session", tone: "neutral" },
     { label: "Status", value: request.statusLabel, detail: "Case status", tone: "info" },
   ];
@@ -71,14 +71,12 @@ function requestRows(data: PsychotherapyReportData): InfoRow[] {
     { label: "Requested on", value: request.requestedOn },
   ];
   rows.push(
-    { label: "Approach", value: request.planApproach },
     { label: "Goals", value: request.planGoals },
     { label: "Frequency", value: request.planFrequency },
     { label: "Session duration", value: request.planSessionDuration },
     { label: "Planned sessions", value: request.planTotalSessions },
     { label: "Plan start", value: request.planStartDate },
-    { label: "Plan start time", value: request.planStartTime },
-    { label: "Review point", value: request.planReviewAfter }
+    { label: "Plan start time", value: request.planStartTime }
   );
   return rows;
 }
@@ -119,7 +117,7 @@ function drawBody(d: ReportDoc, data: PsychotherapyReportData, id: string): void
     title: PSYCHOTHERAPY_REPORT_TITLE,
     subtitle: "A complete record of this psychotherapy case, its planned sessions and clinical notes.",
     period: `${request.planStartDate} \u2014 ${request.planStartTime}`,
-    subject: `${request.planApproach} \u2014 ${data.patient.name}`,
+    subject: `Psychology service \u2014 ${data.patient.name}`,
     preparedFor: data.preparedFor,
     preparedBy: data.preparedBy,
   });

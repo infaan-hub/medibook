@@ -106,12 +106,10 @@ export function PsychotherapyScreen() {
                 <div><small>Gender preference</small><strong>{r.gender_preference}</strong></div>
                 {r.notes && <div><small>Your request notes</small><strong>{r.notes}</strong></div>}
                 <div><small>Sessions completed</small><strong>{completedSessions} of {totalSessions}</strong></div>
-                {r.plan_approach && <div><small>Approach</small><strong>{r.plan_approach}</strong></div>}
                 {r.plan_frequency && <div><small>Frequency</small><strong>{r.plan_frequency}</strong></div>}
                 {r.plan_session_duration && <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>}
                 {r.plan_total_sessions && <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>}
                 {r.plan_start_date && <div><small>Plan begins</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>}
-                {r.plan_review_after && <div><small>Review point</small><strong>After {r.plan_review_after} sessions</strong></div>}
               </div>
               {r.plan_goals && <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>}
             </div>

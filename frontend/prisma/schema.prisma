@@ -927,14 +927,12 @@ model PsychotherapyRequest {
   language_preference       String   @default("english")
   notes                     String?
   status                    String   @default("pending")
-  plan_approach             String?
   plan_goals                String?
   plan_frequency            String?
   plan_session_duration     Int?
   plan_total_sessions       Int?
   plan_start_date           DateTime? @db.Date
   plan_start_time           String?   @db.VarChar(8)
-  plan_review_after         Int?
   assigned_at               DateTime?
   accepted_at               DateTime?
   started_at                DateTime?

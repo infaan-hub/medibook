@@ -49,14 +49,12 @@ export function DoctorPsychotherapyScreen() {
 function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   const { notify } = useToast();
   const [plan, setPlan] = useState({
-    approach: r.plan_approach ?? "CBT",
     goals: r.plan_goals ?? "",
     frequency: r.plan_frequency ?? "weekly",
     session_duration: r.plan_session_duration ?? 50,
     planned_sessions: r.plan_total_sessions ?? 6,
     start_date: r.plan_start_date ? String(r.plan_start_date).slice(0, 10) : "",
     start_time: r.plan_start_time ? r.plan_start_time.slice(0, 5) : "09:00",
-    review_after: r.plan_review_after ?? "",
   });
   const [savingPlan, setSavingPlan] = useState(false);
   const [history, setHistory] = useState<any[] | null>(null);
@@ -70,14 +68,12 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
     try {
       await apiPost("/psychotherapy/?action=plan", {
         id: r.id,
-        approach: plan.approach,
         goals: plan.goals,
         frequency: plan.frequency,
         session_duration: Number(plan.session_duration),
         planned_sessions: Number(plan.planned_sessions),
         start_date: plan.start_date,
         start_time: plan.start_time,
-        review_after: plan.review_after ? Number(plan.review_after) : null,
       });
       notify("success", "Plan accepted and sessions generated.");
       onChanged();
@@ -175,12 +171,6 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         <form onSubmit={submitPlan} className="psych-plan-form">
           <div className="psych-section-heading"><span><CalendarClock size={18} /></span><div><h3>Create treatment plan</h3><p>Set the approach, goals and session schedule for this patient.</p></div></div>
           <div className="psych-plan-grid">
-            <div className="admin-field psych-plan-field">
-              <label htmlFor={`approach-${r.id}`}>Approach</label>
-              <select id={`approach-${r.id}`} value={plan.approach} onChange={(e) => setPlan({ ...plan, approach: e.target.value })}>
-                {APPROACHES.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
             <div className="admin-field psych-plan-field psych-plan-field--wide">
               <label htmlFor={`goals-${r.id}`}>Goals</label>
               <textarea id={`goals-${r.id}`} value={plan.goals} onChange={(e) => setPlan({ ...plan, goals: e.target.value })} required />
@@ -207,10 +197,6 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
               <label htmlFor={`start-time-${r.id}`}>Start time</label>
               <input id={`start-time-${r.id}`} type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
             </div>
-            <div className="admin-field psych-plan-field">
-              <label htmlFor={`review-${r.id}`}>Review point (after N sessions)</label>
-              <input id={`review-${r.id}`} type="number" value={plan.review_after} onChange={(e) => setPlan({ ...plan, review_after: e.target.value })} />
-            </div>
             <div className="psych-plan-actions">
               <Button type="submit" loading={savingPlan}><Check size={16} /> Accept plan & schedule sessions</Button>
             </div>
@@ -218,16 +204,16 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         </form>
       )}
 
-      {r.plan_approach && (
+      {r.plan_goals && (
         <div className="psych-plan-summary">
           <div className="psych-section-heading"><span><ClipboardList size={18} /></span><div><h3>Treatment plan</h3><p>Plan details and scheduled care</p></div></div>
           <div className="psych-plan-summary__grid">
-            <div><small>Approach</small><strong>{r.plan_approach}</strong></div><div><small>Frequency</small><strong>{r.plan_frequency}</strong></div>
-            <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div><div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>
+            <div><small>Frequency</small><strong>{r.plan_frequency}</strong></div>
+            <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>
+            <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>
             <div><small>Plan begins</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>
-            {r.plan_review_after && <div><small>Review point</small><strong>After {r.plan_review_after} sessions</strong></div>}
           </div>
-          {r.plan_goals && <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>}
+          <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>
         </div>
       )}
 

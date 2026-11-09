@@ -3,6 +3,8 @@ import { unauthorized, forbidden } from "@/lib/errors";
 import type { AuthUser } from "@/lib/auth";
 import * as psychotherapy from "@/services/psychotherapy.service";
 
+export const maxDuration = 120;
+
 function assertAuth(user: AuthUser | null): asserts user is AuthUser {
   if (!user) throw unauthorized();
 }

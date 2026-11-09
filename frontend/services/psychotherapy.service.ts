@@ -69,14 +69,12 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
     language_preference: req.language_preference,
     notes: req.notes,
     status: req.status,
-    plan_approach: req.plan_approach,
     plan_goals: req.plan_goals,
     plan_frequency: req.plan_frequency,
     plan_session_duration: req.plan_session_duration,
     plan_total_sessions: req.plan_total_sessions,
     plan_start_date: req.plan_start_date,
     plan_start_time: req.plan_start_time,
-    plan_review_after: req.plan_review_after,
     assigned_at: req.assigned_at,
     accepted_at: req.accepted_at,
     started_at: req.started_at,
@@ -225,8 +223,6 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   if (req.doctor_id !== doctorId) throw forbidden();
   if (req.status !== "assigned") throw conflict("This psychotherapy request is not ready for planning.");
 
-  const approach = String(body?.approach ?? "");
-  if (!APPROACHES.includes(approach)) throw badRequest("Invalid approach.");
   const goals = String(body?.goals ?? "").trim();
   if (!goals) throw badRequest("Goals are required.");
   const frequency = String(body?.frequency ?? "");
@@ -238,10 +234,6 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   const start = body?.start_date ? new Date(body.start_date) : null;
   if (!start || Number.isNaN(start.getTime())) throw badRequest("Start date is required.");
   const startTime = normalizeTime(String(body?.start_time ?? "09:00"));
-  const reviewAfter = body?.review_after !== undefined && body?.review_after !== null && body?.review_after !== ""
-    ? Number(body.review_after)
-    : null;
-  if (reviewAfter !== null && (!Number.isFinite(reviewAfter) || reviewAfter < 1)) throw badRequest("Invalid review point.");
 
   // Generate planned session dates.
   const dates: Date[] = [];
@@ -261,7 +253,6 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   const endTime = secondsToTime(endSec);
 
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`medibook:psychotherapy-request:${id}`}))`;
     const current = await tx.psychotherapyRequest.findUnique({ where: { id }, select: { doctor_id: true, status: true } });
     if (!current || current.doctor_id !== doctorId || current.status !== "assigned") {
       throw conflict("This psychotherapy request is no longer ready for a plan.");
@@ -285,14 +276,12 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
       where: { id },
       data: {
         status: "accepted",
-        plan_approach: approach,
         plan_goals: goals,
         plan_frequency: frequency,
         plan_session_duration: duration,
         plan_total_sessions: total,
         plan_start_date: start,
         plan_start_time: startTime,
-        plan_review_after: reviewAfter,
         accepted_at: new Date(),
       },
       include: includeFull(),
