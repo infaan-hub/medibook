@@ -166,38 +166,48 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
       {r.doctor && <p>Psychologist: {r.doctor.user.first_name} {r.doctor.user.last_name}</p>}
 
       {r.status === "assigned" && (
-        <form onSubmit={submitPlan} style={{ marginTop: 12 }}>
+        <form onSubmit={submitPlan} className="admin-form-card" style={{ marginTop: 12 }}>
           <h4>Start plan</h4>
-          <div style={{ display: "grid", gap: 8 }}>
-            <label>Approach
-              <select value={plan.approach} onChange={(e) => setPlan({ ...plan, approach: e.target.value })}>
+          <div className="admin-form-grid">
+            <div className="admin-field">
+              <label htmlFor={`approach-${r.id}`}>Approach</label>
+              <select id={`approach-${r.id}`} value={plan.approach} onChange={(e) => setPlan({ ...plan, approach: e.target.value })}>
                 {APPROACHES.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
-            </label>
-            <label>Goals
-              <textarea value={plan.goals} onChange={(e) => setPlan({ ...plan, goals: e.target.value })} required />
-            </label>
-            <label>Frequency
-              <select value={plan.frequency} onChange={(e) => setPlan({ ...plan, frequency: e.target.value })}>
+            </div>
+            <div className="admin-field admin-field--wide">
+              <label htmlFor={`goals-${r.id}`}>Goals</label>
+              <textarea id={`goals-${r.id}`} value={plan.goals} onChange={(e) => setPlan({ ...plan, goals: e.target.value })} required />
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`frequency-${r.id}`}>Frequency</label>
+              <select id={`frequency-${r.id}`} value={plan.frequency} onChange={(e) => setPlan({ ...plan, frequency: e.target.value })}>
                 {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
-            </label>
-            <label>Session duration (min)
-              <input type="number" value={plan.session_duration} onChange={(e) => setPlan({ ...plan, session_duration: Number(e.target.value) })} />
-            </label>
-            <label>Planned number of sessions
-              <input type="number" value={plan.planned_sessions} onChange={(e) => setPlan({ ...plan, planned_sessions: Number(e.target.value) })} />
-            </label>
-            <label>Start date
-              <input type="date" value={plan.start_date} onChange={(e) => setPlan({ ...plan, start_date: e.target.value })} required />
-            </label>
-            <label>Start time
-              <input type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
-            </label>
-            <label>Review point (after N sessions)
-              <input type="number" value={plan.review_after} onChange={(e) => setPlan({ ...plan, review_after: e.target.value })} />
-            </label>
-            <Button type="submit" loading={savingPlan}>Accept appointment</Button>
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`duration-${r.id}`}>Session duration (min)</label>
+              <input id={`duration-${r.id}`} type="number" value={plan.session_duration} onChange={(e) => setPlan({ ...plan, session_duration: Number(e.target.value) })} />
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`sessions-${r.id}`}>Planned number of sessions</label>
+              <input id={`sessions-${r.id}`} type="number" value={plan.planned_sessions} onChange={(e) => setPlan({ ...plan, planned_sessions: Number(e.target.value) })} />
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`start-date-${r.id}`}>Start date</label>
+              <input id={`start-date-${r.id}`} type="date" value={plan.start_date} onChange={(e) => setPlan({ ...plan, start_date: e.target.value })} required />
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`start-time-${r.id}`}>Start time</label>
+              <input id={`start-time-${r.id}`} type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
+            </div>
+            <div className="admin-field">
+              <label htmlFor={`review-${r.id}`}>Review point (after N sessions)</label>
+              <input id={`review-${r.id}`} type="number" value={plan.review_after} onChange={(e) => setPlan({ ...plan, review_after: e.target.value })} />
+            </div>
+            <div className="admin-form-actions admin-field--wide">
+              <Button type="submit" loading={savingPlan}>Accept appointment</Button>
+            </div>
           </div>
         </form>
       )}
@@ -314,16 +324,18 @@ function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, 
             </Button>
           </div>
           {showMedsFor === s.id && (
-            <div style={{ marginTop: 8, padding: 8, border: "1px solid #e5e7eb", borderRadius: 8 }}>
-              <input placeholder="Diagnosis" value={medForm.diagnosis} onChange={(e) => setMedForm({ ...medForm, diagnosis: e.target.value })} />
-              <textarea placeholder="Treatment notes" value={medForm.treatment_notes} onChange={(e) => setMedForm({ ...medForm, treatment_notes: e.target.value })} />
-              <input placeholder="Medication" value={medForm.medication} onChange={(e) => setMedForm({ ...medForm, medication: e.target.value })} />
-              <input placeholder="Dosage" value={medForm.dosage} onChange={(e) => setMedForm({ ...medForm, dosage: e.target.value })} />
-              <input placeholder="Frequency" value={medForm.frequency} onChange={(e) => setMedForm({ ...medForm, frequency: e.target.value })} />
-              <input placeholder="Duration" value={medForm.duration} onChange={(e) => setMedForm({ ...medForm, duration: e.target.value })} />
-              <input placeholder="Quantity" value={medForm.quantity} onChange={(e) => setMedForm({ ...medForm, quantity: e.target.value })} />
-              <input placeholder="Instructions" value={medForm.instructions} onChange={(e) => setMedForm({ ...medForm, instructions: e.target.value })} />
-              <Button loading={savingMed} onClick={() => void submitMedication(s.id)}>Save medication</Button>
+            <div className="admin-form-grid" style={{ marginTop: 8, padding: 8, border: "1px solid #e5e7eb", borderRadius: 8 }}>
+              <div className="admin-field"><label>Diagnosis</label><input value={medForm.diagnosis} onChange={(e) => setMedForm({ ...medForm, diagnosis: e.target.value })} /></div>
+              <div className="admin-field admin-field--wide"><label>Treatment notes</label><textarea value={medForm.treatment_notes} onChange={(e) => setMedForm({ ...medForm, treatment_notes: e.target.value })} /></div>
+              <div className="admin-field"><label>Medication</label><input value={medForm.medication} onChange={(e) => setMedForm({ ...medForm, medication: e.target.value })} /></div>
+              <div className="admin-field"><label>Dosage</label><input value={medForm.dosage} onChange={(e) => setMedForm({ ...medForm, dosage: e.target.value })} /></div>
+              <div className="admin-field"><label>Frequency</label><input value={medForm.frequency} onChange={(e) => setMedForm({ ...medForm, frequency: e.target.value })} /></div>
+              <div className="admin-field"><label>Duration</label><input value={medForm.duration} onChange={(e) => setMedForm({ ...medForm, duration: e.target.value })} /></div>
+              <div className="admin-field"><label>Quantity</label><input value={medForm.quantity} onChange={(e) => setMedForm({ ...medForm, quantity: e.target.value })} /></div>
+              <div className="admin-field"><label>Instructions</label><input value={medForm.instructions} onChange={(e) => setMedForm({ ...medForm, instructions: e.target.value })} /></div>
+              <div className="admin-form-actions admin-field--wide">
+                <Button loading={savingMed} onClick={() => void submitMedication(s.id)}>Save medication</Button>
+              </div>
             </div>
           )}
           {s.medication_record && (
