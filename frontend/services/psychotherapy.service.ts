@@ -70,11 +70,11 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
     notes: req.notes,
     status: req.status,
     plan_goals: req.plan_goals,
-    plan_frequency: req.plan_frequency,
     plan_session_duration: req.plan_session_duration,
     plan_total_sessions: req.plan_total_sessions,
     plan_start_date: req.plan_start_date,
     plan_start_time: req.plan_start_time,
+    plan_followup_time: req.plan_followup_time,
     assigned_at: req.assigned_at,
     accepted_at: req.accepted_at,
     started_at: req.started_at,
@@ -225,32 +225,26 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
 
   const goals = String(body?.goals ?? "").trim();
   if (!goals) throw badRequest("Goals are required.");
-  const frequency = String(body?.frequency ?? "");
-  if (!FREQUENCIES.includes(frequency)) throw badRequest("Invalid frequency.");
   const duration = Number(body?.session_duration);
   if (!Number.isFinite(duration) || duration < 10 || duration > 240) throw badRequest("Invalid session duration.");
   const total = Number(body?.planned_sessions);
   if (!Number.isFinite(total) || total < 1 || total > 50) throw badRequest("Invalid planned session count.");
   const start = body?.start_date ? new Date(body.start_date) : null;
   if (!start || Number.isNaN(start.getTime())) throw badRequest("Start date is required.");
-  const startTime = normalizeTime(String(body?.start_time ?? "09:00"));
+  const currentStartTime = normalizeTime(String(body?.start_time ?? "09:00"));
+  const followupStartTime = normalizeTime(String(body?.followup_time ?? body?.follow_up_time ?? "09:00"));
+  const followupTime = followupStartTime;
 
-  // Generate planned session dates.
+  // Generate planned session dates: first session on the start date, then weekly.
   const dates: Date[] = [];
-  if (frequency === "twice_weekly") {
-    for (let i = 0; i < total; i++) {
-      const week = Math.floor(i / 2);
-      const offset = week * 7 + (i % 2 === 0 ? 0 : 3);
-      dates.push(addDays(start, offset));
-    }
-  } else {
-    const interval = frequency === "biweekly" ? 14 : 7;
-    for (let i = 0; i < total; i++) dates.push(addDays(start, i * interval));
-  }
+  for (let i = 0; i < total; i++) dates.push(addDays(start, i * 7));
 
-  const startSec = timeToSeconds(startTime);
-  const endSec = startSec + duration * 60;
-  const endTime = secondsToTime(endSec);
+  const currentStartSec = timeToSeconds(currentStartTime);
+  const currentEndSec = currentStartSec + duration * 60;
+  const currentEndTime = secondsToTime(currentEndSec);
+  const followupStartSec = timeToSeconds(followupTime);
+  const followupEndSec = followupStartSec + duration * 60;
+  const followupEndTime = secondsToTime(followupEndSec);
 
   const updated = await prisma.$transaction(async (tx) => {
     const current = await tx.psychotherapyRequest.findUnique({ where: { id }, select: { doctor_id: true, status: true } });
@@ -260,13 +254,15 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
     // Remove any previously planned sessions (none expected here, but safe).
     await tx.psychotherapySession.deleteMany({ where: { psychotherapy_request_id: id, status: "scheduled" } });
     for (let i = 0; i < dates.length; i++) {
+      const sessionStartTime = i === 0 ? currentStartTime : followupTime;
+      const sessionEndTime = i === 0 ? currentEndTime : followupEndTime;
       await tx.psychotherapySession.create({
         data: {
           psychotherapy_request_id: id,
           session_number: i + 1,
           scheduled_date: dates[i],
-          start_time: startTime,
-          end_time: endTime,
+          start_time: sessionStartTime,
+          end_time: sessionEndTime,
           duration_minutes: duration,
           status: "scheduled",
         },
@@ -277,11 +273,11 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
       data: {
         status: "accepted",
         plan_goals: goals,
-        plan_frequency: frequency,
         plan_session_duration: duration,
         plan_total_sessions: total,
         plan_start_date: start,
-        plan_start_time: startTime,
+        plan_start_time: currentStartTime,
+        plan_followup_time: followupTime,
         accepted_at: new Date(),
       },
       include: includeFull(),

@@ -43,7 +43,7 @@ function summaryCardsFor(data: PsychotherapyReportData): SummaryCard[] {
   return [
     { label: "Sessions", value: String(totals.sessions), detail: `${totals.completed} completed`, tone: "primary" },
     { label: "Progress", value: totals.progress, detail: `${totals.completed} of ${totals.sessions} sessions delivered`, tone: complete ? "success" : "info" },
-    { label: "Frequency", value: request.planFrequency, detail: "Sessions", tone: "violet" },
+    { label: "Follow-up time", value: request.planFollowupTime, detail: "Sessions", tone: "violet" },
     { label: "Duration", value: request.planSessionDuration, detail: "Per session", tone: "neutral" },
     { label: "Status", value: request.statusLabel, detail: "Case status", tone: "info" },
   ];
@@ -72,11 +72,11 @@ function requestRows(data: PsychotherapyReportData): InfoRow[] {
   ];
   rows.push(
     { label: "Goals", value: request.planGoals },
-    { label: "Frequency", value: request.planFrequency },
+    { label: "Current session time", value: request.planStartTime },
+    { label: "Follow-up session time", value: request.planFollowupTime },
     { label: "Session duration", value: request.planSessionDuration },
     { label: "Planned sessions", value: request.planTotalSessions },
-    { label: "Plan start", value: request.planStartDate },
-    { label: "Plan start time", value: request.planStartTime }
+    { label: "Plan start", value: request.planStartDate }
   );
   return rows;
 }

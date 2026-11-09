@@ -50,11 +50,11 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   const { notify } = useToast();
   const [plan, setPlan] = useState({
     goals: r.plan_goals ?? "",
-    frequency: r.plan_frequency ?? "weekly",
     session_duration: r.plan_session_duration ?? 50,
     planned_sessions: r.plan_total_sessions ?? 6,
     start_date: r.plan_start_date ? String(r.plan_start_date).slice(0, 10) : "",
     start_time: r.plan_start_time ? r.plan_start_time.slice(0, 5) : "09:00",
+    followup_time: r.plan_followup_time ? r.plan_followup_time.slice(0, 5) : "09:00",
   });
   const [savingPlan, setSavingPlan] = useState(false);
   const [history, setHistory] = useState<any[] | null>(null);
@@ -69,11 +69,11 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
       await apiPost("/psychotherapy/?action=plan", {
         id: r.id,
         goals: plan.goals,
-        frequency: plan.frequency,
         session_duration: Number(plan.session_duration),
         planned_sessions: Number(plan.planned_sessions),
         start_date: plan.start_date,
         start_time: plan.start_time,
+        followup_time: plan.followup_time,
       });
       notify("success", "Plan accepted and sessions generated.");
       onChanged();
@@ -176,10 +176,12 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
               <textarea id={`goals-${r.id}`} value={plan.goals} onChange={(e) => setPlan({ ...plan, goals: e.target.value })} required />
             </div>
             <div className="admin-field psych-plan-field">
-              <label htmlFor={`frequency-${r.id}`}>Frequency</label>
-              <select id={`frequency-${r.id}`} value={plan.frequency} onChange={(e) => setPlan({ ...plan, frequency: e.target.value })}>
-                {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
+              <label htmlFor={`start-time-${r.id}`}>Current session time</label>
+              <input id={`start-time-${r.id}`} type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
+            </div>
+            <div className="admin-field psych-plan-field">
+              <label htmlFor={`followup-time-${r.id}`}>Follow-up session time</label>
+              <input id={`followup-time-${r.id}`} type="time" value={plan.followup_time} onChange={(e) => setPlan({ ...plan, followup_time: e.target.value })} />
             </div>
             <div className="admin-field psych-plan-field">
               <label htmlFor={`duration-${r.id}`}>Session duration (min)</label>
@@ -193,10 +195,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
               <label htmlFor={`start-date-${r.id}`}>Start date</label>
               <input id={`start-date-${r.id}`} type="date" value={plan.start_date} onChange={(e) => setPlan({ ...plan, start_date: e.target.value })} required />
             </div>
-            <div className="admin-field psych-plan-field">
-              <label htmlFor={`start-time-${r.id}`}>Start time</label>
-              <input id={`start-time-${r.id}`} type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
-            </div>
+
             <div className="psych-plan-actions">
               <Button type="submit" loading={savingPlan}><Check size={16} /> Accept plan & schedule sessions</Button>
             </div>
@@ -208,7 +207,8 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         <div className="psych-plan-summary">
           <div className="psych-section-heading"><span><ClipboardList size={18} /></span><div><h3>Treatment plan</h3><p>Plan details and scheduled care</p></div></div>
           <div className="psych-plan-summary__grid">
-            <div><small>Frequency</small><strong>{r.plan_frequency}</strong></div>
+            <div><small>Current session time</small><strong>{r.plan_start_time?.slice(0, 5)}</strong></div>
+            <div><small>Follow-up session time</small><strong>{r.plan_followup_time?.slice(0, 5)}</strong></div>
             <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>
             <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>
             <div><small>Plan begins</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>
