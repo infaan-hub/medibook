@@ -62,7 +62,10 @@ export async function collectPsychotherapyReport(actor: AuthUser, requestId: num
       patient: { include: { patient: true } },
       doctor: { include: { user: true, specialties: { include: { specialty: true } }, hospitals: { include: { hospital: true } } } },
       sessions: {
-        include: { treatment: { include: { prescriptions: { include: { items: true } } } } },
+        include: {
+          medication_record: true,
+          treatment: { include: { prescriptions: { include: { items: true } } } },
+        },
         orderBy: { session_number: "asc" },
       },
     },
@@ -89,7 +92,13 @@ export async function collectPsychotherapyReport(actor: AuthUser, requestId: num
 
   const sessions: PsychotherapyReportSession[] = req.sessions.map((s) => {
     let medication: string = branding.notProvided;
-    if (clinical && s.treatment) {
+    if (clinical && s.medication_record) {
+      const record = s.medication_record;
+      const items = Array.isArray(record.items)
+        ? record.items.map((item: any) => [item.medication, item.dosage, item.frequency].filter(Boolean).join(" — ")).filter(Boolean).join("; ")
+        : "";
+      medication = [record.diagnosis, record.treatment_notes, items].filter(Boolean).join(". ") || branding.notProvided;
+    } else if (clinical && s.treatment) {
       const rx = s.treatment.prescriptions?.[0];
       const items = rx?.items?.map((i) => `${i.medication} ${i.dosage}`).join(", ") ?? "";
       medication = items || s.treatment.prescription || branding.notProvided;

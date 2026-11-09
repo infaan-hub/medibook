@@ -721,7 +721,7 @@ export function DoctorDashboardScreen() {
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
           <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> Training</Link>
-          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychotherapy</Link>
+          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychology service</Link>
         </div>
       </div>
 
@@ -733,7 +733,7 @@ export function DoctorDashboardScreen() {
       </div>
 
       <Card className="doctor-chart-card" style={{ marginBottom: 16 }}>
-        <div className="doctor-card-heading"><div><h3>Psychotherapy</h3><p>{psycho.length} assigned case(s) · {psycho.filter((p) => p.status === "completed").length} completed</p></div><Brain size={18} /></div>
+        <div className="doctor-card-heading"><div><h3>Psychology service</h3><p>{psycho.length} assigned case(s) · {psycho.filter((p) => p.status === "completed").length} completed</p></div><Brain size={18} /></div>
       </Card>
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">

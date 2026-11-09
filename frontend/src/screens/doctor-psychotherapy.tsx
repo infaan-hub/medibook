@@ -30,12 +30,12 @@ export function DoctorPsychotherapyScreen() {
     <div className="page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Psychotherapy service</p>
-          <h1>My psychotherapy cases</h1>
+          <p className="doctor-eyebrow">Psychology service</p>
+          <h1>My psychology service cases</h1>
           <p>Plan sessions, deliver confidential care and finalize reports.</p>
         </div>
       </div>
-      {items.length === 0 && <EmptyState title="No assigned cases" description="Assigned psychotherapy cases will appear here." />}
+      {items.length === 0 && <EmptyState title="No assigned cases" description="Assigned psychology service cases will appear here." />}
       {items.map((r) => (
         <CaseCard key={r.id} r={r} onChanged={() => void load()} />
       ))}
@@ -58,7 +58,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   const [savingPlan, setSavingPlan] = useState(false);
   const [history, setHistory] = useState<any[] | null>(null);
   const [showMedsFor, setShowMedsFor] = useState<number | null>(null);
-  const [medForm, setMedForm] = useState({ diagnosis: "", treatment_notes: "", medication: "", dosage: "", frequency: "", duration: "", quantity: "", instructions: "", follow_up_date: "", follow_up_time: "" });
+  const [medForm, setMedForm] = useState({ diagnosis: "", treatment_notes: "", medication: "", dosage: "", frequency: "", duration: "", quantity: "", instructions: "" });
   const [savingMed, setSavingMed] = useState(false);
 
   async function submitPlan(e: any) {
@@ -114,7 +114,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   async function finalize() {
     try {
       await apiPost("/psychotherapy/?action=finalize", { id: r.id });
-      notify("success", "Psychotherapy finalized.");
+      notify("success", "Psychology service finalized.");
       onChanged();
     } catch (e: any) { notify("error", e?.message || "Unable to finalize."); }
   }
@@ -130,22 +130,16 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         quantity: medForm.quantity.trim(),
         instructions: medForm.instructions.trim(),
       }] : [];
-      const res = await apiPost<any>("/treatments", {
-        patient: r.patient_id,
+      await apiPost("/psychotherapy/?action=save_medication", {
+        request_id: r.id,
+        session_id: sessionId,
         diagnosis: medForm.diagnosis,
         treatment_notes: medForm.treatment_notes,
         items,
-        follow_up_date: medForm.follow_up_date || null,
-        follow_up_time: medForm.follow_up_time || null,
-        follow_up_notes: "",
       });
-      const treatmentId = res.data?.id;
-      if (treatmentId) {
-        await apiPost("/psychotherapy/?action=update_session", { request_id: r.id, session_id: sessionId, treatment_id: treatmentId });
-      }
       notify("success", "Medication saved to session.");
       setShowMedsFor(null);
-      setMedForm({ diagnosis: "", treatment_notes: "", medication: "", dosage: "", frequency: "", duration: "", quantity: "", instructions: "", follow_up_date: "", follow_up_time: "" });
+      setMedForm({ diagnosis: "", treatment_notes: "", medication: "", dosage: "", frequency: "", duration: "", quantity: "", instructions: "" });
       onChanged();
     } catch (e: any) { notify("error", e?.message || "Unable to save medication."); }
     finally { setSavingMed(false); }
@@ -163,7 +157,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
   return (
     <Card style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong>Psychotherapy #{r.id}</strong>
+        <strong>Psychology service #{r.id}</strong>
         <span>{r.status}</span>
       </div>
       <p>Patient: {r.patient?.first_name} {r.patient?.last_name}</p>
@@ -258,7 +252,15 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
           {history.map((h: any) => (
             <Card key={h.session_id} style={{ marginBottom: 8 }}>
               <strong>Session #{h.session_number}</strong> — {String(h.scheduled_date).slice(0, 10)}
-              <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(h.treatment, null, 2)}</pre>
+              {h.medication_record ? (
+                <div style={{ marginTop: 8, fontSize: 13 }}>
+                  {h.medication_record.diagnosis && <p><b>Diagnosis:</b> {h.medication_record.diagnosis}</p>}
+                  {h.medication_record.treatment_notes && <p><b>Treatment notes:</b> {h.medication_record.treatment_notes}</p>}
+                  {Array.isArray(h.medication_record.items) && h.medication_record.items.map((item: any, index: number) => (
+                    <p key={index}><b>{item.medication}</b> · {item.dosage} · {item.frequency} · {item.duration}<br />{item.instructions}</p>
+                  ))}
+                </div>
+              ) : <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(h.treatment, null, 2)}</pre>}
             </Card>
           ))}
         </div>
@@ -268,14 +270,22 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
 }
 
 function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, savingMed, submitMedication, startSession, completeSession }: any) {
+  const { notify } = useToast();
   const [notes, setNotes] = useState(s.confidential_notes ?? "");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const sessionDate = String(s.scheduled_date).slice(0, 10);
+  const sessionTime = String(s.start_time ?? "").slice(0, 8);
+  const sessionDue = new Date(`${sessionDate}T${sessionTime}Z`).getTime() <= Date.now();
 
   async function saveNotes() {
+    setSavingNotes(true);
     try {
       await apiPost("/psychotherapy/?action=update_session", { request_id: r.id, session_id: s.id, confidential_notes: notes });
-    } catch (e: any) { /* ignore */ }
+      notify("success", "Confidential session notes saved.");
+    } catch (e: any) { notify("error", e?.message || "Unable to save confidential notes."); }
+    finally { setSavingNotes(false); }
   }
 
   return (
@@ -286,15 +296,16 @@ function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, 
       </div>
       <p>{String(s.scheduled_date).slice(0, 10)} {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}</p>
 
-      {s.status === "scheduled" && (
-        <Button onClick={() => void startSession(s.id)}>Start session</Button>
-      )}
+      {s.status === "scheduled" && (sessionDue
+        ? <Button onClick={() => void startSession(s.id)}>Start session</Button>
+        : <p style={{ color: "#64748b", fontSize: 13 }}>Start session is available on {sessionDate} at {sessionTime.slice(0, 5)}.</p>)}
 
       {s.status === "in_progress" && (
         <div style={{ marginTop: 8 }}>
           <label>Confidential notes
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => void saveNotes()} />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
+          <Button variant="secondary" loading={savingNotes} onClick={() => void saveNotes()}>Save confidential notes</Button>
           <div style={{ marginTop: 8 }}>
             <Button variant="secondary" onClick={() => setShowMedsFor(showMedsFor === s.id ? null : s.id)}>
               {showMedsFor === s.id ? "Hide medication form" : "Add medication"}
@@ -310,14 +321,12 @@ function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, 
               <input placeholder="Duration" value={medForm.duration} onChange={(e) => setMedForm({ ...medForm, duration: e.target.value })} />
               <input placeholder="Quantity" value={medForm.quantity} onChange={(e) => setMedForm({ ...medForm, quantity: e.target.value })} />
               <input placeholder="Instructions" value={medForm.instructions} onChange={(e) => setMedForm({ ...medForm, instructions: e.target.value })} />
-              <input type="date" placeholder="Follow-up date" value={medForm.follow_up_date} onChange={(e) => setMedForm({ ...medForm, follow_up_date: e.target.value })} />
-              <input type="time" placeholder="Follow-up time" value={medForm.follow_up_time} onChange={(e) => setMedForm({ ...medForm, follow_up_time: e.target.value })} />
               <Button loading={savingMed} onClick={() => void submitMedication(s.id)}>Save medication</Button>
             </div>
           )}
-          {s.treatment && (
+          {s.medication_record && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
-              <strong>Linked medication:</strong> {s.treatment.diagnosis}
+              <strong>Psychotherapy treatment saved:</strong> {s.medication_record.diagnosis || "Medication / treatment details"}
             </div>
           )}
           <div style={{ marginTop: 8 }}>

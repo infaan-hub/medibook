@@ -100,7 +100,7 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
       { to: "/doctor/health-tips", label: "Health Tips", icon: <Newspaper size={20} /> },
       { to: "/doctor/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/doctor/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
+      { to: "/doctor/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
     ];
   }
