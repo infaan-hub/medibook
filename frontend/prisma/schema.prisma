@@ -135,6 +135,7 @@ model User {
   given_reviews        Review[]
   patient_appointments Appointment[]        @relation("UserPatientAppointments")
   training_requests    TrainingRequest[]    @relation("TrainingRequests")
+  psychotherapy_requests PsychotherapyRequest[] @relation("PsychotherapyRequests")
   treatments           MedicalTreatment[]
   health_records       HealthRecord[]
   prescriptions        Prescription[]
@@ -250,6 +251,7 @@ model Doctor {
   schedule_exceptions ScheduleException[]
   appointments        Appointment[]
   training_assignments TrainingRequest[] @relation("TrainingDoctor")
+  psychotherapy_assignments PsychotherapyRequest[] @relation("PsychotherapyDoctor")
   reviews             Review[]
   treatments          MedicalTreatment[]
   health_records      HealthRecord[]
@@ -589,6 +591,7 @@ model MedicalTreatment {
     follow_up_appointment_id Int? @map("follow_up_appointment_id")
 
   prescriptions     Prescription[]
+  psychotherapy_sessions PsychotherapySession[] @relation("PsychotherapyTreatment")
 
   @@index([doctor_id, patient_id], map: "treat_dr_pat_idx")
   @@index([doctor_id])
@@ -906,4 +909,68 @@ model TrainingQuestion {
 
   @@index([session_id])
   @@map("training_question")
+}
+
+/// Psychotherapy service request submitted by a patient.
+/// Status flow: pending → assigned → accepted → in_progress → follow_up → completed.
+model PsychotherapyRequest {
+  id                        Int      @id @default(autoincrement())
+  patient_id                Int
+  patient                   User     @relation("PsychotherapyRequests", fields: [patient_id], references: [id], onDelete: Cascade)
+  doctor_id                 Int?
+  doctor                    Doctor?  @relation("PsychotherapyDoctor", fields: [doctor_id], references: [id], onDelete: SetNull)
+  session_mode              String   @default("online")
+  preferred_start_date      DateTime @db.Date
+  urgency                   String   @default("routine")
+  confidentiality_accepted  Boolean  @default(false)
+  gender_preference         String   @default("any")
+  language_preference       String   @default("english")
+  notes                     String?
+  status                    String   @default("pending")
+  plan_approach             String?
+  plan_goals                String?
+  plan_frequency            String?
+  plan_session_duration     Int?
+  plan_total_sessions       Int?
+  plan_start_date           DateTime? @db.Date
+  plan_start_time           String?   @db.VarChar(8)
+  plan_review_after         Int?
+  assigned_at               DateTime?
+  accepted_at               DateTime?
+  started_at                DateTime?
+  completed_at              DateTime?
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+  sessions                  PsychotherapySession[]
+
+  @@index([status, created_at])
+  @@index([patient_id])
+  @@index([doctor_id])
+  @@map("psychotherapy_request")
+}
+
+/// One planned psychotherapy session. Clinical notes and the linked medication
+/// treatment are only serialized for the assigned psychologist.
+model PsychotherapySession {
+  id                       Int      @id @default(autoincrement())
+  psychotherapy_request_id Int
+  request                  PsychotherapyRequest @relation(fields: [psychotherapy_request_id], references: [id], onDelete: Cascade)
+  session_number           Int
+  scheduled_date           DateTime @db.Date
+  start_time               String   @db.VarChar(8)
+  end_time                 String   @db.VarChar(8)
+  duration_minutes         Int      @default(50)
+  status                   String   @default("scheduled")
+  confidential_notes       String?
+  treatment_id             Int?
+  treatment                MedicalTreatment? @relation("PsychotherapyTreatment", fields: [treatment_id], references: [id], onDelete: SetNull)
+  started_at               DateTime?
+  completed_at             DateTime?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  @@unique([psychotherapy_request_id, session_number])
+  @@index([scheduled_date, status])
+  @@index([treatment_id])
+  @@map("psychotherapy_session")
 }

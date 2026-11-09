@@ -237,6 +237,7 @@ export const branding = {
   confidentialMedical: "Confidential Medical Information",
   confidentialAdministrative: "Confidential — Administrative Report",
   confidentialTraining: "Confidential — Training Report",
+  confidentialPsychotherapy: "Confidential — Psychotherapy Report",
   notProvided: "Not provided",
 } as const;
 

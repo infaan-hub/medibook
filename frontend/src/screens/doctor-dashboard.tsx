@@ -27,7 +27,7 @@ import {
 } from "../api/reports";
 import type { Appointment, DoctorProfile, PatientProfile } from "../api/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Brain } from "lucide-react";
 import { useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import {
@@ -571,6 +571,12 @@ export function DoctorDashboardScreen() {
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [psycho, setPsycho] = useState<any[]>([]);
+  useEffect(() => {
+    let active = true;
+    apiGet<any[]>("/psychotherapy").then((res) => { if (active) setPsycho(res.data ?? []); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   /* ---- Practice summary report (§34) ---- */
   const [summaryBusy, setSummaryBusy] = useState<"download" | "view" | null>(null);
@@ -715,6 +721,7 @@ export function DoctorDashboardScreen() {
           <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
           <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
           <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> Training</Link>
+          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychotherapy</Link>
         </div>
       </div>
 
@@ -725,6 +732,9 @@ export function DoctorDashboardScreen() {
         <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>Visits done</span><strong>{done.length}</strong><small>Recorded in your practice</small></Card>
       </div>
 
+      <Card className="doctor-chart-card" style={{ marginBottom: 16 }}>
+        <div className="doctor-card-heading"><div><h3>Psychotherapy</h3><p>{psycho.length} assigned case(s) · {psycho.filter((p) => p.status === "completed").length} completed</p></div><Brain size={18} /></div>
+      </Card>
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">
           <div className="doctor-card-heading"><div><h2>Appointment overview</h2><p>Live distribution of your appointment pipeline</p></div><span className="doctor-live"><Activity size={14} /> Live data</span></div>
@@ -794,6 +804,12 @@ export function DoctorAppointmentsScreen() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [psycho, setPsycho] = useState<any[]>([]);
+  useEffect(() => {
+    let active = true;
+    apiGet<any[]>("/psychotherapy").then((res) => { if (active) setPsycho(res.data ?? []); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   /** Waiting room (phase 11): today's queue keyed by appointment id. */
   const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(
     new Map()

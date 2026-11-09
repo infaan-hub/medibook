@@ -52,7 +52,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
 
   it("gives system coordinators only coordination tools", () => {
     expect(navItemsFor(coordinator).map((item) => item.to)).toEqual([
-      "/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient", "/coordinator/training",
+      "/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient", "/coordinator/training", "/coordinator/psychotherapy",
     ]);
     expect(bottomNavItemsFor(coordinator).map((item) => item.to)).toEqual([
       "/coordinator/dashboard", "/coordinator/doctors", "/coordinator/appointment", "/coordinator/emergency", "/coordinator/patient",
@@ -68,6 +68,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
       "/emergency",
       "/settings",
       "/training",
+      "/psychotherapy",
       "/notifications",
     ]);
     expect(sidebarByRole.doctor).toEqual([
@@ -79,6 +80,7 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
       "/doctor/medical-treatment",
       "/doctor/health-tips",
       "/doctor/training",
+      "/doctor/psychotherapy",
       "/notifications",
     ]);
     expect(sidebarByRole.admin).toEqual([

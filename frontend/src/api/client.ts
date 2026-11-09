@@ -155,23 +155,41 @@ const trainingCache = new Map<string, { data: unknown; ts: number }>();
 export function invalidateTrainingCache() {
   trainingCache.clear();
 }
+
+const PSYCHOTHERAPY_CACHE_TTL = 15_000;
+const psychotherapyCache = new Map<string, { data: unknown; ts: number }>();
+
+export function invalidatePsychotherapyCache() {
+  psychotherapyCache.clear();
+}
 export async function apiGet<T>(url: string, params?: Record<string, unknown>): Promise<Envelope<T>> {
-  const cacheKey = url.includes("/training") ? `GET:${url}:${JSON.stringify(params ?? {})}` : null;
+  const isPsy = url.includes("/psychotherapy");
+  const cacheKey = url.includes("/training")
+    ? `GET:${url}:${JSON.stringify(params ?? {})}`
+    : isPsy
+      ? `PSY:${url}:${JSON.stringify(params ?? {})}`
+      : null;
   if (cacheKey) {
-    const hit = trainingCache.get(cacheKey);
-    if (hit && Date.now() - hit.ts < TRAINING_CACHE_TTL) {
+    const cache = cacheKey.startsWith("PSY:") ? psychotherapyCache : trainingCache;
+    const ttl = cacheKey.startsWith("PSY:") ? PSYCHOTHERAPY_CACHE_TTL : TRAINING_CACHE_TTL;
+    const hit = cache.get(cacheKey);
+    if (hit && Date.now() - hit.ts < ttl) {
       return hit.data as Envelope<T>;
     }
   }
   const { data } = await http.get<Envelope<T>>(url, { params });
   const result = envelope<T>(data, url, 200);
-  if (cacheKey) trainingCache.set(cacheKey, { data: result, ts: Date.now() });
+  if (cacheKey) {
+    const cache = cacheKey.startsWith("PSY:") ? psychotherapyCache : trainingCache;
+    cache.set(cacheKey, { data: result, ts: Date.now() });
+  }
   return result;
 }
 
 /** POST returning the unwrapped §28 envelope. */
 export async function apiPost<T>(url: string, body?: unknown): Promise<Envelope<T>> {
   if (url.includes("/training")) invalidateTrainingCache();
+  if (url.includes("/psychotherapy")) invalidatePsychotherapyCache();
   const { data } = await http.post<Envelope<T>>(url, body ?? {});
   return envelope<T>(data, url, 200);
 }

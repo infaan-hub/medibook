@@ -216,3 +216,11 @@ export function downloadTrainingReport(trainingId: number): Promise<ReportResult
 export function viewTrainingReport(trainingId: number): Promise<ReportResult> {
   return view("/reports/training/", { id: trainingId }, "MediBook-Zanzibar-Training-Report.pdf");
 }
+
+export function downloadPsychotherapyReport(requestId: number): Promise<ReportResult> {
+  return download("/reports/psychotherapy/", { id: requestId }, "MediBook-Zanzibar-Psychotherapy-Report.pdf");
+}
+
+export function viewPsychotherapyReport(requestId: number): Promise<ReportResult> {
+  return view("/reports/psychotherapy/", { id: requestId }, "MediBook-Zanzibar-Psychotherapy-Report.pdf");
+}

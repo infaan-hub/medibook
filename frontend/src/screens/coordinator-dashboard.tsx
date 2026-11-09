@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock3,
   GraduationCap,
+  Brain,
   RefreshCw,
   Siren,
   Stethoscope,
@@ -12,6 +13,8 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { apiGet } from "../api/client";
 import type { CoordinatorAppointment, CoordinatorStats } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
 
@@ -71,6 +74,12 @@ export function CoordinatorDashboard({
   error: string | null;
   onRefresh: () => void;
 }) {
+  const [psycho, setPsycho] = useState<any[]>([]);
+  useEffect(() => {
+    let active = true;
+    apiGet<any[]>("/psychotherapy").then((res) => { if (active) setPsycho(res.data ?? []); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   if (error && !stats) {
     return (
       <div className="page doctor-workspace">
@@ -134,6 +143,9 @@ export function CoordinatorDashboard({
           </button>
           <Link to="/coordinator/appointment" className="doctor-primary-button">
             <CalendarDays size={16} /> Appointment desk
+          </Link>
+          <Link to="/coordinator/psychotherapy" className="doctor-outline-button">
+            <Brain size={16} /> Manage psychotherapy
           </Link>
         </div>
       </div>
@@ -325,7 +337,32 @@ export function CoordinatorDashboard({
           <span><b>Manage training</b><small>Review and assign training requests</small></span>
           <ArrowUpRight size={15} />
         </Link>
+        <Link to="/coordinator/psychotherapy">
+          <Brain size={18} />
+          <span><b>Manage psychotherapy</b><small>{psycho.filter((p) => p.status === "completed").length} completed · {psycho.length} total</small></span>
+          <ArrowUpRight size={15} />
+        </Link>
       </div>
+
+      <Card className="doctor-chart-card" style={{ marginTop: 16 }}>
+        <div className="doctor-card-heading">
+          <div>
+            <h3>Psychotherapy schedule</h3>
+            <p>Upcoming sessions across cases.</p>
+          </div>
+        </div>
+        {psycho.flatMap((p) => (p.sessions ?? []).filter((s: any) => s.status === "scheduled")).slice(0, 8).length === 0 ? (
+          <EmptyState title="No upcoming sessions" description="Scheduled psychotherapy sessions will appear here." />
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {psycho.flatMap((p) => (p.sessions ?? []).filter((s: any) => s.status === "scheduled").map((s: any) => ({ p, s }))).slice(0, 8).map(({ p, s }) => (
+              <li key={s.id} style={{ padding: 6, borderBottom: "1px solid #eee" }}>
+                {p.patient?.first_name} {p.patient?.last_name} — Session #{s.session_number} on {String(s.scheduled_date).slice(0, 10)} {s.start_time?.slice(0, 5)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   Newspaper,
   House,
   GraduationCap,
+  Brain,
 } from "lucide-react";
 
 /** Radius used by the directory's "Near me" toggle (matches the API default). */
@@ -278,6 +279,10 @@ function PatientHome({ user }: { user: User | null }) {
         <Link to="/training" className="home__quick-action">
           <GraduationCap size={20} />
           <span>Training</span>
+        </Link>
+        <Link to="/psychotherapy" className="home__quick-action">
+          <Brain size={20} />
+          <span>Psychotherapy</span>
         </Link>
       </div>
     </div>
