@@ -1159,6 +1159,31 @@ a { color: var(--color-primary); }
   .coordinator-appointment-card__when { gap: 6px 10px; }
 }
 
+/* Coordinator training cards — same shell as coordinator appointment cards */
+.coordinator-training-card__person small {
+  overflow: hidden;
+  color: #82909d;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.coordinator-training-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f5;
+}
+.coordinator-training-card__actions .btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: var(--text-xs);
+}
+@media (max-width: 560px) {
+  .coordinator-training-card__actions { flex-direction: column; align-items: stretch; }
+  .coordinator-training-card__actions .btn { width: 100%; justify-content: center; }
+}
+
 /* ---- Coordinator emergency coordination ---- */
 .doctor-metric__icon--red { background: #feecec; color: #dc4c4c; }
 .coordinator-emergency-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--space-4); align-items: start; }
