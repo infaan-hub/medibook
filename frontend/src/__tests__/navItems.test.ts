@@ -91,6 +91,8 @@ describe("sidebar navigation â€” no Profile button for any role", () => {
       "/admin/doctors/new",
       "/admin/appointments",
       "/admin/home-visit",
+      "/admin/training",
+      "/admin/psychotherapy",
       "/notifications",
       "/admin/audit",
     ]);

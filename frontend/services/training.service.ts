@@ -190,6 +190,15 @@ export async function cancelTraining(actor: AuthUser, id: number) {
 }
 
 
+export async function deleteTrainingRequest(actor: AuthUser, id: number) {
+  if (actor.role !== "admin") throw forbidden();
+  const req = await prisma.trainingRequest.findUnique({ where: { id } });
+  if (!req) throw notFound("Training request not found.");
+  await prisma.trainingRequest.delete({ where: { id } });
+  broadcastPlatformDataUpdated("training");
+  return { id };
+}
+
 export async function completeTraining(actor: AuthUser, trainingId: number, sessionId: number) {
   const doctor = actor.role === "doctor" ? await doctorsRepo.findDoctorByUserId(actor.id) : null;
   const doctorId = doctor?.id ?? null;

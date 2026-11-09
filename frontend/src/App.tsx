@@ -135,6 +135,8 @@ const AdminCreateUserScreen = lazyWithRetry(() => import("./screens").then((m) =
 const AdminCreateDoctorScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminCreateDoctorScreen })));
 const AdminAuditScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminAuditScreen })));
 const AdminAppointmentsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminAppointmentsScreen })));
+const AdminTrainingScreen = lazyWithRetry(() => import("./screens/admin-training").then((m) => ({ default: m.AdminTrainingScreen })));
+const AdminPsychotherapyScreen = lazyWithRetry(() => import("./screens/admin-psychotherapy").then((m) => ({ default: m.AdminPsychotherapyScreen })));
 const SpecialtyListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.SpecialtyListPage })));
 const SpecialtyDetailPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.SpecialtyDetailPage })));
 const HospitalListPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.HospitalListPage })));
@@ -361,6 +363,8 @@ export default function App() {
                 <Route path="/admin/users/new" element={<RequireRole role="admin"><AdminCreateUserScreen /></RequireRole>} />
                 <Route path="/admin/doctors/new" element={<RequireRole role="admin"><AdminCreateDoctorScreen /></RequireRole>} />
                 <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAuditScreen /></RequireRole>} />
+                <Route path="/admin/training" element={<RequireRole role="admin"><AdminTrainingScreen /></RequireRole>} />
+                <Route path="/admin/psychotherapy" element={<RequireRole role="admin"><AdminPsychotherapyScreen /></RequireRole>} />
                 <Route path="/admin/appointments" element={<RequireRole role="admin"><AdminAppointmentsScreen /></RequireRole>} />
                 <Route path="/admin/home-visit" element={<RequireRole role="admin"><AdminAppointmentsScreen /></RequireRole>} />
                 <Route path="/specialties" element={<SpecialtyListPage />} />

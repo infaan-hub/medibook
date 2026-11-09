@@ -75,6 +75,8 @@ export function navItemsFor(user: User | null): NavItem[] {
       { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
       { to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
       { to: "/admin/home-visit", label: "Home Service", icon: <House size={20} /> },
+      { to: "/admin/training", label: "Training", icon: <GraduationCap size={20} /> },
+      { to: "/admin/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
       { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
       { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
     ];

@@ -530,6 +530,15 @@ export async function finalizePsychotherapy(actor: AuthUser, requestId: number) 
   return serializeRequest(updated, actor, did);
 }
 
+export async function deletePsychotherapyRequest(actor: AuthUser, id: number) {
+  if (actor.role !== "admin") throw forbidden();
+  const req = await prisma.psychotherapyRequest.findUnique({ where: { id } });
+  if (!req) throw notFound("Psychotherapy request not found.");
+  await prisma.psychotherapyRequest.delete({ where: { id } });
+  broadcastPlatformDataUpdated("psychotherapy");
+  return { id };
+}
+
 export async function listPsychotherapyMedicationHistory(actor: AuthUser, requestId: number) {
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();

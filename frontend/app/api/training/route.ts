@@ -80,5 +80,10 @@ export const POST = handler(async ({ req, user }) => {
     const sessionId = Number(body.session_id);
     return ok(await training.completeTraining(user, id, sessionId));
   }
+  if (action === "delete") {
+    if (user.role !== "admin") throw forbidden();
+    const id = Number(body.id ?? new URL(req.url).searchParams.get("id"));
+    return ok(await training.deleteTrainingRequest(user, id));
+  }
   throw badRequest("Unknown action.");
 });

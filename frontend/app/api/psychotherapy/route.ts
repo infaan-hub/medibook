@@ -78,6 +78,12 @@ export const POST = handler(async ({ req, user }) => {
     if (!id) throw badRequest("Missing request id.");
     return ok(await psychotherapy.finalizePsychotherapy(user, id));
   }
+  if (action === "delete") {
+    if (user.role !== "admin") throw forbidden();
+    const id = Number(body?.id);
+    if (!id) throw badRequest("Missing request id.");
+    return ok(await psychotherapy.deletePsychotherapyRequest(user, id));
+  }
   if (action === "medication_history") {
     const id = Number(body?.id);
     if (!id) throw badRequest("Missing request id.");
