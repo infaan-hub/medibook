@@ -25,12 +25,14 @@ import { renderDoctorReport } from "@/reports/pdf/doctor";
 import { renderDoctorSummaryReport } from "@/reports/pdf/doctorSummary";
 import type { DoctorSummaryData } from "@/reports/data/doctorSummary";
 import { renderPatientReport } from "@/reports/pdf/patient";
+import { renderTrainingReport } from "@/reports/pdf/training";
 import { ReportDoc } from "@/reports/pdf/doc";
 import { dataTable } from "@/reports/pdf/components";
-import { statusTone } from "@/reports/design/tokens";
+import { statusTone, trainingStatusTone } from "@/reports/design/tokens";
 import type { AdminReportData } from "@/reports/data/admin";
 import type { DoctorReportData } from "@/reports/data/doctor";
 import type { PatientReportData } from "@/reports/data/patient";
+import type { TrainingReportData } from "@/reports/data/training";
 import type { ClinicalHistory } from "@/reports/data/clinical";
 
 /* ------------------------------- fixtures -------------------------------- */
@@ -287,6 +289,73 @@ const doctorFixture = (): DoctorReportData => ({
   patient: buildPatientSummary(PATIENT_ROW),
   history: HISTORY,
   counts: COUNTS,
+});
+
+const TRAINING_SESSIONS: TrainingReportData["sessions"] = [
+  {
+    number: 1,
+    date: "9 November 2026",
+    status: "completed",
+    statusLabel: "Completed",
+    started: "9 November 2026, 09:05 AM",
+    completed: "9 November 2026, 11:20 AM",
+    questions: [
+      {
+        question: "How should a patient be triaged when two emergency cases arrive together?",
+        challenge: "The team had no shared scoring sheet; one was drafted during the session.",
+        recordedAt: "9 November 2026, 10:12 AM",
+      },
+    ],
+  },
+  {
+    number: 2,
+    date: "10 November 2026",
+    status: "in_progress",
+    statusLabel: "In Progress",
+    started: "10 November 2026, 09:00 AM",
+    completed: "Not provided",
+    questions: [],
+  },
+];
+
+const trainingFixture = (overrides: Partial<TrainingReportData> = {}): TrainingReportData => ({
+  training: {
+    id: 12,
+    reference: "TRN-00012",
+    topic: "Emergency triage refresher",
+    status: "in_progress",
+    statusLabel: "In Progress",
+    audience: "company",
+    audienceLabel: "Company",
+    companyName: "Zanzibar Health Services",
+    contactName: "Mariam Said",
+    contactEmail: "mariam@example.com",
+    contactPhone: "+255777000444",
+    deliveryMode: "onsite",
+    deliveryLabel: "Onsite",
+    location: "Mnazi Mmoja Hospital, Zanzibar",
+    coordinates: "-6.16590, 39.20260 (±12 m)",
+    notes: "Bring the triage flipcharts.",
+    requestedOn: "1 November 2026, 09:12 AM",
+    startDate: "9 November 2026",
+    endDate: "10 November 2026",
+    days: 2,
+  },
+  patient: buildPatientSummary(PATIENT_ROW),
+  doctor: buildDoctorSummary(DOCTOR_ROW),
+  sessions: TRAINING_SESSIONS,
+  totals: {
+    sessions: 2,
+    completedSessions: 1,
+    inProgressSessions: 1,
+    pendingSessions: 0,
+    questions: 1,
+    challenges: 1,
+    progress: "50%",
+  },
+  preparedFor: "MediBook Zanzibar Coordination Team",
+  preparedBy: "Dr. Amina Hassan",
+  ...overrides,
 });
 
 const doctorSummaryFixture = (
@@ -618,6 +687,45 @@ describe("clinical report renderers", () => {
       GENERATED_AT
     );
     expect(isPdf(buffer)).toBe(true);
+  });
+});
+
+describe("training report renderer", () => {
+  it("produces a real PDF with the schedule and captured questions", async () => {
+    const buffer = await renderTrainingReport(trainingFixture(), GENERATED_AT);
+    expect(isPdf(buffer)).toBe(true);
+    expect(buffer.byteLength).toBeGreaterThan(5_000);
+  });
+
+  it("renders a pending request with no specialist and no sessions", async () => {
+    const base = trainingFixture();
+    const buffer = await renderTrainingReport(
+      trainingFixture({
+        training: { ...base.training, status: "pending", statusLabel: "Pending" },
+        doctor: null,
+        sessions: [],
+        totals: {
+          sessions: 0,
+          completedSessions: 0,
+          inProgressSessions: 0,
+          pendingSessions: 0,
+          questions: 0,
+          challenges: 0,
+          progress: "0%",
+        },
+      }),
+      GENERATED_AT
+    );
+    expect(isPdf(buffer)).toBe(true);
+    expect(buffer.byteLength).toBeGreaterThan(3_000);
+  });
+
+  it("uses the TRN document-id prefix and training status tones", () => {
+    expect(reportId("training", GENERATED_AT, "TRN-00012")).toMatch(/^MB-TRN-/);
+    expect(trainingStatusTone("completed")).toBe("done");
+    expect(trainingStatusTone("pending")).toBe("pending");
+    expect(trainingStatusTone("in_progress")).toBe("in_progress");
+    expect(trainingStatusTone("cancelled")).toBe("cancelled");
   });
 });
 

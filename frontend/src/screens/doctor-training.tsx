@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../api/client";
+import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, TextField, EmptyState, Skeleton, ErrorState } from "../components/ui";
 
 export function DoctorTrainingScreen() {
@@ -14,6 +15,7 @@ export function DoctorTrainingScreen() {
   const [rescheduleId, setRescheduleId] = useState<number | null>(null);
   const [newDate, setNewDate] = useState("");
   const [newDays, setNewDays] = useState(1);
+  const [reporting, setReporting] = useState<number | null>(null);
 
   async function load() {
     setLoading(true); setError("");
@@ -89,6 +91,20 @@ export function DoctorTrainingScreen() {
     finally { setSaving(false); }
   }
 
+  async function downloadReport(t: any) {
+    setReporting(t.id);
+    try { await downloadTrainingReport(t.id); }
+    catch (e: any) { alert(e?.message || "Unable to generate the training report."); }
+    finally { setReporting(null); }
+  }
+
+  async function viewReport(t: any) {
+    setReporting(t.id);
+    try { await viewTrainingReport(t.id); }
+    catch (e: any) { alert(e?.message || "Unable to generate the training report."); }
+    finally { setReporting(null); }
+  }
+
   const statusTone = (status: string) => {
     if (status === "completed") return "#0a9f94";
     if (status === "pending") return "#f3a629";
@@ -149,9 +165,6 @@ export function DoctorTrainingScreen() {
                         </div>
                       </div>
                     )}
-                    {currentSession.status === "completed" && t.status === "completed" && (
-                      <p>Training completed. Report available.</p>
-                    )}
                   </div>
                 )}
                 {t.status !== "completed" && t.status !== "cancelled" && (
@@ -171,15 +184,12 @@ export function DoctorTrainingScreen() {
                   </div>
                 )}
                 {t.status === "completed" && (
-                  <div style={{ marginTop: 8 }}>
-                    <Button variant="secondary" onClick={() => {
-                      const blob = new Blob([JSON.stringify(t, null, 2)], { type: "application/json" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a"); a.href = url; a.download = `training-${t.id}-report.json`; a.click();
-                      URL.revokeObjectURL(url);
-                    }}>Download report</Button>
-                  </div>
+                  <p style={{ marginTop: 8, fontSize: 13, color: "#405563" }}>Training completed. The PDF report is ready below.</p>
                 )}
+                <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #eef2f5", flexWrap: "wrap" }}>
+                  <Button variant="secondary" loading={reporting === t.id} onClick={() => viewReport(t)}>View report</Button>
+                  <Button loading={reporting === t.id} onClick={() => downloadReport(t)}>Download PDF</Button>
+                </div>
               </Card>
             );
           })}

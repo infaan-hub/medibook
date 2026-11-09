@@ -4,6 +4,7 @@ import path from "node:path";
 import { renderAdminReport } from "@/reports/pdf/admin";
 import { renderDoctorReport } from "@/reports/pdf/doctor";
 import { renderPatientReport } from "@/reports/pdf/patient";
+import { renderTrainingReport } from "@/reports/pdf/training";
 
 const GENERATED_AT = new Date("2026-10-03T10:15:00.000Z");
 
@@ -58,10 +59,42 @@ describe("smoke artifacts", () => {
     };
     const doctor = { ...patient, doctor: { reference: "amina", name: "Dr. Amina Hassan", specialties: "Cardiology", qualifications: "MBChB, MMed", experience: "9 years", hospital: "Mnazi Mmoja Hospital, Zanzibar", phone: "+255712000333", email: "amina@example.com", joinedOn: "1 February 2024" } };
 
+    const training = {
+      training: {
+        id: 12, reference: "TRN-00012", topic: "Emergency triage refresher",
+        status: "in_progress", statusLabel: "In Progress", audience: "company", audienceLabel: "Company",
+        companyName: "Zanzibar Health Services", contactName: "Mariam Said", contactEmail: "mariam@example.com",
+        contactPhone: "+255777000444", deliveryMode: "onsite", deliveryLabel: "Onsite",
+        location: "Mnazi Mmoja Hospital, Zanzibar", coordinates: "-6.16590, 39.20260 (±12 m)",
+        notes: "Bring the triage flipcharts.", requestedOn: "1 November 2026, 09:12 AM",
+        startDate: "9 November 2026", endDate: "10 November 2026", days: 2,
+      },
+      patient: patient.patient,
+      doctor: doctor.doctor,
+      sessions: [
+        {
+          number: 1, date: "9 November 2026", status: "completed", statusLabel: "Completed",
+          started: "9 November 2026, 09:05 AM", completed: "9 November 2026, 11:20 AM",
+          questions: [
+            { question: "How should a patient be triaged when two emergency cases arrive together?", challenge: "The team had no shared scoring sheet; one was drafted during the session.", recordedAt: "9 November 2026, 10:12 AM" },
+            { question: "Which observations must be repeated before a patient leaves triage?", challenge: "Not provided", recordedAt: "9 November 2026, 10:40 AM" },
+          ],
+        },
+        {
+          number: 2, date: "10 November 2026", status: "in_progress", statusLabel: "In Progress",
+          started: "10 November 2026, 09:00 AM", completed: "Not provided", questions: [],
+        },
+      ],
+      totals: { sessions: 2, completedSessions: 1, inProgressSessions: 1, pendingSessions: 0, questions: 2, challenges: 1, progress: "50%" },
+      preparedFor: "MediBook Zanzibar Coordination Team",
+      preparedBy: "Dr. Amina Hassan",
+    };
+
     const files: [string, Buffer][] = [
       ["_smoke-admin.pdf", admin],
       ["_smoke-doctor.pdf", await renderDoctorReport(doctor as never, GENERATED_AT)],
       ["_smoke-patient.pdf", await renderPatientReport(patient as never, GENERATED_AT)],
+      ["_smoke-training.pdf", await renderTrainingReport(training, GENERATED_AT)],
     ];
     for (const [name, buffer] of files) {
       fs.writeFileSync(path.join(out, name), buffer);

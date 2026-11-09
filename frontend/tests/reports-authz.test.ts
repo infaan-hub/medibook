@@ -13,6 +13,7 @@ import { collectAdminReport } from "@/reports/data/admin";
 import { collectDoctorReport } from "@/reports/data/doctor";
 import { collectPatientReport } from "@/reports/data/patient";
 import { collectDoctorSummaryReport } from "@/reports/data/doctorSummary";
+import { collectTrainingReport } from "@/reports/data/training";
 
 const db = vi.hoisted(() => {
   const fn = () => vi.fn();
@@ -26,6 +27,7 @@ const db = vi.hoisted(() => {
     labOrder: { count: fn(), findMany: fn() },
     healthRecord: { count: fn(), findMany: fn() },
     article: { count: fn(), findMany: fn() },
+    trainingRequest: { findUnique: fn() },
   };
 });
 
@@ -75,6 +77,7 @@ function emptyDb() {
   }
   db.article.count.mockResolvedValue(0);
   db.article.findMany.mockResolvedValue([]);
+  db.trainingRequest.findUnique.mockResolvedValue(null);
 }
 
 beforeEach(emptyDb);
@@ -271,6 +274,125 @@ describe("collectDoctorSummaryReport - only ever the caller's own practice", () 
     expect(wheres.some((where) => where.appointment_type === "EMERGENCY")).toBe(true);
     // And at least one must be the plain all-appointments total.
     expect(wheres.some((where) => where.appointment_type === undefined)).toBe(true);
+  });
+});
+
+/* ======================= training report authorization ==================== */
+
+const TRAINING = {
+  id: 12,
+  patient_id: 7,
+  patient: PATIENT,
+  training_topic: "Emergency triage refresher",
+  audience: "individual",
+  company_name: null,
+  contact_name: null,
+  contact_email: null,
+  contact_phone: null,
+  preferred_start_date: new Date("2026-11-09T00:00:00.000Z"),
+  preferred_days: 2,
+  delivery_mode: "online",
+  location: null,
+  latitude: null,
+  longitude: null,
+  location_accuracy: null,
+  notes: null,
+  status: "in_progress",
+  doctor_id: 3,
+  doctor: DOCTOR,
+  sessions: [],
+  created_at: new Date("2026-11-01T09:12:00.000Z"),
+};
+
+const PATIENT_ACTOR = {
+  id: 7,
+  role: "patient",
+  first_name: "Salma",
+  last_name: "Juma",
+  username: "salma",
+  email: "salma@example.com",
+} as never;
+
+const DOCTOR_ACTOR = {
+  id: 3,
+  role: "doctor",
+  first_name: "Amina",
+  last_name: "Hassan",
+  username: "amina",
+  email: "amina@example.com",
+} as never;
+
+const COORDINATOR_ACTOR = {
+  id: 20,
+  role: "coordinator",
+  first_name: "Neema",
+  last_name: "Omar",
+  username: "neema",
+  email: "neema@example.com",
+} as never;
+
+const ADMIN_ACTOR = {
+  id: 1,
+  role: "admin",
+  first_name: "Admin",
+  last_name: "MediBook",
+  username: "admin",
+  email: "admin@example.com",
+} as never;
+
+describe("collectTrainingReport - who may print a training", () => {
+  it("404s a training id that does not exist", async () => {
+    await expectStatus(collectTrainingReport(PATIENT_ACTOR, 999), 404);
+  });
+
+  it("lets a patient print their own training", async () => {
+    db.trainingRequest.findUnique.mockResolvedValue(TRAINING);
+
+    const data = await collectTrainingReport(PATIENT_ACTOR, 12);
+
+    expect(db.trainingRequest.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 12 } })
+    );
+    expect(data.training.reference).toBe("TRN-00012");
+    expect(data.patient.reference).toBe("salma");
+    expect(data.preparedFor).toBe("Salma Juma");
+  });
+
+  it("refuses a patient printing someone else's training", async () => {
+    db.trainingRequest.findUnique.mockResolvedValue(TRAINING);
+    const error = await expectStatus(collectTrainingReport({ ...(PATIENT_ACTOR as object), id: 99 } as never, 12), 403);
+    expect(error.message).toMatch(/your own training/i);
+  });
+
+  it("lets the assigned doctor print the training", async () => {
+    db.trainingRequest.findUnique.mockResolvedValue(TRAINING);
+    db.doctor.findUnique.mockResolvedValue(DOCTOR);
+
+    const data = await collectTrainingReport(DOCTOR_ACTOR, 12);
+
+    expect(db.doctor.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { user_id: 3 } })
+    );
+    expect(data.doctor?.reference).toBe("amina");
+    expect(data.preparedBy).toBe("Dr. Amina Hassan");
+  });
+
+  it("refuses a doctor who is not assigned to the training", async () => {
+    db.trainingRequest.findUnique.mockResolvedValue(TRAINING);
+    db.doctor.findUnique.mockResolvedValue({ ...DOCTOR, id: 4 });
+
+    const error = await expectStatus(collectTrainingReport(DOCTOR_ACTOR, 12), 403);
+    expect(error.message).toMatch(/not assigned to you/i);
+  });
+
+  it("lets coordinators and admins print any training", async () => {
+    db.trainingRequest.findUnique.mockResolvedValue(TRAINING);
+
+    const coordinator = await collectTrainingReport(COORDINATOR_ACTOR, 12);
+    const admin = await collectTrainingReport(ADMIN_ACTOR, 12);
+
+    expect(coordinator.training.reference).toBe("TRN-00012");
+    expect(admin.training.reference).toBe("TRN-00012");
   });
 });
 

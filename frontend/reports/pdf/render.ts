@@ -7,12 +7,13 @@ import { branding } from "../design/tokens";
 import { stampPage } from "./chrome";
 import { ReportDoc, type ReportChrome } from "./doc";
 
-export type ReportKind = "admin" | "doctor" | "patient";
+export type ReportKind = "admin" | "doctor" | "patient" | "training";
 
 const KIND_CODE: Record<ReportKind, string> = {
   admin: "ADM",
   doctor: "DOC",
   patient: "PAT",
+  training: "TRN",
 };
 
 /**

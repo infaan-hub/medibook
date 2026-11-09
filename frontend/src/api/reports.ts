@@ -84,7 +84,7 @@ function showBlob(blob: Blob): boolean {
   return true;
 }
 
-type ReportParams = ReportPeriodParams & { patient?: number };
+type ReportParams = ReportPeriodParams & { patient?: number; id?: number };
 
 async function fetchReport(url: string, params: ReportParams, fallbackName: string) {
   let response;
@@ -201,4 +201,18 @@ export function downloadFullPatientReport(): Promise<ReportResult> {
 /** The full patient chart, opened in a preview tab instead of saved. */
 export function viewFullPatientReport(): Promise<ReportResult> {
   return view("/reports/patient/", {}, "MediBook-My-Full-Medical-Report.pdf");
+}
+
+/**
+ * GET /api/reports/training/?id=<training id> — one training request as a PDF.
+ * Doctors may print only trainings assigned to them; coordinators/admins may
+ * print any training; patients may print their own.
+ */
+export function downloadTrainingReport(trainingId: number): Promise<ReportResult> {
+  return download("/reports/training/", { id: trainingId }, "MediBook-Zanzibar-Training-Report.pdf");
+}
+
+/** Same training report, opened in a preview tab instead of saved. */
+export function viewTrainingReport(trainingId: number): Promise<ReportResult> {
+  return view("/reports/training/", { id: trainingId }, "MediBook-Zanzibar-Training-Report.pdf");
 }

@@ -199,6 +199,21 @@ export async function completeTraining(actor: AuthUser, trainingId: number, sess
   await prisma.trainingSession.update({ where: { id: sessionId }, data: { status: "completed", completed_at: new Date() } });
   await prisma.trainingRequest.update({ where: { id: trainingId }, data: { status: "completed" } });
   await notify(session.training.patient_id, "appointment_request", "Your training has been completed.", null, "Training completed");
+  const coordinators = await prisma.user.findMany({
+    where: { role: "coordinator", is_active: true },
+    select: { id: true },
+  });
+  await Promise.allSettled(
+    coordinators.map((coordinator) =>
+      notify(
+        coordinator.id,
+        "system",
+        `The training "${session.training.training_topic}" has been completed. Its PDF training report is ready in Manage training.`,
+        null,
+        "Training report ready"
+      )
+    )
+  );
   broadcastPlatformDataUpdated("training");
   return session.training;
 }

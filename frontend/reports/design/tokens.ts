@@ -197,6 +197,25 @@ export function labStatusTone(status: string): Tone {
   }
 }
 
+/** Training request / session status → tone. */
+export function trainingStatusTone(status: string): Tone {
+  switch (status) {
+    case "completed":
+      return "done";
+    case "in_progress":
+      return "in_progress";
+    case "accepted":
+    case "scheduled":
+      return "accepted";
+    case "pending":
+      return "pending";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "neutral";
+  }
+}
+
 /** Lab result flag → tone, matching `.lab-flag--*` in global.css. */
 export function labFlagTone(flag: string | null): Tone {
   switch (flag) {
@@ -217,6 +236,7 @@ export const branding = {
   product: "MediBook",
   confidentialMedical: "Confidential Medical Information",
   confidentialAdministrative: "Confidential — Administrative Report",
+  confidentialTraining: "Confidential — Training Report",
   notProvided: "Not provided",
 } as const;
 
