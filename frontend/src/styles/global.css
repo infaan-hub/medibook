@@ -3066,7 +3066,7 @@ a { color: var(--color-primary); }
 .home__doctor-card > img {
   width: 100%;
   height: 126px;
-  object-fit: cover;
+  object-fit: contain;
   /* Keep faces in frame as cards narrow into three desktop columns. */
   object-position: center 50%;
 }
