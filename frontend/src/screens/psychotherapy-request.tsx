@@ -7,9 +7,9 @@ export function PsychotherapyRequestScreen() {
   const navigate = useNavigate();
   const [sessionMode, setSessionMode] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
-  const [urgency, setUrgency] = useState("routine");
+  const [urgency, setUrgency] = useState("");
   const [confidentiality, setConfidentiality] = useState(false);
-  const [gender, setGender] = useState("any");
+  const [gender, setGender] = useState("");
   const [language, setLanguage] = useState("english");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -60,6 +60,7 @@ export function PsychotherapyRequestScreen() {
           <div className="admin-field">
             <label htmlFor="urgency">Urgency</label>
             <select id="urgency" value={urgency} onChange={(e:any)=>setUrgency(e.target.value)} required>
+              <option value="">Select urgency</option>
               <option value="routine">Routine</option>
               <option value="soon">Soon</option>
               <option value="urgent">Urgent</option>
@@ -68,6 +69,7 @@ export function PsychotherapyRequestScreen() {
           <div className="admin-field">
             <label htmlFor="gender">Gender preference</label>
             <select id="gender" value={gender} onChange={(e:any)=>setGender(e.target.value)} required>
+              <option value="">Select gender</option>
               <option value="any">Any gender</option>
               <option value="male">Male</option>
               <option value="female">Female</option>
