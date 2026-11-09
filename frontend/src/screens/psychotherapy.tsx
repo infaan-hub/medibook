@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Brain, CalendarClock, CheckCircle2, Clock3, Download, FileText, UserRound } from "lucide-react";
 import { apiGet } from "../api/client";
-import { useRealtimeSync } from "../realtime/socket";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 import { Card, Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 
-const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: "Pending", color: "#d97706", bg: "#fef3c7" },
-  assigned: { label: "Pending", color: "#d97706", bg: "#fef3c7" },
-  accepted: { label: "Accepted", color: "#0a9f94", bg: "#e4f8f5" },
-  in_progress: { label: "Session started", color: "#2563eb", bg: "#dbeafe" },
-  follow_up: { label: "Follow-up session", color: "#7c3aed", bg: "#ede9fe" },
-  completed: { label: "Done", color: "#059669", bg: "#d1fae5" },
+const STATUS: Record<string, { label: string; tone: string }> = {
+  pending: { label: "Pending", tone: "pending" },
+  assigned: { label: "Pending", tone: "pending" },
+  accepted: { label: "Accepted", tone: "accepted" },
+  in_progress: { label: "Session started", tone: "in_progress" },
+  follow_up: { label: "Follow-up session", tone: "in_progress" },
+  completed: { label: "Done", tone: "completed" },
 };
 
-const SESSION_STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  scheduled: { label: "Scheduled", color: "#0a9f94", bg: "#e4f8f5" },
-  in_progress: { label: "In progress", color: "#2563eb", bg: "#dbeafe" },
-  completed: { label: "Completed", color: "#059669", bg: "#d1fae5" },
+const SESSION_STATUS: Record<string, string> = {
+  scheduled: "Scheduled",
+  in_progress: "In progress",
+  completed: "Completed",
 };
 
 export function PsychotherapyScreen() {
@@ -38,7 +38,6 @@ export function PsychotherapyScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
-  useRealtimeSync({ refresh: () => { void load(); }, events: ["platform.data.updated"] });
 
   async function viewReport(id: number) {
     try { await viewPsychotherapyReport(id); }
@@ -68,62 +67,79 @@ export function PsychotherapyScreen() {
       )}
 
       {items.map((r) => {
-        const st = STATUS[r.status] ?? { label: r.status, color: "#6b7280", bg: "#f3f4f6" };
+        const st = STATUS[r.status] ?? { label: r.status, tone: "pending" };
+        const completedSessions = r.sessions?.filter((s: any) => s.status === "completed").length ?? 0;
+        const totalSessions = r.sessions?.length ?? r.plan_total_sessions ?? 0;
         return (
-          <Card key={r.id} className="psych-case-card" style={{ marginBottom: 16 }}>
+          <Card key={r.id} className="psych-case-card">
             <div className="psych-case-card__head">
-              <div>
-                <span className="psych-case-card__eyebrow">Psychology service case</span>
-                <h2>Case #{r.id}</h2>
+              <div className="psych-case-card__title">
+                <span className="psych-case-card__icon"><Brain size={20} /></span>
+                <div>
+                  <span className="psych-case-card__eyebrow">Psychology service case</span>
+                  <h2>Case #{r.id}</h2>
+                </div>
               </div>
-              <span className="psych-case-status" style={{ color: st.color, background: st.bg }}>{st.label}</span>
+              <span className={`psych-case-status psych-case-status--${st.tone}`}>{st.label}</span>
             </div>
-            <div className="appt-detail__field"><span className="appt-detail__label">Psychologist</span><span>{r.doctor ? `${r.doctor.user.first_name} ${r.doctor.user.last_name}` : "Awaiting assignment"}</span></div>
 
-              <div className="appt-detail__field"><span className="appt-detail__label">Mode</span><span>{r.session_mode === "in_person" ? "In person" : "Online"}</span></div>
-              <div className="appt-detail__field"><span className="appt-detail__label">Urgency</span><span>{r.urgency}</span></div>
-              <div className="appt-detail__field"><span className="appt-detail__label">Preferred start</span><span>{String(r.preferred_start_date).slice(0, 10)}</span></div>
-              <div className="appt-detail__field"><span className="appt-detail__label">Psychologist preference</span><span>{r.gender_preference === "any" ? "Any gender" : r.gender_preference}</span></div>
-              <div className="appt-detail__field"><span className="appt-detail__label">Language</span><span>{r.language_preference}</span></div>
-              {r.notes && <div className="appt-detail__field"><span className="appt-detail__label">Your request notes</span><span>{r.notes}</span></div>}
-              <div className="appt-detail__field"><span className="appt-detail__label">Sessions completed</span><span>{r.sessions?.filter((s: any) => s.status === "completed").length ?? 0} of {r.sessions?.length ?? r.plan_total_sessions ?? 0}</span></div>
-              {r.plan_approach && <div className="appt-detail__field"><span className="appt-detail__label">Approach</span><span>{r.plan_approach}</span></div>}
-              {r.plan_goals && <div className="appt-detail__field"><span className="appt-detail__label">Goals</span><span>{r.plan_goals}</span></div>}
-              {r.plan_frequency && <div className="appt-detail__field"><span className="appt-detail__label">Frequency</span><span>{r.plan_frequency}</span></div>}
-              {r.plan_session_duration && <div className="appt-detail__field"><span className="appt-detail__label">Session duration</span><span>{r.plan_session_duration} min</span></div>}
-              {r.plan_total_sessions && <div className="appt-detail__field"><span className="appt-detail__label">Planned sessions</span><span>{r.plan_total_sessions}</span></div>}
-              {r.plan_start_date && <div className="appt-detail__field"><span className="appt-detail__label">Plan start</span><span>{String(r.plan_start_date).slice(0, 10)} {r.plan_start_time?.slice(0, 5)}</span></div>}
-              {r.plan_review_after && <div className="appt-detail__field"><span className="appt-detail__label">Review after</span><span>{r.plan_review_after} session(s)</span></div>}
+            <div className="psych-case-people">
+              <div className="psych-case-person">
+                <span className="psych-case-person__icon"><UserRound size={16} /></span>
+                <div><small>Patient</small><strong>{r.patient?.first_name} {r.patient?.last_name}</strong></div>
+              </div>
+              {r.doctor && (
+                <div className="psych-case-person">
+                  <span className="psych-case-person__icon"><Brain size={16} /></span>
+                  <div><small>Psychologist</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div>
+                </div>
+              )}
+            </div>
 
-              {r.sessions?.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <h4 style={{ marginBottom: 8 }}>Sessions</h4>
-                  {r.sessions.map((s: any) => {
-                    const ss = SESSION_STATUS[s.status] ?? { label: s.status, color: "#6b7280", bg: "#f3f4f6" };
-                    return (
-                      <div key={s.id} className="patient-appt-card" style={{ marginBottom: 8 }}>
-                        <div className="patient-appt-card__accent" style={{ background: ss.color }} />
-                        <div className="patient-appt-card__content">
-                          <div className="patient-appt-card__top">
-                            <div className="patient-appt-card__info">
-                              <div className="patient-appt-card__doctor">Session #{s.session_number}</div>
-                              <div className="patient-appt-card__time">{String(s.scheduled_date).slice(0, 10)} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)} · {s.duration_minutes} min</div>
-                              <span className="patient-appt-card__status" style={{ color: ss.color, background: ss.bg }}>{ss.label}</span>
-                            </div>
-                          </div>
-                        </div>
+            <div className="psych-plan-summary">
+              <div className="psych-section-heading"><span><CalendarClock size={18} /></span><div><h3>Request details</h3><p>Your submitted request and plan</p></div></div>
+              <div className="psych-plan-summary__grid">
+                <div><small>Mode</small><strong>{r.session_mode === "in_person" ? "In person" : "Online"}</strong></div>
+                <div><small>Urgency</small><strong>{r.urgency}</strong></div>
+                <div><small>Preferred start</small><strong>{String(r.preferred_start_date).slice(0, 10)}</strong></div>
+                <div><small>Language</small><strong>{r.language_preference}</strong></div>
+                <div><small>Gender preference</small><strong>{r.gender_preference}</strong></div>
+                {r.notes && <div><small>Your request notes</small><strong>{r.notes}</strong></div>}
+                <div><small>Sessions completed</small><strong>{completedSessions} of {totalSessions}</strong></div>
+                {r.plan_approach && <div><small>Approach</small><strong>{r.plan_approach}</strong></div>}
+                {r.plan_frequency && <div><small>Frequency</small><strong>{r.plan_frequency}</strong></div>}
+                {r.plan_session_duration && <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>}
+                {r.plan_total_sessions && <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>}
+                {r.plan_start_date && <div><small>Plan begins</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>}
+                {r.plan_review_after && <div><small>Review point</small><strong>After {r.plan_review_after} sessions</strong></div>}
+              </div>
+              {r.plan_goals && <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>}
+            </div>
+
+            {r.sessions?.length > 0 && (
+              <div className="psych-case-section">
+                <div className="psych-section-heading"><span><Clock3 size={18} /></span><div><h3>Sessions</h3><p>{completedSessions} of {r.sessions.length} completed</p></div></div>
+                {r.sessions.map((s: any) => {
+                  const ss = SESSION_STATUS[s.status] ?? s.status;
+                  return (
+                    <Card key={s.id} className={`psych-session-card psych-session-card--${s.status === "completed" ? "completed" : s.status === "in_progress" ? "in_progress" : "pending"}`}>
+                      <div className="psych-session-card__head">
+                        <strong>Session {s.session_number}</strong>
+                        <span className={`psych-case-status psych-case-status--${s.status === "completed" ? "completed" : s.status === "in_progress" ? "in_progress" : "pending"}`}>{ss}</span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <p className="psych-session-card__time">{String(s.scheduled_date).slice(0, 10)} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)} · {s.duration_minutes} min</p>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
 
-              {r.status === "completed" && (
-                <div className="patient-appt-card__footer" style={{ marginTop: 12 }}>
-                  <Button variant="secondary" onClick={() => void viewReport(r.id)}>View report</Button>
-                  <Button variant="secondary" onClick={() => void downloadReport(r.id)}>Download report</Button>
-                </div>
-              )}
+            {r.status === "completed" && (
+              <div className="psych-case-actions">
+                <Button variant="secondary" onClick={() => void viewReport(r.id)}><FileText size={16} /> View report</Button>
+                <Button variant="secondary" onClick={() => void downloadReport(r.id)}><Download size={16} /> Download report</Button>
+              </div>
+            )}
           </Card>
         );
       })}
