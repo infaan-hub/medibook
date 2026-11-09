@@ -10,7 +10,7 @@ export function PsychotherapyRequestScreen() {
   const [urgency, setUrgency] = useState("");
   const [confidentiality, setConfidentiality] = useState(false);
   const [gender, setGender] = useState("");
-  const [language, setLanguage] = useState("english");
+  const [language, setLanguage] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +78,7 @@ export function PsychotherapyRequestScreen() {
           <div className="admin-field">
             <label htmlFor="language">Language preference</label>
             <select id="language" value={language} onChange={(e:any)=>setLanguage(e.target.value)} required>
+              <option value="">Select language</option>
               <option value="english">English</option>
               <option value="swahili">Swahili</option>
               <option value="spanish">Spanish</option>
