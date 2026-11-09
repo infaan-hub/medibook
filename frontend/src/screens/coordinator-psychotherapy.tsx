@@ -43,7 +43,7 @@ export function CoordinatorPsychotherapyScreen() {
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
   if (error) return <div className="page"><ErrorState message={error} onRetry={() => void load()} /></div>;
 
-  const availableDoctors = doctors.length ? doctors : [];
+  const availableDoctors = doctors.filter((doctor) => doctor.is_available);
 
   return (
     <div className="page doctor-workspace">
@@ -51,7 +51,7 @@ export function CoordinatorPsychotherapyScreen() {
         <div>
           <p className="doctor-eyebrow">Coordinator</p>
           <h1>Manage psychotherapy</h1>
-          <p>Receive pending requests, assign a psychologist and proceed.</p>
+          <p>Review incoming requests and assign an available doctor to plan the therapy sessions.</p>
         </div>
       </div>
 
@@ -131,17 +131,24 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
 
       {r.status === "pending" && (
         <div className="coordinator-appointment-card__reassign">
-          <div className="coordinator-appointment-select">
-            <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+          <div className="coordinator-appointment-select coordinator-psychotherapy-select">
+            <select
+              value={doctorId}
+              aria-label={`Select psychologist for psychotherapy request ${r.id}`}
+              onChange={(e) => setDoctorId(e.target.value)}
+            >
               <option value="">Select psychologist</option>
               {doctors.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.user?.first_name} {d.user?.last_name}</option>
+                <option key={d.id} value={d.id}>{d.name ? `Dr. ${d.name}` : `Doctor #${d.id}`}</option>
               ))}
             </select>
           </div>
           <Button loading={saving} disabled={!doctorId} onClick={() => void proceed()}>
-            Proceed psychotherapy
+            Assign psychologist
           </Button>
+          {doctors.length === 0 && (
+            <div className="coordinator-appointment-card__closed">No active doctors are available for assignment right now.</div>
+          )}
         </div>
       )}
 

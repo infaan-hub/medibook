@@ -1145,6 +1145,7 @@ a { color: var(--color-primary); }
 .coordinator-appointment-select { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border: 1px solid #d7e2e7; border-radius: 9px; background: #fff; color: #82909d; }
 .coordinator-appointment-select select { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #163C3C; font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .coordinator-appointment-select select option { color: #163C3C; background: #ffffff; }
+.coordinator-psychotherapy-select select option { color: #ffffff; background: #163C3C; }
 .coordinator-appointment-select:focus-within { border-color: #0a9f94; box-shadow: 0 0 0 3px rgb(10 159 148 / .12); }
 .coordinator-appointment-card__reassign .btn { flex: 0 0 auto; min-height: 40px; padding: 0 14px; font-size: var(--text-xs); }
 .coordinator-appointment-card__reassign .coordinator-appointment-card__closed { flex: 1; }
