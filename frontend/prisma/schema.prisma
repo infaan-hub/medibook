@@ -932,6 +932,7 @@ model PsychotherapyRequest {
   plan_total_sessions       Int?
   plan_start_date           DateTime? @db.Date
   plan_start_time           String?   @db.VarChar(8)
+  plan_followup_date        DateTime? @db.Date
   plan_followup_time        String?   @db.VarChar(8)
   assigned_at               DateTime?
   accepted_at               DateTime?

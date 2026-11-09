@@ -54,6 +54,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
     planned_sessions: r.plan_total_sessions ?? 6,
     start_date: r.plan_start_date ? String(r.plan_start_date).slice(0, 10) : "",
     start_time: r.plan_start_time ? r.plan_start_time.slice(0, 5) : "09:00",
+    followup_date: r.plan_followup_date ? String(r.plan_followup_date).slice(0, 10) : "",
     followup_time: r.plan_followup_time ? r.plan_followup_time.slice(0, 5) : "09:00",
   });
   const [savingPlan, setSavingPlan] = useState(false);
@@ -73,6 +74,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         planned_sessions: Number(plan.planned_sessions),
         start_date: plan.start_date,
         start_time: plan.start_time,
+        followup_date: plan.followup_date || null,
         followup_time: plan.followup_time,
       });
       notify("success", "Plan accepted and sessions generated.");
@@ -180,6 +182,10 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
               <input id={`start-time-${r.id}`} type="time" value={plan.start_time} onChange={(e) => setPlan({ ...plan, start_time: e.target.value })} />
             </div>
             <div className="admin-field psych-plan-field">
+              <label htmlFor={`followup-date-${r.id}`}>Follow-up session date</label>
+              <input id={`followup-date-${r.id}`} type="date" value={plan.followup_date ?? ""} onChange={(e) => setPlan({ ...plan, followup_date: e.target.value })} />
+            </div>
+            <div className="admin-field psych-plan-field">
               <label htmlFor={`followup-time-${r.id}`}>Follow-up session time</label>
               <input id={`followup-time-${r.id}`} type="time" value={plan.followup_time} onChange={(e) => setPlan({ ...plan, followup_time: e.target.value })} />
             </div>
@@ -192,7 +198,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
               <input id={`sessions-${r.id}`} type="number" value={plan.planned_sessions} onChange={(e) => setPlan({ ...plan, planned_sessions: Number(e.target.value) })} />
             </div>
             <div className="admin-field psych-plan-field">
-              <label htmlFor={`start-date-${r.id}`}>Start date</label>
+              <label htmlFor={`start-date-${r.id}`}>Current session date</label>
               <input id={`start-date-${r.id}`} type="date" value={plan.start_date} onChange={(e) => setPlan({ ...plan, start_date: e.target.value })} required />
             </div>
 
@@ -211,7 +217,8 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
             <div><small>Follow-up session time</small><strong>{r.plan_followup_time?.slice(0, 5)}</strong></div>
             <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>
             <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>
-            <div><small>Plan begins</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>
+            <div><small>Current session</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>
+            {r.plan_followup_date && <div><small>Follow-up session</small><strong>{String(r.plan_followup_date).slice(0, 10)} · {r.plan_followup_time?.slice(0, 5)}</strong></div>}
           </div>
           <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>
         </div>

@@ -37,6 +37,7 @@ export interface PsychotherapyReportData {
     planTotalSessions: string;
     planStartDate: string;
     planStartTime: string;
+    planFollowupDate: string;
     planFollowupTime: string;
   };
   /** Alias kept for compatibility with report fixtures/tests. */
@@ -137,6 +138,7 @@ export async function collectPsychotherapyReport(actor: AuthUser, requestId: num
       planTotalSessions: req.plan_total_sessions ? String(req.plan_total_sessions) : branding.notProvided,
       planStartDate: formatIsoDate(req.plan_start_date),
       planStartTime: req.plan_start_time ? req.plan_start_time.slice(0, 5) : branding.notProvided,
+      planFollowupDate: formatIsoDate(req.plan_followup_date),
       planFollowupTime: req.plan_followup_time ? req.plan_followup_time.slice(0, 5) : branding.notProvided,
     },
     patient,

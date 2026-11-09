@@ -74,6 +74,7 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
     plan_total_sessions: req.plan_total_sessions,
     plan_start_date: req.plan_start_date,
     plan_start_time: req.plan_start_time,
+    plan_followup_date: req.plan_followup_date,
     plan_followup_time: req.plan_followup_time,
     assigned_at: req.assigned_at,
     accepted_at: req.accepted_at,
@@ -229,20 +230,24 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   if (!Number.isFinite(duration) || duration < 10 || duration > 240) throw badRequest("Invalid session duration.");
   const total = Number(body?.planned_sessions);
   if (!Number.isFinite(total) || total < 1 || total > 50) throw badRequest("Invalid planned session count.");
-  const start = body?.start_date ? new Date(body.start_date) : null;
-  if (!start || Number.isNaN(start.getTime())) throw badRequest("Start date is required.");
-  const currentStartTime = normalizeTime(String(body?.start_time ?? "09:00"));
+  const currentDate = body?.current_date ? new Date(body.current_date) : (body?.start_date ? new Date(body.start_date) : null);
+  if (!currentDate || Number.isNaN(currentDate.getTime())) throw badRequest("Current session date is required.");
+  const followupDate = body?.followup_date ? new Date(body.followup_date) : (body?.follow_up_date ? new Date(body.follow_up_date) : null);
+  if (total > 1 && (!followupDate || Number.isNaN(followupDate.getTime()))) throw badRequest("Follow-up session date is required.");
+  const currentStartTime = normalizeTime(String(body?.start_time ?? body?.current_time ?? "09:00"));
   const followupStartTime = normalizeTime(String(body?.followup_time ?? body?.follow_up_time ?? "09:00"));
-  const followupTime = followupStartTime;
 
-  // Generate planned session dates: first session on the start date, then weekly.
-  const dates: Date[] = [];
-  for (let i = 0; i < total; i++) dates.push(addDays(start, i * 7));
+  // Generate planned session dates: first on current date, then follow-up date and weekly thereafter.
+  const dates: Date[] = [currentDate];
+  if (total > 1) {
+    const baseFollowup = followupDate ?? addDays(currentDate, 7);
+    for (let i = 1; i < total; i++) dates.push(addDays(baseFollowup, (i - 1) * 7));
+  }
 
   const currentStartSec = timeToSeconds(currentStartTime);
   const currentEndSec = currentStartSec + duration * 60;
   const currentEndTime = secondsToTime(currentEndSec);
-  const followupStartSec = timeToSeconds(followupTime);
+  const followupStartSec = timeToSeconds(followupStartTime);
   const followupEndSec = followupStartSec + duration * 60;
   const followupEndTime = secondsToTime(followupEndSec);
 
@@ -254,7 +259,7 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
     // Remove any previously planned sessions (none expected here, but safe).
     await tx.psychotherapySession.deleteMany({ where: { psychotherapy_request_id: id, status: "scheduled" } });
     for (let i = 0; i < dates.length; i++) {
-      const sessionStartTime = i === 0 ? currentStartTime : followupTime;
+      const sessionStartTime = i === 0 ? currentStartTime : followupStartTime;
       const sessionEndTime = i === 0 ? currentEndTime : followupEndTime;
       await tx.psychotherapySession.create({
         data: {
@@ -275,9 +280,10 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
         plan_goals: goals,
         plan_session_duration: duration,
         plan_total_sessions: total,
-        plan_start_date: start,
+        plan_start_date: currentDate,
         plan_start_time: currentStartTime,
-        plan_followup_time: followupTime,
+        plan_followup_date: total > 1 ? (followupDate ?? addDays(currentDate, 7)) : null,
+        plan_followup_time: followupStartTime,
         accepted_at: new Date(),
       },
       include: includeFull(),

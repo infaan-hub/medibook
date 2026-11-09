@@ -72,11 +72,10 @@ function requestRows(data: PsychotherapyReportData): InfoRow[] {
   ];
   rows.push(
     { label: "Goals", value: request.planGoals },
-    { label: "Current session time", value: request.planStartTime },
-    { label: "Follow-up session time", value: request.planFollowupTime },
+    { label: "Current session", value: `${request.planStartDate} ${request.planStartTime}` },
+    { label: "Follow-up session", value: `${request.planFollowupDate} ${request.planFollowupTime}` },
     { label: "Session duration", value: request.planSessionDuration },
-    { label: "Planned sessions", value: request.planTotalSessions },
-    { label: "Plan start", value: request.planStartDate }
+    { label: "Planned sessions", value: request.planTotalSessions }
   );
   return rows;
 }
