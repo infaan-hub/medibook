@@ -70,25 +70,15 @@ export function PsychotherapyScreen() {
       {items.map((r) => {
         const st = STATUS[r.status] ?? { label: r.status, color: "#6b7280", bg: "#f3f4f6" };
         return (
-          <Card key={r.id} className="patient-appt-card" style={{ marginBottom: 16 }}>
-            <div className="patient-appt-card__accent" style={{ background: st.color }} />
-            <div className="patient-appt-card__content">
-              <div className="patient-appt-card__top">
-                <div className="patient-appt-card__info">
-                  <div className="patient-appt-card__doctor">
-                    Psychology service #{r.id}
-                  </div>
-                  <div className="patient-appt-card__time">
-                    {r.doctor ? `Psychologist: ${r.doctor.user.first_name} ${r.doctor.user.last_name}` : "Awaiting assignment"}
-                  </div>
-                  <span
-                    className="patient-appt-card__status"
-                    style={{ color: st.color, background: st.bg }}
-                  >
-                    {st.label}
-                  </span>
-                </div>
+          <Card key={r.id} className="psych-case-card" style={{ marginBottom: 16 }}>
+            <div className="psych-case-card__head">
+              <div>
+                <span className="psych-case-card__eyebrow">Psychology service case</span>
+                <h2>Case #{r.id}</h2>
               </div>
+              <span className="psych-case-status" style={{ color: st.color, background: st.bg }}>{st.label}</span>
+            </div>
+            <div className="appt-detail__field"><span className="appt-detail__label">Psychologist</span><span>{r.doctor ? `${r.doctor.user.first_name} ${r.doctor.user.last_name}` : "Awaiting assignment"}</span></div>
 
               <div className="appt-detail__field"><span className="appt-detail__label">Mode</span><span>{r.session_mode === "in_person" ? "In person" : "Online"}</span></div>
               <div className="appt-detail__field"><span className="appt-detail__label">Urgency</span><span>{r.urgency}</span></div>
@@ -134,7 +124,6 @@ export function PsychotherapyScreen() {
                   <Button variant="secondary" onClick={() => void downloadReport(r.id)}>Download report</Button>
                 </div>
               )}
-            </div>
           </Card>
         );
       })}
