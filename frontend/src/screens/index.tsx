@@ -282,7 +282,7 @@ function PatientHome({ user }: { user: User | null }) {
         </Link>
         <Link to="/psychotherapy" className="home__quick-action">
           <Brain size={20} />
-          <span>Psychotherapy</span>
+          <span>Psychology service</span>
         </Link>
       </div>
     </div>

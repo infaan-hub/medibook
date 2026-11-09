@@ -964,6 +964,7 @@ model PsychotherapySession {
   confidential_notes       String?
   treatment_id             Int?
   treatment                MedicalTreatment? @relation("PsychotherapyTreatment", fields: [treatment_id], references: [id], onDelete: SetNull)
+  medication_record        PsychotherapyMedication?
   started_at               DateTime?
   completed_at             DateTime?
   created_at               DateTime @default(now())
@@ -973,4 +974,20 @@ model PsychotherapySession {
   @@index([scheduled_date, status])
   @@index([treatment_id])
   @@map("psychotherapy_session")
+}
+
+/// Psychotherapy-only medication/clinical treatment details. These records
+/// remain attached to a therapy session and are never part of general visit
+/// history. Access is enforced through the assigned psychologist.
+model PsychotherapyMedication {
+  id             Int                @id @default(autoincrement())
+  session_id     Int                @unique
+  session        PsychotherapySession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  diagnosis      String             @default("")
+  treatment_notes String            @default("")
+  items          Json               @default("[]")
+  created_at     DateTime           @default(now())
+  updated_at     DateTime           @updatedAt
+
+  @@map("psychotherapy_medication")
 }

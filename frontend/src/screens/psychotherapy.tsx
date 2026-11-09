@@ -32,7 +32,7 @@ export function PsychotherapyScreen() {
       const res = await apiGet<any[]>("/psychotherapy");
       setItems(res.data ?? []);
     } catch (e: any) {
-      setError(e?.message || "Unable to load psychotherapy.");
+      setError(e?.message || "Unable to load psychology service.");
     } finally { setLoading(false); }
   }, []);
 
@@ -54,15 +54,15 @@ export function PsychotherapyScreen() {
     <div className="page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Psychotherapy service</p>
-          <h1>My psychotherapy</h1>
-          <p>Track your psychotherapy request and sessions.</p>
+          <p className="doctor-eyebrow">Psychology service</p>
+          <h1>My psychology service</h1>
+          <p>Track your psychology service request and sessions.</p>
         </div>
         <Link to="/psychotherapy/request"><Button>Request Therapy session</Button></Link>
       </div>
 
       {items.length === 0 && (
-        <EmptyState title="No psychotherapy requests" description="Request a psychotherapy session to get started." />
+        <EmptyState title="No psychology service requests" description="Request a psychology service session to get started." />
       )}
 
       {items.map((r) => {
@@ -74,7 +74,7 @@ export function PsychotherapyScreen() {
               <div className="patient-appt-card__top">
                 <div className="patient-appt-card__info">
                   <div className="patient-appt-card__doctor">
-                    Psychotherapy #{r.id}
+                    Psychology service #{r.id}
                   </div>
                   <div className="patient-appt-card__time">
                     {r.doctor ? `Psychologist: ${r.doctor.user.first_name} ${r.doctor.user.last_name}` : "Awaiting assignment"}

@@ -29,7 +29,10 @@ export const GET = handler(async ({ req, user }) => {
 export const POST = handler(async ({ req, user }) => {
   assertAuth(user);
   const body = (await readJson(req)) as any;
-  const action = String(body?.action ?? "create");
+  // The client sends actions as ?action=..., while allowing body.action keeps
+  // compatibility with API consumers that encode the operation in JSON.
+  const queryAction = new URL(req.url).searchParams.get("action");
+  const action = String(body?.action ?? queryAction ?? "create");
   if (action === "create") {
     return created(await psychotherapy.createPsychotherapyRequest(user, body));
   }
@@ -55,6 +58,12 @@ export const POST = handler(async ({ req, user }) => {
     const sessionId = Number(body?.session_id);
     if (!id || !sessionId) throw badRequest("Missing request or session.");
     return ok(await psychotherapy.updatePsychotherapySession(user, id, sessionId, body));
+  }
+  if (action === "save_medication") {
+    const id = Number(body?.request_id ?? body?.id);
+    const sessionId = Number(body?.session_id);
+    if (!id || !sessionId) throw badRequest("Missing request or session.");
+    return ok(await psychotherapy.savePsychotherapyMedication(user, id, sessionId, body));
   }
   if (action === "complete_session") {
     const id = Number(body?.request_id ?? body?.id);

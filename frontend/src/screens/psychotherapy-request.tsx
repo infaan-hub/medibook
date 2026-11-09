@@ -38,8 +38,8 @@ export function PsychotherapyRequestScreen() {
     <div className="page admin-form-page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Psychotherapy service</p>
-          <h1>Request psychotherapy</h1>
+          <p className="doctor-eyebrow">Psychology service</p>
+          <h1>Request psychology service</h1>
           <p>Fill in the details and a coordinator will assign a psychologist.</p>
         </div>
       </div>
@@ -89,13 +89,13 @@ export function PsychotherapyRequestScreen() {
           <div className="admin-field admin-field--wide">
             <label>
               <input type="checkbox" checked={confidentiality} onChange={(e:any)=>setConfidentiality(e.target.checked)} required />{" "}
-              I understand psychotherapy is confidential and agree to the confidentiality notice.
+              I understand psychology service is confidential and agree to the confidentiality notice.
             </label>
           </div>
           <div className="admin-field admin-field--wide"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" value={notes} onChange={(e:any)=>setNotes(e.target.value)} /></div>
           {error && <p className="form-note form-note--error admin-field--wide">{error}</p>}
           <div className="admin-form-actions admin-field--wide">
-            <Button type="submit" loading={saving}>Request psychotherapy</Button>
+            <Button type="submit" loading={saving}>Request psychology service</Button>
           </div>
         </form>
       </Card>

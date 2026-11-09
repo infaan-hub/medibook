@@ -15,6 +15,7 @@ import type { AuthUser } from "@/lib/auth";
 import * as doctorsRepo from "@/repositories/doctors.repo";
 import { normalizeTime, timeToSeconds, secondsToTime } from "@/lib/dates";
 import { treatmentDto } from "@/lib/serializers";
+import { Prisma } from "@prisma/client";
 
 const ACTIVE_STATUSES = ["pending", "assigned", "accepted", "in_progress", "follow_up"];
 
@@ -36,6 +37,7 @@ function includeFull() {
     doctor: { include: { user: { select: { id: true, first_name: true, last_name: true, email: true, profile_image_id: true } } } },
     sessions: {
       include: {
+        medication_record: true,
         treatment: { include: { prescriptions: { include: { items: true } }, appointment: { select: { status: true } } } },
       },
       orderBy: { session_number: "asc" as const },
@@ -44,7 +46,8 @@ function includeFull() {
 }
 
 function canSeeClinical(actor: AuthUser, req: any, doctorId: number | null) {
-  if (actor.role === "admin") return true;
+  // Psychotherapy notes and medication details are visible only to the
+  // psychologist assigned to this case, including after the case is closed.
   return actor.role === "doctor" && req.doctor_id !== null && req.doctor_id === doctorId;
 }
 
@@ -99,6 +102,7 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
         base.confidential_notes = s.confidential_notes;
         base.treatment_id = s.treatment_id;
         base.treatment = s.treatment ? treatmentDto(s.treatment) : null;
+        base.medication_record = s.medication_record ?? null;
       }
       return base;
     }),
@@ -194,9 +198,14 @@ export async function assignPsychotherapyDoctor(actor: AuthUser, id: number, doc
     data: { status: "assigned", doctor_id: doctorId, assigned_at: new Date() },
     include: includeFull(),
   });
-  await notify(req.patient_id, "appointment_confirmed", `Your psychotherapy request has been assigned to Dr. ${doctor.user.first_name} ${doctor.user.last_name}.`, null, "Psychotherapy assigned");
-  await notify(doctor.user.id, "appointment_request", "You have been assigned a psychotherapy case. Open Psychotherapy to plan the sessions.", null, "Psychotherapy assigned");
   broadcastPlatformDataUpdated("psychotherapy");
+  const effects = await Promise.allSettled([
+    notify(req.patient_id, "appointment_confirmed", `Your psychotherapy request has been assigned to Dr. ${doctor.user.first_name} ${doctor.user.last_name}.`, null, "Psychotherapy assigned"),
+    notify(doctor.user.id, "appointment_request", "You have been assigned a psychotherapy case. Open Psychotherapy to plan the sessions.", null, "Psychotherapy assigned"),
+  ]);
+  effects.forEach((effect) => {
+    if (effect.status === "rejected") console.error("[psychotherapy] assignment notification failed", effect.reason);
+  });
   const did = await ownDoctorId(actor);
   return serializeRequest(updated, actor, did);
 }
@@ -244,42 +253,51 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
   const endSec = startSec + duration * 60;
   const endTime = secondsToTime(endSec);
 
-  // Remove any previously planned sessions (none expected here, but safe).
-  await prisma.psychotherapySession.deleteMany({ where: { psychotherapy_request_id: id, status: "scheduled" } });
-
-  for (let i = 0; i < dates.length; i++) {
-    await prisma.psychotherapySession.create({
+  const updated = await prisma.$transaction(async (tx) => {
+    // Remove any previously planned sessions (none expected here, but safe).
+    await tx.psychotherapySession.deleteMany({ where: { psychotherapy_request_id: id, status: "scheduled" } });
+    for (let i = 0; i < dates.length; i++) {
+      await tx.psychotherapySession.create({
+        data: {
+          psychotherapy_request_id: id,
+          session_number: i + 1,
+          scheduled_date: dates[i],
+          start_time: startTime,
+          end_time: endTime,
+          duration_minutes: duration,
+          status: "scheduled",
+        },
+      });
+    }
+    return tx.psychotherapyRequest.update({
+      where: { id },
       data: {
-        psychotherapy_request_id: id,
-        session_number: i + 1,
-        scheduled_date: dates[i],
-        start_time: startTime,
-        end_time: endTime,
-        duration_minutes: duration,
-        status: "scheduled",
+        status: "accepted",
+        plan_approach: approach,
+        plan_goals: goals,
+        plan_frequency: frequency,
+        plan_session_duration: duration,
+        plan_total_sessions: total,
+        plan_start_date: start,
+        plan_start_time: startTime,
+        plan_review_after: reviewAfter,
+        accepted_at: new Date(),
       },
+      include: includeFull(),
     });
-  }
-
-  const updated = await prisma.psychotherapyRequest.update({
-    where: { id },
-    data: {
-      status: "accepted",
-      plan_approach: approach,
-      plan_goals: goals,
-      plan_frequency: frequency,
-      plan_session_duration: duration,
-      plan_total_sessions: total,
-      plan_start_date: start,
-      plan_start_time: startTime,
-      plan_review_after: reviewAfter,
-      accepted_at: new Date(),
-    },
-    include: includeFull(),
   });
 
-  await notify(req.patient_id, "appointment_confirmed", `Your psychotherapy appointment has been accepted. Psychologist: Dr. ${updated.doctor?.user?.first_name ?? ""} ${updated.doctor?.user?.last_name ?? ""}. ${total} session(s) planned from ${start.toISOString().slice(0, 10)}.`, null, "Psychotherapy accepted");
   broadcastPlatformDataUpdated("psychotherapy");
+  const planned = (updated.sessions ?? [])
+    .map((session) => `${session.scheduled_date.toISOString().slice(0, 10)} ${session.start_time.slice(0, 5)}`)
+    .join(", ");
+  await notify(
+    req.patient_id,
+    "appointment_confirmed",
+    `Your psychotherapy plan has been accepted. Psychologist: Dr. ${updated.doctor?.user?.first_name ?? ""} ${updated.doctor?.user?.last_name ?? ""}. Sessions: ${planned}. View Psychotherapy for the full plan.`,
+    null,
+    "Psychotherapy accepted"
+  ).catch((error) => console.error("[psychotherapy] plan notification failed", error));
   return serializeRequest(updated, actor, doctorId);
 }
 
@@ -294,20 +312,34 @@ export async function startPsychotherapySession(actor: AuthUser, requestId: numb
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId } });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
   if (session.status === "completed") throw conflict("Session already completed.");
-  if (session.status === "in_progress") {
-    // idempotent
-  } else {
+  if (!["accepted", "in_progress", "follow_up"].includes(req.status)) {
+    throw conflict("The psychotherapy plan must be accepted before a session can start.");
+  }
+  if (session.status !== "in_progress") {
+    if (session.status !== "scheduled") throw conflict("This session is not scheduled.");
     // Block until scheduled date/time reached.
-    const scheduled = new Date(`${session.scheduled_date.toISOString().slice(0, 10)}T${session.start_time}`);
+    const scheduled = new Date(`${session.scheduled_date.toISOString().slice(0, 10)}T${normalizeTime(session.start_time)}Z`);
     if (Number.isNaN(scheduled.getTime())) throw badRequest("Invalid scheduled time.");
     if (new Date() < scheduled) throw conflict("This session is not due yet.");
   }
 
-  const updatedSession = await prisma.psychotherapySession.update({
-    where: { id: sessionId },
-    data: { status: "in_progress", started_at: session.started_at ?? new Date() },
+  const updatedSession = await prisma.$transaction(async (tx) => {
+    const otherActive = await tx.psychotherapySession.findFirst({
+      where: { psychotherapy_request_id: requestId, status: "in_progress", id: { not: sessionId } },
+      select: { id: true },
+    });
+    if (otherActive) throw conflict("Complete the active session before starting another one.");
+    const changed = await tx.psychotherapySession.updateMany({
+      where: { id: sessionId, psychotherapy_request_id: requestId, status: { in: ["scheduled", "in_progress"] } },
+      data: { status: "in_progress", started_at: session.started_at ?? new Date() },
+    });
+    if (changed.count !== 1) throw conflict("This session changed before it could be started. Refresh and try again.");
+    await tx.psychotherapyRequest.update({
+      where: { id: requestId },
+      data: { status: "in_progress", started_at: req.started_at ?? new Date() },
+    });
+    return tx.psychotherapySession.findUniqueOrThrow({ where: { id: sessionId } });
   });
-  await prisma.psychotherapyRequest.update({ where: { id: requestId }, data: { status: "in_progress", started_at: req.started_at ?? new Date() } });
   broadcastPlatformDataUpdated("psychotherapy");
   return updatedSession;
 }
@@ -319,6 +351,10 @@ export async function updatePsychotherapySession(actor: AuthUser, requestId: num
   if (!session || session.psychotherapy_request_id !== requestId) throw notFound("Session not found.");
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId } });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
+  if (session.status === "completed" || req.status === "completed") throw conflict("Completed psychotherapy sessions are read-only.");
+  if (body?.confidential_notes !== undefined && session.status !== "in_progress") {
+    throw conflict("Start the session before saving confidential notes.");
+  }
 
   const data: any = {};
   if (body?.confidential_notes !== undefined) data.confidential_notes = body.confidential_notes ? String(body.confidential_notes) : null;
@@ -336,52 +372,124 @@ export async function updatePsychotherapySession(actor: AuthUser, requestId: num
   return updated;
 }
 
+/** Save the medication/treatment form privately against one active therapy session. */
+export async function savePsychotherapyMedication(actor: AuthUser, requestId: number, sessionId: number, body: any) {
+  const doctorId = await ownDoctorId(actor);
+  if (!doctorId) throw forbidden();
+  const session = await prisma.psychotherapySession.findUnique({
+    where: { id: sessionId },
+    include: { request: { select: { doctor_id: true, status: true } } },
+  });
+  if (!session || session.psychotherapy_request_id !== requestId) throw notFound("Session not found.");
+  if (session.request.doctor_id !== doctorId) throw forbidden();
+  if (session.status !== "in_progress" || session.request.status === "completed") {
+    throw conflict("Medication can only be saved during an active psychotherapy session.");
+  }
+
+  const diagnosis = String(body?.diagnosis ?? "").trim().slice(0, 2000);
+  const treatmentNotes = String(body?.treatment_notes ?? "").trim().slice(0, 10_000);
+  const incoming = body?.items ?? [];
+  if (!Array.isArray(incoming) || incoming.length > 20) throw badRequest("Add no more than 20 medication items.");
+  const items = incoming.map((item: any) => ({
+    medication: String(item?.medication ?? "").trim().slice(0, 200),
+    dosage: String(item?.dosage ?? "").trim().slice(0, 200),
+    frequency: String(item?.frequency ?? "").trim().slice(0, 200),
+    duration: String(item?.duration ?? "").trim().slice(0, 200),
+    quantity: String(item?.quantity ?? "").trim().slice(0, 100),
+    instructions: String(item?.instructions ?? "").trim().slice(0, 2000),
+  })).filter((item: any) => item.medication);
+  if (!diagnosis && !treatmentNotes && items.length === 0) {
+    throw badRequest("Enter treatment notes or at least one medication before saving.");
+  }
+
+  const record = await prisma.psychotherapyMedication.upsert({
+    where: { session_id: sessionId },
+    create: {
+      session_id: sessionId,
+      diagnosis,
+      treatment_notes: treatmentNotes,
+      items: items as Prisma.InputJsonValue,
+    },
+    update: {
+      diagnosis,
+      treatment_notes: treatmentNotes,
+      items: items as Prisma.InputJsonValue,
+    },
+  });
+  broadcastPlatformDataUpdated("psychotherapy");
+  return record;
+}
+
 export async function completePsychotherapySession(actor: AuthUser, requestId: number, sessionId: number, body: any) {
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();
   const session = await prisma.psychotherapySession.findUnique({ where: { id: sessionId } });
   if (!session || session.psychotherapy_request_id !== requestId) throw notFound("Session not found.");
-  const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId }, include: { sessions: true } });
+  const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId } });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
-  if (session.status === "completed") throw conflict("Session already completed.");
+  if (req.status === "completed") throw conflict("This psychotherapy case is already complete.");
+  if (session.status !== "in_progress") throw conflict("Start the session before completing it.");
 
-  await prisma.psychotherapySession.update({
-    where: { id: sessionId },
-    data: { status: "completed", completed_at: new Date(), confidential_notes: body?.confidential_notes !== undefined ? (body.confidential_notes ? String(body.confidential_notes) : null) : session.confidential_notes },
-  });
-
-  // Optional follow-up scheduling.
-  const followUpDate = body?.follow_up_date ? new Date(body.follow_up_date) : null;
-  const followUpTime = body?.follow_up_time ? normalizeTime(String(body.follow_up_time)) : null;
-  if (followUpDate && !Number.isNaN(followUpDate.getTime())) {
-    if (!followUpTime) throw badRequest("Follow-up time is required.");
-    const duration = req.plan_session_duration ?? session.duration_minutes ?? 50;
-    const startSec = timeToSeconds(followUpTime);
-    const endSec = startSec + duration * 60;
-    const nextNumber = (req.sessions?.length ?? 0) + 1;
-    await prisma.psychotherapySession.create({
-      data: {
-        psychotherapy_request_id: requestId,
-        session_number: nextNumber,
-        scheduled_date: followUpDate,
-        start_time: followUpTime,
-        end_time: secondsToTime(endSec),
-        duration_minutes: duration,
-        status: "scheduled",
-      },
-    });
-    await prisma.psychotherapyRequest.update({ where: { id: requestId }, data: { status: "follow_up" } });
-  } else {
-    // If all sessions completed, mark follow_up? Keep in_progress until finalized or follow-up.
-    const remaining = await prisma.psychotherapySession.count({ where: { psychotherapy_request_id: requestId, status: { in: ["scheduled", "in_progress"] } } });
-    if (remaining === 0) {
-      await prisma.psychotherapyRequest.update({ where: { id: requestId }, data: { status: "follow_up" } });
-    } else {
-      await prisma.psychotherapyRequest.update({ where: { id: requestId }, data: { status: "in_progress" } });
+  const hasFollowUpDate = Boolean(body?.follow_up_date);
+  const hasFollowUpTime = Boolean(body?.follow_up_time);
+  if (hasFollowUpDate !== hasFollowUpTime) throw badRequest("Enter both a follow-up date and time, or leave both blank.");
+  let followUpDate: Date | null = null;
+  let followUpTime: string | null = null;
+  let followUpEndTime: string | null = null;
+  if (hasFollowUpDate && hasFollowUpTime) {
+    const dateText = String(body.follow_up_date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) throw badRequest("Enter a valid follow-up date.");
+    followUpDate = new Date(`${dateText}T00:00:00.000Z`);
+    if (Number.isNaN(followUpDate.getTime()) || followUpDate.toISOString().slice(0, 10) !== dateText) {
+      throw badRequest("Enter a valid follow-up date.");
     }
+    followUpTime = normalizeTime(String(body.follow_up_time));
+    const duration = req.plan_session_duration ?? session.duration_minutes ?? 50;
+    const endSeconds = timeToSeconds(followUpTime) + duration * 60;
+    if (endSeconds > 24 * 60 * 60) throw badRequest("The follow-up session cannot run past midnight.");
+    followUpEndTime = secondsToTime(endSeconds);
   }
 
+  await prisma.$transaction(async (tx) => {
+    const changed = await tx.psychotherapySession.updateMany({
+      where: { id: sessionId, psychotherapy_request_id: requestId, status: "in_progress" },
+      data: {
+        status: "completed",
+        completed_at: new Date(),
+        confidential_notes: body?.confidential_notes !== undefined
+          ? (body.confidential_notes ? String(body.confidential_notes).slice(0, 20_000) : null)
+          : session.confidential_notes,
+      },
+    });
+    if (changed.count !== 1) throw conflict("This session was already completed. Refresh the case.");
+
+    if (followUpDate && followUpTime && followUpEndTime) {
+      const count = await tx.psychotherapySession.count({ where: { psychotherapy_request_id: requestId } });
+      await tx.psychotherapySession.create({
+        data: {
+          psychotherapy_request_id: requestId,
+          session_number: count + 1,
+          scheduled_date: followUpDate,
+          start_time: followUpTime,
+          end_time: followUpEndTime,
+          duration_minutes: req.plan_session_duration ?? session.duration_minutes ?? 50,
+          status: "scheduled",
+        },
+      });
+      await tx.psychotherapyRequest.update({ where: { id: requestId }, data: { status: "follow_up" } });
+    }
+  });
+
   broadcastPlatformDataUpdated("psychotherapy");
+  if (followUpDate && followUpTime) {
+    await notify(
+      req.patient_id,
+      "appointment_confirmed",
+      `Your psychologist scheduled a follow-up psychotherapy session for ${followUpDate.toISOString().slice(0, 10)} at ${followUpTime.slice(0, 5)}.`,
+      null,
+      "Psychotherapy follow-up scheduled"
+    ).catch((error) => console.error("[psychotherapy] follow-up notification failed", error));
+  }
   const updated = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId }, include: includeFull() });
   const did = await ownDoctorId(actor);
   return serializeRequest(updated, actor, did);
@@ -392,22 +500,27 @@ export async function finalizePsychotherapy(actor: AuthUser, requestId: number) 
   if (!doctorId) throw forbidden();
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId }, include: { sessions: true } });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
-  // Block if any scheduled/in-progress sessions remain.
-  const pending = (req.sessions || []).some((s: any) => s.status === "scheduled" || s.status === "in_progress");
-  if (pending) throw conflict("Complete or remove pending sessions before finalizing.");
-  const updated = await prisma.psychotherapyRequest.update({
-    where: { id: requestId },
+  if (req.status === "completed") throw conflict("This psychotherapy case is already complete.");
+  if (req.sessions.length === 0 || req.sessions.some((session) => session.status !== "completed")) {
+    throw conflict("Complete every planned session before marking psychotherapy done.");
+  }
+  const changed = await prisma.psychotherapyRequest.updateMany({
+    where: { id: requestId, doctor_id: doctorId, status: { in: ["accepted", "in_progress", "follow_up"] } },
     data: { status: "completed", completed_at: new Date() },
-    include: includeFull(),
   });
-  await notify(req.patient_id, "appointment_confirmed", "Your psychotherapy sessions have been completed. Your report is now available.", null, "Psychotherapy completed");
-  const coordinators = await prisma.user.findMany({ where: { role: "coordinator", is_active: true }, select: { id: true } });
-  await Promise.allSettled(
-    coordinators.map((c) =>
-      notify(c.id, "system", "A psychotherapy case has been completed. Its report is ready in Manage psychotherapy.", null, "Psychotherapy completed")
-    )
-  );
+  if (changed.count !== 1) throw conflict("The psychotherapy case changed. Refresh and try again.");
+  const updated = await prisma.psychotherapyRequest.findUniqueOrThrow({ where: { id: requestId }, include: includeFull() });
   broadcastPlatformDataUpdated("psychotherapy");
+  const coordinators = await prisma.user.findMany({ where: { role: "coordinator", is_active: true }, select: { id: true } });
+  const notifications = await Promise.allSettled([
+    notify(req.patient_id, "appointment_confirmed", "Your psychotherapy sessions have been completed. Your report is now available.", null, "Psychotherapy completed"),
+    ...coordinators.map((c) =>
+      notify(c.id, "system", `Psychotherapy case #${requestId} is complete. ${req.sessions.length} session(s) completed. Its report is ready in Manage psychotherapy.`, null, "Psychotherapy completed")
+    ),
+  ]);
+  notifications.forEach((result) => {
+    if (result.status === "rejected") console.error("[psychotherapy] completion notification failed", result.reason);
+  });
   const did = await ownDoctorId(actor);
   return serializeRequest(updated, actor, did);
 }
@@ -418,11 +531,13 @@ export async function listPsychotherapyMedicationHistory(actor: AuthUser, reques
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId }, include: includeFull() });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
   return (req.sessions || [])
-    .filter((s: any) => s.treatment)
+    .filter((s: any) => s.medication_record || s.treatment)
     .map((s: any) => ({
       session_id: s.id,
       session_number: s.session_number,
       scheduled_date: s.scheduled_date,
-      treatment: treatmentDto(s.treatment),
+      medication_record: s.medication_record ?? null,
+      // Read legacy records created before psychotherapy had a private table.
+      treatment: s.medication_record ? null : treatmentDto(s.treatment),
     }));
 }

@@ -112,7 +112,7 @@ export function navItemsFor(user: User | null): NavItem[] {
     { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
     { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
     { to: "/training", label: "Training", icon: <GraduationCap size={20} /> },
-    { to: "/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
+    { to: "/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
     { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
   ];
 }
