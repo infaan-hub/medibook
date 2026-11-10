@@ -5,9 +5,38 @@ import "../src/styles/global.css";
 import "../src/styles/shell.css";
 
 export const metadata: Metadata = {
-  title: "MediBook",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://zan-medibook.vercel.app"),
+  applicationName: "MediBook",
+  title: {
+    default: "MediBook | Healthcare, made easier",
+    template: "%s | MediBook",
+  },
   description:
-    "MediBook — find doctors, check availability, and book healthcare appointments.",
+    "Find doctors, check availability, book clinic and home-service appointments, and keep your care organized in one place with MediBook.",
+  openGraph: {
+    type: "website",
+    locale: "en_TZ",
+    url: "/",
+    siteName: "MediBook",
+    title: "MediBook | Healthcare, made easier",
+    description:
+      "Find doctors, check availability, book clinic and home-service appointments, and keep your care organized in one place.",
+    images: [
+      {
+        url: "/og/medibook-share.png",
+        width: 1200,
+        height: 630,
+        alt: "MediBook — healthcare, made easier. Find doctors, book appointments, and manage care in one place.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MediBook | Healthcare, made easier",
+    description:
+      "Find doctors, check availability, book clinic and home-service appointments, and keep your care organized in one place.",
+    images: ["/og/medibook-share.png"],
+  },
   // NOTE: `/manifest.json` is linked explicitly in RootLayout below, not here.
   // Next resolves this metadata export asynchronously and — on the streamed
   // dynamic route — emits it after `</head>`. Chrome only reads
