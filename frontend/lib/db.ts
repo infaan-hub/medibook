@@ -20,6 +20,21 @@ export function withDatabaseIdentity<T>(identity: DatabaseIdentity, fn: () => Pr
   return identityStorage.run(identity, fn);
 }
 
+/**
+ * Run trusted maintenance work with the database's privileged/system identity.
+ *
+ * Session-expiry jobs update rows the signed-in user may be allowed to read but
+ * not write (for example a patient's own training_session rows). Running the
+ * maintenance pass as the system keeps those writes valid under row-level
+ * security without weakening the per-user policies.
+ */
+export function withSystemDatabaseIdentity<T>(fn: () => Promise<T>): Promise<T> {
+  return withDatabaseIdentity(
+    { userId: null, role: "admin", mode: "system", isSuperuser: true },
+    fn
+  );
+}
+
 async function setTransactionIdentity(tx: Prisma.TransactionClient, identity: DatabaseIdentity) {
   // The Neon URL uses a database owner (which bypasses RLS). Switch each
   // request transaction to a non-login, non-bypass application role so the

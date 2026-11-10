@@ -4,7 +4,7 @@ import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
-import { Brain, CalendarClock, Check, ClipboardList, Clock3, Download, FileText, History, UserRound } from "lucide-react";
+import { Brain, CalendarClock, Check, ClipboardList, Clock3, Download, FileText, History, UserRound, AlarmClock } from "lucide-react";
 
 const APPROACHES = ["CBT", "DBT", "ACT", "supportive", "psychodynamic"];
 const FREQUENCIES = ["weekly", "biweekly", "twice_weekly"];
@@ -169,6 +169,18 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
         {r.doctor && <div className="psych-case-person"><span className="psych-case-person__icon"><Brain size={16} /></span><div><small>Psychologist</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div></div>}
       </div>
 
+      {r.status === "expired" && (
+        <div className="psych-plan-summary">
+          <div className="psych-plan-summary__goals">
+            <small>Session expired</small>
+            <p>
+              This psychology service case expired because a scheduled session was
+              not started in time. The patient must request a new session.
+            </p>
+          </div>
+        </div>
+      )}
+
       {r.status === "assigned" && (
         <form onSubmit={submitPlan} className="psych-plan-form">
           <div className="psych-section-heading"><span><CalendarClock size={18} /></span><div><h3>Create treatment plan</h3><p>Set the approach, goals and session schedule for this patient.</p></div></div>
@@ -247,7 +259,7 @@ function CaseCard({ r, onChanged }: { r: any; onChanged: () => void }) {
 
       <div className="psych-case-actions">
         <Button variant="secondary" onClick={() => void loadHistory()}><History size={16} /> Medication history</Button>
-        {r.status !== "completed" && sessions.every((s: any) => s.status === "completed") && sessions.length > 0 && (
+        {r.status !== "completed" && r.status !== "expired" && sessions.every((s: any) => s.status === "completed") && sessions.length > 0 && (
           <Button onClick={() => void finalize()}>Done</Button>
         )}
         {r.status === "completed" && (
@@ -312,6 +324,13 @@ function SessionBlock({ s, r, showMedsFor, setShowMedsFor, medForm, setMedForm, 
       {s.status === "scheduled" && (sessionDue
         ? <Button onClick={() => void startSession(s.id)}><Check size={16} /> Start session</Button>
         : <p style={{ color: "#64748b", fontSize: 13 }}>Start session is available on {sessionDate} at {sessionTime.slice(0, 5)}.</p>)}
+
+      {s.status === "expired" && (
+        <p style={{ color: "#525252", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <AlarmClock size={15} /> This session expired because it was not started
+          before its scheduled time. The patient must request a new session.
+        </p>
+      )}
 
       {s.status === "in_progress" && (
         <div className="psych-session-workspace">

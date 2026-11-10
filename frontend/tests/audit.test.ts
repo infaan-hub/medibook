@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     auditEvent: { create: state.create, deleteMany: state.deleteMany },
     user: { findUnique: vi.fn(async () => null) },

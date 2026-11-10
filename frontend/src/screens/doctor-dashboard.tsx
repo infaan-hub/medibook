@@ -715,6 +715,7 @@ export function DoctorDashboardScreen() {
   const psychotherapySessions = psycho.flatMap((item) => item.sessions ?? []);
   const completedPsychotherapySessions = psychotherapySessions.filter((session: any) => session.status === "completed").length;
   const upcomingPsychotherapySessions = psychotherapySessions.filter((session: any) => session.status === "scheduled").length;
+  const expiredPsychotherapySessions = psychotherapySessions.filter((session: any) => session.status === "expired").length;
   const psychotherapyProgress = psychotherapySessions.length
     ? Math.round((completedPsychotherapySessions / psychotherapySessions.length) * 100)
     : 0;
@@ -743,7 +744,7 @@ export function DoctorDashboardScreen() {
       </div>
 
       <Card className="doctor-chart-card" style={{ marginBottom: 16 }}>
-        <div className="doctor-card-heading"><div><h3>Psychology service</h3><p>{psycho.length} assigned case(s) · {completedPsychotherapySessions} session(s) completed · {upcomingPsychotherapySessions} upcoming</p></div><Brain size={18} /></div>
+        <div className="doctor-card-heading"><div><h3>Psychology service</h3><p>{psycho.length} assigned case(s) · {completedPsychotherapySessions} session(s) completed · {upcomingPsychotherapySessions} upcoming{expiredPsychotherapySessions ? ` · ${expiredPsychotherapySessions} expired` : ""}</p></div><Brain size={18} /></div>
         <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of psychology service sessions completed`}>
           <span style={{ width: `${psychotherapyProgress}%` }} />
         </div>

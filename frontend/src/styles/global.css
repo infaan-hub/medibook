@@ -4411,6 +4411,7 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .psych-case-status { display: inline-flex; align-items: center; padding: 6px 11px; border-radius: 99px; background: #fff3db; color: #a86200; font-size: 12px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
 .psych-case-status--accepted, .psych-case-status--completed { background: #e4f8ee; color: #16805d; }
 .psych-case-status--in_progress, .psych-case-status--follow_up { background: #eaf1ff; color: #2563eb; }
+.psych-case-status--expired { background: #f1f1f1; color: #525252; }
 .psych-case-people { flex-wrap: wrap; gap: 12px; padding: 15px; border: 1px solid #edf1f4; border-radius: 12px; background: #fbfdfd; }
 .psych-case-person { min-width: min(100%, 220px); flex: 1; gap: 10px; }
 .psych-case-person__icon { width: 34px; height: 34px; border-radius: 10px; }
@@ -4439,6 +4440,8 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .psych-case-section { display: flex; flex-direction: column; gap: 12px; }
 .psych-session-card { display: flex; flex-direction: column; gap: 11px; padding: 15px !important; border: 1px solid #e7eef2; border-left: 3px solid #dce6eb; border-radius: 12px; box-shadow: none; }
 .psych-session-card--in_progress { border-left-color: #2563eb; }
+.psych-session-card--completed { border-left-color: #16805d; }
+.psych-session-card--expired { border-left-color: var(--color-status-expired, #525252); background: #fafafa; }
 .psych-session-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .psych-session-card__head > strong { color: #17384a; font-size: 14px; }
 .psych-session-card .psych-case-status { padding: 4px 9px; font-size: 11px; }

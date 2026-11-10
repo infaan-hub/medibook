@@ -12,6 +12,7 @@ const STATUS: Record<string, { label: string; tone: string; badge: string; text:
   in_progress: { label: "In progress", tone: "#7c3aed", badge: "badge--in_progress", text: "#ffffff" },
   follow_up: { label: "Follow-up", tone: "#7c3aed", badge: "badge--in_progress", text: "#ffffff" },
   completed: { label: "Completed", tone: "#2563eb", badge: "badge--done", text: "#ffffff" },
+  expired: { label: "Expired", tone: "#525252", badge: "badge--expired", text: "#ffffff" },
 };
 
 function formatDay(value: string | null | undefined): string {
@@ -129,6 +130,17 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
             <p>{r.notes}</p>
           </div>
         )}
+        {r.sessions?.length > 0 && (
+          <div className="coordinator-appointment-card__reason">
+            <span>Sessions</span>
+            <p>
+              {r.sessions.length} scheduled
+              {r.sessions.some((session: any) => session.status === "expired")
+                ? ` · ${r.sessions.filter((session: any) => session.status === "expired").length} expired`
+                : ""}
+            </p>
+          </div>
+        )}
       </div>
 
       {r.status === "pending" && (
@@ -157,6 +169,13 @@ function PsychotherapyCard({ r, doctors, onChanged }: { r: any; doctors: any[]; 
       {r.status !== "pending" && specialist && (
         <div className="coordinator-appointment-card__checked">
           Assigned to {specialist}
+        </div>
+      )}
+
+      {r.status === "expired" && (
+        <div className="coordinator-appointment-card__closed">
+          This psychology service request expired because a scheduled session was
+          not started in time. The patient must request a new session.
         </div>
       )}
     </Card>

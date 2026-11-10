@@ -48,7 +48,10 @@ const harness = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: harness.prisma,
+}));
 
 import { purgeExpiredEmergencies } from "@/repositories/appointments.repo";
 

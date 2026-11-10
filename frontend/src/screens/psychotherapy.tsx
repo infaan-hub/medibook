@@ -13,12 +13,14 @@ const STATUS: Record<string, { label: string; tone: string }> = {
   in_progress: { label: "Session started", tone: "in_progress" },
   follow_up: { label: "Follow-up session", tone: "in_progress" },
   completed: { label: "Done", tone: "completed" },
+  expired: { label: "Expired", tone: "expired" },
 };
 
 const SESSION_STATUS: Record<string, string> = {
   scheduled: "Scheduled",
   in_progress: "In progress",
   completed: "Completed",
+  expired: "Expired",
 };
 
 export function PsychotherapyScreen() {
@@ -83,6 +85,22 @@ export function PsychotherapyScreen() {
               <span className={`psych-case-status psych-case-status--${st.tone}`}>{st.label}</span>
             </div>
 
+            {r.status === "expired" && (
+              <div className="psych-plan-summary">
+                <div className="psych-plan-summary__goals">
+                  <small>Session expired</small>
+                  <p>
+                    This psychology service request expired because a scheduled
+                    session was not started in time. Please request a new
+                    psychology service session.{" "}
+                    <Link to="/psychotherapy/request" style={{ fontWeight: 600 }}>
+                      Request again
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="psych-case-people">
               <div className="psych-case-person">
                 <span className="psych-case-person__icon"><UserRound size={16} /></span>
@@ -122,10 +140,10 @@ export function PsychotherapyScreen() {
                 {r.sessions.map((s: any) => {
                   const ss = SESSION_STATUS[s.status] ?? s.status;
                   return (
-                    <Card key={s.id} className={`psych-session-card psych-session-card--${s.status === "completed" ? "completed" : s.status === "in_progress" ? "in_progress" : "pending"}`}>
+                    <Card key={s.id} className={`psych-session-card psych-session-card--${s.status}`}>
                       <div className="psych-session-card__head">
                         <strong>Session {s.session_number}</strong>
-                        <span className={`psych-case-status psych-case-status--${s.status === "completed" ? "completed" : s.status === "in_progress" ? "in_progress" : "pending"}`}>{ss}</span>
+                        <span className={`psych-case-status psych-case-status--${s.status}`}>{ss}</span>
                       </div>
                       <p className="psych-session-card__time">{String(s.scheduled_date).slice(0, 10)} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)} · {s.duration_minutes} min</p>
                     </Card>

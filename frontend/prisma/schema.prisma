@@ -880,6 +880,7 @@ model TrainingRequest {
   location_accuracy    Float?
   notes                String?
   status               String            @default("pending")
+  expired_at           DateTime?
   doctor_id            Int?
   doctor               Doctor?           @relation("TrainingDoctor", fields: [doctor_id], references: [id], onDelete: SetNull)
   sessions             TrainingSession[]
@@ -902,10 +903,12 @@ model TrainingSession {
   status              String             @default("pending")
   started_at          DateTime?
   completed_at        DateTime?
+  expired_at          DateTime?
   questions           TrainingQuestion[]
   created_at          DateTime           @default(now())
 
   @@index([training_request_id, session_number])
+  @@index([status, session_date])
   @@map("training_session")
 }
 
@@ -937,6 +940,7 @@ model PsychotherapyRequest {
   language_preference      String                 @default("english")
   notes                    String?
   status                   String                 @default("pending")
+  expired_at               DateTime?
   plan_goals               String?
   plan_session_duration    Int?
   plan_total_sessions      Int?
@@ -970,6 +974,7 @@ model PsychotherapySession {
   end_time                 String                   @db.VarChar(8)
   duration_minutes         Int                      @default(50)
   status                   String                   @default("scheduled")
+  expired_at               DateTime?
   confidential_notes       String?
   treatment_id             Int?
   treatment                MedicalTreatment?        @relation("PsychotherapyTreatment", fields: [treatment_id], references: [id], onDelete: SetNull)
@@ -981,6 +986,7 @@ model PsychotherapySession {
 
   @@unique([psychotherapy_request_id, session_number])
   @@index([scheduled_date, status])
+  @@index([status, scheduled_date])
   @@index([treatment_id])
   @@map("psychotherapy_session")
 }

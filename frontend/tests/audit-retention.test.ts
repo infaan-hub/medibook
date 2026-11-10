@@ -110,7 +110,10 @@ vi.hoisted(() => {
   process.env.THROTTLE_DISABLED = "true";
 });
 
-vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: harness.prisma,
+}));
 
 import { AUDIT_RETENTION_HOURS, purgeExpiredAuditEvents } from "@/lib/audit";
 import { signAccessToken } from "@/lib/jwt";

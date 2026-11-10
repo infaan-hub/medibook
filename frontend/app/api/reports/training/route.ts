@@ -13,6 +13,7 @@ import { recordAudit } from "@/repositories/admin.repo";
 import { collectTrainingReport } from "@/reports/data/training";
 import { renderTrainingReport } from "@/reports/pdf/training";
 import { pdfFilename, pdfResponse } from "@/reports/http";
+import { expireStaleSessions } from "@/services/session-expiry.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export const GET = handler(async (ctx) => {
   const trainingId = intParam(new URL(ctx.req.url).searchParams.get("id"));
   if (trainingId === null) throw badRequest("Select a training before generating its report.");
 
+  await expireStaleSessions();
   const data = await collectTrainingReport(user, trainingId);
   const generatedAt = new Date();
   const buffer = await renderTrainingReport(data, generatedAt);

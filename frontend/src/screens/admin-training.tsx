@@ -12,6 +12,7 @@ const STATUS_TONE: Record<string, string> = {
   in_progress: "#7c3aed",
   completed: "#16805d",
   cancelled: "#a9b6bf",
+  expired: "#525252",
 };
 
 export function AdminTrainingScreen() {
@@ -51,6 +52,7 @@ export function AdminTrainingScreen() {
     in_progress: items.filter((t) => t.status === "in_progress").length,
     completed: items.filter((t) => t.status === "completed").length,
     cancelled: items.filter((t) => t.status === "cancelled").length,
+    expired: items.filter((t) => t.status === "expired").length,
   };
 
   async function remove(id: number) {
@@ -93,6 +95,7 @@ export function AdminTrainingScreen() {
               ["in_progress", "In progress", statusCounts.in_progress],
               ["completed", "Completed", statusCounts.completed],
               ["cancelled", "Cancelled", statusCounts.cancelled],
+              ["expired", "Expired", statusCounts.expired],
             ] as [string, string, number][]).map(([key, label, count]) => (
               <button
                 key={key}
@@ -171,6 +174,15 @@ function TrainingCard({ t, onDelete }: { t: any; onDelete: () => void }) {
         <div className="admin-field">
           <small style={{ color: "#82909d", textTransform: "uppercase", fontSize: "10px", letterSpacing: ".04em" }}>Notes</small>
           <p style={{ margin: "2px 0 0", color: "#536b7a", fontSize: "var(--text-sm)" }}>{t.notes}</p>
+        </div>
+      )}
+      {t.status === "expired" && (
+        <div className="admin-field">
+          <small style={{ color: "#82909d", textTransform: "uppercase", fontSize: "10px", letterSpacing: ".04em" }}>Expired</small>
+          <p style={{ margin: "2px 0 0", color: "#525252", fontSize: "var(--text-sm)" }}>
+            A session was not started before its scheduled time. The patient must submit a new
+            training request.
+          </p>
         </div>
       )}
     </Card>

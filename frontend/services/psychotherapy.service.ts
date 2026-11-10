@@ -16,6 +16,7 @@ import * as doctorsRepo from "@/repositories/doctors.repo";
 import { normalizeTime, timeToSeconds, secondsToTime, todayIso } from "@/lib/dates";
 import { treatmentDto } from "@/lib/serializers";
 import { Prisma } from "@prisma/client";
+import { expireStaleSessions } from "@/services/session-expiry.service";
 
 const ACTIVE_STATUSES = ["pending", "assigned", "accepted", "in_progress", "follow_up"];
 
@@ -80,6 +81,7 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
     accepted_at: req.accepted_at,
     started_at: req.started_at,
     completed_at: req.completed_at,
+    expired_at: req.expired_at,
     created_at: req.created_at,
     updated_at: req.updated_at,
     sessions: (req.sessions || []).map((s: any) => {
@@ -94,6 +96,7 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
         status: s.status,
         started_at: s.started_at,
         completed_at: s.completed_at,
+        expired_at: s.expired_at,
         created_at: s.created_at,
         updated_at: s.updated_at,
       };
@@ -116,6 +119,8 @@ function addDays(d: Date, n: number): Date {
 
 export async function createPsychotherapyRequest(actor: AuthUser, body: any) {
   if (actor.role !== "patient") throw forbidden();
+  // Expire stale cases first so they do not block a new request.
+  await expireStaleSessions();
   const sessionMode = String(body?.session_mode ?? "");
   if (!SESSION_MODES.includes(sessionMode)) throw badRequest("Choose a session mode.");
   const preferredText = String(body?.preferred_start_date ?? "");
@@ -158,6 +163,7 @@ export async function createPsychotherapyRequest(actor: AuthUser, body: any) {
 }
 
 export async function listPsychotherapyRequests(actor: AuthUser, filters?: { status?: string; patient_id?: number; doctor_id?: number }) {
+  await expireStaleSessions();
   const where: any = {};
   if (actor.role === "patient") where.patient_id = actor.id;
   else if (actor.role === "doctor") {
@@ -179,6 +185,7 @@ export async function listPsychotherapyRequests(actor: AuthUser, filters?: { sta
 }
 
 export async function getPsychotherapyRequest(actor: AuthUser, id: number) {
+  await expireStaleSessions();
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id }, include: includeFull() });
   if (!req) throw notFound("Psychotherapy request not found.");
   if (actor.role === "patient" && req.patient_id !== actor.id) throw forbidden();
@@ -305,6 +312,7 @@ export async function planPsychotherapy(actor: AuthUser, id: number, body: any) 
 }
 
 export async function startPsychotherapySession(actor: AuthUser, requestId: number, sessionId: number) {
+  await expireStaleSessions();
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();
   const session = await prisma.psychotherapySession.findUnique({
@@ -315,6 +323,12 @@ export async function startPsychotherapySession(actor: AuthUser, requestId: numb
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId } });
   if (!req || req.doctor_id !== doctorId) throw forbidden();
   if (session.status === "completed") throw conflict("Session already completed.");
+  if (session.status === "expired") {
+    throw conflict("This session has expired because it was not started in time. Ask the patient to request a new psychology service session.");
+  }
+  if (req.status === "expired") {
+    throw conflict("This psychology service request has expired. Ask the patient to request a new session.");
+  }
   if (!["accepted", "in_progress", "follow_up"].includes(req.status)) {
     throw conflict("The psychotherapy plan must be accepted before a session can start.");
   }
@@ -349,6 +363,7 @@ export async function startPsychotherapySession(actor: AuthUser, requestId: numb
 }
 
 export async function updatePsychotherapySession(actor: AuthUser, requestId: number, sessionId: number, body: any) {
+  await expireStaleSessions();
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();
   const session = await prisma.psychotherapySession.findUnique({ where: { id: sessionId } });
@@ -425,6 +440,7 @@ export async function savePsychotherapyMedication(actor: AuthUser, requestId: nu
 }
 
 export async function completePsychotherapySession(actor: AuthUser, requestId: number, sessionId: number, body: any) {
+  await expireStaleSessions();
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();
   const session = await prisma.psychotherapySession.findUnique({ where: { id: sessionId } });
@@ -501,6 +517,7 @@ export async function completePsychotherapySession(actor: AuthUser, requestId: n
 }
 
 export async function finalizePsychotherapy(actor: AuthUser, requestId: number) {
+  await expireStaleSessions();
   const doctorId = await ownDoctorId(actor);
   if (!doctorId) throw forbidden();
   const req = await prisma.psychotherapyRequest.findUnique({ where: { id: requestId }, include: { sessions: true } });

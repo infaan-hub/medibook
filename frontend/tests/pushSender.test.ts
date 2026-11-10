@@ -23,6 +23,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     pushSubscription: {
       findMany: state.findMany,

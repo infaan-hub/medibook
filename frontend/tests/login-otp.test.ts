@@ -268,7 +268,10 @@ vi.hoisted(() => {
   process.env.THROTTLE_DISABLED = "true";
 });
 
-vi.mock("@/lib/db", () => ({ prisma: harness.prisma }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: harness.prisma,
+}));
 vi.mock("@/lib/mail", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/mail")>();
   return { ...actual, sendMail: harness.sendMail };

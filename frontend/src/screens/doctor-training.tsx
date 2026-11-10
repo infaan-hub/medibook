@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Ban, CalendarClock, CheckCircle2, Download, FileText, Play } from "lucide-react";
+import { AlarmClock, Ban, CalendarClock, CheckCircle2, Download, FileText, Play } from "lucide-react";
 import { apiGet, apiPost } from "../api/client";
 import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, TextField, EmptyState, Skeleton, ErrorState } from "../components/ui";
@@ -53,6 +53,13 @@ const STATUS: Record<
     card: "cancelled",
     tone: "var(--color-status-cancelled)",
     badge: "badge--cancelled",
+    text: "#ffffff",
+  },
+  expired: {
+    label: "Expired",
+    card: "expired",
+    tone: "var(--color-status-expired)",
+    badge: "badge--expired",
     text: "#ffffff",
   },
 };
@@ -216,7 +223,14 @@ export function DoctorTrainingScreen() {
           {items.map((t: any) => {
             const sessions: any[] = t.sessions ?? [];
             const currentSession =
-              sessions.find((s) => s.status !== "completed") ?? sessions[sessions.length - 1] ?? null;
+              sessions.find(
+                (s) => t.status === "expired" && s.status === "expired"
+              ) ??
+              sessions.find(
+                (s) => s.status === "pending" || s.status === "in_progress"
+              ) ??
+              sessions[sessions.length - 1] ??
+              null;
             const completedSessions = sessions.filter((s) => s.status === "completed").length;
             const isLast = (currentSession?.session_number ?? 0) >= sessions.length;
             const status = statusOf(t.status);
@@ -228,7 +242,7 @@ export function DoctorTrainingScreen() {
             const specialist = t.doctor?.user
               ? `Dr. ${t.doctor.user.first_name ?? ""} ${t.doctor.user.last_name ?? ""}`.trim()
               : "Not yet assigned";
-            const canManage = t.status !== "completed" && t.status !== "cancelled";
+            const canManage = !["completed", "cancelled", "expired"].includes(t.status);
             const canStart = canManage && currentSession?.status === "pending";
             const sessionRunning =
               currentSession?.status === "in_progress" &&
@@ -305,6 +319,17 @@ export function DoctorTrainingScreen() {
                     <div className="appt-card__notes">
                       <span className="appt-card__notes-label">Request notes</span>
                       <span className="appt-card__notes-text">{t.notes}</span>
+                    </div>
+                  )}
+
+                  {t.status === "expired" && (
+                    <div className="appt-card__notes">
+                      <span className="appt-card__notes-label">Expired</span>
+                      <span className="appt-card__notes-text">
+                        <AlarmClock size={14} style={{ marginRight: 6, verticalAlign: "middle" }} />
+                        A session was not started before its scheduled time. The
+                        patient must request a new training.
+                      </span>
                     </div>
                   )}
 

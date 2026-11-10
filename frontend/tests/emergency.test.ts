@@ -52,6 +52,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     doctor: {
       findMany: async ({ where }: { where?: Record<string, unknown> }) =>

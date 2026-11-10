@@ -74,7 +74,10 @@ vi.mock("@/lib/notify", () => ({
 
 // Never touched here, but the service graph pulls it in — stub it so no
 // Prisma client is ever constructed in a unit test.
-vi.mock("@/lib/db", () => ({ prisma: {} }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: {},
+}));
 
 const REQUEST = () => new Request("http://localhost/api/appointments/9/");
 

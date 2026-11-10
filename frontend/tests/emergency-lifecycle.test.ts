@@ -66,7 +66,10 @@ vi.mock("@/lib/notify", () => ({ notify, broadcastAppointmentEvent, pushRaw }));
 
 // Never touched by these tests, but the service lazily imports it — stub it so
 // no Prisma client is ever constructed in a unit test.
-vi.mock("@/lib/db", () => ({ prisma: {} }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: {},
+}));
 
 const REQUEST = () => new Request("http://localhost/api/emergency/appointments/9/");
 

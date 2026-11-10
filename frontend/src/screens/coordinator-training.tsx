@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlarmClock,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -64,6 +65,12 @@ const STATUS: Record<
     badge: "badge--cancelled",
     text: "#ffffff",
   },
+  expired: {
+    label: "Expired",
+    tone: "#525252",
+    badge: "badge--expired",
+    text: "#ffffff",
+  },
 };
 
 const statusOf = (status: string) => STATUS[status] ?? STATUS.pending;
@@ -93,6 +100,7 @@ const FILTERS = [
   { key: "active", label: "Active" },
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
+  { key: "expired", label: "Expired" },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["key"];
@@ -123,7 +131,12 @@ function TrainingCard({
   const sessions: any[] = t.sessions ?? [];
   const completedSessions = sessions.filter((session) => session.status === "completed").length;
   const currentSession =
-    sessions.find((session) => session.status !== "completed") ??
+    sessions.find(
+      (session) => t.status === "expired" && session.status === "expired"
+    ) ??
+    sessions.find(
+      (session) => session.status === "pending" || session.status === "in_progress"
+    ) ??
     sessions[sessions.length - 1] ??
     null;
   const currentStatus = currentSession ? statusOf(currentSession.status) : status;
@@ -319,6 +332,13 @@ function TrainingCard({
         </div>
       )}
 
+      {t.status === "expired" && (
+        <div className="coordinator-appointment-card__closed">
+          <AlarmClock size={14} /> This training expired because a session was not
+          started in time. The patient must request a new training.
+        </div>
+      )}
+
       <div className="coordinator-training-card__actions">
         <Button variant="secondary" loading={reporting} onClick={() => void viewReport()}>
           <FileText size={14} /> View report
@@ -369,8 +389,9 @@ export function CoordinatorTrainingScreen() {
       pending: 0,
       accepted: 1,
       in_progress: 2,
-      completed: 3,
-      cancelled: 4,
+      expired: 3,
+      completed: 4,
+      cancelled: 5,
     };
     const query = search.trim().toLowerCase();
     return items

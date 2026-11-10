@@ -182,6 +182,8 @@ function outcomeText(data: TrainingReportData): string {
       return `This training has been completed. ${data.totals.completedSessions} of ${data.totals.sessions} planned sessions were delivered, and every question and challenge captured by the specialist is reproduced in this document.`;
     case "cancelled":
       return "This training was cancelled. This document is the final record of the request and any sessions delivered before cancellation.";
+    case "expired":
+      return "This training expired because a session was not started before its scheduled time. This document is the final record of the request and any sessions delivered before expiry.";
     case "in_progress":
       return `This training is currently in progress. ${data.totals.completedSessions} of ${data.totals.sessions} sessions are complete; this document is a snapshot of the record at the time of generation.`;
     case "accepted":

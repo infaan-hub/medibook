@@ -36,7 +36,10 @@ vi.mock("@/lib/notify", () => ({
 }));
 
 // Never touched — stubbed so no Prisma client is constructed in a unit test.
-vi.mock("@/lib/db", () => ({ prisma: {} }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: {},
+}));
 
 const ADMIN = { id: 1, role: "admin", is_superuser: false } as AuthUser;
 const PATIENT = { id: 7, role: "patient", is_superuser: false } as AuthUser;

@@ -36,6 +36,7 @@ const matches = (list: number[] | undefined, id: number) =>
   Array.isArray(list) ? list.includes(id) : list === undefined;
 
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     doctor: {
       count: async () => state.doctors.length,

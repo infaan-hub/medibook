@@ -76,13 +76,19 @@ export function CoordinatorDashboard({
   onRefresh: () => void;
 }) {
   const [psycho, setPsycho] = useState<any[]>([]);
+  const [training, setTraining] = useState<any[]>([]);
   const loadPsychotherapy = useCallback(() => {
     void apiGet<any[]>("/psychotherapy").then((res) => setPsycho(res.data ?? [])).catch(() => {});
   }, []);
+  const loadTraining = useCallback(() => {
+    void apiGet<any[]>("/training").then((res) => setTraining(res.data ?? [])).catch(() => {});
+  }, []);
   useEffect(() => {
     loadPsychotherapy();
-  }, [loadPsychotherapy]);
+    loadTraining();
+  }, [loadPsychotherapy, loadTraining]);
   useRealtimeSync({ refresh: loadPsychotherapy, events: ["platform.data.updated"], resources: ["psychotherapy"] });
+  useRealtimeSync({ refresh: loadTraining, events: ["platform.data.updated"], resources: ["training"] });
   if (error && !stats) {
     return (
       <div className="page doctor-workspace">
@@ -114,10 +120,12 @@ export function CoordinatorDashboard({
   const psychotherapySessions = psycho.flatMap((item) => item.sessions ?? []);
   const psychotherapyCompletedSessions = psychotherapySessions.filter((session: any) => session.status === "completed").length;
   const psychotherapyUpcomingSessions = psychotherapySessions.filter((session: any) => session.status === "scheduled").length;
+  const psychotherapyExpiredSessions = psychotherapySessions.filter((session: any) => session.status === "expired").length;
   const psychotherapyTotalSessions = psychotherapySessions.length;
   const psychotherapyProgress = psychotherapyTotalSessions
     ? Math.round((psychotherapyCompletedSessions / psychotherapyTotalSessions) * 100)
     : 0;
+  const expiredTrainingRequests = training.filter((item) => item.status === "expired").length;
 
   const pipeline = [
     { key: "accepted", label: "Accepted", value: accepted, color: statusColors.accepted },
@@ -344,12 +352,12 @@ export function CoordinatorDashboard({
         </Link>
         <Link to="/coordinator/training">
           <GraduationCap size={18} />
-          <span><b>Manage training</b><small>Review and assign training requests</small></span>
+          <span><b>Manage training</b><small>Review and assign training requests{expiredTrainingRequests ? ` · ${expiredTrainingRequests} expired` : ""}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/psychotherapy">
           <Brain size={18} />
-          <span><b>Manage psychotherapy</b><small>{psychotherapyCompletedSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming</small></span>
+          <span><b>Manage psychotherapy</b><small>{psychotherapyCompletedSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming{psychotherapyExpiredSessions ? ` · ${psychotherapyExpiredSessions} expired` : ""}</small></span>
           <ArrowUpRight size={15} />
         </Link>
       </div>
@@ -358,7 +366,7 @@ export function CoordinatorDashboard({
         <div className="doctor-card-heading">
           <div>
             <h3>Psychotherapy schedule</h3>
-            <p>{psychotherapyCompletedSessions} of {psychotherapyTotalSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming.</p>
+            <p>{psychotherapyCompletedSessions} of {psychotherapyTotalSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming{psychotherapyExpiredSessions ? ` · ${psychotherapyExpiredSessions} expired` : ""}.</p>
           </div>
         </div>
         <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of scheduled psychotherapy sessions completed`}>

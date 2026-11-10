@@ -40,6 +40,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     pushSubscription: {
       findUnique: async ({ where }: { where: { endpoint?: string; id?: number } }) => {

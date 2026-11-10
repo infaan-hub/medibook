@@ -3,6 +3,7 @@ import { badRequest, notFound, conflict, forbidden } from "@/lib/errors";
 import { notify, broadcastPlatformDataUpdated } from "@/lib/notify";
 import type { AuthUser } from "@/lib/auth";
 import * as doctorsRepo from "@/repositories/doctors.repo";
+import { expireStaleSessions } from "@/services/session-expiry.service";
 
 export async function createTrainingRequest(actor: AuthUser, data: any) {
   if (!data.training_topic?.trim()) throw badRequest("Training topic is required.");
@@ -17,6 +18,9 @@ export async function createTrainingRequest(actor: AuthUser, data: any) {
     if (!data.contact_email?.trim()) throw badRequest("Contact email is required.");
   }
   if (data.delivery_mode === "onsite" && !data.location?.trim()) throw badRequest("Location is required for onsite training.");
+
+  // Close stale sessions first so an expired training no longer blocks a new request.
+  await expireStaleSessions();
 
   // One active training at a time per patient
   const active = await prisma.trainingRequest.findFirst({
@@ -58,6 +62,7 @@ export async function createTrainingRequest(actor: AuthUser, data: any) {
 }
 
 export async function listTrainingRequests(filters?: { status?: string; doctor_id?: number; patient_id?: number }) {
+  await expireStaleSessions();
   const where: any = {};
   if (filters?.status) where.status = filters.status;
   if (filters?.doctor_id) where.doctor_id = filters.doctor_id;
@@ -71,6 +76,7 @@ export async function listTrainingRequests(filters?: { status?: string; doctor_i
 }
 
 export async function getTrainingRequest(id: number) {
+  await expireStaleSessions();
   const r = await prisma.trainingRequest.findUnique({
     where: { id },
     include: { patient: { select: { id: true, first_name: true, last_name: true, email: true, phone: true, profile_image_id: true } }, doctor: { include: { user: { select: { first_name: true, last_name: true, email: true, profile_image_id: true } } } }, sessions: { include: { questions: true }, orderBy: { session_number: "asc" } } },
@@ -80,6 +86,7 @@ export async function getTrainingRequest(id: number) {
 }
 
 export async function acceptTraining(actor: AuthUser, id: number, doctorId: number) {
+  await expireStaleSessions();
   const req = await prisma.trainingRequest.findUnique({ where: { id } });
   if (!req) throw notFound("Training request not found.");
   if (req.status !== "pending") throw conflict("This training request is no longer pending.");
@@ -96,19 +103,29 @@ export async function acceptTraining(actor: AuthUser, id: number, doctorId: numb
 }
 
 export async function startSession(actor: AuthUser, trainingId: number, sessionId: number) {
+  await expireStaleSessions();
   const doctor = actor.role === "doctor" ? await doctorsRepo.findDoctorByUserId(actor.id) : null;
   const doctorId = doctor?.id ?? null;
   const session = await prisma.trainingSession.findUnique({ where: { id: sessionId }, include: { training: true } });
   if (!session || session.training_request_id !== trainingId) throw notFound("Session not found.");
   if (session.training.doctor_id !== doctorId && actor.role !== "admin") throw forbidden("Not assigned to this training.");
   if (session.status === "completed") throw conflict("Session already completed.");
-  const updated = await prisma.trainingSession.update({
-    where: { id: sessionId },
+  if (session.status === "expired") {
+    throw conflict("This session has expired because it was not started in time. Ask the patient to request a new training.");
+  }
+  if (["expired", "cancelled", "completed"].includes(session.training.status)) {
+    throw conflict("This training is no longer active. Ask the patient to request a new training.");
+  }
+  const changed = await prisma.trainingSession.updateMany({
+    where: { id: sessionId, status: { in: ["pending", "in_progress"] } },
     data: { status: "in_progress", started_at: new Date() },
   });
+  if (changed.count !== 1) {
+    throw conflict("This session changed before it could be started. Refresh and try again.");
+  }
   await prisma.trainingRequest.update({ where: { id: trainingId }, data: { status: "in_progress" } });
   broadcastPlatformDataUpdated("training");
-  return updated;
+  return prisma.trainingSession.findUniqueOrThrow({ where: { id: sessionId } });
 }
 
 export async function addQuestion(actor: AuthUser, sessionId: number, question: string, challenge?: string) {
@@ -123,20 +140,29 @@ export async function addQuestion(actor: AuthUser, sessionId: number, question: 
 }
 
 export async function nextSession(actor: AuthUser, trainingId: number, sessionId: number) {
+  await expireStaleSessions();
   const doctor = actor.role === "doctor" ? await doctorsRepo.findDoctorByUserId(actor.id) : null;
   const doctorId = doctor?.id ?? null;
   const session = await prisma.trainingSession.findUnique({ where: { id: sessionId }, include: { training: { include: { sessions: true } } } });
   if (!session || session.training_request_id !== trainingId) throw notFound("Session not found.");
   if (session.training.doctor_id !== doctorId && actor.role !== "admin") throw forbidden("Not assigned.");
+  if (session.status === "expired") throw conflict("This session has expired. Ask the patient to request a new training.");
+  if (["expired", "cancelled", "completed"].includes(session.training.status)) {
+    throw conflict("This training is no longer active.");
+  }
   await prisma.trainingSession.update({ where: { id: sessionId }, data: { status: "completed", completed_at: new Date() } });
   broadcastPlatformDataUpdated("training");
   return session.training;
 }
 
 export async function rescheduleTraining(actor: AuthUser, id: number, newStartDate: string, days?: number) {
+  await expireStaleSessions();
   const req = await prisma.trainingRequest.findUnique({ where: { id }, include: { sessions: true } });
   if (!req) throw notFound("Training request not found.");
-  if (req.status === "completed" || req.status === "cancelled") throw conflict("Cannot reschedule a completed or cancelled training.");
+  if (req.status === "completed" || req.status === "cancelled" || req.status === "expired") throw conflict("Cannot reschedule a completed, cancelled or expired training.");
+  if (req.sessions.some((session) => session.status === "expired")) {
+    throw conflict("A session on this training has expired. Please request a new training.");
+  }
   if (req.doctor_id !== null && actor.role === "doctor") {
     const doctor = await doctorsRepo.findDoctorByUserId(actor.id);
     if (!doctor || req.doctor_id !== doctor.id) throw forbidden("Not assigned.");
@@ -170,9 +196,10 @@ export async function rescheduleTraining(actor: AuthUser, id: number, newStartDa
 }
 
 export async function cancelTraining(actor: AuthUser, id: number) {
+  await expireStaleSessions();
   const req = await prisma.trainingRequest.findUnique({ where: { id } });
   if (!req) throw notFound("Training request not found.");
-  if (req.status === "completed" || req.status === "cancelled") throw conflict("Cannot cancel this training.");
+  if (req.status === "completed" || req.status === "cancelled" || req.status === "expired") throw conflict("Cannot cancel this training.");
   if (actor.role === "patient" && req.patient_id !== actor.id) throw forbidden("Not your training.");
   if (actor.role === "doctor") {
     const doctor = await doctorsRepo.findDoctorByUserId(actor.id);
@@ -200,12 +227,39 @@ export async function deleteTrainingRequest(actor: AuthUser, id: number) {
 }
 
 export async function completeTraining(actor: AuthUser, trainingId: number, sessionId: number) {
+  await expireStaleSessions();
   const doctor = actor.role === "doctor" ? await doctorsRepo.findDoctorByUserId(actor.id) : null;
   const doctorId = doctor?.id ?? null;
   const session = await prisma.trainingSession.findUnique({ where: { id: sessionId }, include: { training: { include: { sessions: true, patient: true } } } });
   if (!session || session.training_request_id !== trainingId) throw notFound("Session not found.");
   if (session.training.doctor_id !== doctorId && actor.role !== "admin") throw forbidden("Not assigned.");
+  if (session.status === "expired") throw conflict("This session has expired. Ask the patient to request a new training.");
+  if (["expired", "cancelled", "completed"].includes(session.training.status)) {
+    throw conflict("This training is no longer active.");
+  }
   await prisma.trainingSession.update({ where: { id: sessionId }, data: { status: "completed", completed_at: new Date() } });
+
+  const otherSessions = session.training.sessions.filter((item) => item.id !== sessionId);
+  const hasExpiredSession = otherSessions.some((item) => item.status === "expired");
+  const hasStartableSession = otherSessions.some((item) => ["pending", "in_progress"].includes(item.status));
+
+  if (hasExpiredSession && !hasStartableSession) {
+    // The training cannot be completed in full once a session was missed.
+    await prisma.trainingRequest.update({
+      where: { id: trainingId },
+      data: { status: "expired", expired_at: new Date() },
+    });
+    await notify(
+      session.training.patient_id,
+      "appointment_request",
+      `Your training "${session.training.training_topic}" has expired because a session was not started in time. Please request a new training.`,
+      null,
+      "Training expired"
+    );
+    broadcastPlatformDataUpdated("training");
+    return prisma.trainingRequest.findUnique({ where: { id: trainingId } });
+  }
+
   await prisma.trainingRequest.update({ where: { id: trainingId }, data: { status: "completed" } });
   await notify(session.training.patient_id, "appointment_request", "Your training has been completed.", null, "Training completed");
   const coordinators = await prisma.user.findMany({

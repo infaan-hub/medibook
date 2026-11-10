@@ -20,6 +20,7 @@ export async function register(): Promise<void> {
 
   const { sendDueReminders } = await import("./lib/reminders");
   const { purgeExpiredAppointments } = await import("./services/emergency.service");
+  const { expireStaleSessions } = await import("./services/session-expiry.service");
   const tick = async () => {
     try {
       const result = await sendDueReminders();
@@ -38,6 +39,21 @@ export async function register(): Promise<void> {
       }
     } catch (error) {
       console.error("[appointments] purge failed:", error);
+    }
+    try {
+      const expired = await expireStaleSessions();
+      if (
+        expired.training_sessions > 0 ||
+        expired.training_requests > 0 ||
+        expired.psychotherapy_sessions > 0 ||
+        expired.psychotherapy_requests > 0
+      ) {
+        console.log(
+          `[sessions] expired training=${expired.training_sessions}/${expired.training_requests} psychotherapy=${expired.psychotherapy_sessions}/${expired.psychotherapy_requests}`
+        );
+      }
+    } catch (error) {
+      console.error("[sessions] expiry failed:", error);
     }
   };
   setInterval(tick, minutes * 60_000);

@@ -14,6 +14,7 @@ const STATUS_TONE: Record<string, string> = {
   follow_up: "#7c3aed",
   completed: "#16805d",
   cancelled: "#a9b6bf",
+  expired: "#525252",
 };
 
 export function AdminPsychotherapyScreen() {
@@ -55,6 +56,7 @@ export function AdminPsychotherapyScreen() {
     in_progress: items.filter((r) => r.status === "in_progress").length,
     follow_up: items.filter((r) => r.status === "follow_up").length,
     completed: items.filter((r) => r.status === "completed").length,
+    expired: items.filter((r) => r.status === "expired").length,
   };
 
   async function remove(id: number) {
@@ -98,6 +100,7 @@ export function AdminPsychotherapyScreen() {
               ["in_progress", "In progress", statusCounts.in_progress],
               ["follow_up", "Follow-up", statusCounts.follow_up],
               ["completed", "Completed", statusCounts.completed],
+              ["expired", "Expired", statusCounts.expired],
             ] as [string, string, number][]).map(([key, label, count]) => (
               <button
                 key={key}
@@ -185,7 +188,21 @@ function PsychotherapyCard({ r, onDelete }: { r: any; onDelete: () => void }) {
       {r.sessions?.length > 0 && (
         <div className="admin-field">
           <small style={{ color: "#82909d", textTransform: "uppercase", fontSize: "10px", letterSpacing: ".04em" }}>Sessions</small>
-          <p style={{ margin: "2px 0 0", color: "#17384a", fontSize: "var(--text-sm)", fontWeight: "500" }}>{r.sessions.length} scheduled</p>
+          <p style={{ margin: "2px 0 0", color: "#17384a", fontSize: "var(--text-sm)", fontWeight: "500" }}>
+            {r.sessions.length} scheduled
+            {r.sessions.some((session: any) => session.status === "expired")
+              ? ` · ${r.sessions.filter((session: any) => session.status === "expired").length} expired`
+              : ""}
+          </p>
+        </div>
+      )}
+      {r.status === "expired" && (
+        <div className="admin-field">
+          <small style={{ color: "#82909d", textTransform: "uppercase", fontSize: "10px", letterSpacing: ".04em" }}>Expired</small>
+          <p style={{ margin: "2px 0 0", color: "#525252", fontSize: "var(--text-sm)" }}>
+            A scheduled session was not started before its time passed. The patient must
+            submit a new psychology service request.
+          </p>
         </div>
       )}
     </Card>

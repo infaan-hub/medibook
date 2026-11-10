@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlarmClock,
   CalendarCheck,
   CheckCircle2,
   Clock3,
@@ -58,6 +59,12 @@ const STATUS: Record<
     color: "#dc2626",
     bg: "#fee2e2",
     icon: <XCircle size={14} />,
+  },
+  expired: {
+    label: "Expired",
+    color: "#525252",
+    bg: "#f1f1f1",
+    icon: <AlarmClock size={14} />,
   },
 };
 
@@ -190,7 +197,7 @@ export function TrainingScreen() {
           <p>
             {tab === "active"
               ? "Request a training session and follow its delivery here."
-              : "Completed and cancelled trainings will appear here."}
+              : "Completed, cancelled and expired trainings will appear here."}
           </p>
           {tab === "active" && (
             <Link to="/training/request">
@@ -208,7 +215,14 @@ export function TrainingScreen() {
               (session) => session.status === "completed"
             ).length;
             const currentSession =
-              sessions.find((session) => session.status !== "completed") ??
+              sessions.find(
+                (session) =>
+                  t.status === "expired" && session.status === "expired"
+              ) ??
+              sessions.find(
+                (session) =>
+                  session.status === "pending" || session.status === "in_progress"
+              ) ??
               sessions[sessions.length - 1] ??
               null;
             const currentStatus = currentSession ? statusOf(currentSession.status) : status;
@@ -295,6 +309,16 @@ export function TrainingScreen() {
                   {t.notes && (
                     <div className="patient-appt-card__reason patient-training-card__notes">
                       {t.notes}
+                    </div>
+                  )}
+
+                  {t.status === "expired" && (
+                    <div className="patient-appt-card__reason patient-training-card__notes">
+                      This training expired because a session was not started in
+                      time. Please request a new training.
+                      <Link to="/training/request" style={{ marginLeft: 6, fontWeight: 600 }}>
+                        Request again
+                      </Link>
                     </div>
                   )}
 

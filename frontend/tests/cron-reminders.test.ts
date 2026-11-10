@@ -26,6 +26,7 @@ vi.mock("@/services/emergency.service", () => ({
 }));
 // handler() still runs the request audit — a minimal stand-in is enough.
 vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
   prisma: {
     auditEvent: {
       deleteMany: async () => ({ count: 0 }),

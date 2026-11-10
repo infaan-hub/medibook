@@ -31,7 +31,10 @@ const db = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/db", () => ({ prisma: db }));
+vi.mock("@/lib/db", () => ({
+  withDatabaseIdentity: (_identity: unknown, fn: () => Promise<unknown>) => fn(),
+  prisma: db,
+}));
 
 const DOCTOR = {
   id: 3,
