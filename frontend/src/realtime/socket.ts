@@ -536,6 +536,19 @@ class RealtimeClient {
 
 export const realtime = new RealtimeClient();
 
+/** Decide whether an event should reload a screen's current resource. */
+export function shouldSyncRealtimeEvent(
+  event: RealtimeEvent,
+  payload: Record<string, unknown>,
+  events: string[],
+  resources?: string[]
+): boolean {
+  if (event === "platform.data.updated") {
+    return !resources?.length || resources.includes(String(payload?.resource ?? ""));
+  }
+  return events.length === 0 || events.includes(event);
+}
+
 /** React hook: run `handler` for every realtime event while mounted. */
 export function useRealtimeEvent(handler: RealtimeHandler): void {
   const ref = useRef(handler);
@@ -574,6 +587,7 @@ export function useRealtimeStatus(): RealtimeStatus {
 export function useRealtimeSync({
   refresh,
   events = [],
+  resources,
   interval = FALLBACK_POLL_INTERVAL_MS,
   polling = false,
   reconcileOnFocus = false,
@@ -581,6 +595,8 @@ export function useRealtimeSync({
 }: {
   refresh: () => void;
   events?: string[];
+  /** For platform.data.updated, refresh only when payload.resource is listed. */
+  resources?: string[];
   interval?: number;
   /** Disable periodic reconciliation for screens refreshed by API actions and socket events. */
   polling?: boolean;
@@ -618,8 +634,8 @@ export function useRealtimeSync({
     return () => clearInterval(poll);
   }, [safeRefresh, interval, enabled, polling, connected]);
 
-  useRealtimeEvent((event) => {
-    if (event === "platform.data.updated" || events.length === 0 || events.includes(event)) {
+  useRealtimeEvent((event, payload) => {
+    if (shouldSyncRealtimeEvent(event, payload, events, resources)) {
       safeRefresh(true);
     }
   });

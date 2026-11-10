@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { realtime, __test, FALLBACK_POLL_INTERVAL_MS } from "../realtime/socket";
+import { realtime, __test, FALLBACK_POLL_INTERVAL_MS, shouldSyncRealtimeEvent } from "../realtime/socket";
 
 const { entityKey, RealtimeClient } = __test;
 
@@ -98,6 +98,24 @@ describe("realtime envelope ordering", () => {
 describe("fallback polling interval", () => {
   it("uses a low non-5s default", () => {
     expect(FALLBACK_POLL_INTERVAL_MS).toBeGreaterThanOrEqual(10_000);
+  });
+});
+
+describe("resource-scoped realtime refresh", () => {
+  it("refreshes a psychotherapy screen for psychotherapy events", () => {
+    expect(shouldSyncRealtimeEvent("platform.data.updated", { resource: "psychotherapy" }, ["platform.data.updated"], ["psychotherapy"])).toBe(true);
+  });
+
+  it("skips unrelated resource updates", () => {
+    expect(shouldSyncRealtimeEvent("platform.data.updated", { resource: "training" }, ["platform.data.updated"], ["psychotherapy"])).toBe(false);
+  });
+
+  it("keeps unfiltered overview screens subscribed to all platform updates", () => {
+    expect(shouldSyncRealtimeEvent("platform.data.updated", { resource: "training" }, ["platform.data.updated"])).toBe(true);
+  });
+
+  it("continues to refresh for explicitly subscribed entity events", () => {
+    expect(shouldSyncRealtimeEvent("appointment.updated", { id: 12 }, ["appointment.updated"], ["psychotherapy"])).toBe(true);
   });
 });
 

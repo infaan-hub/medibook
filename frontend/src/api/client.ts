@@ -151,58 +151,96 @@ export function envelope<T>(body: unknown, url: string, status: number): Envelop
 
 const TRAINING_CACHE_TTL = 15_000;
 const trainingCache = new Map<string, { data: unknown; ts: number }>();
+let trainingCacheGeneration = 0;
 
 export function invalidateTrainingCache() {
+  trainingCacheGeneration += 1;
   trainingCache.clear();
 }
 
 const PSYCHOTHERAPY_CACHE_TTL = 15_000;
 const psychotherapyCache = new Map<string, { data: unknown; ts: number }>();
+let psychotherapyCacheGeneration = 0;
 
 export function invalidatePsychotherapyCache() {
+  psychotherapyCacheGeneration += 1;
   psychotherapyCache.clear();
 }
+
+const inFlightGets = new Map<string, Promise<Envelope<unknown>>>();
+
+function invalidateForWrite(url: string) {
+  if (url.includes("/training")) invalidateTrainingCache();
+  if (url.includes("/psychotherapy")) invalidatePsychotherapyCache();
+}
+
 export async function apiGet<T>(url: string, params?: Record<string, unknown>): Promise<Envelope<T>> {
+  const isTraining = url.includes("/training");
   const isPsy = url.includes("/psychotherapy");
-  const cacheKey = url.includes("/training")
-    ? `GET:${url}:${JSON.stringify(params ?? {})}`
+  // Never reuse authenticated response data across accounts in this tab.
+  const identityScope = tokenStore.getAccess() ?? "anonymous";
+  const generation = isTraining ? trainingCacheGeneration : isPsy ? psychotherapyCacheGeneration : 0;
+  const cacheKey = isTraining
+    ? `${identityScope}:TRAINING:${generation}:${url}:${JSON.stringify(params ?? {})}`
     : isPsy
-      ? `PSY:${url}:${JSON.stringify(params ?? {})}`
+      ? `${identityScope}:PSY:${generation}:${url}:${JSON.stringify(params ?? {})}`
       : null;
+  const requestKey = `${identityScope}:${generation}:${http.getUri({ url, params })}`;
   if (cacheKey) {
-    const cache = cacheKey.startsWith("PSY:") ? psychotherapyCache : trainingCache;
-    const ttl = cacheKey.startsWith("PSY:") ? PSYCHOTHERAPY_CACHE_TTL : TRAINING_CACHE_TTL;
+    const cache = isPsy ? psychotherapyCache : trainingCache;
+    const ttl = isPsy ? PSYCHOTHERAPY_CACHE_TTL : TRAINING_CACHE_TTL;
     const hit = cache.get(cacheKey);
     if (hit && Date.now() - hit.ts < ttl) {
       return hit.data as Envelope<T>;
     }
+    if (hit) cache.delete(cacheKey);
   }
-  const { data } = await http.get<Envelope<T>>(url, { params });
-  const result = envelope<T>(data, url, 200);
-  if (cacheKey) {
-    const cache = cacheKey.startsWith("PSY:") ? psychotherapyCache : trainingCache;
-    cache.set(cacheKey, { data: result, ts: Date.now() });
-  }
-  return result;
+  const pending = inFlightGets.get(requestKey);
+  if (pending) return pending as Promise<Envelope<T>>;
+
+  const generationAtStart = isTraining ? trainingCacheGeneration : isPsy ? psychotherapyCacheGeneration : null;
+  const request = http.get<Envelope<T>>(url, { params }).then(({ data }) => {
+    const result = envelope<T>(data, url, 200);
+    // A write during this GET advances the generation, preventing stale data
+    // from repopulating a cache that was already invalidated.
+    const generationStillCurrent = isTraining
+      ? generationAtStart === trainingCacheGeneration
+      : isPsy
+        ? generationAtStart === psychotherapyCacheGeneration
+        : false;
+    if (cacheKey && generationStillCurrent) {
+      const cache = isPsy ? psychotherapyCache : trainingCache;
+      cache.set(cacheKey, { data: result, ts: Date.now() });
+    }
+    return result;
+  }).finally(() => {
+    if (inFlightGets.get(requestKey) === request) inFlightGets.delete(requestKey);
+  });
+  inFlightGets.set(requestKey, request as Promise<Envelope<unknown>>);
+  return request;
 }
 
 /** POST returning the unwrapped §28 envelope. */
 export async function apiPost<T>(url: string, body?: unknown): Promise<Envelope<T>> {
-  if (url.includes("/training")) invalidateTrainingCache();
-  if (url.includes("/psychotherapy")) invalidatePsychotherapyCache();
+  invalidateForWrite(url);
   const { data } = await http.post<Envelope<T>>(url, body ?? {});
+  invalidateForWrite(url);
   return envelope<T>(data, url, 200);
 }
 
 /** PATCH returning the unwrapped §28 envelope. */
 export async function apiPatch<T>(url: string, body?: unknown): Promise<Envelope<T>> {
+  invalidateForWrite(url);
   const { data } = await http.patch<Envelope<T>>(url, body ?? {});
+  invalidateForWrite(url);
   return envelope<T>(data, url, 200);
 }
 
 /** DELETE returning the §28 envelope where supplied by the API. */
 export async function apiDelete<T = void>(url: string): Promise<Envelope<T> | undefined> {
+  invalidateForWrite(url);
   const response = await http.delete<Envelope<T>>(url);
+  invalidateForWrite(url);
   if (response.status === 204) return undefined;
   return envelope<T>(response.data, url, response.status);
 }

@@ -6,7 +6,7 @@
  * Authorization ALWAYS happens here, on the server; UI state and localStorage
  * roles are never trusted.
  */
-import { prisma } from "./db";
+import { prisma, withDatabaseIdentity } from "./db";
 import { ApiError, PERMISSION_MESSAGES, unauthorized } from "./errors";
 import { verifyAccessToken } from "./jwt";
 import type { Role, User } from "@prisma/client";
@@ -20,7 +20,10 @@ export async function optionalAuth(req: Request): Promise<AuthUser | null> {
   const token = header.slice(7).trim();
   if (!token) return null;
   const claims = await verifyAccessToken(token); // throws 401 on bad tokens
-  const user = await prisma.user.findUnique({ where: { id: Number(claims.sub) } });
+  const tokenUserId = Number(claims.sub);
+  const user = await withDatabaseIdentity({ userId: tokenUserId, role: "authenticating", mode: "token" }, () =>
+    prisma.user.findUnique({ where: { id: tokenUserId } })
+  );
   if (!user) throw new ApiError(401, "User not found");
   if (!user.is_active) throw new ApiError(401, "User is not active");
   return user;

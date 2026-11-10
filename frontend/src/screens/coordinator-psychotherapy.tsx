@@ -40,7 +40,7 @@ export function CoordinatorPsychotherapyScreen() {
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
-  useRealtimeSync({ refresh: () => { void load(); }, events: ["platform.data.updated"] });
+  useRealtimeSync({ refresh: () => { void load(); }, events: ["platform.data.updated"], resources: ["psychotherapy"] });
 
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
   if (error) return <div className="page"><ErrorState message={error} onRetry={() => void load()} /></div>;

@@ -82,7 +82,7 @@ export function CoordinatorDashboard({
   useEffect(() => {
     loadPsychotherapy();
   }, [loadPsychotherapy]);
-  useRealtimeSync({ refresh: loadPsychotherapy, events: ["platform.data.updated"] });
+  useRealtimeSync({ refresh: loadPsychotherapy, events: ["platform.data.updated"], resources: ["psychotherapy"] });
   if (error && !stats) {
     return (
       <div className="page doctor-workspace">

@@ -17,6 +17,7 @@ import { optionalAuth, type AuthUser } from "./auth";
 import { auditRequest, startIdentifierCapture } from "./audit";
 import { errorResponseFrom, applySecurityHeaders, successResponse } from "./responses";
 import { throttleIdentity, throttleScope } from "./throttle";
+import { withDatabaseIdentity } from "./db";
 
 export interface RouteCtx {
   req: Request;
@@ -61,11 +62,23 @@ export function handler(
       // 2) Rate limiting — scoped views use ONLY their scope limit (DRF swaps
       //    the throttle classes on those views); everything else uses the
       //    default anon/user limits.
-      if (options.throttle) throttleScope(req, options.throttle);
+      if (options.throttle) await throttleScope(req, options.throttle);
       else throttleIdentity(req, user ? user.id : null);
 
       // 3) The route itself (role checks + validation happen inside).
-      response = await fn({ req, user, params });
+      const mode = options.skipAuth
+        ? "system"
+        : user
+          ? "user"
+          : pathname.startsWith("/api/auth/") || pathname === "/api/tokens/refresh"
+            ? "auth"
+            : "anonymous";
+      response = await withDatabaseIdentity({
+        userId: user?.id ?? null,
+        role: user?.role ?? (mode === "system" ? "system" : "anonymous"),
+        mode,
+        isSuperuser: user?.is_superuser ?? false,
+      }, () => Promise.resolve(fn({ req, user, params })));
     } catch (error) {
       response = errorResponseFrom(error);
     }
