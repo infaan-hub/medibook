@@ -319,7 +319,7 @@
 
 /* ================================================================
    SIDEBAR â€” mobile drawer (< 600px)
-   Modern slide-out panel: 78vw wide, left accent bar on active,
+   Modern slide-out panel: 74vw wide, left accent bar on active,
    generous touch targets, close button, polished user section.
    ================================================================ */
 @media (max-width: 599px) {
@@ -331,7 +331,7 @@
     left: 0;
     bottom: 0;
     z-index: 50;
-    width: min(78vw, 300px);
+    width: min(74vw, 280px);
     transform: translateX(-100%);
     transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
     padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px);
