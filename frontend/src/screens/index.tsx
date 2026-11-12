@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, memo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
@@ -76,7 +76,7 @@ function formatDoctorName(doctor: DoctorProfile): string {
  * Read straight off the card so a patient knows whether they can book before
  * they open the profile.
  */
-function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
+const AvailabilityChip = memo(function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
   const { t } = useTranslation();
   const available = doctor.available_today ?? doctor.is_available !== false;
   return (
@@ -88,7 +88,7 @@ function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
       {available ? t("home.available") : t("home.notAvailable")}
     </span>
   );
-}
+});
 
 /**
  * The signed-in person's photo in the greeting. Deterministic either way:
@@ -106,7 +106,7 @@ function GreetingAvatar({ user }: { user: User }) {
   );
 }
 
-function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: number }) {
+const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: number }) {
   const { t } = useTranslation();
   return (
     <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
@@ -140,7 +140,7 @@ function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: numb
       <ChevronRight size={17} />
     </Link>
   );
-}
+});
 
 function PatientHome({ user }: { user: User | null }) {
   const { t } = useTranslation();
