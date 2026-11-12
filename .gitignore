@@ -41,3 +41,8 @@ npm-debug.log*
 # Applies to both apps: the same smoke suite writes these wherever it runs.
 **/reports/_shots/
 **/reports/_smoke-*.pdf
+
+# --- Local database backups and portable tooling ---
+# The repository is public: never commit patient data or downloaded binaries.
+backups/
+.tools/

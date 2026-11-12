@@ -1,0 +1,88 @@
+name: Keep database awake
+
+# Neon suspends a free-plan project after ~5 minutes with no queries. This
+# workflow keeps MediBook's database active 24/7 by issuing a query every
+# 4 minutes.
+#
+# It works with no setup at all: by default it calls the production health
+# endpoint, which runs `SELECT 1` against the same database. If you add a
+# repository secret named DATABASE_URL, it skips the web app and pings Postgres
+# directly instead (recommended — it does not depend on a Vercel deployment).
+#
+# Optional repository variable:
+#   MEDIBOOK_HEALTH_URL = https://your-app.example.com/api/health/
+#
+# Note: GitHub automatically disables scheduled workflows in public
+# repositories after 60 days without repository activity. If that happens,
+# re-enable the workflow from the Actions tab, or run it manually.
+
+on:
+  schedule:
+    # Start a new ~29-minute keep-alive job every 30 minutes. Schedules are
+    # often delayed by a few minutes, so each job pings in a loop and the
+    # concurrency queue immediately starts the next job when one ends. That
+    # leaves no idle window long enough for Neon to suspend.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Queue the next job instead of cancelling the running one, so coverage is
+  # continuous.
+  group: medibook-database-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    name: Ping database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    steps:
+      - name: Query every 4 minutes for ~29 minutes
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HEALTH_URL: ${{ vars.MEDIBOOK_HEALTH_URL || 'https://zan-medibook.vercel.app/api/health/' }}
+        run: |
+          set -euo pipefail
+
+          ping_database() {
+            if [ -n "${DATABASE_URL:-}" ] && command -v psql >/dev/null 2>&1; then
+              psql "$DATABASE_URL" --no-psqlrc --tuples-only --no-align \
+                --command "SELECT 1;" >/dev/null
+              echo "Direct Postgres ping OK"
+              return 0
+            fi
+
+            body="$(curl --fail --silent --show-error --max-time 30 "$HEALTH_URL")"
+            echo "Health response: $body"
+            if printf '%s' "$body" | grep -q '"database":"connected"'; then
+              echo "Health-endpoint ping OK"
+              return 0
+            fi
+
+            echo "::error::Health endpoint did not report a connected database"
+            return 1
+          }
+
+          # t = 0, 4, 8, ... 28 minutes. Neon's idle threshold is 5 minutes.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "Keep-alive ping $attempt/8 at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for retry in 1 2 3; do
+              if ping_database; then
+                break
+              fi
+              if [ "$retry" -eq 3 ]; then
+                echo "::error::Database ping failed three times in a row"
+                exit 1
+              fi
+              echo "Ping failed; retrying in 20s..."
+              sleep 20
+            done
+
+            if [ "$attempt" -lt 8 ]; then
+              sleep 240
+            fi
+          done

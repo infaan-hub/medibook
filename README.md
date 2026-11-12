@@ -44,6 +44,14 @@ All in `frontend/.env` — copy `frontend/.env.example` and fill in at least `DA
 
 Never expose `VAPID_PRIVATE_KEY` or `AUTH_SECRET` to the client.
 
+## Database keep-alive and backups
+
+- `/.github/workflows/keep-alive.yml` queries the Neon database every 4 minutes, 24/7, so it never idles into suspension.
+- `/.github/workflows/backup.yml` dumps every table daily at 02:15 UTC and stores an encrypted artifact for 30 days (requires the `DATABASE_URL` and `BACKUP_PASSPHRASE` repository secrets).
+- `scripts/backup/install-backup-task.ps1` registers a Windows task that writes a verified full dump to `E:\Medibook\backups` every day at 02:00 and keeps 30 days.
+
+See [`docs/DATABASE_BACKUPS.md`](docs/DATABASE_BACKUPS.md) for setup, restore commands and the Neon compute-hour caveat.
+
 ## Realtime (no chat)
 
 - `GET /ws/notifications/?token=…` upgrades to a WebSocket (frames `{event, payload}`, `{"type":"ping"}` → `{event:"pong"}`, close `4001` = refresh your token).

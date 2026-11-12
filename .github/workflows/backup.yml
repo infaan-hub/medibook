@@ -1,0 +1,145 @@
+name: Backup database
+
+# Full logical backup of the MediBook PostgreSQL database (all 36 tables,
+# schema and data). Runs every day at 02:15 UTC and can be started manually
+# from the Actions tab.
+#
+# The dump is encrypted before it leaves the runner because this repository is
+# public: raw medical data must never be stored as a downloadable artifact.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL       Neon connection string (direct endpoint preferred)
+#   BACKUP_PASSPHRASE  long random passphrase used to encrypt the dump.
+#                      Store it in a password manager: without it the backup
+#                      cannot be restored.
+#
+# Optional repository secret:
+#   BACKUP_DATABASE_URL  Direct (non-pooler) URL. When absent, Neon's
+#                        "-pooler" hostname is rewritten to the direct host.
+#
+# Artifacts are kept for 30 days. This is an off-machine copy; the local
+# Windows task in scripts/backup writes daily dumps to E:\Medibook\backups.
+
+on:
+  schedule:
+    - cron: "15 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medibook-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump and encrypt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check configuration
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Add the repository secret DATABASE_URL (the Neon connection string)."
+            exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::Add the repository secret BACKUP_PASSPHRASE (long random value)."
+            exit 1
+          fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 16 ]; then
+            echo "::error::BACKUP_PASSPHRASE must be at least 16 characters."
+            exit 1
+          fi
+
+      - name: Install PostgreSQL 18 client
+        run: |
+          set -euo pipefail
+          # The Neon server runs PostgreSQL 18, and pg_dump refuses to dump a
+          # server newer than itself, so install a matching client from PGDG.
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates postgresql-common
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          pg_dump --version
+
+      - name: Dump every table and all data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+
+          DUMP_URL="${BACKUP_DATABASE_URL:-$DATABASE_URL}"
+          # pg_dump should not run through PgBouncer; use Neon's direct host.
+          case "$DUMP_URL" in
+            *neon.tech*-pooler.*) DUMP_URL="${DUMP_URL/-pooler./.}" ;;
+          esac
+
+          STAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+          DUMP="backup/medibook-${STAMP}.dump"
+
+          pg_dump \
+            --dbname "$DUMP_URL" \
+            --format=custom \
+            --compress=9 \
+            --no-owner \
+            --no-privileges \
+            --file "$DUMP"
+
+          # A custom-format dump starts with the "PGDMP" magic bytes. Also make
+          # pg_restore read the archive so a truncated file fails the workflow.
+          test "$(head -c 5 "$DUMP")" = "PGDMP"
+          pg_restore --list "$DUMP" > /dev/null
+          echo "Dump size: $(du -h "$DUMP" | cut -f1)"
+          echo "Table-data sections: $(pg_restore --list "$DUMP" | grep -c 'TABLE DATA' || true)"
+
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 \
+            --output "${DUMP}.gpg" "$DUMP"
+          rm -f "$DUMP"
+
+          sha256sum "${DUMP}.gpg" > "backup/SHA256SUMS"
+
+          cat > "backup/RESTORE.txt" <<EOF
+          MediBook database backup
+          Created (UTC): ${STAMP}
+          Contents: complete PostgreSQL schema + data for every table.
+
+          Decrypt:
+            gpg --output medibook.dump --decrypt medibook-${STAMP}.dump.gpg
+
+          Restore into an empty database:
+            pg_restore --no-owner --no-privileges \
+              --dbname "postgresql://USER:PASSWORD@HOST:5432/DB" medibook.dump
+
+          Restore over an existing database (drops and recreates its objects):
+            pg_restore --clean --if-exists --no-owner --no-privileges \
+              --dbname "postgresql://USER:PASSWORD@HOST:5432/DB" medibook.dump
+          EOF
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: medibook-db-backup-${{ github.run_id }}
+          path: |
+            backup/*.gpg
+            backup/SHA256SUMS
+            backup/RESTORE.txt
+          if-no-files-found: error
+          retention-days: 30
