@@ -218,7 +218,6 @@
     "noTimesDescDate": "Todos los horarios están reservados o no disponibles. Prueba otra fecha.",
     "availableWindows": "Franjas disponibles: {{windows}} — las citas duran 30 minutos.",
     "preferredStart": "Indica tu hora de inicio preferida",
-    "timeHint": "Introduce cualquier minuto dentro de las franjas disponibles. Las citas duran 30 minutos; el servidor comprueba todo el intervalo por descansos y reservas existentes. Si la hora acaba de ocuparse, elige otra.",
     "confirmTitle": "Confirma tu reserva",
     "dateAtTime": "{{date}} a las {{time}}",
     "reasonHome": "Motivo de la visita a domicilio (opcional)",

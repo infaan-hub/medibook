@@ -218,7 +218,6 @@
     "noTimesDescDate": "All times are booked or unavailable. Try another date.",
     "availableWindows": "Available windows: {{windows}} — appointments last 30 minutes.",
     "preferredStart": "Set your preferred appointment start time",
-    "timeHint": "Enter any minute within the available windows. Appointments last 30 minutes; the server checks the full interval for breaks and existing bookings. If the time has just been taken, choose another time.",
     "confirmTitle": "Confirm your booking",
     "dateAtTime": "{{date}} at {{time}}",
     "reasonHome": "Reason for home visit (optional)",

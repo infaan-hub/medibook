@@ -218,7 +218,6 @@
     "noTimesDescDate": "Tous les créneaux sont réservés ou indisponibles. Essayez une autre date.",
     "availableWindows": "Plages disponibles : {{windows}} — les rendez-vous durent 30 minutes.",
     "preferredStart": "Définissez l'heure de début souhaitée",
-    "timeHint": "Saisissez n'importe quelle minute dans les plages disponibles. Les rendez-vous durent 30 minutes ; le serveur vérifie tout l'intervalle pour les pauses et les réservations existantes. Si le créneau vient d'être pris, choisissez-en un autre.",
     "confirmTitle": "Confirmez votre réservation",
     "dateAtTime": "{{date}} à {{time}}",
     "reasonHome": "Motif de la visite à domicile (facultatif)",

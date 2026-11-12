@@ -218,7 +218,6 @@
     "noTimesDescDate": "Alle Zeiten sind gebucht oder nicht verfügbar. Versuchen Sie ein anderes Datum.",
     "availableWindows": "Verfügbare Zeitfenster: {{windows}} — Termine dauern 30 Minuten.",
     "preferredStart": "Legen Sie Ihre bevorzugte Startzeit fest",
-    "timeHint": "Geben Sie eine beliebige Minute innerhalb der verfügbaren Zeitfenster ein. Termine dauern 30 Minuten; der Server prüft den gesamten Zeitraum auf Pausen und bestehende Buchungen. Wenn die Zeit gerade vergeben wurde, wählen Sie eine andere.",
     "confirmTitle": "Bestätigen Sie Ihre Buchung",
     "dateAtTime": "{{date}} um {{time}}",
     "reasonHome": "Grund für den Hausbesuch (optional)",

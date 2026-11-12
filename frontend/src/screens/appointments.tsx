@@ -648,7 +648,7 @@ export function BookingScreen() {
 
       {/* Step 2: Choose any available start time */}
       {selectedDate && (
-        <Card>
+        <Card className="booking-time-card">
           <h2>{t("booking.chooseTime", { date: formatDate(selectedDate) })}</h2>
           {slotsLoading ? (
             <Skeleton lines={3} />
@@ -676,9 +676,6 @@ export function BookingScreen() {
                     setError(null);
                   }}
                 />
-                <p className="page__subtitle">
-                  {t("booking.timeHint")}
-                </p>
               </div>
             </>
           )}

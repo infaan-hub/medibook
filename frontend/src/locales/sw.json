@@ -218,7 +218,6 @@
     "noTimesDescDate": "Nyakati zote zimewekwa au hazipatikani. Jaribu tarehe nyingine.",
     "availableWindows": "Dirisha zinazopatikana: {{windows}} — miadi hudumu dakika 30.",
     "preferredStart": "Weka muda wa kuanza unaopendelea",
-    "timeHint": "Weka dakika yoyote ndani ya dirisha zinazopatikana. Miadi hudumu dakika 30; seva hukagua muda wote kwa mapumziko na miadi iliyopo. Ikiwa muda umechukuliwa, chagua mwingine.",
     "confirmTitle": "Thibitisha miadi yako",
     "dateAtTime": "{{date}} saa {{time}}",
     "reasonHome": "Sababu ya ziara ya nyumbani (hiari)",
