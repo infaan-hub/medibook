@@ -104,6 +104,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 const HomeScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.HomeScreen })));
 const NotFoundPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.NotFoundPage })));
 const DoctorsPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorsPage })));
+const ListDoctorsPage = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.ListDoctorsPage })));
 const DoctorProfileScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.DoctorProfileScreen })));
 const BookingScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BookingScreen })));
 const BookingSuccessScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.BookingSuccessScreen })));
@@ -306,6 +307,7 @@ export default function App() {
                 }
               >
                 <Route path="/doctors" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
+                <Route path="/list-doctors" element={<RequirePatient><ListDoctorsPage /></RequirePatient>} />
                 <Route path="/home-visit/doctor" element={<RequirePatient><DoctorsPage /></RequirePatient>} />
                 <Route path="/home-visit/doctors/:id" element={<RequirePatient><DoctorProfileScreen /></RequirePatient>} />
                 <Route path="/home-visit/booking/:id" element={<RequirePatient><BookingScreen /></RequirePatient>} />

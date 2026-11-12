@@ -50,6 +50,11 @@ export function listDoctors(params: ListDoctorsParams = {}): Promise<
   return apiGet<Paginated<DoctorProfile>>("/doctors/", params as Record<string, unknown>);
 }
 
+/** GET /api/doctors/top/ — the four doctors with the most appointments. */
+export function listTopDoctors(): Promise<Envelope<DoctorProfile[]>> {
+  return apiGet<DoctorProfile[]>("/doctors/top/");
+}
+
 /** GET /api/doctors/:id/ â€” a single doctor's public professional profile. */
 export function getDoctor(id: number, appointmentId?: number): Promise<Envelope<DoctorProfile>> {
   const query = appointmentId ? `?appointment_id=${appointmentId}` : "";

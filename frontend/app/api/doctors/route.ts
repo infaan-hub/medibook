@@ -4,7 +4,7 @@ import { paginationParams, paginate } from "@/lib/pagination";
 import { doctorListWhere, countDoctors, listDoctors } from "@/repositories/doctors.repo";
 import { doctorDto } from "@/lib/serializers";
 import { hasLocation, haversineKm } from "@/lib/geo";
-import { availableTodayIds, createOwnDoctorProfile } from "@/services/doctor.service";
+import { availableTodayIds, createOwnDoctorProfile, withAvailableToday } from "@/services/doctor.service";
 
 /** Default "near me" circle, in km — patients usually want walking distance. */
 const DEFAULT_RADIUS_KM = 5;
@@ -21,22 +21,6 @@ type DoctorRow = Awaited<ReturnType<typeof listDoctors>>[number];
  * for one side only.
  * POST — authenticated profile creation.
  */
-async function withAvailableToday(
-  req: Request,
-  rows: DoctorRow[],
-  origin?: { latitude: number; longitude: number }
-) {
-  const todayIds = await availableTodayIds(rows.map((row) => row.id));
-  return rows.map((row) => ({
-    ...doctorDto(row, req, origin),
-    // Contact details are shared after a patient has an appointment, not in
-    // public directory and dashboard doctor cards.
-    phone: "",
-    phone_secondary: "",
-    available_today: row.is_available && todayIds.has(row.id),
-  }));
-}
-
 export const GET = handler(async ({ req }) => {
   const url = new URL(req.url);
   const latitude = Number(url.searchParams.get("latitude"));

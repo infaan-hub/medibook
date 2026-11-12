@@ -231,3 +231,18 @@ export async function adminDeleteDoctor(user: AuthUser, id: number): Promise<voi
     `Deleted Dr. ${fullName} and their account`,
   );
 }
+export async function withAvailableToday(
+  req: Request,
+  rows: Awaited<ReturnType<typeof doctors.listDoctors>>,
+  origin?: { latitude: number; longitude: number }
+) {
+  const todayIds = await availableTodayIds(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...doctorDto(row, req, origin),
+    // Contact details are shared after a patient has an appointment, not in
+    // public directory and dashboard doctor cards.
+    phone: "",
+    phone_secondary: "",
+    available_today: row.is_available && todayIds.has(row.id),
+  }));
+}

@@ -5,7 +5,7 @@ import i18n from "../i18n";
 import { listMyAppointments } from "../api/appointments";
 import { reasonLabel, statusLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
-import { listDoctors, type ListDoctorsParams } from "../api/doctors";
+import { listDoctors, listTopDoctors, type ListDoctorsParams } from "../api/doctors";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { DistanceBadge } from "../components/Location";
@@ -106,6 +106,42 @@ function GreetingAvatar({ user }: { user: User }) {
   );
 }
 
+function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: number }) {
+  const { t } = useTranslation();
+  return (
+    <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
+      <DoctorImage
+        src={doctorCardImage(doctor)}
+        alt={formatDoctorName(doctor)}
+        width={500}
+        height={333}
+        sizes="40vw"
+        priority={index === 0}
+      />
+      <span className="home__doctor-info">
+        <strong>{formatDoctorName(doctor)}</strong>
+        {doctor.specialties && doctor.specialties.length > 0 ? (
+          <span className="home__doctor-specialties">
+            {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
+          </span>
+        ) : (
+          <span>{t("home.medicalSpecialist")}</span>
+        )}
+        {doctor.has_location && directionsUrl(doctor) && (
+          <span className="home__doctor-location">
+            <MapPin size={11} />
+            <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
+              {nearestAreaName(doctor) ?? t("home.directions")}
+            </a>
+          </span>
+        )}
+        <AvailabilityChip doctor={doctor} />
+      </span>
+      <ChevronRight size={17} />
+    </Link>
+  );
+}
+
 function PatientHome({ user }: { user: User | null }) {
   const { t } = useTranslation();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
@@ -128,8 +164,8 @@ function PatientHome({ user }: { user: User | null }) {
   useEffect(() => {
     if (user) loadAppointments();
     else setAppointments([]);
-    listDoctors()
-      .then((response) => setDoctors((response.data?.results ?? []).slice(0, 3)))
+    listTopDoctors()
+      .then((response) => setDoctors((response.data ?? []).slice(0, 4)))
       .catch(() => setDoctors([]));
   }, [loadAppointments, user]);
 
@@ -198,43 +234,14 @@ function PatientHome({ user }: { user: User | null }) {
       <section className="home__section">
         <div className="home__section-heading">
           <h1>{t("home.topDoctors")}</h1>
-          <Link to="/doctors">{t("home.seeAll")} <ChevronRight size={15} /></Link>
+          <Link to="/list-doctors">{t("home.seeAll")} <ChevronRight size={15} /></Link>
         </div>
         {doctors === null ? <Skeleton lines={4} /> : doctors.length === 0 ? (
           <EmptyState title={t("home.noDoctors")} description={t("home.noDoctorsDesc")} />
         ) : (
           <div className="home__doctor-list">
             {doctors.map((doctor, index) => (
-              <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
-                <DoctorImage
-                  src={doctorCardImage(doctor)}
-                  alt={formatDoctorName(doctor)}
-                  width={500}
-                  height={333}
-                  sizes="40vw"
-                  priority={index === 0}
-                />
-                <span className="home__doctor-info">
-                  <strong>{formatDoctorName(doctor)}</strong>
-                  {doctor.specialties && doctor.specialties.length > 0 ? (
-                    <span className="home__doctor-specialties">
-                      {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
-                    </span>
-                  ) : (
-                    <span>{t("home.medicalSpecialist")}</span>
-                  )}
-                  {doctor.has_location && directionsUrl(doctor) && (
-                    <span className="home__doctor-location">
-                      <MapPin size={11} />
-                      <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
-                        {nearestAreaName(doctor) ?? t("home.directions")}
-                      </a>
-                    </span>
-                  )}
-                  <AvailabilityChip doctor={doctor} />
-                </span>
-                <ChevronRight size={17} />
-              </Link>
+              <DoctorCard key={doctor.id} doctor={doctor} index={index} />
             ))}
           </div>
         )}
@@ -523,3 +530,41 @@ export function NotFoundPage() {
 }
 
 export { CoordinatorScreen } from "./coordinator";
+export function ListDoctorsPage() {
+  const { t } = useTranslation();
+  const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listDoctors()
+      .then((response) => setDoctors(response.data?.results ?? []))
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : i18n.t("common.couldNotLoadDoctors"))
+      );
+  }, []);
+
+  return (
+    <div className="page home-page">
+      <Link to="/" className="home__back-link">
+        <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} /> {t("common.back", { defaultValue: "Back" })}
+      </Link>
+      <section className="home__section">
+        <div className="home__section-heading">
+          <h1>{t("doctors.title")}</h1>
+        </div>
+        {error && <ErrorState message={error} />}
+        {doctors === null ? (
+          <Skeleton lines={6} />
+        ) : doctors.length === 0 ? (
+          <EmptyState title={t("home.noDoctors")} description={t("home.noDoctorsDesc")} />
+        ) : (
+          <div className="home__doctor-list">
+            {doctors.map((doctor, index) => (
+              <DoctorCard key={doctor.id} doctor={doctor} index={index} />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -11,8 +11,9 @@ import "../i18n";
 import { HomeScreen } from "../screens/index";
 import type { Appointment, DoctorProfile, User } from "../api/types";
 
-const { listDoctors, listMyAppointments, listArticles, sessionUser } = vi.hoisted(() => ({
+const { listDoctors, listTopDoctors, listMyAppointments, listArticles, sessionUser } = vi.hoisted(() => ({
   listDoctors: vi.fn(),
+  listTopDoctors: vi.fn(),
   listMyAppointments: vi.fn(),
   listArticles: vi.fn(),
   sessionUser: { value: null as unknown },
@@ -21,6 +22,7 @@ const { listDoctors, listMyAppointments, listArticles, sessionUser } = vi.hoiste
 vi.mock("../api/doctors", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/doctors")>()),
   listDoctors,
+  listTopDoctors,
 }));
 vi.mock("../api/appointments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/appointments")>()),
@@ -56,6 +58,10 @@ function envelope<T>(results: T[]) {
     message: "",
     data: { count: results.length, page: 1, page_size: 100, total_pages: 1, next: null, previous: null, results },
   };
+}
+
+function topEnvelope<T>(results: T[]) {
+  return { success: true, message: "", data: results };
 }
 
 function doctor(overrides: Record<string, unknown> = {}): DoctorProfile {
@@ -104,7 +110,7 @@ beforeEach(() => {
 describe("patient home — Top Doctors availability chip", () => {
   it("omits the guest greeting and avatar on the public home page", async () => {
     sessionUser.value = null;
-    listDoctors.mockResolvedValue(envelope([]));
+    listTopDoctors.mockResolvedValue(topEnvelope([]));
 
     const { container } = renderHome();
 
@@ -115,8 +121,7 @@ describe("patient home — Top Doctors availability chip", () => {
   });
 
   it("shows Available only for a doctor with an active window today", async () => {
-    listDoctors.mockResolvedValue(
-      envelope([doctor({ id: 4, first_name: "Neema", last_name: "Kimaro", available_today: true })]),
+    listTopDoctors.mockResolvedValue(topEnvelope([doctor({ id: 4, first_name: "Neema", last_name: "Kimaro", available_today: true })]),
     );
 
     const { container } = renderHome();
@@ -125,13 +130,12 @@ describe("patient home — Top Doctors availability chip", () => {
     const chip = container.querySelector(".home__doctor-status");
     expect(chip).toHaveTextContent("Available");
     expect(chip?.className).not.toContain("home__doctor-status--off");
-    expect(listDoctors).toHaveBeenCalledTimes(1);
+    expect(listTopDoctors).toHaveBeenCalledTimes(1);
   });
 
   it("shows Not available when today's day is not set on the schedule", async () => {
     // Healthy account, but no active window on today's weekday → unavailable.
-    listDoctors.mockResolvedValue(
-      envelope([
+    listTopDoctors.mockResolvedValue(topEnvelope([
         doctor({ id: 13, first_name: "Zawadi", last_name: "Juma", is_available: true, available_today: false }),
       ]),
     );
@@ -145,8 +149,7 @@ describe("patient home — Top Doctors availability chip", () => {
   });
 
   it("reads Available and Not available side by side in Top Doctors", async () => {
-    listDoctors.mockResolvedValue(
-      envelope([
+    listTopDoctors.mockResolvedValue(topEnvelope([
         doctor({ id: 4, available_today: true }),
         doctor({ id: 13, first_name: "Zawadi", last_name: "Juma", available_today: false }),
       ]),
@@ -162,8 +165,7 @@ describe("patient home — Top Doctors availability chip", () => {
   });
 
   it("marks a suspended doctor Not available even with a window today", async () => {
-    listDoctors.mockResolvedValue(
-      envelope([
+    listTopDoctors.mockResolvedValue(topEnvelope([
         doctor({ id: 9, first_name: "John", last_name: "Mrema", is_available: false, available_today: false }),
       ]),
     );
@@ -199,7 +201,7 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
 
 describe("patient home — upcoming appointments clarify emergencies", () => {
   it("hides the whole upcoming section when there are no live upcoming appointments", async () => {
-    listDoctors.mockResolvedValue(envelope([]));
+    listTopDoctors.mockResolvedValue(topEnvelope([]));
     listMyAppointments.mockResolvedValue(envelope([
       appointment({ id: 30, status: "cancelled" }),
       appointment({ id: 31, status: "rejected" }),
@@ -216,7 +218,7 @@ describe("patient home — upcoming appointments clarify emergencies", () => {
   });
 
   it("shows the upcoming section while a pending appointment remains", async () => {
-    listDoctors.mockResolvedValue(envelope([]));
+    listTopDoctors.mockResolvedValue(topEnvelope([]));
     listMyAppointments.mockResolvedValue(envelope([appointment({ id: 34, status: "pending" })]));
 
     const { container } = renderHome();
@@ -226,7 +228,7 @@ describe("patient home — upcoming appointments clarify emergencies", () => {
   });
 
   it("marks an emergency request red: date box, title, badge and reason", async () => {
-    listDoctors.mockResolvedValue(envelope([]));
+    listTopDoctors.mockResolvedValue(topEnvelope([]));
     listMyAppointments.mockResolvedValue(
       envelope([appointment({ id: 21, appointment_type: "EMERGENCY", emergency_reason: "accident" })]),
     );
@@ -246,7 +248,7 @@ describe("patient home — upcoming appointments clarify emergencies", () => {
   });
 
   it("keeps a normal booking on the green date box with the Doctor appointment title", async () => {
-    listDoctors.mockResolvedValue(envelope([]));
+    listTopDoctors.mockResolvedValue(topEnvelope([]));
     listMyAppointments.mockResolvedValue(envelope([appointment({ id: 22 })]));
 
     const { container } = renderHome();
@@ -258,3 +260,5 @@ describe("patient home — upcoming appointments clarify emergencies", () => {
     expect(screen.queryByText("Emergency", { selector: ".badge--emergency" })).not.toBeInTheDocument();
   });
 });
+
+

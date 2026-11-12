@@ -10,6 +10,7 @@ export const DOCTOR_INCLUDE = {
   user: true,
   specialties: { include: { specialty: true } },
   hospitals: true,
+  _count: { select: { appointments: { where: { deleted_at: null } } } },
 } satisfies Prisma.DoctorInclude;
 
 export type DoctorWithRelations = Prisma.DoctorGetPayload<{ include: typeof DOCTOR_INCLUDE }>;
