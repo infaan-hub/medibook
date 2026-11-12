@@ -737,9 +737,153 @@
     "next": "Weiter",
     "getStarted": "Loslegen",
     "slideOf": "Folie {{current}} von {{total}}",
-    "goToSlide": "Zu Folie {{current}} gehen: {{title}}",
+    "goToSlide": "Zu Folie {{current}} wechseln: {{title}}",
     "byDevice": "{{title}} nach Gerät",
-    "howItWorks": "So funktioniert es: {{steps}}"
+    "howItWorks": "So funktioniert es: {{steps}}",
+    "logoAlt": "MediBook-Logo",
+    "exampleCaption": "Beispiel — Ihr Bildschirm kann je nach Browser und Version leicht anders aussehen.",
+    "languagePrompt": {
+      "title": "Sprache wählen",
+      "description": "Wählen Sie die Sprache, die Sie in MediBook verwenden möchten. Sie können sie jederzeit ändern.",
+      "continue": "Weiter",
+      "close": "Sprachauswahl schließen"
+    },
+    "slides": {
+      "welcome": {
+        "title": "Willkommen bei MediBook",
+        "description": "Ihre Anleitung, um MediBook einzurichten.",
+        "steps": [
+          "Standort erlauben",
+          "Benachrichtigungen aktivieren",
+          "MediBook als App installieren",
+          "MediBook bequem auf Handy und Computer nutzen"
+        ]
+      },
+      "location": {
+        "title": "Standort erlauben",
+        "why": "MediBook kann Ihren Standort verwenden, um Gesundheitseinrichtungen in der Nähe zu finden und standortbezogene Funktionen anzubieten.",
+        "heroAlt": "MediBook fragt „Standort festlegen, um zu buchen“ mit der Schaltfläche „Meinen Standort teilen“",
+        "heroCaption": "Das sehen Sie zuerst in MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome unter Android fragt „Darf MediBook Ihren Standort verwenden?“ mit hervorgehobenem Zulassen",
+            "steps": [
+              "Ihr Browser fragt möglicherweise: „Darf MediBook Ihren Standort verwenden?“",
+              "Wählen Sie Zulassen.",
+              "Vorher blockiert? Tippen Sie auf das Symbol neben der Adressleiste → Website-Einstellungen → Standort → Zulassen."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone und iPad",
+            "alt": "iPhone-Hinweis, MediBook den Standort zu erlauben, mit hervorgehobenem „Beim Verwenden der App erlauben“",
+            "steps": [
+              "Ihr Browser fragt möglicherweise: „Darf MediBook Ihren Standort verwenden?“",
+              "Wählen Sie „Beim Verwenden der App erlauben“.",
+              "Vorher blockiert? Tippen Sie auf die Adressleiste → Website-Einstellungen → Standort → Zulassen."
+            ]
+          },
+          "desktop": {
+            "label": "Computer",
+            "alt": "Pop-up des Desktop-Browsers fragt nach Ihrem Standort, mit hervorgehobenem Zulassen",
+            "steps": [
+              "Ihr Browser fragt möglicherweise: „Darf MediBook Ihren Standort verwenden?“",
+              "Wählen Sie Zulassen.",
+              "Vorher blockiert? Klicken Sie auf das Schloss-Symbol in der Adressleiste → Website-Einstellungen → Standort → Zulassen."
+            ]
+          }
+        }
+      },
+      "notifications": {
+        "title": "Benachrichtigungen aktivieren",
+        "why": "Benachrichtigungen informieren Sie, wenn sich Ihr Termin, Ihre Buchung, die Antwort eines Arztes, eine Notfallanfrage oder eine andere wichtige MediBook-Aktivität ändert.",
+        "flow": [
+          "MediBook",
+          "Benachrichtigungen erlauben?",
+          "Zulassen tippen",
+          "Benachrichtigungen sind an"
+        ],
+        "heroAlt": "Die Karte „Benachrichtigungen aktivieren“ in MediBook mit der Schaltfläche Zulassen",
+        "heroCaption": "Das sehen Sie zuerst in MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome unter Android fragt „Darf MediBook Ihnen Benachrichtigungen senden?“ mit hervorgehobenem Zulassen",
+            "steps": [
+              "Öffnen Sie MediBook in Chrome.",
+              "Tippen Sie auf Zulassen, wenn die Benachrichtigungsberechtigung erscheint.",
+              "Kehren Sie zu MediBook zurück — Updates kommen auch an, wenn MediBook geschlossen ist."
+            ],
+            "note": "Blockieren gedrückt? Tippen Sie auf das Symbol neben der Adressleiste → Website-Einstellungen → Benachrichtigungen → Zulassen."
+          },
+          "iphone": {
+            "label": "iPhone und iPad",
+            "alt": "MediBook auf dem iPhone zeigt „MediBook installieren, um Benachrichtigungen zu aktivieren“ mit den Schritten zum Hinzufügen zum Home-Bildschirm",
+            "caption": "Das zeigt MediBook auf dem iPhone",
+            "steps": [
+              "iPhone und iPad können Benachrichtigungen nicht aus einem normalen Safari-Tab aktivieren — installieren Sie MediBook zuerst.",
+              "Tippen Sie in Safari auf Teilen → Zum Home-Bildschirm → Hinzufügen.",
+              "Öffnen Sie MediBook vom Home-Bildschirm.",
+              "Tippen Sie auf Zulassen, wenn Benachrichtigungen angefragt werden."
+            ],
+            "note": "„Nicht erlauben“ gedrückt? Entfernen Sie MediBook vom Home-Bildschirm, fügen Sie es erneut hinzu und tippen Sie auf Zulassen."
+          },
+          "desktop": {
+            "label": "Computer",
+            "alt": "Pop-up des Desktop-Browsers fragt nach dem Senden von MediBook-Benachrichtigungen, mit hervorgehobenem Zulassen",
+            "steps": [
+              "Öffnen Sie MediBook in Ihrem Browser.",
+              "Drücken Sie Zulassen, wenn Benachrichtigungen angefragt werden.",
+              "Lassen Sie Benachrichtigungen aktiviert, um Updates zu erhalten, während MediBook im Hintergrund ist."
+            ],
+            "note": "Blockieren gedrückt? Klicken Sie auf das Schloss-Symbol in der Adressleiste → Website-Einstellungen → Benachrichtigungen → Zulassen."
+          }
+        }
+      },
+      "install": {
+        "title": "MediBook als App erhalten",
+        "description": "Sie können MediBook auf Android, iPhone/iPad und Computer installieren.",
+        "extraAlt": "Die Schaltfläche „App herunterladen“ in der MediBook-Seitenleiste",
+        "extraCaption": "Oder tippen Sie unter dem Seitenmenü auf App herunterladen",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome-Menü unter Android mit hervorgehobenem „Zum Startbildschirm hinzufügen“",
+            "steps": [
+              "Öffnen Sie MediBook in Chrome.",
+              "Suchen Sie „App installieren“ oder „Zum Startbildschirm hinzufügen“ — die Formulierung hängt von Browser und Version ab.",
+              "Tippen Sie auf die Installationsoption.",
+              "Bestätigen Sie die Installation.",
+              "Öffnen Sie MediBook vom Startbildschirm oder der App-Übersicht."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone und iPad",
+            "alt": "Safari-Teilen-Menü auf dem iPhone mit hervorgehobenem „Zum Home-Bildschirm“",
+            "steps": [
+              "Öffnen Sie MediBook in Safari.",
+              "Tippen Sie auf die Teilen-Schaltfläche.",
+              "Wählen Sie Zum Home-Bildschirm.",
+              "Bestätigen Sie mit Hinzufügen.",
+              "Öffnen Sie MediBook vom Home-Bildschirm.",
+              "Aktivieren Sie Benachrichtigungen, wenn MediBook danach fragt."
+            ],
+            "note": "Safari hat keine automatische Schaltfläche „App installieren“ — Teilen → Zum Home-Bildschirm ist der richtige Weg."
+          },
+          "desktop": {
+            "label": "Computer",
+            "alt": "Adressleiste des Browsers mit hervorgehobenem Installationssymbol",
+            "steps": [
+              "Öffnen Sie MediBook in Chrome, Edge oder einem anderen Browser, der die App-Installation unterstützt.",
+              "Suchen Sie das Installationssymbol in der Adressleiste oder öffnen Sie das Browsermenü.",
+              "Wählen Sie „MediBook installieren“ und bestätigen Sie.",
+              "Öffnen Sie MediBook vom Desktop oder Startmenü."
+            ],
+            "note": "Schaltfläche und genaue Formulierung unterscheiden sich zwischen Chrome, Edge, Safari und Versionen. In Browsern ohne Installationsunterstützung können Sie MediBook normal in einem Browser-Tab weiterverwenden."
+          }
+        }
+      }
+    }
   },
   "language": {
     "title": "Sprache",

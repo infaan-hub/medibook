@@ -730,7 +730,7 @@
     "couldNotReadLocation": "No se pudo leer tu ubicación. Inténtalo de nuevo."
   },
   "onboarding": {
-    "skip": "Saltar",
+    "skip": "Omitir",
     "suggested": "Sugerido",
     "back": "Atrás",
     "signIn": "Iniciar sesión",
@@ -739,7 +739,151 @@
     "slideOf": "Diapositiva {{current}} de {{total}}",
     "goToSlide": "Ir a la diapositiva {{current}}: {{title}}",
     "byDevice": "{{title}} por dispositivo",
-    "howItWorks": "Cómo funciona: {{steps}}"
+    "howItWorks": "Cómo funciona: {{steps}}",
+    "logoAlt": "Logotipo de MediBook",
+    "exampleCaption": "Ejemplo — tu pantalla puede verse un poco diferente según tu navegador y su versión.",
+    "languagePrompt": {
+      "title": "Elige tu idioma",
+      "description": "Selecciona el idioma que quieres usar en MediBook. Puedes cambiarlo en cualquier momento.",
+      "continue": "Continuar",
+      "close": "Cerrar la selección de idioma"
+    },
+    "slides": {
+      "welcome": {
+        "title": "Te damos la bienvenida a MediBook",
+        "description": "Tu guía para preparar MediBook.",
+        "steps": [
+          "Permitir la ubicación",
+          "Activar las notificaciones",
+          "Instalar MediBook como aplicación",
+          "Usar MediBook cómodamente en el teléfono y el ordenador"
+        ]
+      },
+      "location": {
+        "title": "Permitir la ubicación",
+        "why": "MediBook puede usar tu ubicación para ayudarte a encontrar servicios de salud cercanos y ofrecer funciones basadas en la ubicación.",
+        "heroAlt": "MediBook preguntando «Configura tu ubicación para reservar» con un botón «Compartir mi ubicación»",
+        "heroCaption": "Lo que verás primero en MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome en Android preguntando «¿Permitir que MediBook use tu ubicación?» con Permitir resaltado",
+            "steps": [
+              "Tu navegador puede preguntar: «¿Permitir que MediBook use tu ubicación?»",
+              "Elige Permitir.",
+              "¿Lo bloqueaste antes? Toca el icono junto a la barra de direcciones → Configuración del sitio → Ubicación → Permitir."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone y iPad",
+            "alt": "Aviso de iPhone pidiendo permitir que MediBook use tu ubicación, con «Permitir mientras se usa la app» resaltado",
+            "steps": [
+              "Tu navegador puede preguntar: «¿Permitir que MediBook use tu ubicación?»",
+              "Elige «Permitir mientras se usa la app».",
+              "¿Lo bloqueaste antes? Toca la barra de direcciones → Configuración del sitio web → Ubicación → Permitir."
+            ]
+          },
+          "desktop": {
+            "label": "Ordenador",
+            "alt": "Ventana emergente del navegador pidiendo conocer tu ubicación, con Permitir resaltado",
+            "steps": [
+              "Tu navegador puede preguntar: «¿Permitir que MediBook use tu ubicación?»",
+              "Elige Permitir.",
+              "¿Lo bloqueaste antes? Haz clic en el icono del candado de la barra de direcciones → Configuración del sitio → Ubicación → Permitir."
+            ]
+          }
+        }
+      },
+      "notifications": {
+        "title": "Activar las notificaciones",
+        "why": "Las notificaciones te ayudan a saber cuándo cambia tu cita, reserva, la respuesta de un médico, una solicitud de emergencia u otra actividad importante de MediBook.",
+        "flow": [
+          "MediBook",
+          "¿Permitir notificaciones?",
+          "Pulsa Permitir",
+          "Las notificaciones están activadas"
+        ],
+        "heroAlt": "La tarjeta «Activar notificaciones» en MediBook con el botón Permitir",
+        "heroCaption": "Lo que verás primero en MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome en Android preguntando «¿Permitir que MediBook te envíe notificaciones?» con Permitir resaltado",
+            "steps": [
+              "Abre MediBook en Chrome.",
+              "Cuando aparezca el permiso de notificaciones, toca Permitir.",
+              "Vuelve a MediBook: las novedades llegan aunque MediBook esté cerrado."
+            ],
+            "note": "¿Pulsaste Bloquear? Toca el icono junto a la barra de direcciones → Configuración del sitio → Notificaciones → Permitir."
+          },
+          "iphone": {
+            "label": "iPhone y iPad",
+            "alt": "MediBook en iPhone mostrando «Instala MediBook para activar las notificaciones» con los pasos de Añadir a pantalla de inicio",
+            "caption": "Lo que MediBook muestra en iPhone",
+            "steps": [
+              "iPhone y iPad no pueden activar las notificaciones desde una pestaña normal de Safari: primero instala MediBook.",
+              "En Safari, toca Compartir → Añadir a pantalla de inicio → Añadir.",
+              "Abre MediBook desde tu pantalla de inicio.",
+              "Toca Permitir cuando se soliciten las notificaciones."
+            ],
+            "note": "¿Pulsaste No permitir? Elimina MediBook de tu pantalla de inicio, vuelve a añadirlo y toca Permitir."
+          },
+          "desktop": {
+            "label": "Ordenador",
+            "alt": "Ventana emergente del navegador pidiendo enviar notificaciones de MediBook, con Permitir resaltado",
+            "steps": [
+              "Abre MediBook en tu navegador.",
+              "Pulsa Permitir cuando se soliciten las notificaciones.",
+              "Deja las notificaciones activadas para recibir novedades mientras MediBook está en segundo plano."
+            ],
+            "note": "¿Pulsaste Bloquear? Haz clic en el icono del candado de la barra de direcciones → Configuración del sitio → Notificaciones → Permitir."
+          }
+        }
+      },
+      "install": {
+        "title": "Obtén MediBook como aplicación",
+        "description": "Puedes instalar MediBook en Android, iPhone/iPad y ordenador.",
+        "extraAlt": "El botón «Descargar app» en la barra lateral de MediBook",
+        "extraCaption": "O toca Descargar app debajo del menú lateral",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Menú de Chrome en Android con «Añadir a pantalla de inicio» resaltado",
+            "steps": [
+              "Abre MediBook en Chrome.",
+              "Busca «Instalar aplicación» o «Añadir a pantalla de inicio»: el texto depende de tu navegador y su versión.",
+              "Toca la opción de instalación.",
+              "Confirma la instalación.",
+              "Abre MediBook desde tu pantalla de inicio o el lanzador de apps."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone y iPad",
+            "alt": "Hoja de compartir de Safari en iPhone con «Añadir a pantalla de inicio» resaltada",
+            "steps": [
+              "Abre MediBook en Safari.",
+              "Toca el botón Compartir.",
+              "Selecciona Añadir a pantalla de inicio.",
+              "Confirma con Añadir.",
+              "Abre MediBook desde tu pantalla de inicio.",
+              "Activa las notificaciones cuando MediBook lo pida."
+            ],
+            "note": "Safari no tiene un botón automático de «Instalar aplicación»: Compartir → Añadir a pantalla de inicio es el procedimiento real."
+          },
+          "desktop": {
+            "label": "Ordenador",
+            "alt": "Barra de direcciones del navegador con el icono de instalación resaltado",
+            "steps": [
+              "Abre MediBook en Chrome, Edge u otro navegador compatible con la instalación de apps.",
+              "Busca el icono de instalación en la barra de direcciones o abre el menú del navegador.",
+              "Selecciona «Instalar MediBook» y confirma.",
+              "Abre MediBook desde tu escritorio o el menú Inicio."
+            ],
+            "note": "El botón y el texto exactos varían entre Chrome, Edge, Safari y sus versiones. En navegadores sin compatibilidad de instalación, sigue usando MediBook normalmente en una pestaña."
+          }
+        }
+      }
+    }
   },
   "language": {
     "title": "Idioma",

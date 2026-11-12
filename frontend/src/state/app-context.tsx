@@ -23,11 +23,17 @@ import {
   logout as logoutRequest,
   register as registerRequest,
   socialLogin as socialLoginRequest,
+  updateMe,
   verifyLoginOtp as verifyLoginOtpRequest,
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import { realtime } from "../realtime/socket";
-import i18n, { changeAppLanguage, normalizeLanguage } from "../i18n";
+import i18n, {
+  changeAppLanguage,
+  clearRememberedLanguageChoice,
+  getRememberedLanguageChoice,
+  normalizeLanguage,
+} from "../i18n";
 import type { LoginPushPayload, RegisterPayload, User } from "../api/types";
 
 /* ---------------- Toasts ---------------- */
@@ -127,19 +133,50 @@ function currentLanguage() {
 }
 
 /**
- * After sign-in the ACCOUNT language wins over whatever the device had.
- * The switch is instant and also updates localStorage, so a later guest view
- * keeps the same language.
+ * The language a sign-in should start with: an explicit guest choice beats the
+ * detector's value, so onboarding selections survive the auth redirect.
  */
-function applyAccountLanguage(language: unknown): void {
-  const next = normalizeLanguage(typeof language === "string" ? language : null);
-  if (next && next !== currentLanguage()) void changeAppLanguage(next);
+function preferredLanguage() {
+  return getRememberedLanguageChoice() ?? currentLanguage();
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>("booting");
   const [user, setUserState] = useState<User | null>(null);
   const booted = useRef(false);
+
+  /**
+   * Apply the account language after boot/sign-in. An explicit guest choice
+   * (made in the onboarding gate or the guest switcher) wins over the account's
+   * previous value and is written back to the account, so the language keeps
+   * working on every page and on other devices. The local switch is instant;
+   * the PATCH is best-effort and retried on the next sign-in.
+   */
+  const applyAccountLanguage = useCallback((account: User) => {
+    const remembered = getRememberedLanguageChoice();
+    const accountLanguage = normalizeLanguage(account.language);
+    const next = remembered ?? accountLanguage;
+    if (next && next !== currentLanguage()) void changeAppLanguage(next);
+
+    if (!remembered) return;
+    if (accountLanguage === remembered) {
+      // New registration or an account already using the chosen language.
+      clearRememberedLanguageChoice();
+      return;
+    }
+
+    void updateMe({ language: remembered })
+      .then((envelope) => {
+        // Skip if the user signed out (or switched accounts) while this ran.
+        if (tokenStore.getUser()?.id !== envelope.data.id) return;
+        tokenStore.setUser(envelope.data);
+        setUserState(envelope.data);
+        clearRememberedLanguageChoice();
+      })
+      .catch(() => {
+        // Keep the local choice and the marker; retry on the next sign-in.
+      });
+  }, []);
 
   // Boot probe (§54 token restore): a stored refresh token means a previous
   // session exists. Validate it against /auth/me/ — the axios interceptor
@@ -156,7 +193,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((envelope) => {
         setUserState(envelope.data);
         tokenStore.setUser(envelope.data);
-        applyAccountLanguage(envelope.data.language);
+        applyAccountLanguage(envelope.data);
         setStatus("authed");
       })
       .catch(() => {
@@ -164,17 +201,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUserState(null);
         setStatus("guest");
       });
-  }, []);
+  }, [applyAccountLanguage]);
 
   const applyAuth = useCallback(
     (payload: { access: string; refresh: string; user: User }) => {
       tokenStore.setPair({ access: payload.access, refresh: payload.refresh });
       tokenStore.setUser(payload.user);
       setUserState(payload.user);
-      applyAccountLanguage(payload.user.language);
+      applyAccountLanguage(payload.user);
       setStatus("authed");
     },
-    []
+    [applyAccountLanguage]
   );
 
   const login = useCallback(
@@ -216,7 +253,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Start the new account in the language the guest picked before signing up.
       const envelope = await registerRequest({
         ...payload,
-        language: payload.language ?? currentLanguage(),
+        language: payload.language ?? preferredLanguage(),
       });
       applyAuth(envelope.data);
     },
@@ -225,7 +262,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const socialLogin = useCallback(
     async (provider: "google", token: string) => {
-      const envelope = await socialLoginRequest(provider, token, currentLanguage());
+      const envelope = await socialLoginRequest(provider, token, preferredLanguage());
       applyAuth(envelope.data);
     },
     [applyAuth]

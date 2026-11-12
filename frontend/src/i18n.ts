@@ -18,6 +18,15 @@ export const LANGUAGE_NAMES: Record<AppLanguage, string> = {
 };
 export const LANGUAGE_STORAGE_KEY = "medibook_language";
 
+/**
+ * A language the guest explicitly picked (onboarding gate or the guest
+ * switcher). Kept separate from `LANGUAGE_STORAGE_KEY` because i18n's detector
+ * writes that key eagerly on first load. `SessionProvider` reads this marker
+ * after sign-in so the choice also becomes the account language instead of
+ * being overwritten by the account's previous value.
+ */
+export const LANGUAGE_CHOICE_STORAGE_KEY = "medibook_language_choice";
+
 export function isAppLanguage(value: unknown): value is AppLanguage {
   return typeof value === "string" && APP_LANGUAGES.includes(value as AppLanguage);
 }
@@ -31,6 +40,34 @@ export function normalizeLanguage(value: string | null | undefined): AppLanguage
 export function getStoredLanguage(): AppLanguage | null {
   if (typeof window === "undefined") return null;
   return normalizeLanguage(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));
+}
+
+/** Remember an explicit guest choice so a later sign-in can keep it. */
+export function rememberLanguageChoice(language: AppLanguage): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LANGUAGE_CHOICE_STORAGE_KEY, language);
+  } catch {
+    /* Private mode with storage disabled — the current visit still switches. */
+  }
+}
+
+export function getRememberedLanguageChoice(): AppLanguage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return normalizeLanguage(window.localStorage.getItem(LANGUAGE_CHOICE_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function clearRememberedLanguageChoice(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LANGUAGE_CHOICE_STORAGE_KEY);
+  } catch {
+    /* Nothing to clean up when storage is unavailable. */
+  }
 }
 
 function syncDocumentLanguage(language: string) {

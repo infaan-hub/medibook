@@ -113,7 +113,7 @@
     "updatePassword": "Sasisha nenosiri",
     "passwordResetToast": "Nenosiri limesasishwa. Ingia kwa nenosiri lako jipya.",
     "backToSignIn": "Rudi kuingia",
-    "welcomeTitle": "Medibook",
+    "welcomeTitle": "Hospitali ya Medibook",
     "welcomeSubtitle": "Afya Yako, Kipaumbele Chetu",
     "continueWithGoogle": "Endelea na Google",
     "socialOptions": "Chaguo za kuingia kwa mitandao",
@@ -739,7 +739,151 @@
     "slideOf": "Kionyeshi {{current}} kati ya {{total}}",
     "goToSlide": "Nenda kwenye kionyeshi {{current}}: {{title}}",
     "byDevice": "{{title}} kwa kifaa",
-    "howItWorks": "Jinsi inavyofanya kazi: {{steps}}"
+    "howItWorks": "Jinsi inavyofanya kazi: {{steps}}",
+    "logoAlt": "Nembo ya MediBook",
+    "exampleCaption": "Mfano — skrini yako inaweza kuonekana tofauti kidogo kulingana na kivinjari na toleo lako.",
+    "languagePrompt": {
+      "title": "Chagua lugha yako",
+      "description": "Chagua lugha unayotaka kutumia kwenye MediBook. Unaweza kuibadilisha wakati wowote.",
+      "continue": "Endelea",
+      "close": "Funga uteuzi wa lugha"
+    },
+    "slides": {
+      "welcome": {
+        "title": "Karibu MediBook",
+        "description": "Mwongozo wako wa kuitayarisha MediBook.",
+        "steps": [
+          "Ruhusu eneo",
+          "Washa taarifa",
+          "Sakinisha MediBook kama programu",
+          "Tumia MediBook kwa urahisi kwenye simu na kompyuta"
+        ]
+      },
+      "location": {
+        "title": "Ruhusu Eneo",
+        "why": "MediBook inaweza kutumia eneo lako kukusaidia kupata huduma za afya zilizo karibu na kutoa huduma zinazotegemea eneo.",
+        "heroAlt": "MediBook ikikuuliza \"Weka eneo lako ili kuweka miadi\" na kitufe cha \"Shiriki eneo langu\"",
+        "heroCaption": "Utakachokiona kwanza kwenye MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome ya Android ikiuliza \"Ruhusu MediBook kutumia eneo lako?\" na Ruhusu limeangaziwa",
+            "steps": [
+              "Kivinjari chako kinaweza kuuliza: \"Ruhusu MediBook kutumia eneo lako?\"",
+              "Chagua Ruhusu.",
+              "Ulikuwa umezuia awali? Gusa aikoni kando ya upau wa anwani → Mipangilio ya tovuti → Eneo → Ruhusu."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone na iPad",
+            "alt": "Onyo la iPhone linalouliza kuruhusu MediBook kutumia eneo lako, na \"Ruhusu unapotumia programu\" limeangaziwa",
+            "steps": [
+              "Kivinjari chako kinaweza kuuliza: \"Ruhusu MediBook kutumia eneo lako?\"",
+              "Chagua \"Ruhusu unapotumia programu\".",
+              "Ulikuwa umezuia awali? Gusa upau wa anwani → Mipangilio ya tovuti → Eneo → Ruhusu."
+            ]
+          },
+          "desktop": {
+            "label": "Kompyuta",
+            "alt": "Dirisha ibukizi la kivinjari cha kompyuta likiuliza kujua eneo lako, na Ruhusu limeangaziwa",
+            "steps": [
+              "Kivinjari chako kinaweza kuuliza: \"Ruhusu MediBook kutumia eneo lako?\"",
+              "Chagua Ruhusu.",
+              "Ulikuwa umezuia awali? Bofya aikoni ya kufuli kwenye upau wa anwani → Mipangilio ya tovuti → Eneo → Ruhusu."
+            ]
+          }
+        }
+      },
+      "notifications": {
+        "title": "Washa Taarifa",
+        "why": "Taarifa hukusaidia kujua wakati miadi yako, uhifadhi, jibu la daktari, ombi la dharura au shughuli nyingine muhimu ya MediBook inabadilika.",
+        "flow": [
+          "MediBook",
+          "Ruhusu taarifa?",
+          "Bonyeza Ruhusu",
+          "Taarifa zimewashwa"
+        ],
+        "heroAlt": "Kadi ya \"Washa taarifa\" kwenye MediBook ikiwa na kitufe cha Ruhusu",
+        "heroCaption": "Utakachokiona kwanza kwenye MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome ya Android ikiuliza \"Ruhusu MediBook kukutumia taarifa?\" na Ruhusu limeangaziwa",
+            "steps": [
+              "Fungua MediBook kwenye Chrome.",
+              "Ruhusa ya taarifa inapotokea, gusa Ruhusu.",
+              "Rudi kwenye MediBook — taarifa hufika hata MediBook ikiwa imefungwa."
+            ],
+            "note": "Ulibonyeza Zuia? Gusa aikoni kando ya upau wa anwani → Mipangilio ya tovuti → Taarifa → Ruhusu."
+          },
+          "iphone": {
+            "label": "iPhone na iPad",
+            "alt": "MediBook kwenye iPhone ikionyesha \"Sakinisha MediBook ili kuwasha taarifa\" pamoja na hatua za Ongeza kwenye Skrini ya Mwanzo",
+            "caption": "MediBook inachoonyesha kwenye iPhone",
+            "steps": [
+              "iPhone na iPad haziwezi kuwasha taarifa kutoka kwenye kichupo cha kawaida cha Safari — sakinisha MediBook kwanza.",
+              "Kwenye Safari gusa Shiriki → Ongeza kwenye Skrini ya Mwanzo → Ongeza.",
+              "Fungua MediBook kutoka Skrini yako ya Mwanzo.",
+              "Gusa Ruhusu taarifa zinapoulizwa."
+            ],
+            "note": "Ulibonyeza Usiruhusu? Ondoa MediBook kwenye Skrini yako ya Mwanzo, iongeze tena, kisha gusa Ruhusu."
+          },
+          "desktop": {
+            "label": "Kompyuta",
+            "alt": "Dirisha ibukizi la kivinjari cha kompyuta likiuliza kutuma taarifa za MediBook, na Ruhusu limeangaziwa",
+            "steps": [
+              "Fungua MediBook kwenye kivinjari chako.",
+              "Bonyeza Ruhusu taarifa zinapoulizwa.",
+              "Acha taarifa zikiwa washwa ili kupata taarifa MediBook ikiwa nyuma."
+            ],
+            "note": "Ulibonyeza Zuia? Bofya aikoni ya kufuli kwenye upau wa anwani → Mipangilio ya tovuti → Taarifa → Ruhusu."
+          }
+        }
+      },
+      "install": {
+        "title": "Pata MediBook kama Programu",
+        "description": "Unaweza kusakinisha MediBook kwenye Android, iPhone/iPad na kompyuta.",
+        "extraAlt": "Kitufe cha \"Pakua programu\" kwenye upau wa kando wa MediBook",
+        "extraCaption": "Au gusa Pakua programu chini ya menyu ya upau wa kando",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Menyu ya Chrome kwenye Android ikiwa na \"Ongeza kwenye skrini ya mwanzo\" limeangaziwa",
+            "steps": [
+              "Fungua MediBook kwenye Chrome.",
+              "Tafuta \"Sakinisha programu\" au \"Ongeza kwenye skrini ya mwanzo\" — maneno hutegemea kivinjari na toleo lako.",
+              "Gusa chaguo la usakinishaji.",
+              "Thibitisha usakinishaji.",
+              "Fungua MediBook kutoka skrini yako ya mwanzo au kizindua programu."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone na iPad",
+            "alt": "Karatasi ya Kushiriki ya Safari ya iPhone ikiwa na \"Ongeza kwenye Skrini ya Mwanzo\" limeangaziwa",
+            "steps": [
+              "Fungua MediBook kwenye Safari.",
+              "Gusa kitufe cha Shiriki.",
+              "Chagua Ongeza kwenye Skrini ya Mwanzo.",
+              "Thibitisha kwa Ongeza.",
+              "Fungua MediBook kutoka Skrini yako ya Mwanzo.",
+              "Washa taarifa MediBook inapouliza."
+            ],
+            "note": "Safari haina kitufe cha kiotomatiki cha \"Sakinisha programu\" — Shiriki → Ongeza kwenye Skrini ya Mwanzo ndiyo utaratibu halisi."
+          },
+          "desktop": {
+            "label": "Kompyuta",
+            "alt": "Upau wa anwani wa kivinjari cha kompyuta ukiwa na aikoni ya usakinishaji iliyoangaziwa",
+            "steps": [
+              "Fungua MediBook kwenye Chrome, Edge au kivinjari kingine kinachoauni usakinishaji wa programu.",
+              "Tafuta aikoni ya usakinishaji kwenye upau wa anwani, au fungua menyu ya kivinjari.",
+              "Chagua \"Sakinisha MediBook\" na uthibitishe.",
+              "Fungua MediBook kutoka eneo la kazi au menyu ya kuanza."
+            ],
+            "note": "Kitufe halisi na maneno hutofautiana kati ya Chrome, Edge, Safari na matoleo. Katika vivinjari visivyoauni usakinishaji, endelea kutumia MediBook kawaida kwenye kichupo cha kivinjari."
+          }
+        }
+      }
+    }
   },
   "language": {
     "title": "Lugha",

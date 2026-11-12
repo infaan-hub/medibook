@@ -17,7 +17,9 @@ import {
   APP_LANGUAGES,
   LANGUAGE_NAMES,
   changeAppLanguage,
+  clearRememberedLanguageChoice,
   normalizeLanguage,
+  rememberLanguageChoice,
   type AppLanguage,
 } from "../i18n";
 import { updateMe } from "../api/auth";
@@ -66,9 +68,21 @@ export function LanguageSwitcher({
   async function choose(language: AppLanguage) {
     setOpen(false);
     onSelected?.();
-    if (saving || language === current) return;
+    if (saving) return;
+
+    if (language === current) {
+      // Picking the language already on screen is still an explicit guest
+      // choice worth carrying into the next sign-in.
+      if (!user) rememberLanguageChoice(language);
+      return;
+    }
 
     setSaving(language);
+    // A guest choice is remembered for the next sign-in; a signed-in switch is
+    // written straight to the account below, so no marker is needed.
+    if (user) clearRememberedLanguageChoice();
+    else rememberLanguageChoice(language);
+
     // Instant UI switch first — no reload, every t() re-renders.
     await changeAppLanguage(language);
 
@@ -77,6 +91,9 @@ export function LanguageSwitcher({
         const envelope = await updateMe({ language });
         session?.setUser(envelope.data);
       } catch {
+        // The account could not keep it now; remember the choice so the next
+        // sign-in retries the sync instead of snapping back.
+        rememberLanguageChoice(language);
         // i18n.t (not the closure's `t`) so the warning is in the NEW language.
         notify("error", i18n.t("language.saveError"));
       }

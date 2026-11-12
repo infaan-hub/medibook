@@ -15,6 +15,7 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import i18n from "../i18n";
 import {
   confirmPasswordReset,
@@ -29,6 +30,11 @@ import { getPushPlatform } from "../lib/platform";
 import { collectLoginPush } from "../push/loginPush";
 import { TextField } from "../components/ui";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import {
+  LanguageGate,
+  hasSeenLanguagePrompt,
+  markLanguagePromptSeen,
+} from "../components/LanguageGate";
 
 /* ---------------- shared helpers ---------------- */
 
@@ -220,9 +226,6 @@ type OnboardingSlide = {
   readonly installable?: boolean;
 };
 
-const EXAMPLE_CAPTION =
-  "Example \u2014 your screen may look slightly different depending on your browser and version.";
-
 /** Detect the visitor's device; only ever used to pre-select a tab. */
 function detectPlatform(): PlatformKey {
   if (typeof navigator === "undefined") return "desktop";
@@ -232,202 +235,155 @@ function detectPlatform(): PlatformKey {
   return "desktop";
 }
 
-const onboardingSlides: readonly OnboardingSlide[] = [
-  {
-    title: "Welcome to MediBook",
-    description: "Your guide to getting MediBook ready.",
-    logo: true,
-    steps: [
-      "Allow location",
-      "Turn on notifications",
-      "Install MediBook as an app",
-      "Use MediBook comfortably on phone and desktop",
-    ],
-  },
-  {
-    title: "Allow Location",
-    why: "MediBook can use your location to help you find nearby healthcare services and provide location-aware features.",
-    hero: {
-      src: "onboarding/location-prompt-card.png",
-      alt: 'MediBook asking "Set your location to book" with a "Share my location" button',
-      caption: "What you will see in MediBook first",
-      real: true,
+/** Read a translated list; i18next returns arrays only with returnObjects. */
+function translatedList(t: TFunction, key: string): string[] {
+  const value = t(key, { returnObjects: true });
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+/**
+ * Builds the deck in the active language. Every visible string (titles,
+ * descriptions, alt text, captions, steps and notes) comes from
+ * `onboarding.slides.*`, so changing language re-renders the whole carousel
+ * instantly — the images and layout stay the same.
+ */
+function buildOnboardingSlides(t: TFunction): readonly OnboardingSlide[] {
+  const exampleCaption = t("onboarding.exampleCaption");
+  const platformBase = (slide: string, platform: PlatformKey) =>
+    `onboarding.slides.${slide}.platforms.${platform}`;
+
+  const visual = (
+    slide: string,
+    platform: PlatformKey,
+    src: string,
+    real = false
+  ): OnboardingVisual => ({
+    src,
+    alt: t(`${platformBase(slide, platform)}.alt`),
+    caption: real
+      ? t(`${platformBase(slide, platform)}.caption`)
+      : exampleCaption,
+    ...(real ? { real: true } : {}),
+  });
+
+  const panel = (
+    slide: string,
+    platform: PlatformKey,
+    illustrated: OnboardingVisual,
+    extra?: OnboardingVisual
+  ): OnboardingPlatformPanel => {
+    const base = platformBase(slide, platform);
+    const note = t(`${base}.note`, { defaultValue: "" });
+    return {
+      key: platform,
+      label: t(`${base}.label`),
+      visual: illustrated,
+      steps: translatedList(t, `${base}.steps`),
+      ...(note ? { note } : {}),
+      ...(extra ? { extra } : {}),
+    };
+  };
+
+  const installExtra: OnboardingVisual = {
+    src: "onboarding/download-button.png",
+    alt: t("onboarding.slides.install.extraAlt"),
+    caption: t("onboarding.slides.install.extraCaption"),
+    real: true,
+  };
+
+  return [
+    {
+      title: t("onboarding.slides.welcome.title"),
+      description: t("onboarding.slides.welcome.description"),
+      logo: true,
+      steps: translatedList(t, "onboarding.slides.welcome.steps"),
     },
-    platforms: [
-      {
-        key: "android",
-        label: "Android",
-        visual: {
-          src: "tutorial-location-android.svg",
-          alt: 'Android Chrome asking "Allow MediBook to use your location?" with Allow highlighted',
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
-          "Choose Allow.",
-          "Previously blocked it? Tap the icon next to the address bar \u2192 Site settings \u2192 Location \u2192 Allow.",
-        ],
+    {
+      title: t("onboarding.slides.location.title"),
+      why: t("onboarding.slides.location.why"),
+      hero: {
+        src: "onboarding/location-prompt-card.png",
+        alt: t("onboarding.slides.location.heroAlt"),
+        caption: t("onboarding.slides.location.heroCaption"),
+        real: true,
       },
-      {
-        key: "iphone",
-        label: "iPhone & iPad",
-        visual: {
-          src: "tutorial-location-iphone.svg",
-          alt: 'iPhone alert asking to let MediBook use your location, with "Allow While Using App" highlighted',
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
-          "Choose \u201cAllow While Using App\u201d.",
-          "Previously blocked it? Tap the address bar \u2192 Website Settings \u2192 Location \u2192 Allow.",
-        ],
-      },
-      {
-        key: "desktop",
-        label: "Computer",
-        visual: {
-          src: "tutorial-location.svg",
-          alt: "Desktop browser pop-up asking to know your location, with Allow highlighted",
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Your browser may ask: \u201cAllow MediBook to use your location?\u201d",
-          "Choose Allow.",
-          "Previously blocked it? Click the lock icon in the address bar \u2192 Site settings \u2192 Location \u2192 Allow.",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Turn On Notifications",
-    why: "Notifications help you know when your appointment, booking, doctor response, emergency request, or other important MediBook activity changes.",
-    flow: ["MediBook", "Allow notifications?", "Press Allow", "Notifications are on"],
-    hero: {
-      src: "onboarding/notification-prompt-card.png",
-      alt: 'The "Turn on notifications" card in MediBook with the Allow button',
-      caption: "What you will see in MediBook first",
-      real: true,
+      platforms: [
+        panel(
+          "location",
+          "android",
+          visual("location", "android", "tutorial-location-android.svg")
+        ),
+        panel(
+          "location",
+          "iphone",
+          visual("location", "iphone", "tutorial-location-iphone.svg")
+        ),
+        panel(
+          "location",
+          "desktop",
+          visual("location", "desktop", "tutorial-location.svg")
+        ),
+      ],
     },
-    platforms: [
-      {
-        key: "android",
-        label: "Android",
-        visual: {
-          src: "tutorial-notifications-android.svg",
-          alt: 'Android Chrome asking "Allow MediBook to send you notifications?" with Allow highlighted',
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Open MediBook in Chrome.",
-          "When the notification permission appears, tap Allow.",
-          "Return to MediBook \u2014 updates arrive even when MediBook is closed.",
-        ],
-        note: "Pressed Block? Tap the icon next to the address bar \u2192 Site settings \u2192 Notifications \u2192 Allow.",
+    {
+      title: t("onboarding.slides.notifications.title"),
+      why: t("onboarding.slides.notifications.why"),
+      flow: translatedList(t, "onboarding.slides.notifications.flow"),
+      hero: {
+        src: "onboarding/notification-prompt-card.png",
+        alt: t("onboarding.slides.notifications.heroAlt"),
+        caption: t("onboarding.slides.notifications.heroCaption"),
+        real: true,
       },
-      {
-        key: "iphone",
-        label: "iPhone & iPad",
-        visual: {
-          src: "onboarding/install-ios-steps-card.png",
-          alt: 'MediBook on iPhone showing "Install MediBook to enable notifications" with the Add to Home Screen steps',
-          caption: "What MediBook shows on iPhone",
-          real: true,
-        },
-        steps: [
-          "iPhone and iPad cannot turn notifications on from a normal Safari tab \u2014 install MediBook first.",
-          "In Safari tap Share \u2192 Add to Home Screen \u2192 Add.",
-          "Open MediBook from your Home Screen.",
-          "Tap Allow when notifications are asked.",
-        ],
-        note: "Pressed Don\u2019t Allow? Remove MediBook from your Home Screen, add it again, then tap Allow.",
-      },
-      {
-        key: "desktop",
-        label: "Computer",
-        visual: {
-          src: "tutorial-notifications.svg",
-          alt: "Desktop browser pop-up asking to send MediBook notifications, with Allow highlighted",
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Open MediBook in your browser.",
-          "Press Allow when notifications are asked.",
-          "Leave notifications enabled to get updates while MediBook is in the background.",
-        ],
-        note: "Pressed Block? Click the lock icon in the address bar \u2192 Site settings \u2192 Notifications \u2192 Allow.",
-      },
-    ],
-  },
-  {
-    title: "Get MediBook as an App",
-    description: "You can install MediBook on Android, iPhone/iPad, and desktop.",
-    installable: true,
-    platforms: [
-      {
-        key: "android",
-        label: "Android",
-        visual: {
-          src: "tutorial-install-android.svg",
-          alt: 'Chrome menu on Android with "Add to Home screen" highlighted',
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Open MediBook in Chrome.",
-          "Look for \u201cInstall app\u201d or \u201cAdd to Home screen\u201d \u2014 the wording depends on your browser and version.",
-          "Tap the installation option.",
-          "Confirm the installation.",
-          "Open MediBook from your home screen or app launcher.",
-        ],
-        extra: {
-          src: "onboarding/download-button.png",
-          alt: 'The "Download app" button in the MediBook sidebar',
-          caption: "Or tap Download app below the sidebar menu",
-          real: true,
-        },
-      },
-      {
-        key: "iphone",
-        label: "iPhone & iPad",
-        visual: {
-          src: "tutorial-install-iphone.svg",
-          alt: 'iPhone Safari Share sheet with "Add to Home Screen" highlighted',
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Open MediBook in Safari.",
-          "Tap the Share button.",
-          "Select Add to Home Screen.",
-          "Confirm with Add.",
-          "Open MediBook from your Home Screen.",
-          "Enable notifications when MediBook asks.",
-        ],
-        note: "Safari has no automatic \u201cInstall app\u201d button \u2014 Share \u2192 Add to Home Screen is the real procedure.",
-      },
-      {
-        key: "desktop",
-        label: "Computer",
-        visual: {
-          src: "tutorial-install-desktop.svg",
-          alt: "Desktop browser address bar with the install icon highlighted",
-          caption: EXAMPLE_CAPTION,
-        },
-        steps: [
-          "Open MediBook in Chrome, Edge or another browser that supports app install.",
-          "Look for the install icon in the address bar, or open the browser menu.",
-          "Select \u201cInstall MediBook\u201d and confirm.",
-          "Open MediBook from your desktop or start menu.",
-        ],
-        note: "The exact button and wording differ between Chrome, Edge, Safari and versions. In browsers without install support, keep using MediBook normally in a browser tab.",
-        extra: {
-          src: "onboarding/download-button.png",
-          alt: 'The "Download app" button in the MediBook sidebar',
-          caption: "Or tap Download app below the sidebar menu",
-          real: true,
-        },
-      },
-    ],
-  },
-];
+      platforms: [
+        panel(
+          "notifications",
+          "android",
+          visual("notifications", "android", "tutorial-notifications-android.svg")
+        ),
+        panel(
+          "notifications",
+          "iphone",
+          visual(
+            "notifications",
+            "iphone",
+            "onboarding/install-ios-steps-card.png",
+            true
+          )
+        ),
+        panel(
+          "notifications",
+          "desktop",
+          visual("notifications", "desktop", "tutorial-notifications.svg")
+        ),
+      ],
+    },
+    {
+      title: t("onboarding.slides.install.title"),
+      description: t("onboarding.slides.install.description"),
+      installable: true,
+      platforms: [
+        panel(
+          "install",
+          "android",
+          visual("install", "android", "tutorial-install-android.svg"),
+          installExtra
+        ),
+        panel(
+          "install",
+          "iphone",
+          visual("install", "iphone", "tutorial-install-iphone.svg")
+        ),
+        panel(
+          "install",
+          "desktop",
+          visual("install", "desktop", "tutorial-install-desktop.svg"),
+          installExtra
+        ),
+      ],
+    },
+  ];
+}
 
 export function OnboardingScreen() {
   const { t } = useTranslation();
@@ -441,7 +397,21 @@ export function OnboardingScreen() {
   const touchStartY = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  const isLast = slide === onboardingSlides.length - 1;
+  // Rebuilt on every language change so the whole carousel follows the choice.
+  const slides = buildOnboardingSlides(t);
+  const totalSlides = slides.length;
+
+  // First-ever visit: ask for a language before the guide starts. The flag is
+  // separate from i18n's stored language, which the detector writes eagerly.
+  const [languageGateOpen, setLanguageGateOpen] = useState(
+    () => !hasSeenLanguagePrompt()
+  );
+  const closeLanguageGate = useCallback(() => {
+    markLanguagePromptSeen();
+    setLanguageGateOpen(false);
+  }, []);
+
+  const isLast = slide === totalSlides - 1;
 
   useEffect(() => {
     const detected = detectPlatform();
@@ -449,17 +419,19 @@ export function OnboardingScreen() {
     setPlatform(detected);
   }, []);
 
-  // Left/Right arrows page through the slides like the Back/Next buttons.
+  // Left/Right arrows page through the slides like the Back/Next buttons —
+  // but not while the first-visit language gate is open.
   useEffect(() => {
+    if (languageGateOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "ArrowLeft") setSlide((s) => Math.max(s - 1, 0));
       if (event.key === "ArrowRight") {
-        setSlide((s) => Math.min(s + 1, onboardingSlides.length - 1));
+        setSlide((s) => Math.min(s + 1, totalSlides - 1));
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [totalSlides, languageGateOpen]);
 
   const completeAndGoWelcome = useCallback(() => {
     localStorage.setItem("medibook_onboarding_completed", "1");
@@ -495,12 +467,12 @@ export function OnboardingScreen() {
       touchStart.current = null;
       touchStartY.current = null;
       if (dx < -50) {
-        setSlide((s) => Math.min(s + 1, onboardingSlides.length - 1));
+        setSlide((s) => Math.min(s + 1, totalSlides - 1));
       } else if (dx > 50) {
         setSlide((s) => Math.max(s - 1, 0));
       }
     },
-    []
+    [totalSlides]
   );
 
   return (
@@ -516,7 +488,7 @@ export function OnboardingScreen() {
           <img
             className="ab-onboarding__brand-img"
             src="/images/logo.jpeg"
-            alt="MediBook logo"
+            alt={t("onboarding.logoAlt")}
             width={36}
             height={36}
             draggable={false}
@@ -539,7 +511,7 @@ export function OnboardingScreen() {
         className="ab-onboarding__track"
         style={{ transform: `translateX(-${slide * 100}%)` }}
       >
-        {onboardingSlides.map((item, index) => {
+        {slides.map((item, index) => {
           const active = index === slide;
           return (
             <section
@@ -574,7 +546,7 @@ export function OnboardingScreen() {
                   <img
                     className="ab-onboarding__hero-logo"
                     src="/images/logo.jpeg"
-                    alt="MediBook logo"
+                    alt={t("onboarding.logoAlt")}
                     width={96}
                     height={96}
                     fetchPriority="high"
@@ -590,7 +562,9 @@ export function OnboardingScreen() {
                   <div
                     className="ab-onboarding__flow"
                     role="group"
-                    aria-label={`How it works: ${item.flow.join(", then ")}`}
+                    aria-label={t("onboarding.howItWorks", {
+                      steps: item.flow.join(" \u2192 "),
+                    })}
                   >
                     {item.flow.map((node, nodeIndex) => (
                       <span className="ab-onboarding__flow-group" key={node}>
@@ -627,7 +601,7 @@ export function OnboardingScreen() {
                     <div
                       className="ab-onboarding__tabs"
                       role="tablist"
-                      aria-label={`${item.title} by device`}
+                      aria-label={t("onboarding.byDevice", { title: item.title })}
                     >
                       {item.platforms.map((panel) => {
                         const selected = platform === panel.key;
@@ -647,7 +621,7 @@ export function OnboardingScreen() {
                             {panel.label}
                             {suggested.current === panel.key && (
                               <span className="ab-onboarding__tab-hint">
-                                Suggested
+                                {t("onboarding.suggested")}
                               </span>
                             )}
                           </button>
@@ -739,9 +713,9 @@ export function OnboardingScreen() {
       <div
         className="ab-dots"
         role="group"
-        aria-label={t("onboarding.slideOf", { current: slide + 1, total: onboardingSlides.length })}
+        aria-label={t("onboarding.slideOf", { current: slide + 1, total: totalSlides })}
       >
-        {onboardingSlides.map((item, index) => (
+        {slides.map((item, index) => (
           <button
             key={item.title}
             type="button"
@@ -771,6 +745,8 @@ export function OnboardingScreen() {
           {isLast ? t("onboarding.getStarted") : t("onboarding.next")}
         </button>
       </footer>
+
+      <LanguageGate open={languageGateOpen} onClose={closeLanguageGate} />
     </main>
   );
 }

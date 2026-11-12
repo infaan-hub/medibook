@@ -739,7 +739,151 @@
     "slideOf": "Diapositive {{current}} sur {{total}}",
     "goToSlide": "Aller à la diapositive {{current}} : {{title}}",
     "byDevice": "{{title}} par appareil",
-    "howItWorks": "Comment ça marche : {{steps}}"
+    "howItWorks": "Comment ça marche : {{steps}}",
+    "logoAlt": "Logo MediBook",
+    "exampleCaption": "Exemple — votre écran peut être légèrement différent selon votre navigateur et sa version.",
+    "languagePrompt": {
+      "title": "Choisissez votre langue",
+      "description": "Sélectionnez la langue que vous souhaitez utiliser dans MediBook. Vous pouvez la modifier à tout moment.",
+      "continue": "Continuer",
+      "close": "Fermer la sélection de la langue"
+    },
+    "slides": {
+      "welcome": {
+        "title": "Bienvenue sur MediBook",
+        "description": "Votre guide pour préparer MediBook.",
+        "steps": [
+          "Autoriser la localisation",
+          "Activer les notifications",
+          "Installer MediBook comme application",
+          "Utiliser MediBook confortablement sur téléphone et ordinateur"
+        ]
+      },
+      "location": {
+        "title": "Autoriser la localisation",
+        "why": "MediBook peut utiliser votre position pour vous aider à trouver des services de santé à proximité et fournir des fonctionnalités basées sur la localisation.",
+        "heroAlt": "MediBook demandant « Définissez votre position pour réserver » avec un bouton « Partager ma position »",
+        "heroCaption": "Ce que vous verrez d'abord dans MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome sur Android demandant « Autoriser MediBook à utiliser votre position ? » avec Autoriser mis en évidence",
+            "steps": [
+              "Votre navigateur peut demander : « Autoriser MediBook à utiliser votre position ? »",
+              "Choisissez Autoriser.",
+              "Vous l'avez bloqué auparavant ? Touchez l'icône à côté de la barre d'adresse → Paramètres du site → Localisation → Autoriser."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone et iPad",
+            "alt": "Alerte iPhone demandant d'autoriser MediBook à utiliser votre position, avec « Autoriser pendant l'utilisation » mis en évidence",
+            "steps": [
+              "Votre navigateur peut demander : « Autoriser MediBook à utiliser votre position ? »",
+              "Choisissez « Autoriser pendant l'utilisation ».",
+              "Vous l'avez bloqué auparavant ? Touchez la barre d'adresse → Réglages du site → Localisation → Autoriser."
+            ]
+          },
+          "desktop": {
+            "label": "Ordinateur",
+            "alt": "Fenêtre contextuelle du navigateur demandant votre position, avec Autoriser mis en évidence",
+            "steps": [
+              "Votre navigateur peut demander : « Autoriser MediBook à utiliser votre position ? »",
+              "Choisissez Autoriser.",
+              "Vous l'avez bloqué auparavant ? Cliquez sur l'icône de cadenas dans la barre d'adresse → Paramètres du site → Localisation → Autoriser."
+            ]
+          }
+        }
+      },
+      "notifications": {
+        "title": "Activer les notifications",
+        "why": "Les notifications vous aident à savoir quand votre rendez-vous, réservation, réponse d'un médecin, demande d'urgence ou toute autre activité importante de MediBook change.",
+        "flow": [
+          "MediBook",
+          "Autoriser les notifications ?",
+          "Appuyez sur Autoriser",
+          "Les notifications sont activées"
+        ],
+        "heroAlt": "La carte « Activer les notifications » dans MediBook avec le bouton Autoriser",
+        "heroCaption": "Ce que vous verrez d'abord dans MediBook",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Chrome sur Android demandant « Autoriser MediBook à vous envoyer des notifications ? » avec Autoriser mis en évidence",
+            "steps": [
+              "Ouvrez MediBook dans Chrome.",
+              "Lorsque l'autorisation de notification apparaît, touchez Autoriser.",
+              "Revenez à MediBook — les mises à jour arrivent même lorsque MediBook est fermé."
+            ],
+            "note": "Vous avez appuyé sur Bloquer ? Touchez l'icône à côté de la barre d'adresse → Paramètres du site → Notifications → Autoriser."
+          },
+          "iphone": {
+            "label": "iPhone et iPad",
+            "alt": "MediBook sur iPhone affichant « Installez MediBook pour activer les notifications » avec les étapes Ajouter à l'écran d'accueil",
+            "caption": "Ce que MediBook affiche sur iPhone",
+            "steps": [
+              "L'iPhone et l'iPad ne peuvent pas activer les notifications depuis un onglet Safari normal — installez d'abord MediBook.",
+              "Dans Safari, touchez Partager → Sur l'écran d'accueil → Ajouter.",
+              "Ouvrez MediBook depuis votre écran d'accueil.",
+              "Touchez Autoriser lorsque les notifications sont demandées."
+            ],
+            "note": "Vous avez appuyé sur Ne pas autoriser ? Supprimez MediBook de votre écran d'accueil, ajoutez-le à nouveau, puis touchez Autoriser."
+          },
+          "desktop": {
+            "label": "Ordinateur",
+            "alt": "Fenêtre contextuelle du navigateur demandant d'envoyer les notifications de MediBook, avec Autoriser mis en évidence",
+            "steps": [
+              "Ouvrez MediBook dans votre navigateur.",
+              "Appuyez sur Autoriser lorsque les notifications sont demandées.",
+              "Laissez les notifications activées pour recevoir des mises à jour lorsque MediBook est en arrière-plan."
+            ],
+            "note": "Vous avez appuyé sur Bloquer ? Cliquez sur l'icône de cadenas dans la barre d'adresse → Paramètres du site → Notifications → Autoriser."
+          }
+        }
+      },
+      "install": {
+        "title": "Obtenir MediBook en tant qu'application",
+        "description": "Vous pouvez installer MediBook sur Android, iPhone/iPad et ordinateur.",
+        "extraAlt": "Le bouton « Télécharger l'application » dans la barre latérale de MediBook",
+        "extraCaption": "Ou touchez Télécharger l'application sous le menu latéral",
+        "platforms": {
+          "android": {
+            "label": "Android",
+            "alt": "Menu Chrome sur Android avec « Ajouter à l'écran d'accueil » mis en évidence",
+            "steps": [
+              "Ouvrez MediBook dans Chrome.",
+              "Cherchez « Installer l'application » ou « Ajouter à l'écran d'accueil » — le libellé dépend de votre navigateur et de sa version.",
+              "Touchez l'option d'installation.",
+              "Confirmez l'installation.",
+              "Ouvrez MediBook depuis votre écran d'accueil ou le lanceur d'applications."
+            ]
+          },
+          "iphone": {
+            "label": "iPhone et iPad",
+            "alt": "Feuille de partage de Safari sur iPhone avec « Sur l'écran d'accueil » mis en évidence",
+            "steps": [
+              "Ouvrez MediBook dans Safari.",
+              "Touchez le bouton Partager.",
+              "Sélectionnez Sur l'écran d'accueil.",
+              "Confirmez avec Ajouter.",
+              "Ouvrez MediBook depuis votre écran d'accueil.",
+              "Activez les notifications lorsque MediBook le demande."
+            ],
+            "note": "Safari n'a pas de bouton automatique « Installer l'application » — Partager → Sur l'écran d'accueil est la vraie procédure."
+          },
+          "desktop": {
+            "label": "Ordinateur",
+            "alt": "Barre d'adresse du navigateur avec l'icône d'installation mise en évidence",
+            "steps": [
+              "Ouvrez MediBook dans Chrome, Edge ou un autre navigateur compatible avec l'installation d'applications.",
+              "Cherchez l'icône d'installation dans la barre d'adresse, ou ouvrez le menu du navigateur.",
+              "Sélectionnez « Installer MediBook » et confirmez.",
+              "Ouvrez MediBook depuis votre bureau ou le menu Démarrer."
+            ],
+            "note": "Le bouton et le libellé exacts varient selon Chrome, Edge, Safari et les versions. Dans les navigateurs sans prise en charge de l'installation, continuez à utiliser MediBook normalement dans un onglet."
+          }
+        }
+      }
+    }
   },
   "language": {
     "title": "Langue",

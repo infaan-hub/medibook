@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { ProfileScreen } from "../screens/profile";
-import { LoginScreen, OnboardingScreen } from "../screens/auth";
+import { LoginScreen, OnboardingScreen, WelcomeScreen } from "../screens/auth";
 import i18n from "../i18n";
 import type { User } from "../api/types";
 import { ToastProvider } from "../state/app-context";
@@ -83,7 +83,19 @@ function renderWithProviders(children: React.ReactNode, initialPath = "/") {
   );
 }
 
+async function dismissLanguageGate(user: ReturnType<typeof userEvent.setup>) {
+  const dialog = screen.queryByRole("dialog");
+  if (!dialog) return;
+  await user.click(
+    within(dialog).getByRole("button", {
+      name: i18n.getFixedT("en")("onboarding.languagePrompt.continue"),
+    })
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 async function switchToFrench(user: ReturnType<typeof userEvent.setup>) {
+  await dismissLanguageGate(user);
   const inlineSelect = screen.queryByRole("combobox", { name: /language/i });
   if (inlineSelect) {
     await user.selectOptions(inlineSelect, "fr");
@@ -170,5 +182,91 @@ describe("language switching across app surfaces", () => {
     const french = i18n.getFixedT("fr");
     expect(screen.getByRole("button", { name: french("onboarding.skip") })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: french("onboarding.next") })).toBeInTheDocument();
+  });
+
+  it("asks first-time visitors for a language and translates onboarding immediately", async () => {
+    const user = userEvent.setup();
+    const first = renderWithProviders(<OnboardingScreen />, "/onboarding");
+
+    const english = i18n.getFixedT("en");
+    const dialog = screen.getByRole("dialog", {
+      name: english("onboarding.languagePrompt.title"),
+    });
+
+    for (const language of ["English", "Kiswahili", "Français", "Español", "Deutsch"]) {
+      expect(
+        within(dialog).getByRole("radio", { name: new RegExp(language, "i") })
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(dialog).getByRole("radio", { name: /english/i })
+    ).toHaveAttribute("aria-checked", "true");
+
+    await user.click(within(dialog).getByRole("radio", { name: /français/i }));
+
+    const french = i18n.getFixedT("fr");
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe("fr"));
+    // The choice is remembered for the account that signs in later.
+    expect(window.localStorage.getItem("medibook_language_choice")).toBe("fr");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("dialog", {
+          name: french("onboarding.languagePrompt.title"),
+        })
+      ).toBeInTheDocument()
+    );
+    expect(
+      screen.getByRole("heading", { name: french("onboarding.slides.welcome.title") })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(french("onboarding.slides.welcome.steps.2"))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /français/i })
+    ).toHaveAttribute("aria-checked", "true");
+
+    await user.click(
+      screen.getByRole("button", { name: french("onboarding.languagePrompt.continue") })
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(window.localStorage.getItem("medibook_language_prompt_seen")).toBe("1");
+
+    // Returning to /onboarding does not ask again.
+    first.unmount();
+    renderWithProviders(<OnboardingScreen />, "/onboarding");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the language chosen in onboarding on the welcome screen", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/onboarding"]}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/onboarding" element={<OnboardingScreen />} />
+            <Route path="/onboarding/welcome" element={<WelcomeScreen />} />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>
+    );
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("radio", { name: /français/i }));
+
+    const french = i18n.getFixedT("fr");
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe("fr"));
+    expect(window.localStorage.getItem("medibook_language")).toBe("fr");
+
+    await user.click(
+      screen.getByRole("button", { name: french("onboarding.languagePrompt.continue") })
+    );
+    await user.click(screen.getByRole("button", { name: french("onboarding.skip") }));
+
+    expect(
+      screen.getByRole("heading", { name: french("auth.welcomeTitle") })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: french("auth.createNewAccount") })
+    ).toBeInTheDocument();
   });
 });

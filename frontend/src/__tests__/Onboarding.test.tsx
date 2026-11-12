@@ -35,6 +35,9 @@ describe("OnboardingScreen", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    // These tests cover the carousel itself; the first-visit language gate is
+    // exercised separately in languageSwitching.test.tsx.
+    localStorage.setItem("medibook_language_prompt_seen", "1");
   });
 
   it("renders the brand row, four slides and four pagination dots", () => {
