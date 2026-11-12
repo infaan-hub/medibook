@@ -3915,10 +3915,11 @@ a { color: var(--color-primary); }
 .booking-cal-day--selected { background: #09A99E !important; color: #fff !important; border-color: #09A99E !important; }
 .booking-cal-hint { text-align: center; font-size: 12px; color: #94a3b8; margin-top: var(--space-3); }
 .booking-time-card { padding: var(--space-4); }
-.booking-time-card .field__input[type="time"] { min-width: 100%; font-size: 16px; }
+.booking-time-card .field { width: 100%; }
+.booking-time-card .field__input[type="time"] { width: 100%; max-width: 100%; min-width: 100%; display: block; font-size: 16px; }
 @media (max-width: 599px) {
-  .booking-time-card { padding: var(--space-3); }
-  .booking-time-card .field__input[type="time"] { min-height: 46px; }
+  .booking-time-card { padding: var(--space-3) var(--space-2); }
+  .booking-time-card .field__input[type="time"] { min-height: 50px; font-size: 18px; }
 }
 
 /* ---- Doctor Availability Day Cards ---- */
