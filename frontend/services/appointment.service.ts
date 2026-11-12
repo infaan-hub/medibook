@@ -120,13 +120,27 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
       doctor: ["This doctor is not taking appointments right now."],
     });
   }
-  // Hard gate: no appointment without a real location on BOTH sides. The
-  // booking screen prompts for it first, so this only fires when the client is
-  // bypassed (curl, a stale tab, a doctor who cleared their location).
+  // Home visits need the patient's live position; a centre visit has the
+  // hospital address and needs no GPS from the patient. When the doctor has a
+  // listed centre, assign it so the patient sees exactly where to go.
+  const linkedHospitals = doctor.hospitals ?? [];
+  let hospitalId = input.hospital ?? null;
+  if (appointmentType === "NORMAL") {
+    if (hospitalId == null && linkedHospitals.length > 0) {
+      hospitalId = linkedHospitals[0].hospital_id;
+    }
+    if (
+      hospitalId != null &&
+      linkedHospitals.length > 0 &&
+      !linkedHospitals.some((row) => row.hospital_id === hospitalId)
+    ) {
+      throw new ValidationError({ hospital: ["Choose one of this doctor's centres."] });
+    }
+  }
   const { assertBookingLocation, assertHomeServiceLocation } = await import("@/services/location.service");
   if (appointmentType === "HOME_SERVICE") {
     await assertHomeServiceLocation(user);
-  } else {
+  } else if (hospitalId == null) {
     await assertBookingLocation(user, doctor.id);
   }
   if (input.hospital !== undefined && input.hospital !== null) {
@@ -162,7 +176,7 @@ export async function bookAppointment(req: Request, user: AuthUser, body: unknow
     appointments.createAppointment({
       patient_id: user.id,
       doctor_id: doctor.id,
-      hospital_id: appointmentType === "HOME_SERVICE" ? null : input.hospital ?? null,
+      hospital_id: appointmentType === "HOME_SERVICE" ? null : hospitalId,
       appointment_type: appointmentType,
       ...(appointmentType === "HOME_SERVICE" ? {
         home_service_latitude: input.home_service_latitude,

@@ -202,6 +202,10 @@ export interface Appointment {
   patient_email: string;
   doctor: number | null;
   hospital: number | null;
+  /** Centre details resolved from `hospital` (null for home visits/legacy rows). */
+  hospital_name?: string | null;
+  hospital_address?: string | null;
+  hospital_city?: string | null;
   appointment_date: string;
   start_time: string;
   end_time: string;

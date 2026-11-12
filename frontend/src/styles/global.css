@@ -3587,6 +3587,8 @@ a { color: var(--color-primary); }
 .patient-appt-card__time { font-size: 13px; color: #64748b; }
 .patient-appt-card__status { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; flex: 0 0 auto; }
 .patient-appt-card__reason { font-size: 13px; color: #64748b; padding-top: 8px; border-top: 1px solid #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.patient-appt-card__centre { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #64748b; min-width: 0; }
+.patient-appt-card__centre span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .patient-appt-card__footer { display: flex; justify-content: flex-end; padding-top: 4px; }
 .patient-appt-card__view { font-size: 13px; font-weight: 500; color: #09A99E; transition: color 0.15s; }
 .patient-appt-card:hover .patient-appt-card__view { color: #087F79; }
@@ -3839,6 +3841,26 @@ a { color: var(--color-primary); }
 .booking-medical-card__value { color: #1e293b; }
 .booking-medical-card__value--muted { color: #94a3b8; }
 .booking-medical-card__value--muted a { color: #09A99E; font-weight: 500; }
+
+/* ---- Booking visit type ---- */
+.booking-visit-card { border-left: 3px solid #09A99E; }
+.booking-visit-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0 16px; }
+.booking-visit-option { display: flex; align-items: flex-start; gap: 10px; text-align: left; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
+.booking-visit-option:hover { border-color: #99f6e4; background: #f0fdfa; }
+.booking-visit-option--active { border-color: #09A99E; background: #f0fdfa; box-shadow: inset 0 0 0 1px #09A99E; }
+.booking-visit-option__icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px; background: #ecfdf5; color: #09A99E; }
+.booking-visit-option__copy { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.booking-visit-option__copy strong { font-size: 14px; color: #0f172a; }
+.booking-visit-option__copy span { font-size: 12px; color: #64748b; line-height: 1.4; }
+.booking-visit-option__check { flex-shrink: 0; color: #09A99E; }
+.booking-centre__details { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; padding: 12px; background: #f8fafc; border-radius: 10px; font-size: 13px; color: #475569; }
+.booking-centre__details > svg { color: #09A99E; margin-top: 2px; }
+.booking-centre__details > div { display: flex; flex-direction: column; gap: 2px; }
+.booking-centre__details strong { color: #0f172a; }
+.booking-centre__directions { grid-column: 2; color: #09A99E; font-weight: 600; font-size: 12px; text-decoration: none; }
+.booking-home-location__title { margin: 0 0 4px; font-size: 14px; color: #1e293b; }
+.booking-home-location__coords { margin: 8px 0 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #0f766e; background: #f0fdfa; padding: 6px 10px; border-radius: 8px; }
+@media (max-width: 560px) { .booking-visit-options { grid-template-columns: 1fr; } }
 
 /* ---- Medical Edit Form ---- */
 .med-edit-form { padding-top: var(--space-3); }

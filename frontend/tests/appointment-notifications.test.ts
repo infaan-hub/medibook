@@ -46,6 +46,11 @@ const doctorsRepo = vi.hoisted(() => ({
 const availableSlots = vi.hoisted(() => vi.fn());
 const isSlotAvailable = vi.hoisted(() => vi.fn());
 
+const location = vi.hoisted(() => ({
+  assertBookingLocation: vi.fn().mockResolvedValue(undefined),
+  assertHomeServiceLocation: vi.fn().mockResolvedValue(undefined),
+}));
+
 const notify = vi.hoisted(() => vi.fn());
 const broadcastAppointmentEvent = vi.hoisted(() => vi.fn());
 const broadcastAvailabilityUpdated = vi.hoisted(() => vi.fn());
@@ -60,10 +65,7 @@ vi.mock("@/repositories/doctors.repo", () => doctorsRepo);
 
 vi.mock("@/services/schedule.service", () => ({ availableSlots, isSlotAvailable }));
 
-vi.mock("@/services/location.service", () => ({
-  assertBookingLocation: vi.fn().mockResolvedValue(undefined),
-  assertHomeServiceLocation: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock("@/services/location.service", () => location);
 
 vi.mock("@/lib/notify", () => ({
   notify,
@@ -386,6 +388,77 @@ describe("bookAppointment rescheduled_from", () => {
       "appointment_request",
       "New appointment request from asha@example.com.",
       55
+    );
+  });
+});
+/* ==================== 5. visit type + centre location ===================== */
+describe("bookAppointment visit type", () => {
+  const body = (extra: Record<string, unknown> = {}) => ({
+    doctor: 4,
+    appointment_date: DATE,
+    start_time: "09:00:00",
+    end_time: "09:30:00",
+    reason: "Follow-up",
+    ...extra,
+  });
+
+  beforeEach(() => {
+    availableSlots.mockResolvedValue([{ start_time: "09:00:00", end_time: "09:30:00" }]);
+    isSlotAvailable.mockResolvedValue(true);
+    repo.createAppointment.mockResolvedValue(normalRow("pending", { id: 55, hospital_id: 3 }));
+  });
+
+  it("assigns the doctor's centre and skips the GPS gate for a normal booking", async () => {
+    doctorsRepo.findDoctorById.mockResolvedValue({
+      ...DOCTOR_PROFILE,
+      hospitals: [{ hospital_id: 3 }],
+    });
+
+    await bookAppointment(REQUEST(), account(7, "patient", "asha@example.com"), body());
+
+    expect(location.assertBookingLocation).not.toHaveBeenCalled();
+    expect(location.assertHomeServiceLocation).not.toHaveBeenCalled();
+    expect(repo.createAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ appointment_type: "NORMAL", hospital_id: 3 }),
+      expect.anything()
+    );
+  });
+
+  it("keeps the GPS gate when the doctor has no listed centre", async () => {
+    await bookAppointment(REQUEST(), account(7, "patient", "asha@example.com"), body());
+
+    expect(location.assertBookingLocation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 }),
+      4
+    );
+    expect(repo.createAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ appointment_type: "NORMAL", hospital_id: null }),
+      expect.anything()
+    );
+  });
+
+  it("books a home visit with the patient's current location and no hospital", async () => {
+    await bookAppointment(
+      REQUEST(),
+      account(7, "patient", "asha@example.com"),
+      body({
+        appointment_type: "HOME_SERVICE",
+        home_service_latitude: -6.3,
+        home_service_longitude: 39.5,
+        home_service_location_accuracy: 12,
+      })
+    );
+
+    expect(location.assertHomeServiceLocation).toHaveBeenCalled();
+    expect(location.assertBookingLocation).not.toHaveBeenCalled();
+    expect(repo.createAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appointment_type: "HOME_SERVICE",
+        hospital_id: null,
+        home_service_latitude: -6.3,
+        home_service_longitude: 39.5,
+      }),
+      expect.anything()
     );
   });
 });

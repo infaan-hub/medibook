@@ -16,6 +16,7 @@ import {
   listMyAppointments,
 } from "../api/appointments";
 import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api/doctors";
+import { getHospital } from "../api/specialties";
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
 import { formatDate as formatIntlDate } from "../lib/intl";
@@ -27,6 +28,7 @@ import type {
   DoctorAvailability,
   DoctorAvailableDays,
   DoctorProfile,
+  Hospital,
   PatientProfile,
 } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -38,7 +40,7 @@ import { pushStateNeedsPrompt } from "../push/prompt";
 import { captureFix, type CapturedFix } from "../lib/location";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
-import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play, House } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play, House, Building2 } from "lucide-react";
 
 /* ---------- helpers ---------- */
 
@@ -144,6 +146,55 @@ function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; app
    BOOKING FLOW — from doctor profile page
    ====================================== */
 
+type VisitMode = "centre" | "home";
+
+/** Legacy fallback for older normal appointments that never stored a hospital
+ *  id; new bookings always resolve a real centre or keep their GPS address. */
+const DEFAULT_CENTRE = {
+  name: "Dhuran Special Need Centre",
+  address: "Jambiani Main Road, Kibigija, Tanzania",
+  city: "Jambiani, Tanzania",
+  maps: "https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402",
+};
+
+function centreMapsUrl(hospital: Hospital | null, fallback = DEFAULT_CENTRE.maps): string {
+  if (!hospital) return fallback;
+  const query = [hospital.name, hospital.address, hospital.city].filter(Boolean).join(", ");
+  return query
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+    : fallback;
+}
+
+/** The shared "share/refresh current location" controls used by both booking
+ *  routes and by the home-visit choice on a normal booking. */
+function CurrentLocationPanel({
+  profile,
+  saving,
+  onCapture,
+}: {
+  profile: PatientProfile | null;
+  saving: boolean;
+  onCapture: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <h3 className="booking-home-location__title">{t("booking.homeLocationTitle")}</h3>
+      <p className="page__subtitle">{t("booking.homeLocationDesc")}</p>
+      {profile?.latitude != null && profile.longitude != null ? (
+        <p className="booking-home-location__coords">
+          {profile.latitude.toFixed(5)}, {profile.longitude.toFixed(5)}
+        </p>
+      ) : (
+        <p className="form-note--error">{t("booking.shareLocationToContinue")}</p>
+      )}
+      <Button variant="secondary" disabled={!profile} loading={saving} onClick={onCapture}>
+        <MapPin size={15} /> {t("booking.useCurrentLocation")}
+      </Button>
+    </>
+  );
+}
+
 export function BookingScreen() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -152,6 +203,11 @@ export function BookingScreen() {
   const navigate = useNavigate();
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
   const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
+  /** Centre visits are the default on /booking; /home-visit forces a home visit. */
+  const [visitMode, setVisitMode] = useState<VisitMode>(isHomeService ? "home" : "centre");
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null);
+  const [hospitalsLoading, setHospitalsLoading] = useState(false);
 
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
@@ -204,6 +260,42 @@ export function BookingScreen() {
       .then((r) => setPatientProfile(r.data))
       .catch(() => setPatientProfile(null));
   }, []);
+
+  // Resolve the doctor's centres once so a clinic booking can name the exact
+  // place (and so the booking does not require the patient's GPS for it).
+  useEffect(() => {
+    if (!doctor || isHomeService || doctor.hospitals.length === 0) {
+      setHospitals([]);
+      setSelectedHospitalId(null);
+      setHospitalsLoading(false);
+      return;
+    }
+    let active = true;
+    setHospitalsLoading(true);
+    Promise.all(
+      doctor.hospitals.map((hospitalId) =>
+        getHospital(hospitalId)
+          .then((r) => r.data)
+          .catch(() => null)
+      )
+    )
+      .then((rows) => {
+        if (!active) return;
+        const list = rows.filter((row): row is Hospital => row !== null);
+        setHospitals(list);
+        setSelectedHospitalId((current) =>
+          current != null && list.some((row) => row.id === current)
+            ? current
+            : list[0]?.id ?? null
+        );
+      })
+      .finally(() => {
+        if (active) setHospitalsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [doctor, isHomeService]);
 
   // One open appointment per patient: name the appointment being held before a
   // slot is picked, so the API's 409 never lands as a surprise. A failed lookup
@@ -262,13 +354,26 @@ export function BookingScreen() {
   async function handleBook(event: FormEvent) {
     event.preventDefault();
     if (!id || !selectedTime || !selectedDate) return;
-    const homeServiceLocation = isHomeService && patientProfile?.latitude != null && patientProfile.longitude != null
+    const isHomeVisit = visitMode === "home";
+    const homeServiceLocation = isHomeVisit && patientProfile?.latitude != null && patientProfile.longitude != null
       ? { latitude: patientProfile.latitude, longitude: patientProfile.longitude, accuracy: patientProfile.location_accuracy }
       : null;
-    if (isHomeService && !homeServiceLocation) {
+    if (isHomeVisit && !homeServiceLocation) {
       setGateOverride("patient");
       setError(t("booking.shareLocationForHome"));
       return;
+    }
+    // A centre with no hospital record still needs both sides on file; a
+    // resolved centre carries its own address, so GPS is not required.
+    if (!isHomeVisit && !hospitalsLoading && hospitals.length === 0) {
+      if (!patientProfile?.has_location) {
+        setGateOverride("patient");
+        return;
+      }
+      if (doctor && !doctor.has_location) {
+        setGateOverride("doctor");
+        return;
+      }
     }
     setSubmitting(true);
     setError(null);
@@ -284,8 +389,9 @@ export function BookingScreen() {
     try {
       const result = await createAppointment({
         doctor: Number(id),
+        appointment_type: isHomeVisit ? "HOME_SERVICE" : "NORMAL",
+        ...(!isHomeVisit && selectedHospitalId != null ? { hospital: selectedHospitalId } : {}),
         ...(homeServiceLocation ? {
-          appointment_type: "HOME_SERVICE" as const,
           home_service_latitude: homeServiceLocation.latitude,
           home_service_longitude: homeServiceLocation.longitude,
           home_service_location_accuracy: homeServiceLocation.accuracy,
@@ -300,7 +406,7 @@ export function BookingScreen() {
       if (!result.success) {
         throw new ApiError(result.message || i18n.t("booking.failed"), 409, result.errors);
       }
-      navigate(isHomeService ? "/home-visit/success" : "/booking/success");
+      navigate(isHomeVisit ? "/home-visit/success" : "/booking/success");
     } catch (e) {
       // Location refused → open the guided prompt instead of a raw error line.
       const gate = locationGateFromError(e);
@@ -353,16 +459,32 @@ export function BookingScreen() {
     }
   }
 
-  // Proactive gate: never let the user fill in a slot the API would reject.
+  async function useCurrentLocation() {
+    try {
+      await savePatientLocation(await captureFix());
+    } catch (reason) {
+      setError(message(reason));
+    }
+  }
+
+  // A resolved centre carries its own address, so only a home visit (or a
+  // centre-less doctor) needs location prompts before booking.
+  const centreNeedsGps = !hospitalsLoading && hospitals.length === 0;
   const derivedGate =
-    !doctor || !patientProfile
+    !doctor || (visitMode === "centre" && !centreNeedsGps)
       ? null
-      : !patientProfile.has_location
-        ? "patient"
-        : !doctor.has_location
-          ? "doctor"
-          : null;
+      : visitMode === "home"
+        ? !patientProfile?.has_location
+          ? "patient"
+          : null
+        : !patientProfile?.has_location
+          ? "patient"
+          : !doctor.has_location
+            ? "doctor"
+            : null;
   const locationGate = gateOverride ?? derivedGate;
+  const selectedHospital =
+    hospitals.find((hospital) => hospital.id === selectedHospitalId) ?? hospitals[0] ?? null;
 
   if (error && !doctor) return <div className="page"><ErrorState message={error} onRetry={loadDoctor} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
@@ -419,15 +541,11 @@ export function BookingScreen() {
 
       {isHomeService && (
         <Card className="booking-home-location">
-          <h2>{t("booking.homeLocationTitle")}</h2>
-          <p className="page__subtitle">{t("booking.homeLocationDesc")}</p>
-          {patientProfile?.latitude != null && patientProfile.longitude != null ? (
-            <p className="booking-home-location__coords">{patientProfile.latitude.toFixed(5)}, {patientProfile.longitude.toFixed(5)}</p>
-          ) : <p className="form-note--error">{t("booking.shareLocationToContinue")}</p>}
-          <Button variant="secondary" disabled={!patientProfile} loading={savingLocation} onClick={async () => {
-            try { await savePatientLocation(await captureFix()); }
-            catch (reason) { setError(message(reason)); }
-          }}><MapPin size={15} /> {t("booking.useCurrentLocation")}</Button>
+          <CurrentLocationPanel
+            profile={patientProfile}
+            saving={savingLocation}
+            onCapture={() => void useCurrentLocation()}
+          />
         </Card>
       )}
       {/* Patient medical info preview */}
@@ -566,7 +684,125 @@ export function BookingScreen() {
         </Card>
       )}
 
-      {/* Step 3: reason + confirm */}
+      {/* Step 3: choose where the visit happens (normal booking only) */}
+      {selectedTime && selectedDate && !isHomeService && (
+        <Card className="booking-visit-card">
+          <h2>{t("booking.visitTypeTitle")}</h2>
+          <p className="page__subtitle">{t("booking.visitTypeDesc")}</p>
+
+          <div
+            className="booking-visit-options"
+            role="radiogroup"
+            aria-label={t("booking.visitTypeTitle")}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={visitMode === "centre"}
+              className={`booking-visit-option${visitMode === "centre" ? " booking-visit-option--active" : ""}`}
+              onClick={() => {
+                setVisitMode("centre");
+                setGateOverride(null);
+                setError(null);
+              }}
+            >
+              <span className="booking-visit-option__icon" aria-hidden="true">
+                <Building2 size={20} />
+              </span>
+              <span className="booking-visit-option__copy">
+                <strong>{t("booking.visitAtCentre")}</strong>
+                <span>{t("booking.visitAtCentreDesc")}</span>
+              </span>
+              {visitMode === "centre" && (
+                <CheckCircle2 size={18} className="booking-visit-option__check" aria-hidden="true" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              role="radio"
+              aria-checked={visitMode === "home"}
+              className={`booking-visit-option${visitMode === "home" ? " booking-visit-option--active" : ""}`}
+              onClick={() => {
+                setVisitMode("home");
+                setGateOverride(null);
+                setError(null);
+              }}
+            >
+              <span className="booking-visit-option__icon" aria-hidden="true">
+                <House size={20} />
+              </span>
+              <span className="booking-visit-option__copy">
+                <strong>{t("booking.visitAtHome")}</strong>
+                <span>{t("booking.visitAtHomeDesc")}</span>
+              </span>
+              {visitMode === "home" && (
+                <CheckCircle2 size={18} className="booking-visit-option__check" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+
+          {visitMode === "centre" ? (
+            hospitalsLoading ? (
+              <Skeleton lines={2} />
+            ) : selectedHospital ? (
+              <div className="booking-centre">
+                {hospitals.length > 1 && (
+                  <div className="field">
+                    <label className="field__label" htmlFor="book-centre">
+                      {t("booking.chooseCentre")}
+                    </label>
+                    <select
+                      id="book-centre"
+                      className="field__input"
+                      value={selectedHospital.id}
+                      onChange={(event) => setSelectedHospitalId(Number(event.target.value))}
+                    >
+                      {hospitals.map((hospital) => (
+                        <option key={hospital.id} value={hospital.id}>
+                          {hospital.name} — {hospital.city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="booking-centre__details">
+                  <MapPin size={16} aria-hidden="true" />
+                  <div>
+                    <strong>{selectedHospital.name}</strong>
+                    {selectedHospital.address && <span>{selectedHospital.address}</span>}
+                    <span>
+                      {[selectedHospital.city, selectedHospital.phone]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </div>
+                  <a
+                    className="booking-centre__directions"
+                    href={centreMapsUrl(selectedHospital)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("appointments.getDirections")}
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <p className="page__subtitle">{t("booking.noHospitalLocation")}</p>
+            )
+          ) : (
+            <div className="booking-home-location">
+              <CurrentLocationPanel
+                profile={patientProfile}
+                saving={savingLocation}
+                onCapture={() => void useCurrentLocation()}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Step 4: reason + confirm */}
       {selectedTime && selectedDate && (
         <Card>
           <h2>{t("booking.confirmTitle")}</h2>
@@ -576,7 +812,7 @@ export function BookingScreen() {
 
           <form className="form" onSubmit={handleBook}>
             <div className="field">
-              <label className="field__label" htmlFor="book-reason">{isHomeService ? t("booking.reasonHome") : t("booking.reason")}</label>
+              <label className="field__label" htmlFor="book-reason">{visitMode === "home" ? t("booking.reasonHome") : t("booking.reason")}</label>
               <textarea
                 id="book-reason"
                 className="field__input"
@@ -600,12 +836,12 @@ export function BookingScreen() {
         open={locationGate === "patient"}
         saving={savingLocation}
         onCaptured={savePatientLocation}
-        title={isHomeService ? t("booking.setHomeLocation") : t("booking.setLocation")}
-        description={isHomeService
+        title={visitMode === "home" ? t("booking.setHomeLocation") : t("booking.setLocation")}
+        description={visitMode === "home"
           ? t("booking.homeLocationDoctorDesc", { name: `${doctor.first_name} ${doctor.last_name}` })
           : t("booking.locationDoctorDesc", { name: `${doctor.first_name} ${doctor.last_name}` })}
         actionLabel={t("booking.shareLocation")}
-        privacyNote={isHomeService ? t("booking.homeLocationPrivacy") : t("booking.locationPrivacy")}
+        privacyNote={visitMode === "home" ? t("booking.homeLocationPrivacy") : t("booking.locationPrivacy")}
       />
 
       {/* Location gate — doctor side. Nothing the patient can fix, so the only
@@ -795,8 +1031,20 @@ export function RescheduleScreen() {
 
     try {
       await cancelAppointment(Number(id), "Rescheduled");
+      const isHomeVisit = appointment.appointment_type === "HOME_SERVICE";
       const result = await createAppointment({
         doctor: appointment.doctor,
+        appointment_type: isHomeVisit ? "HOME_SERVICE" : "NORMAL",
+        ...(!isHomeVisit && appointment.hospital != null ? { hospital: appointment.hospital } : {}),
+        ...(isHomeVisit &&
+        appointment.home_service_latitude != null &&
+        appointment.home_service_longitude != null
+          ? {
+              home_service_latitude: appointment.home_service_latitude,
+              home_service_longitude: appointment.home_service_longitude,
+              home_service_location_accuracy: appointment.home_service_location_accuracy ?? undefined,
+            }
+          : {}),
         appointment_date: date,
         start_time: startTime,
         end_time: endTime,
@@ -1044,6 +1292,15 @@ export function AppointmentsListScreen() {
                       <div className="patient-appt-card__time">
                         {formatTime(a.start_time)} – {formatTime(a.end_time)}
                       </div>
+                      {a.appointment_type === "NORMAL" && a.hospital_name && (
+                        <div className="patient-appt-card__centre">
+                          <MapPin size={12} aria-hidden="true" />
+                          <span>
+                            {a.hospital_name}
+                            {a.hospital_city ? ` · ${a.hospital_city}` : ""}
+                          </span>
+                        </div>
+                      )}
                       {a.appointment_type === "HOME_SERVICE" && <span className="badge badge--accepted">{t("nav.homeService")}</span>}
                       <span
                         className="patient-appt-card__status"
@@ -1278,10 +1535,23 @@ export function AppointmentDetailScreen() {
           ) : (
             <div className="appt-detail__field appt-detail__location">
               <span className="appt-detail__label">{t("appointments.hospitalLocation")}</span>
-              <strong>Dhuran Special Need Centre</strong>
-              <span>Jambiani Main Road, Kibigija, Tanzania</span>
-              <span>MGPW+2C Jambiani, Tanzania</span>
-              <a className="btn btn--secondary appt-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402" target="_blank" rel="noreferrer">
+              <strong>{appointment.hospital_name || DEFAULT_CENTRE.name}</strong>
+              <span>{appointment.hospital_address || DEFAULT_CENTRE.address}</span>
+              <span>{appointment.hospital_city || DEFAULT_CENTRE.city}</span>
+              <a
+                className="btn btn--secondary appt-detail__directions"
+                href={
+                  appointment.hospital_name
+                    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        [appointment.hospital_name, appointment.hospital_address, appointment.hospital_city]
+                          .filter(Boolean)
+                          .join(", ")
+                      )}`
+                    : DEFAULT_CENTRE.maps
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
                 <MapPin size={16} /> {t("appointments.getDirections")}
               </a>
             </div>

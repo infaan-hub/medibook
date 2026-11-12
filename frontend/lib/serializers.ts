@@ -486,7 +486,11 @@ export function hospitalDto(hospital: Hospital): Record<string, unknown> {
 
 /** appointments.serializers.AppointmentSerializer. */
 export function appointmentDto(
-  appointment: Appointment & { patient: User; doctor: { user: User } }
+  appointment: Appointment & {
+    patient: User;
+    doctor: { user: User };
+    hospital?: Hospital | null;
+  }
 ): Record<string, unknown> {
   const base = {
     id: appointment.id,
@@ -494,6 +498,10 @@ export function appointmentDto(
     patient_email: appointment.patient.email,
     doctor: appointment.doctor_id,
     hospital: appointment.hospital_id,
+    /** Centre details so the patient can see where to go without another call. */
+    hospital_name: appointment.hospital?.name ?? null,
+    hospital_address: appointment.hospital?.address ?? null,
+    hospital_city: appointment.hospital?.city ?? null,
     appointment_date: dateStr(appointment.appointment_date),
     start_time: appointment.start_time,
     end_time: appointment.end_time,
