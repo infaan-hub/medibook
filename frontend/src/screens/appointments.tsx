@@ -38,6 +38,7 @@ import { NotificationPrompt } from "../components/NotificationPrompt";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
 import { captureFix, type CapturedFix } from "../lib/location";
+import { nearestAreaName } from "../lib/zanzibar";
 import { useSession, useToast } from "../state/app-context";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
 import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User, Clock3, XCircle, Calendar, Phone, MapPin, Users, UserCheck, Play, House, Building2 } from "lucide-react";
@@ -183,7 +184,7 @@ function CurrentLocationPanel({
       <p className="page__subtitle">{t("booking.homeLocationDesc")}</p>
       {profile?.latitude != null && profile.longitude != null ? (
         <p className="booking-home-location__coords">
-          {profile.latitude.toFixed(5)}, {profile.longitude.toFixed(5)}
+          {nearestAreaName(profile) ?? t("shared.location.shared")}
         </p>
       ) : (
         <p className="form-note--error">{t("booking.shareLocationToContinue")}</p>
@@ -1526,7 +1527,7 @@ export function AppointmentDetailScreen() {
               <div className="appt-detail__field appt-detail__location">
                 <span className="appt-detail__label">{t("appointments.patientHomeLocation")}</span>
                 <strong>{t("appointments.savedForAppointment")}</strong>
-                <span>{appointment.home_service_latitude.toFixed(5)}, {appointment.home_service_longitude.toFixed(5)}</span>
+                <span>{nearestAreaName({ latitude: appointment.home_service_latitude, longitude: appointment.home_service_longitude }) ?? t("shared.location.shared")}</span>
                 <a className="btn btn--secondary appt-detail__directions" href={`https://www.google.com/maps/dir/?api=1&destination=${appointment.home_service_latitude},${appointment.home_service_longitude}`} target="_blank" rel="noreferrer">
                   <MapPin size={16} /> {t("appointments.openPatientLocation")}
                 </a>
