@@ -14,6 +14,7 @@
  * an "Allow" button the OS would ignore.
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BellRing, TriangleAlert } from "lucide-react";
 import { Button } from "./ui";
 import { Modal } from "./Modal";
@@ -36,21 +37,20 @@ export interface NotificationPromptProps {
   enableLabel?: string;
 }
 
-const DEFAULT_DESCRIPTION =
-  "Get appointment confirmations, rejections and reminders as soon as they happen — even when MediBook is closed.";
-
 export function NotificationPrompt({
   open,
   onEnable,
   onDismiss,
   busy = false,
   error,
-  title = "Turn on notifications",
-  description = DEFAULT_DESCRIPTION,
+  title,
+  description,
   steps,
-  skipLabel = "Maybe later",
-  enableLabel = "Enable notifications",
+  skipLabel,
+  enableLabel,
 }: NotificationPromptProps) {
+  const { t } = useTranslation();
+  const resolvedSkipLabel = skipLabel === undefined ? t("shared.notificationPrompt.skip") : skipLabel;
   const [dismissed, setDismissed] = useState(false);
   const close = () => {
     setDismissed(true);
@@ -60,19 +60,19 @@ export function NotificationPrompt({
   return (
     <Modal
       open={open && !dismissed}
-      title={title}
+      title={title ?? t("shared.notificationPrompt.title")}
       onDismiss={onDismiss ? close : undefined}
       dismissible={Boolean(onDismiss)}
       actions={
         <>
-          {skipLabel !== null && onDismiss && (
+          {resolvedSkipLabel !== null && onDismiss && (
             <Button variant="ghost" onClick={close}>
-              {skipLabel}
+              {resolvedSkipLabel}
             </Button>
           )}
           {onEnable && (
             <Button variant="primary" loading={busy} onClick={() => void onEnable()}>
-              {enableLabel}
+              {enableLabel ?? t("shared.notificationPrompt.enable")}
             </Button>
           )}
         </>
@@ -82,7 +82,7 @@ export function NotificationPrompt({
         <div className="prompt__icon" aria-hidden="true">
           <BellRing size={26} />
         </div>
-        <p className="prompt__description">{description}</p>
+        <p className="prompt__description">{description ?? t("shared.notificationPrompt.description")}</p>
         {steps && steps.length > 0 && (
           <ol className="prompt__steps">
             {steps.map((step) => (
@@ -97,8 +97,7 @@ export function NotificationPrompt({
           </p>
         )}
         <p className="prompt__privacy">
-          Only appointment and reminder updates. No marketing, and you can turn them off in
-          Settings at any time.
+          {t("shared.notificationPrompt.privacy")}
         </p>
       </div>
     </Modal>

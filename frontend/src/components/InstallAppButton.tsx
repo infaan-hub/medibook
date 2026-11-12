@@ -26,6 +26,7 @@
  */
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 import { useInstallAvailability } from "../pwa/installPrompt";
 import { useToast } from "../state/app-context";
@@ -37,6 +38,7 @@ export function InstallAppButton({
 }: {
   variant?: InstallAppButtonVariant;
 }) {
+  const { t } = useTranslation();
   const { installed, isIOS, install } = useInstallAvailability();
   const { notify } = useToast();
 
@@ -47,7 +49,7 @@ export function InstallAppButton({
       // steps up for 20s instead of the 4s default toast lifetime.
       notify(
         "info",
-        "Tap Share, then Add to Home Screen, to install MediBook.",
+        t("shared.install.iosManualHint"),
         20_000
       );
       return;
@@ -55,9 +57,9 @@ export function InstallAppButton({
     // One tap → the browser installs MediBook and drops its shortcut
     // (desktop icon / home screen). Browsers with no install path do nothing.
     void install().then((accepted) => {
-      if (accepted) notify("success", "Installing MediBook…");
+      if (accepted) notify("success", t("shared.install.installing"));
     });
-  }, [install, isIOS, notify]);
+  }, [install, isIOS, notify, t]);
 
   if (installed) return null;
 
@@ -66,11 +68,11 @@ export function InstallAppButton({
       type="button"
       className={`install-btn install-btn--${variant}`}
       onClick={handleClick}
-      aria-label="Download app"
-      title="Download app"
+      aria-label={t("nav.downloadApp")}
+      title={t("nav.downloadApp")}
     >
       <Download size={18} aria-hidden="true" />
-      <span className="install-btn__label">Download app</span>
+      <span className="install-btn__label">{t("nav.downloadApp")}</span>
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { apiGet, apiPost } from "../api/client";
 import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -10,6 +11,7 @@ const APPROACHES = ["CBT", "DBT", "ACT", "supportive", "psychodynamic"];
 const FREQUENCIES = ["weekly", "biweekly", "twice_weekly"];
 
 export function DoctorPsychotherapyScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export function DoctorPsychotherapyScreen() {
     try {
       const res = await apiGet<any[]>("/psychotherapy");
       setItems(res.data ?? []);
-    } catch (e: any) { setError(e?.message || "Unable to load."); }
+    } catch (e: any) { setError(e?.message || t("common.tryAgainError")); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -33,12 +35,12 @@ export function DoctorPsychotherapyScreen() {
     <div className="page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Psychology service</p>
-          <h1>My psychology service cases</h1>
-          <p>Plan sessions, deliver confidential care and finalize reports.</p>
+          <p className="doctor-eyebrow">{t("psychotherapy.service")}</p>
+          <h1>{t("psychotherapy.myCases")}</h1>
+          <p>{t("psychotherapy.planDeliverFinalize")}</p>
         </div>
       </div>
-      {items.length === 0 && <EmptyState title="No assigned cases" description="Assigned psychology service cases will appear here." />}
+      {items.length === 0 && <EmptyState title={t("psychotherapy.noAssignedCases")} description={t("psychotherapy.assignedAppear")} />}
       {items.map((r) => (
         <CaseCard key={r.id} r={r} onChanged={() => void load()} />
       ))}

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import i18n from "../i18n";
 
 interface Props {
   children: ReactNode;
@@ -37,10 +38,10 @@ export class ErrorBoundary extends Component<Props, ErrorBoundaryState> {
         (errorMessage.includes("chunk") && errorMessage.includes("failed"));
       return (
         <div style={{ padding: 24, fontFamily: "system-ui" }}>
-          <h2>{isChunkError ? "A new app version is available" : "Something went wrong"}</h2>
+          <h2>{isChunkError ? i18n.t("common.newAppVersion") : i18n.t("common.somethingWentWrong")}</h2>
           {isChunkError && (
             <p style={{ color: "#666" }}>
-              Reload the app to load its latest files and continue.
+              {i18n.t("common.reloadToContinue")}
             </p>
           )}
           <p style={{ color: "#666" }}>{this.state.error?.message}</p>
@@ -60,7 +61,7 @@ export class ErrorBoundary extends Component<Props, ErrorBoundaryState> {
               cursor: "pointer",
             }}
           >
-            {isChunkError ? "Reload app" : "Go to Home"}
+            {isChunkError ? i18n.t("common.reloadApp") : i18n.t("common.goHome")}
           </button>
         </div>
       );

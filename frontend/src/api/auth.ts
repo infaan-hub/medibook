@@ -59,9 +59,10 @@ export function verifyLoginOtp(
 /** POST /api/auth/social/ — Google OAuth login. */
 export function socialLogin(
   provider: "google",
-  token: string
+  token: string,
+  language?: string
 ): Promise<Envelope<AuthPayload>> {
-  return apiPost<AuthPayload>("/auth/social/", { provider, token });
+  return apiPost<AuthPayload>("/auth/social/", { provider, token, ...(language ? { language } : {}) });
 }
 
 /** POST /api/auth/logout/ — blacklists the given refresh token. */
@@ -76,7 +77,7 @@ export function getMe(): Promise<Envelope<User>> {
 
 /** PATCH /api/auth/me/ — update own profile fields (email/role read-only). */
 export function updateMe(
-  patch: Partial<Pick<User, "first_name" | "last_name" | "phone">>
+  patch: Partial<Pick<User, "first_name" | "last_name" | "phone" | "language">>
 ): Promise<Envelope<User>> {
   return apiPatch<User>("/auth/me/", patch);
 }

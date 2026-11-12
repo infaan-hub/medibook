@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { formatDate as intlDate, formatDateTime as intlDateTime } from "../lib/intl";
 import {
   Activity,
   AlertTriangle,
@@ -138,21 +140,21 @@ function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return intlDate(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatShortDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return intlDate(date, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return intlDateTime(date, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatTime(value?: string | null) {
@@ -823,6 +825,8 @@ export function CoordinatorPatients({
   error: string | null;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
+
   if (selectedPatientId) {
     return (
       <PatientHistoryView
@@ -846,3 +850,4 @@ export function CoordinatorPatients({
     />
   );
 }
+

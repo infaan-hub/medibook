@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import { formatDate as intlDate } from "../lib/intl";
 import {
   AlarmClock,
   CalendarDays,
@@ -79,7 +81,7 @@ const statusOf = (status: string) => STATUS[status] ?? STATUS.pending;
 function formatDay(value: string | null | undefined): string {
   if (!value) return "—";
   const day = String(value).slice(0, 10);
-  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${day}T00:00:00`), {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -356,6 +358,7 @@ function TrainingCard({
 }
 
 export function CoordinatorTrainingScreen() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -370,7 +373,7 @@ export function CoordinatorTrainingScreen() {
       setItems(res.data ?? []);
       const d = await getCoordinatorDoctors(new Date().toISOString().slice(0, 10));
       setDoctors(d.data ?? []);
-    } catch (e: any) { setError(e?.message || "Failed."); }
+    } catch (e: any) { setError(e?.message || t("common.tryAgainError")); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
@@ -425,7 +428,7 @@ export function CoordinatorTrainingScreen() {
       <div className="doctor-page-header">
         <div>
           <p className="doctor-eyebrow">Coordination center</p>
-          <h1>Training requests</h1>
+          <h1>{t("coordinatorTraining.trainingRequests")}</h1>
           <p>Review requests, assign a specialist and generate the PDF training report.</p>
         </div>
         <div className="doctor-header-actions">
@@ -465,9 +468,7 @@ export function CoordinatorTrainingScreen() {
             </div>
           </Card>
 
-          <p className="coordinator-appointments-count">
-            Showing {visible.length} of {items.length} training requests
-          </p>
+          <p className="coordinator-appointments-count">{t("coordinatorTraining.showingXOfY", { filtered: visible.length, total: items.length })}</p>
 
           {visible.length === 0 ? (
             <EmptyState

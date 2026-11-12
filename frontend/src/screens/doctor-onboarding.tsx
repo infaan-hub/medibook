@@ -22,6 +22,8 @@
  *    My Doctor save endpoints the rest of the app already uses.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -53,7 +55,7 @@ import { usePushNotifications } from "../push/usePushNotifications";
 import { useSession, useToast } from "../state/app-context";
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
 }
 
 /** Requirement steps in the order the flow presents them. */
@@ -69,40 +71,40 @@ const COMPLETE_INDEX = REQUIREMENT_STEPS.length;
 
 interface StepMeta {
   id: DoctorOnboardingStep | "complete";
-  title: string;
-  summary: string;
+  titleKey: string;
+  summaryKey: string;
   icon: typeof Bell;
 }
 
 const STEPS: StepMeta[] = [
   {
     id: "notifications",
-    title: "Turn on notifications",
-    summary: "Appointment reminders reach this device.",
+    titleKey: "doctorOnboarding.turnOnNotifications",
+    summaryKey: "doctorOnboarding.notificationsSummary",
     icon: Bell,
   },
   {
     id: "location",
-    title: "Set your practice location",
-    summary: "Patients see directions; booking requires it.",
+    titleKey: "doctorOnboarding.setPracticeLocation",
+    summaryKey: "doctorOnboarding.locationSummary",
     icon: MapPin,
   },
   {
     id: "profile_image",
-    title: "Upload a profile picture",
-    summary: "Your photo appears on every doctor card.",
+    titleKey: "doctorOnboarding.uploadProfilePicture",
+    summaryKey: "doctorOnboarding.pictureSummary",
     icon: Camera,
   },
   {
     id: "doctor_profile",
-    title: "Complete your My Doctor information",
-    summary: "Your name and specialties, as patients see them.",
+    titleKey: "doctorOnboarding.completeMyDoctor",
+    summaryKey: "doctorOnboarding.myDoctorSummary",
     icon: User,
   },
   {
     id: "complete",
-    title: "Save and finish",
-    summary: "The server checks every step, then unlocks the app.",
+    titleKey: "doctorOnboarding.saveAndFinish",
+    summaryKey: "doctorOnboarding.saveAndFinishSummary",
     icon: Check,
   },
 ];
@@ -114,6 +116,7 @@ function firstIncompleteIndex(status: DoctorOnboardingStatus): number {
 }
 
 export function DoctorOnboardingScreen() {
+  const { t } = useTranslation();
   const { user, setUser } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -391,7 +394,7 @@ export function DoctorOnboardingScreen() {
                 <span className={`onboarding__marker onboarding__marker--${state}`} aria-hidden="true">
                   {done ? <Check size={14} /> : current ? <ChevronRight size={14} /> : <Circle size={14} />}
                 </span>
-                <span className="onboarding__step-title">{step.title}</span>
+                <span className="onboarding__step-title">{t(step.titleKey)}</span>
                 <span className="sr-only">
                   {done ? "completed" : current ? "in progress" : "not started"}
                 </span>
@@ -403,9 +406,9 @@ export function DoctorOnboardingScreen() {
 
       <Card className="onboarding__panel">
         <h2 className="card__title">
-          <ActiveIcon size={18} aria-hidden="true" /> {activeMeta.title}
+          <ActiveIcon size={18} aria-hidden="true" /> {t(activeMeta.titleKey)}
         </h2>
-        <p className="page__subtitle">{activeMeta.summary}</p>
+        <p className="page__subtitle">{t(activeMeta.summaryKey)}</p>
 
         {stepError && (
           <p className="field__error" role="alert">
@@ -607,7 +610,7 @@ export function DoctorOnboardingScreen() {
                   ) : (
                     <Circle size={15} aria-hidden="true" />
                   )}
-                  <span>{step.title}</span>
+                  <span>{t(step.titleKey)}</span>
                   <span className="sr-only">
                     {isDone(index) ? "completed" : "not completed"}
                   </span>

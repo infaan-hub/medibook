@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const SPLASH_DURATION = 5000;
 
@@ -48,6 +49,7 @@ export function SplashScreen({ hidden }: { hidden: boolean }) {
  * Listens for the new service worker taking over and offers a refresh.
  */
 export function UpdatePrompt() {
+  const { t } = useTranslation();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -59,13 +61,13 @@ export function UpdatePrompt() {
   if (!ready) return null;
   return (
     <div className="prompt" role="alert">
-      <span>A new version of MediBook is available.</span>
+      <span>{t("common.newVersionAvailable")}</span>
       <button
         type="button"
         className="btn btn--primary btn--sm"
         onClick={() => window.location.reload()}
       >
-        Refresh
+        {t("common.refresh")}
       </button>
     </div>
   );

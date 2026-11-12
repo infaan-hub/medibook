@@ -19,6 +19,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   createEmergency,
   getEmergencyEligibility,
@@ -41,6 +43,7 @@ import {
 import { nearestAreaName } from "../lib/zanzibar";
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
+import { formatDate as intlDate, formatDateTime as intlDateTime } from "../lib/intl";
 import {
   Siren,
   MapPin,
@@ -56,7 +59,7 @@ import {
 /* ---------- helpers ---------- */
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
 }
 
 function formatTime(t: string): string {
@@ -65,7 +68,7 @@ function formatTime(t: string): string {
 
 function formatDate(d: string): string {
   const dt = new Date(d + "T00:00:00");
-  return dt.toLocaleDateString(undefined, {
+  return intlDate(dt, {
     weekday: "short",
     year: "numeric",
     month: "short",
@@ -97,38 +100,39 @@ function nowMoment(now: Date = new Date()): { date: string; start: string; end: 
   };
 }
 
-const REASON_LABELS: Record<string, string> = {
-  severe_pain: "Severe pain",
-  breathing_difficulty: "Breathing difficulty",
-  injury: "Injury",
-  accident: "Accident",
-  sudden_illness: "Sudden illness",
-  high_fever: "High fever",
-  allergic_reaction: "Allergic reaction",
-  other: "Other",
+const REASON_KEYS: Record<string, string> = {
+  severe_pain: "emergency.reasonOptions.severe_pain",
+  breathing_difficulty: "emergency.reasonOptions.breathing_difficulty",
+  injury: "emergency.reasonOptions.injury",
+  accident: "emergency.reasonOptions.accident",
+  sudden_illness: "emergency.reasonOptions.sudden_illness",
+  high_fever: "emergency.reasonOptions.high_fever",
+  allergic_reaction: "emergency.reasonOptions.allergic_reaction",
+  other: "emergency.reasonOptions.other",
 };
 
 export function reasonLabel(reason?: string | null): string {
-  if (!reason) return "Emergency";
-  return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
+  if (!reason) return i18n.t("emergency.defaultReason");
+  const key = REASON_KEYS[reason];
+  return key ? i18n.t(key) : reason.replace(/_/g, " ");
 }
 
 /** Statuses that still hold the patient's single active emergency (§4). */
 const OPEN_STATUSES: readonly AppointmentStatus[] = ["pending", "accepted", "in_progress"];
 
 /** Human wording for every status the API can return (badge + cards). */
-const STATUS_LABELS: Record<AppointmentStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  in_progress: "In progress",
-  done: "Completed",
-  cancelled: "Cancelled",
-  rejected: "Rejected",
-  expired: "Expired",
+const STATUS_KEYS: Record<AppointmentStatus, string> = {
+  pending: "appointments.status.pending",
+  accepted: "appointments.status.accepted",
+  in_progress: "appointments.status.in_progress",
+  done: "appointments.status.done",
+  cancelled: "appointments.status.cancelled",
+  rejected: "appointments.status.rejected",
+  expired: "appointments.status.expired",
 };
 
 export function statusLabel(status: AppointmentStatus): string {
-  return STATUS_LABELS[status] ?? status;
+  return i18n.t(STATUS_KEYS[status] ?? "appointments.status.pending");
 }
 
 /** The server's re-request window — mirrored ONLY to render the countdown. */
@@ -201,12 +205,12 @@ function emergencyLocationRow(request: EmergencyAppointment) {
   const maps = directionsUrl(point);
   return (
     <p className="emergency__contact-line">
-      <MapPin size={14} /> {area ? `Patient is in ${area}` : "Patient location"}
+      <MapPin size={14} /> {area ? i18n.t("emergency.patientInArea", { area }) : i18n.t("emergency.patientLocation")}
       {maps && (
         <>
           {" · "}
           <a href={maps} target="_blank" rel="noreferrer">
-            Open in Google Maps
+            {i18n.t("emergency.openMaps")}
           </a>
         </>
       )}
@@ -224,7 +228,7 @@ interface GeoFix {
 function requestGeo(): Promise<GeoFix> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      reject(new Error("This device cannot share a location."));
+      reject(new Error(i18n.t("emergency.deviceNoLocation")));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -238,8 +242,8 @@ function requestGeo(): Promise<GeoFix> {
         reject(
           new Error(
             error.code === error.PERMISSION_DENIED
-              ? "Location permission is required for an emergency request."
-              : "Could not read your location. Try again."
+              ? i18n.t("emergency.permissionRequired")
+              : i18n.t("emergency.couldNotReadLocation")
           )
         ),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -260,6 +264,7 @@ function eligibilityFromError(error: unknown): EmergencyEligibility | null {
    ===================================================== */
 
 export function PatientEmergencyScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [emergencies, setEmergencies] = useState<EmergencyAppointment[] | null>(null);
   const [eligibility, setEligibility] = useState<EmergencyEligibility | null>(null);
@@ -357,7 +362,7 @@ export function PatientEmergencyScreen() {
     event.preventDefault();
     setFormError(null);
     if (!reason) {
-      setFormError("Choose an emergency reason.");
+      setFormError(t("emergency.chooseReason"));
       return;
     }
     setSubmitting(true);
@@ -380,8 +385,8 @@ export function PatientEmergencyScreen() {
       notify(
         "success",
         assigned
-          ? `Emergency sent to Dr. ${assigned}.`
-          : "Emergency sent — the nearest doctor has been assigned."
+          ? t("emergency.sentTo", { name: assigned })
+          : t("emergency.sentNearest")
       );
       setReason("");
       setDescription("");
@@ -396,9 +401,7 @@ export function PatientEmergencyScreen() {
         load();
       }
       if (reason_ instanceof ApiError && Array.isArray(reason_.errors.location)) {
-        setFormError(
-          "A doctor in this area has not set a practice location. Please try again."
-        );
+        setFormError(t("emergency.doctorNoLocation"));
       } else {
         setFormError(message(reason_));
       }
@@ -444,17 +447,17 @@ export function PatientEmergencyScreen() {
     if (!lastClosed) return null;
     switch (lastClosed.status) {
       case "done":
-        return "Your last emergency was completed by the doctor — you can request help again.";
+        return t("emergency.closedDone");
       case "expired":
-        return "Your last emergency expired after 30 minutes without a doctor starting it — you can request help again.";
+        return t("emergency.closedExpired");
       case "rejected":
-        return `Your last emergency request was rejected${
-          lastClosed.cancel_reason ? `: ${lastClosed.cancel_reason}` : ""
-        }.`;
+        return lastClosed.cancel_reason
+          ? t("emergency.closedRejectedReason", { reason: lastClosed.cancel_reason })
+          : t("emergency.closedRejected");
       case "cancelled":
-        return `Your last emergency request was cancelled${
-          lastClosed.cancel_reason ? `: ${lastClosed.cancel_reason}` : ""
-        }.`;
+        return lastClosed.cancel_reason
+          ? t("emergency.closedCancelledReason", { reason: lastClosed.cancel_reason })
+          : t("emergency.closedCancelled");
       default:
         return null;
     }
@@ -467,9 +470,9 @@ export function PatientEmergencyScreen() {
           <Siren size={26} />
         </span>
         <div>
-          <h1 className="page__title">Emergency</h1>
+          <h1 className="page__title">{t("emergency.title")}</h1>
           <p className="page__subtitle">
-            Request urgent help from an available doctor right now.
+            {t("emergency.patientSubtitle")}
           </p>
         </div>
       </header>
@@ -494,11 +497,11 @@ export function PatientEmergencyScreen() {
             <Clock3 size={14} /> {formatDate(active.appointment_date)} ·{" "}
             {formatTime(active.start_time)}–{formatTime(active.end_time)}
             {active.emergency_requested_at &&
-              ` · requested ${new Date(active.emergency_requested_at).toLocaleString()}`}
+              ` · ${t("emergency.requested", { time: intlDateTime(new Date(active.emergency_requested_at)) })}`}
           </p>
           {(active.doctor_name || active.doctor_phone) && (
             <p className="emergency__contact-line">
-              <UserIcon size={14} /> {active.doctor_name ? `Dr. ${active.doctor_name}` : "Doctor"}
+              <UserIcon size={14} /> {active.doctor_name ? `Dr. ${active.doctor_name}` : t("emergency.doctorFallback")}
               {doctorDistance !== null && ` · ${formatDistance(doctorDistance) ?? ""}`}
               {doctorArea ? ` — ${doctorArea}` : ""}
               {active.doctor_phone && (
@@ -509,7 +512,8 @@ export function PatientEmergencyScreen() {
               )}
               {active.doctor_phone_secondary && (
                 <>
-                  {" · alt: "}
+                  {" · "}
+                  {t("emergency.altPhone")}
                   <a href={`tel:${active.doctor_phone_secondary}`}>
                     {active.doctor_phone_secondary}
                   </a>
@@ -521,41 +525,41 @@ export function PatientEmergencyScreen() {
             <p className="emergency__contact-line">
               <MapPin size={14} />{" "}
               <a href={doctorMaps} target="_blank" rel="noreferrer">
-                Open the doctor's location in Google Maps
+                {t("emergency.doctorMaps")}
               </a>
             </p>
           )}
           {patientPoint && (
             <p className="emergency__contact-line">
-              <MapPin size={14} /> Your location: {patientArea ?? "shared"}
+              <MapPin size={14} /> {patientArea
+                ? t("emergency.yourLocationArea", { area: patientArea })
+                : t("emergency.yourLocationShared")}
             </p>
           )}
           {active.status === "pending" && (
-            <p className="form-note">Waiting for the doctor to accept your request…</p>
+            <p className="form-note">{t("emergency.waitingAccept")}</p>
           )}
           {active.status === "accepted" && (
             <p className="form-note">
-              The nearest doctor has been assigned — no waiting on an accept.
+              {t("emergency.assignedNoWait")}
             </p>
           )}
           {active.status === "in_progress" && (
             <p className="form-note">
-              The doctor is with you now. Your emergency stays open until they
-              complete the visit.
+              {t("emergency.doctorWithYou")}
             </p>
           )}
           {active.status !== "in_progress" && remainingMs !== null && remainingMs > 0 && (
             <p className="form-note">
-              <Clock3 size={14} /> If the doctor does not start the emergency, you
-              can request help again in {formatCountdown(remainingMs)}.
+              <Clock3 size={14} /> {t("emergency.notStartedYet", { time: formatCountdown(remainingMs) })}
             </p>
           )}
           <div className="emergency__actions">
             <Link to={`/appointments/${active.id}`}>
-              <Button variant="secondary">View details</Button>
+              <Button variant="secondary">{t("emergency.viewDetails")}</Button>
             </Link>
             <Link to="/appointments">
-              <Button variant="secondary">All appointments</Button>
+              <Button variant="secondary">{t("emergency.allAppointments")}</Button>
             </Link>
           </div>
         </Card>
@@ -564,30 +568,28 @@ export function PatientEmergencyScreen() {
         <Card className="emergency__status">
           <div className="emergency__status-head">
             <span className={`badge badge--${eligibility.status ?? "pending"}`}>
-              {eligibility.status ? statusLabel(eligibility.status) : "Active"}
+              {eligibility.status ? statusLabel(eligibility.status) : t("emergency.active")}
             </span>
             <span className="emergency__status-reason">
-              <ShieldAlert size={15} /> Emergency already open
+              <ShieldAlert size={15} /> {t("emergency.openTitle")}
             </span>
           </div>
-          <p>{eligibility.message ?? "You already have an active emergency request."}</p>
+          <p>{eligibility.message ?? t("emergency.openFallback")}</p>
           {eligibility.status === "in_progress" ? (
             <p className="form-note">
-              You cannot file a second one while a doctor is with you — it ends
-              when they mark the visit done.
+              {t("emergency.cannotFileSecond")}
             </p>
           ) : (
             remainingMs !== null &&
             remainingMs > 0 && (
               <p className="form-note">
-                <Clock3 size={14} /> You can request help again in{" "}
-                {formatCountdown(remainingMs)}.
+                <Clock3 size={14} /> {t("emergency.requestAgainIn", { time: formatCountdown(remainingMs) })}
               </p>
             )
           )}
           <div className="emergency__actions">
             <Link to="/appointments">
-              <Button variant="secondary">All appointments</Button>
+              <Button variant="secondary">{t("emergency.allAppointments")}</Button>
             </Link>
           </div>
         </Card>
@@ -595,13 +597,13 @@ export function PatientEmergencyScreen() {
         /* -------- request form -------- */
         <Card>
           <h2 className="emergency__form-title">
-            <ShieldAlert size={18} /> Request emergency help
+            <ShieldAlert size={18} /> {t("emergency.requestTitle")}
           </h2>
           {closedNote && <p className="form-note">{closedNote}</p>}
           <form className="form" onSubmit={submit}>
             <div className="field">
               <label className="field__label" htmlFor="em-reason">
-                What is happening?
+                {t("emergency.whatHappening")}
               </label>
               <select
                 id="em-reason"
@@ -610,10 +612,10 @@ export function PatientEmergencyScreen() {
                 onChange={(event) => setReason(event.target.value as EmergencyReason)}
                 required
               >
-                <option value="">Select an emergency reason…</option>
-                {Object.entries(REASON_LABELS).map(([value, label]) => (
+                <option value="">{t("emergency.selectReason")}</option>
+                {Object.entries(REASON_KEYS).map(([value, key]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(key)}
                   </option>
                 ))}
               </select>
@@ -621,23 +623,22 @@ export function PatientEmergencyScreen() {
 
             <div className="field">
               <label className="field__label" htmlFor="em-description">
-                Description (optional)
+                {t("emergency.description")}
               </label>
               <textarea
                 id="em-description"
                 className="field__input"
                 rows={3}
-                placeholder="Describe what happened, symptoms, allergies…"
+                placeholder={t("emergency.descriptionPlaceholder")}
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
               />
             </div>
 
             <div className="field">
-              <span className="field__label">Your location</span>
+              <span className="field__label">{t("emergency.yourLocation")}</span>
               <p className="form-note">
-                Your GPS position picks the doctors near you and tells them how to
-                reach you.
+                {t("emergency.locationDesc")}
               </p>
               <Button
                 type="button"
@@ -647,21 +648,22 @@ export function PatientEmergencyScreen() {
               >
                 <MapPin size={16} />
                 {geo
-                  ? `Location shared${patientAreaFromFix ? ` · ${patientAreaFromFix}` : ""}`
-                  : "Share my location"}
+                  ? (patientAreaFromFix
+                    ? t("emergency.locationSharedArea", { area: patientAreaFromFix })
+                    : t("emergency.locationShared"))
+                  : t("emergency.shareLocation")}
               </Button>
             </div>
 
             {!geo && (
               <p className="form-note">
-                Share your location so the nearest doctor can be dispatched and
-                reach you.
+                {t("emergency.shareLocationHint")}
               </p>
             )}
 
             {formError && <p className="form-note--error">{formError}</p>}
             <Button type="submit" loading={submitting}>
-              <Siren size={16} /> Request emergency help
+              <Siren size={16} /> {t("emergency.requestTitle")}
             </Button>
           </form>
         </Card>
@@ -675,6 +677,7 @@ export function PatientEmergencyScreen() {
    ===================================================== */
 
 export function DoctorEmergencyScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [requests, setRequests] = useState<EmergencyAppointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -737,18 +740,18 @@ export function DoctorEmergencyScreen() {
   };
 
   const accept = (id: number) =>
-    act(id, "accept", undefined, "Emergency accepted — the patient has been notified.");
+    act(id, "accept", undefined, t("emergency.acceptedToast"));
 
   const startInProgress = (id: number) =>
     act(
       id,
       "in-progress",
       undefined,
-      "Emergency in progress — the patient can see you are on your way."
+      t("emergency.inProgressToast")
     );
 
   const complete = (id: number) =>
-    act(id, "done", undefined, "Emergency completed. The patient may request help again.");
+    act(id, "done", undefined, t("emergency.completedToast"));
 
   const reject = (id: number) => {
     const cancelReason = rejectReason.trim();
@@ -756,7 +759,7 @@ export function DoctorEmergencyScreen() {
       id,
       "reject",
       cancelReason ? { cancel_reason: cancelReason } : undefined,
-      "Emergency request rejected."
+      t("emergency.rejectedToast")
     );
   };
 
@@ -767,10 +770,9 @@ export function DoctorEmergencyScreen() {
           <Siren size={26} />
         </span>
         <div>
-          <h1 className="page__title">Emergency requests</h1>
+          <h1 className="page__title">{t("emergency.requestsTitle")}</h1>
           <p className="page__subtitle">
-            Urgent requests assigned to you — accept the new ones, then take them
-            in progress and close them when the visit ends.
+            {t("emergency.requestSubtitle")}
           </p>
         </div>
       </header>
@@ -782,8 +784,8 @@ export function DoctorEmergencyScreen() {
       ) : requests.length === 0 ? (
         <EmptyState
           icon={<Siren size={28} />}
-          title="No emergency requests right now"
-          description="New urgent requests from patients will appear here in real time."
+          title={t("emergency.noRequests")}
+          description={t("emergency.noRequestsDesc")}
         />
       ) : (
         <div className="emergency__list">
@@ -810,7 +812,7 @@ export function DoctorEmergencyScreen() {
                 <Clock3 size={14} /> {formatDate(request.appointment_date)} ·{" "}
                 {formatTime(request.start_time)}–{formatTime(request.end_time)}
                 {request.emergency_requested_at &&
-                  ` · requested ${new Date(request.emergency_requested_at).toLocaleString()}`}
+                  ` · ${t("emergency.requested", { time: intlDateTime(new Date(request.emergency_requested_at)) })}`}
               </p>
 
               <div className="emergency__contact-line">
@@ -833,14 +835,14 @@ export function DoctorEmergencyScreen() {
                       className="field__label"
                       htmlFor={`reject-${request.id}`}
                     >
-                      Reason (shared with the patient)
+                      {t("emergency.rejectReason")}
                     </label>
                     <input
                       id={`reject-${request.id}`}
                       className="field__input"
                       value={rejectReason}
                       onChange={(event) => setRejectReason(event.target.value)}
-                      placeholder="e.g. Off duty — call the clinic line"
+                      placeholder={t("emergency.rejectPlaceholder")}
                     />
                   </div>
                   <div className="emergency__actions">
@@ -849,7 +851,7 @@ export function DoctorEmergencyScreen() {
                       loading={acting === request.id}
                       onClick={() => reject(request.id)}
                     >
-                      Confirm rejection
+                      {t("emergency.confirmRejection")}
                     </Button>
                     <Button
                       variant="secondary"
@@ -858,7 +860,7 @@ export function DoctorEmergencyScreen() {
                         setRejectReason("");
                       }}
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </div>
@@ -869,21 +871,20 @@ export function DoctorEmergencyScreen() {
                       loading={acting === request.id}
                       onClick={() => accept(request.id)}
                     >
-                      <Check size={16} /> Accept
+                      <Check size={16} /> {t("emergency.accept")}
                     </Button>
                   )}
 
                   {request.status === "accepted" && (
                     <>
                       <p className="form-note">
-                        Auto-assigned — accepted for the patient. Mark it in
-                        progress once you are with them.
+                        {t("emergency.autoAssigned")}
                       </p>
                       <Button
                         loading={acting === request.id}
                         onClick={() => startInProgress(request.id)}
                       >
-                        <ShieldAlert size={16} /> Emergency In Progress
+                        <ShieldAlert size={16} /> {t("emergency.inProgress")}
                       </Button>
                     </>
                   )}
@@ -891,19 +892,18 @@ export function DoctorEmergencyScreen() {
                   {request.status === "in_progress" && (
                     <>
                       <p className="form-note">
-                        Visit open — close it with Done, which is what lets the
-                        patient request help again later.
+                        {t("emergency.visitOpen")}
                       </p>
                       <Link to={`/doctor/medical-treatment/emergency?appointment=${request.id}`}>
                         <Button variant="secondary">
-                          <Stethoscope size={14} /> Treatment
+                          <Stethoscope size={14} /> {t("emergency.treatment")}
                         </Button>
                       </Link>
                       <Button
                         loading={acting === request.id}
                         onClick={() => complete(request.id)}
                       >
-                        <Check size={16} /> Done
+                        <Check size={16} /> {t("emergency.done")}
                       </Button>
                     </>
                   )}
@@ -919,12 +919,12 @@ export function DoctorEmergencyScreen() {
                         setRejectReason("");
                       }}
                     >
-                      <X size={16} /> Reject
+                      <X size={16} /> {t("emergency.reject")}
                     </Button>
                   )}
 
                   <Link to={`/appointments/${request.id}`}>
-                    <Button variant="secondary">Details</Button>
+                    <Button variant="secondary">{t("emergency.details")}</Button>
                   </Link>
                 </div>
               )}

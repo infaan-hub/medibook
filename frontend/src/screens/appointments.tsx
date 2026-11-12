@@ -5,6 +5,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   cancelAppointment,
   completeAppointment,
@@ -16,6 +18,7 @@ import {
 import { getDoctor, getDoctorAvailability, getDoctorAvailableDays } from "../api/doctors";
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
+import { formatDate as formatIntlDate } from "../lib/intl";
 import { getQueue, checkIn, startConsultation, type QueueSlot } from "../api/queue";
 import { respondToEmergency } from "../api/emergency";
 import type {
@@ -40,7 +43,7 @@ import { ArrowLeft, CheckCircle2, Heart, Droplet, AlertTriangle, FileText, User,
 /* ---------- helpers ---------- */
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
 }
 
 /**
@@ -63,10 +66,18 @@ function locationGateFromError(error: unknown): "patient" | "doctor" | null {
  * doctor marks it done — so the proactive gate below and a refused booking
  * read identically.
  */
-function openAppointmentMessage(appointment: Appointment): string {
-  const date = appointment.appointment_date.slice(0, 10);
+function openAppointmentMessage(
+  appointment: Appointment,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  const date = formatIntlDate(`${appointment.appointment_date.slice(0, 10)}T00:00:00`, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
   const clock = appointment.start_time.slice(0, 5);
-  return `You already have an appointment on ${date} at ${clock}. It has to be marked as done by your doctor before you can book another one.`;
+  return t("appointments.openAppointmentMessage", { date, time: clock });
 }
 
 function formatTime(t: string): string {
@@ -75,7 +86,7 @@ function formatTime(t: string): string {
 
 function formatDate(d: string): string {
   const dt = new Date(d + "T00:00:00");
-  return dt.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+  return formatIntlDate(dt, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
 }
 
 function localDayKey(date = new Date()): string {
@@ -83,31 +94,37 @@ function localDayKey(date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-const STATUS_LABELS: Record<AppointmentStatus, string> = {
-  pending: "Pending",
-  accepted: "Accepted",
-  in_progress: "In progress",
-  done: "Done",
-  cancelled: "Cancelled",
-  rejected: "Rejected",
-  expired: "Expired",
+const STATUS_KEYS: Record<AppointmentStatus, string> = {
+  pending: "appointments.status.pending",
+  accepted: "appointments.status.accepted",
+  in_progress: "appointments.status.in_progress",
+  done: "appointments.status.done",
+  cancelled: "appointments.status.cancelled",
+  rejected: "appointments.status.rejected",
+  expired: "appointments.status.expired",
 };
 
 function StatusBadge({ status }: { status: AppointmentStatus }) {
-  return <span className={`badge badge--${status}`}>{STATUS_LABELS[status]}</span>;
+  const { t } = useTranslation();
+  return <span className={`badge badge--${status}`}>{t(STATUS_KEYS[status])}</span>;
 }
 
 function DoctorName({ doctorId }: { doctorId: number | null }) {
-  const [name, setName] = useState<string>(`Doctor #${doctorId}`);
+  const { t } = useTranslation();
+  const [name, setName] = useState("");
   useEffect(() => {
-    if (!doctorId) return;
+    if (!doctorId) {
+      setName("");
+      return;
+    }
     getDoctor(doctorId).then((r) => setName(`Dr. ${r.data.first_name} ${r.data.last_name}`)).catch(() => {});
   }, [doctorId]);
-  return <>{name}</>;
+  return <>{name || (doctorId ? t("appointments.doctorNumber", { id: doctorId }) : "")}</>;
 }
 
 /* Doctor phone is only requested from a specific appointment detail. */
 function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; appointmentId: number }) {
+  const { t } = useTranslation();
   const [phone, setPhone] = useState<string | null>(null);
   useEffect(() => {
     if (!doctorId) return;
@@ -117,7 +134,7 @@ function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; app
   if (!phone) return null;
   return (
     <div className="appt-detail__field">
-      <span className="appt-detail__label">Doctor phone</span>
+      <span className="appt-detail__label">{t("appointments.doctorPhone")}</span>
       <a href={`tel:${phone}`}>{phone}</a>
     </div>
   );
@@ -128,6 +145,7 @@ function DoctorPhone({ doctorId, appointmentId }: { doctorId: number | null; app
    ====================================== */
 
 export function BookingScreen() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const route = useLocation();
   const isHomeService = route.pathname.startsWith("/home-visit");
@@ -249,7 +267,7 @@ export function BookingScreen() {
       : null;
     if (isHomeService && !homeServiceLocation) {
       setGateOverride("patient");
-      setError("Share your current location for the home visit.");
+      setError(t("booking.shareLocationForHome"));
       return;
     }
     setSubmitting(true);
@@ -280,7 +298,7 @@ export function BookingScreen() {
       // apiPost throws on non-2xx, so reaching here means HTTP 2xx.
       // But the envelope might still carry success: false.
       if (!result.success) {
-        throw new ApiError(result.message || "Booking failed.", 409, result.errors);
+        throw new ApiError(result.message || i18n.t("booking.failed"), 409, result.errors);
       }
       navigate(isHomeService ? "/home-visit/success" : "/booking/success");
     } catch (e) {
@@ -303,7 +321,7 @@ export function BookingScreen() {
           (e as { response?: { data?: any; status?: number } }).response?.data
         ) {
           const data = (e as { response?: { data?: any } }).response?.data;
-          errorMessage = data?.message || `Request failed`;
+          errorMessage = data?.message || i18n.t("common.requestFailed");
         } else {
           errorMessage = message(e);
         }
@@ -354,20 +372,20 @@ export function BookingScreen() {
   if (openAppointment) {
     return (
       <div className="page">
-        <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
+        <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> {t("booking.backToDoctor")}</Link>
         <Card className="card--fit">
-          <h1 className="page__title">{isHomeService ? "Book a Home Service visit" : "Book appointment"}</h1>
+          <h1 className="page__title">{isHomeService ? t("booking.bookHomeVisit") : t("booking.title")}</h1>
           <p className="page__subtitle">
             Dr. {doctor.first_name} {doctor.last_name}
           </p>
           <EmptyState
             icon={<Calendar size={28} />}
-            title="Finish your current appointment first"
-            description={openAppointmentMessage(openAppointment)}
+            title={t("booking.finishCurrentTitle")}
+            description={openAppointmentMessage(openAppointment, t)}
             action={
               <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "center" }}>
-                <Link to="/appointments">View my appointments</Link>
-                <Button variant="secondary" onClick={loadOpenAppointment}>Check again</Button>
+                <Link to="/appointments">{t("appointments.viewMine")}</Link>
+                <Button variant="secondary" onClick={loadOpenAppointment}>{t("booking.checkAgain")}</Button>
               </div>
             }
           />
@@ -379,14 +397,18 @@ export function BookingScreen() {
   const calDays = new Date(calYear, calMonth, 0).getDate();
   const firstDayOfWeek = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
   const daySet = new Set(availableDays?.available_days ?? []);
-  const monthName = new Date(calYear, calMonth - 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const monthName = formatIntlDate(new Date(calYear, calMonth - 1), { month: "long", year: "numeric" });
+  // 1 Jan 2024 was a Monday — format a stable week with the active locale.
+  const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
+    formatIntlDate(new Date(2024, 0, 1 + index), { weekday: "short" })
+  );
 
   return (
     <div className="page">
-      <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> Back to doctor</Link>
+      <Link to={isHomeService ? `/home-visit/doctors/${id}` : `/doctors/${id}`}><ArrowLeft size={16} /> {t("booking.backToDoctor")}</Link>
 
       <Card className="card--fit">
-        <h1 className="page__title">{isHomeService ? "Book a Home Service visit" : "Book appointment"}</h1>
+        <h1 className="page__title">{isHomeService ? t("booking.bookHomeVisit") : t("booking.title")}</h1>
         <p className="page__subtitle">
           Dr. {doctor.first_name} {doctor.last_name}
           {doctor.specialties && doctor.specialties.length > 0
@@ -397,15 +419,15 @@ export function BookingScreen() {
 
       {isHomeService && (
         <Card className="booking-home-location">
-          <h2>Home visit location</h2>
-          <p className="page__subtitle">The doctor will visit your saved current location. Confirm or refresh it before booking.</p>
+          <h2>{t("booking.homeLocationTitle")}</h2>
+          <p className="page__subtitle">{t("booking.homeLocationDesc")}</p>
           {patientProfile?.latitude != null && patientProfile.longitude != null ? (
             <p className="booking-home-location__coords">{patientProfile.latitude.toFixed(5)}, {patientProfile.longitude.toFixed(5)}</p>
-          ) : <p className="form-note--error">Share your current location to continue.</p>}
+          ) : <p className="form-note--error">{t("booking.shareLocationToContinue")}</p>}
           <Button variant="secondary" disabled={!patientProfile} loading={savingLocation} onClick={async () => {
             try { await savePatientLocation(await captureFix()); }
             catch (reason) { setError(message(reason)); }
-          }}><MapPin size={15} /> Use current location</Button>
+          }}><MapPin size={15} /> {t("booking.useCurrentLocation")}</Button>
         </Card>
       )}
       {/* Patient medical info preview */}
@@ -413,47 +435,47 @@ export function BookingScreen() {
         <Card className="booking-medical-card">
           <div className="booking-medical-card__header">
             <Heart size={16} />
-            <h2>Your medical info</h2>
-            <span className="booking-medical-card__shared">Visible to doctor</span>
+            <h2>{t("booking.medicalInfoTitle")}</h2>
+            <span className="booking-medical-card__shared">{t("booking.visibleToDoctor")}</span>
           </div>
           <div className="booking-medical-card__grid">
             {patientProfile.blood_group && (
               <div className="booking-medical-card__field">
                 <Droplet size={13} />
-                <span className="booking-medical-card__label">Blood</span>
+                <span className="booking-medical-card__label">{t("booking.blood")}</span>
                 <span className="booking-medical-card__value">{patientProfile.blood_group}</span>
               </div>
             )}
             {patientProfile.gender && (
               <div className="booking-medical-card__field">
-                <span className="booking-medical-card__label">Gender</span>
+                <span className="booking-medical-card__label">{t("settings.gender")}</span>
                 <span className="booking-medical-card__value">{patientProfile.gender}</span>
               </div>
             )}
             {patientProfile.date_of_birth && (
               <div className="booking-medical-card__field">
-                <span className="booking-medical-card__label">Date of birth</span>
+                <span className="booking-medical-card__label">{t("settings.dateOfBirth")}</span>
                 <span className="booking-medical-card__value">{patientProfile.date_of_birth}</span>
               </div>
             )}
             {patientProfile.allergies && (
               <div className="booking-medical-card__field booking-medical-card__field--warn">
                 <AlertTriangle size={13} />
-                <span className="booking-medical-card__label">Allergies</span>
+                <span className="booking-medical-card__label">{t("settings.allergies")}</span>
                 <span className="booking-medical-card__value">{patientProfile.allergies}</span>
               </div>
             )}
             {patientProfile.medical_history && (
               <div className="booking-medical-card__field booking-medical-card__field--full">
                 <FileText size={13} />
-                <span className="booking-medical-card__label">Medical history</span>
+                <span className="booking-medical-card__label">{t("settings.medicalHistory")}</span>
                 <span className="booking-medical-card__value">{patientProfile.medical_history}</span>
               </div>
             )}
             {!patientProfile.blood_group && !patientProfile.allergies && !patientProfile.medical_history && (
               <div className="booking-medical-card__field booking-medical-card__field--full">
                 <span className="booking-medical-card__value booking-medical-card__value--muted">
-                  No medical details filled yet. <Link to="/settings">Add medical details</Link>
+                  {t("booking.noMedicalDetails")} <Link to="/settings">{t("booking.addMedicalDetails")}</Link>
                 </span>
               </div>
             )}
@@ -463,14 +485,14 @@ export function BookingScreen() {
 
       {/* Step 1: Pick a day from calendar */}
       <Card>
-        <h2>Select a day</h2>
+        <h2>{t("booking.selectDay")}</h2>
         <div className="booking-cal-nav">
-          <Button variant="secondary" onClick={prevMonth}>&larr; Prev</Button>
+          <Button variant="secondary" onClick={prevMonth}>&larr; {t("common.previous")}</Button>
           <span className="booking-cal-month">{monthName}</span>
-          <Button variant="secondary" onClick={nextMonth}>Next &rarr;</Button>
+          <Button variant="secondary" onClick={nextMonth}>{t("common.next")} &rarr;</Button>
         </div>
         <div className="booking-cal-weekdays">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+          {weekdayLabels.map((d) => (
             <span key={d} className="booking-cal-weekday">{d}</span>
           ))}
         </div>
@@ -500,28 +522,30 @@ export function BookingScreen() {
         </div>
         <p className="booking-cal-hint">
           {daySet.size > 0
-            ? `${daySet.size} day${daySet.size !== 1 ? "s" : ""} available this month`
-            : "No available days this month"}
+            ? t("booking.daysAvailable", { count: daySet.size })
+            : t("booking.noDaysThisMonth")}
         </p>
       </Card>
 
       {/* Step 2: Choose any available start time */}
       {selectedDate && (
         <Card>
-          <h2>Choose a time — {formatDate(selectedDate)}</h2>
+          <h2>{t("booking.chooseTime", { date: formatDate(selectedDate) })}</h2>
           {slotsLoading ? (
             <Skeleton lines={3} />
           ) : availability === null ? (
             <Skeleton lines={3} />
           ) : availability.slots.length === 0 ? (
-            <EmptyState title="No available appointment times" description="All times are booked or unavailable. Try another day." />
+            <EmptyState title={t("booking.noTimesTitle")} description={t("booking.noTimesDesc")} />
           ) : (
             <>
               <p className="page__subtitle">
-                Available windows:{availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join("")} — appointments last 30 minutes.
+                {t("booking.availableWindows", {
+                  windows: availability.windows.map((w) => ` ${w.start_time}–${w.end_time}`).join(""),
+                })}
               </p>
               <div className="field">
-                <label className="field__label" htmlFor="book-time">Set your preferred appointment start time</label>
+                <label className="field__label" htmlFor="book-time">{t("booking.preferredStart")}</label>
                 <input
                   id="book-time"
                   className="field__input"
@@ -534,9 +558,7 @@ export function BookingScreen() {
                   }}
                 />
                 <p className="page__subtitle">
-                  Enter any minute within the available windows. Appointments last 30 minutes;
-                  the server checks the full interval for breaks and existing bookings. If the
-                  time has just been taken, choose another time.
+                  {t("booking.timeHint")}
                 </p>
               </div>
             </>
@@ -547,26 +569,26 @@ export function BookingScreen() {
       {/* Step 3: reason + confirm */}
       {selectedTime && selectedDate && (
         <Card>
-          <h2>Confirm your booking</h2>
+          <h2>{t("booking.confirmTitle")}</h2>
           <p className="page__subtitle">
-            {formatDate(selectedDate)} at {selectedTime.slice(0, 5)}
+            {t("booking.dateAtTime", { date: formatDate(selectedDate), time: selectedTime.slice(0, 5) })}
           </p>
 
           <form className="form" onSubmit={handleBook}>
             <div className="field">
-              <label className="field__label" htmlFor="book-reason">{isHomeService ? "Reason for home visit (optional)" : "Reason for visit (optional)"}</label>
+              <label className="field__label" htmlFor="book-reason">{isHomeService ? t("booking.reasonHome") : t("booking.reason")}</label>
               <textarea
                 id="book-reason"
                 className="field__input"
                 rows={3}
-                placeholder="Describe your symptoms or reason for the appointment"
+                placeholder={t("booking.reasonPlaceholder")}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             </div>
             {error && <p className="form-note--error">{error}</p>}
             <Button type="submit" loading={submitting}>
-              Confirm booking
+              {t("booking.confirm")}
             </Button>
           </form>
         </Card>
@@ -578,25 +600,27 @@ export function BookingScreen() {
         open={locationGate === "patient"}
         saving={savingLocation}
         onCaptured={savePatientLocation}
-        title={isHomeService ? "Set your home visit location" : "Set your location to book"}
-        description={isHomeService ? `Dr. ${doctor.first_name} ${doctor.last_name} needs your current location for the home visit.` : `Dr. ${doctor.first_name} ${doctor.last_name} needs your position so the clinic knows where you are coming from. Your appointment cannot be created without it.`}
-        actionLabel="Share my location"
-        privacyNote={isHomeService ? "Your visit location is saved on this appointment and shared only with the doctor you book." : "Stored on your profile. Visible only to the doctor you book with."}
+        title={isHomeService ? t("booking.setHomeLocation") : t("booking.setLocation")}
+        description={isHomeService
+          ? t("booking.homeLocationDoctorDesc", { name: `${doctor.first_name} ${doctor.last_name}` })
+          : t("booking.locationDoctorDesc", { name: `${doctor.first_name} ${doctor.last_name}` })}
+        actionLabel={t("booking.shareLocation")}
+        privacyNote={isHomeService ? t("booking.homeLocationPrivacy") : t("booking.locationPrivacy")}
       />
 
       {/* Location gate — doctor side. Nothing the patient can fix, so the only
           way forward is back to the directory. */}
       <Modal
         open={locationGate === "doctor"}
-        title="This doctor has no location yet"
+        title={t("booking.doctorNoLocationTitle")}
         dismissible={false}
         actions={
           <>
             <Button variant="ghost" onClick={() => navigate("/doctors")}>
-              Find another doctor
+              {t("booking.findAnotherDoctor")}
             </Button>
             <Button variant="primary" onClick={() => navigate(`/doctors/${id}`)}>
-              Back to profile
+              {t("booking.backToProfile")}
             </Button>
           </>
         }
@@ -606,9 +630,7 @@ export function BookingScreen() {
             <MapPin size={26} />
           </div>
           <p className="prompt__description">
-            Dr. {doctor.first_name} {doctor.last_name} has not set their practice location, so
-            MediBook cannot confirm where the appointment will take place. Please pick another
-            doctor for now.
+            {t("booking.doctorNoLocationDesc", { name: `${doctor.first_name} ${doctor.last_name}` })}
           </p>
         </div>
       </Modal>
@@ -621,6 +643,7 @@ export function BookingScreen() {
    ====================================== */
 
 export function BookingSuccessScreen() {
+  const { t } = useTranslation();
   const isHomeService = useLocation().pathname.startsWith("/home-visit");
   const { status, user } = useSession();
   const userId = status === "authed" && user ? user.id : null;
@@ -652,15 +675,15 @@ export function BookingSuccessScreen() {
       <Card className="card--fit">
         <div className="booking-success">
           <div className="booking-success__icon"><CheckCircle2 size={48} /></div>
-          <h1 className="page__title">{isHomeService ? "Home Service requested" : "Appointment requested"}</h1>
+          <h1 className="page__title">{isHomeService ? t("booking.homeRequestedTitle") : t("booking.requestedTitle")}</h1>
           <p className="page__subtitle">
             {isHomeService
-              ? "Your Home Service visit has been submitted. The doctor will review it and you will be notified when it is accepted or rejected."
-              : "Your appointment has been submitted. You will receive a notification once the doctor confirms or rejects the request."}
+              ? t("booking.homeRequestedDesc")
+              : t("booking.requestedDesc")}
           </p>
           <div className="booking-success__actions">
-            <Link to="/appointments"><Button>View my appointments</Button></Link>
-            <Link to={isHomeService ? "/home-visit/doctor" : "/doctors"}><Button variant="secondary">Find another doctor</Button></Link>
+            <Link to="/appointments"><Button>{t("appointments.viewMine")}</Button></Link>
+            <Link to={isHomeService ? "/home-visit/doctor" : "/doctors"}><Button variant="secondary">{t("booking.findAnotherDoctor")}</Button></Link>
           </div>
         </div>
       </Card>
@@ -686,20 +709,20 @@ export function BookingSuccessScreen() {
         onDismiss={markAsked}
         title={
           installMode
-            ? "Install MediBook to enable notifications"
+            ? t("booking.installNotificationsTitle")
             : blockedMode
-              ? "Notifications are blocked"
-              : "Know the moment they reply"
+              ? t("push.blockedTitle")
+              : t("booking.notifyTitle")
         }
         description={
           installMode
-            ? "iOS delivers notifications from the MediBook app on your Home Screen. Add it once, then open MediBook from there:"
+            ? t("booking.notifyInstallDesc")
             : blockedMode
               ? push.message
-              : "Turn on notifications and you'll be alerted as soon as this doctor confirms, rejects or reschedules your appointment."
+              : t("booking.notifyDesc")
         }
-        enableLabel={push.actionLabel ?? "Allow notifications"}
-        skipLabel="Not now"
+        enableLabel={push.actionLabel ?? t("push.allowNotifications")}
+        skipLabel={t("common.notNow")}
       />
     </div>
   );
@@ -710,6 +733,7 @@ export function BookingSuccessScreen() {
    ====================================== */
 
 export function RescheduleScreen() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { notify } = useToast();
@@ -780,9 +804,9 @@ export function RescheduleScreen() {
         rescheduled_from: Number(id),
       });
       if (!result.success) {
-        throw new ApiError(result.message || "Reschedule failed.", 409, result.errors);
+        throw new ApiError(result.message || i18n.t("appointments.rescheduleFailed"), 409, result.errors);
       }
-      notify("success", "Appointment rescheduled. The new request is pending doctor confirmation.");
+      notify("success", t("appointments.rescheduledToast"));
       navigate("/appointments");
     } catch (e) {
       let errorMessage: string;
@@ -797,7 +821,7 @@ export function RescheduleScreen() {
         (e as { response?: { data?: any; status?: number } }).response?.data
       ) {
         const data = (e as { response?: { data?: any } }).response?.data;
-        errorMessage = data?.message || `Request failed`;
+        errorMessage = data?.message || i18n.t("common.requestFailed");
       } else {
         errorMessage = message(e);
       }
@@ -814,9 +838,9 @@ export function RescheduleScreen() {
   if (!canReschedule) {
     return (
       <div className="page">
-        <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> Back to appointment</Link>
+        <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> {t("appointments.backToAppointment")}</Link>
         <Card className="card--fit">
-          <EmptyState title="Cannot reschedule" description="Only pending or accepted appointments can be rescheduled." />
+          <EmptyState title={t("appointments.cannotReschedule")} description={t("appointments.cannotRescheduleDesc")} />
         </Card>
       </div>
     );
@@ -824,19 +848,19 @@ export function RescheduleScreen() {
 
   return (
     <div className="page">
-      <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> Back to appointment</Link>
+      <Link to={`/appointments/${id}`}><ArrowLeft size={16} /> {t("appointments.backToAppointment")}</Link>
 
       <Card className="card--fit">
-        <h1 className="page__title">Reschedule appointment</h1>
+        <h1 className="page__title">{t("appointments.rescheduleTitle")}</h1>
         <p className="page__subtitle">
-          Current: {formatDate(appointment.appointment_date)} at {formatTime(appointment.start_time)}
+          {t("appointments.current", { date: formatDate(appointment.appointment_date), time: formatTime(appointment.start_time) })}
         </p>
       </Card>
 
       <Card>
-        <h2>Select new date</h2>
+        <h2>{t("appointments.selectNewDate")}</h2>
         <div className="field">
-          <label className="field__label" htmlFor="reschedule-date">New appointment date</label>
+          <label className="field__label" htmlFor="reschedule-date">{t("appointments.newDate")}</label>
           <input
             id="reschedule-date"
             className="field__input"
@@ -849,14 +873,14 @@ export function RescheduleScreen() {
       </Card>
 
       <Card>
-        <h2>Choose a new time</h2>
+        <h2>{t("appointments.chooseNewTime")}</h2>
         {availability === null ? (
           <Skeleton lines={3} />
         ) : availability.slots.length === 0 ? (
-          <EmptyState title="No available appointment times" description="All times are booked or unavailable. Try another date." />
+          <EmptyState title={t("booking.noTimesTitle")} description={t("booking.noTimesDescDate")} />
         ) : (
           <div className="field">
-            <label className="field__label" htmlFor="reschedule-time">Available appointment start time</label>
+            <label className="field__label" htmlFor="reschedule-time">{t("appointments.availableStart")}</label>
             <select
               id="reschedule-time"
               className="field__input"
@@ -866,28 +890,28 @@ export function RescheduleScreen() {
                 setError(null);
               }}
             >
-              <option value="">Select a free time</option>
+              <option value="">{t("appointments.selectFreeTime")}</option>
               {availability.slots.map((slot) => (
                 <option key={slot.start_time} value={slot.start_time.slice(0, 5)}>
                   {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
                 </option>
               ))}
             </select>
-            <p className="page__subtitle">Appointments last 30 minutes. Only free times are listed.</p>
+            <p className="page__subtitle">{t("appointments.freeTimesNote")}</p>
           </div>
         )}
       </Card>
 
       {selectedTime && (
         <Card>
-          <h2>Confirm reschedule</h2>
+          <h2>{t("appointments.confirmReschedule")}</h2>
           <p className="page__subtitle">
-            New time: {formatDate(date)} at {selectedTime.slice(0, 5)}
+            {t("appointments.newTime", { date: formatDate(date), time: selectedTime.slice(0, 5) })}
           </p>
-          <p className="form-note">Your current appointment will be cancelled and a new request will be submitted.</p>
+          <p className="form-note">{t("appointments.rescheduleNote")}</p>
           {error && <p className="form-note--error">{error}</p>}
           <Button onClick={handleReschedule} loading={submitting}>
-            Confirm reschedule
+            {t("appointments.confirmReschedule")}
           </Button>
         </Card>
       )}
@@ -900,6 +924,7 @@ export function RescheduleScreen() {
    ====================================== */
 
 export function AppointmentsListScreen() {
+  const { t } = useTranslation();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [queueByAppointment, setQueueByAppointment] = useState<Map<number, QueueSlot>>(new Map());
   const [error, setError] = useState<string | null>(null);
@@ -958,13 +983,13 @@ export function AppointmentsListScreen() {
     rejected: { icon: <XCircle size={14} />, color: "#9333ea", bg: "#ede9fe" },
   };
 
-  if (error) return <div className="page"><h1 className="page__title">My Appointments</h1><ErrorState message={error} onRetry={load} /></div>;
+  if (error) return <div className="page"><h1 className="page__title">{t("appointments.mine")}</h1><ErrorState message={error} onRetry={load} /></div>;
 
   return (
     <div className="page patient-appointments">
       <div className="patient-appt-header">
-        <h1 className="page__title">My Appointments</h1>
-        <Link to="/doctors" className="patient-appt-book-btn">+ Book New</Link>
+        <h1 className="page__title">{t("appointments.mine")}</h1>
+        <Link to="/doctors" className="patient-appt-book-btn">{t("appointments.bookNew")}</Link>
       </div>
 
       <div className="patient-appt-tabs">
@@ -973,7 +998,7 @@ export function AppointmentsListScreen() {
           className={`patient-appt-tab${tab === "upcoming" ? " patient-appt-tab--active" : ""}`}
           onClick={() => setTab("upcoming")}
         >
-          Upcoming
+          {t("appointments.upcoming")}
           <span className="patient-appt-tab__count">{upcoming.length}</span>
         </button>
         <button
@@ -981,7 +1006,7 @@ export function AppointmentsListScreen() {
           className={`patient-appt-tab${tab === "past" ? " patient-appt-tab--active" : ""}`}
           onClick={() => setTab("past")}
         >
-          Past
+          {t("appointments.past")}
           <span className="patient-appt-tab__count">{past.length}</span>
         </button>
       </div>
@@ -991,9 +1016,9 @@ export function AppointmentsListScreen() {
       ) : visible.length === 0 ? (
         <div className="patient-appt-empty">
           <div className="patient-appt-empty__icon"><Calendar size={40} /></div>
-          <h3>{tab === "upcoming" ? "No upcoming appointments" : "No past appointments"}</h3>
-          <p>{tab === "upcoming" ? "Find a doctor to book your next visit." : "Your past and cancelled appointments will appear here."}</p>
-          {tab === "upcoming" && <Link to="/doctors"><Button>Find a Doctor</Button></Link>}
+          <h3>{tab === "upcoming" ? t("appointments.noUpcoming") : t("appointments.noPast")}</h3>
+          <p>{tab === "upcoming" ? t("appointments.noUpcomingDesc") : t("appointments.noPastDesc")}</p>
+          {tab === "upcoming" && <Link to="/doctors"><Button>{t("appointments.findDoctor")}</Button></Link>}
         </div>
       ) : (
         <div className="patient-appt-grid">
@@ -1009,32 +1034,32 @@ export function AppointmentsListScreen() {
                         {new Date(a.appointment_date + "T00:00:00").getDate()}
                       </span>
                       <span className="patient-appt-card__month">
-                        {new Date(a.appointment_date + "T00:00:00").toLocaleDateString(undefined, { month: "short" })}
+                        {formatIntlDate(new Date(a.appointment_date + "T00:00:00"), { month: "short" })}
                       </span>
                     </div>
                     <div className="patient-appt-card__info">
                       <div className="patient-appt-card__doctor">
-                        {a.appointment_type === "HOME_SERVICE" ? "Home Service with " : ""}<DoctorName doctorId={a.doctor} />
+                        {a.appointment_type === "HOME_SERVICE" ? t("appointments.homeServiceWith") : ""}<DoctorName doctorId={a.doctor} />
                       </div>
                       <div className="patient-appt-card__time">
                         {formatTime(a.start_time)} – {formatTime(a.end_time)}
                       </div>
-                      {a.appointment_type === "HOME_SERVICE" && <span className="badge badge--accepted">Home Service</span>}
+                      {a.appointment_type === "HOME_SERVICE" && <span className="badge badge--accepted">{t("nav.homeService")}</span>}
                       <span
                         className="patient-appt-card__status"
                         style={{ color: sc.color, background: sc.bg }}
                       >
-                        {sc.icon} {STATUS_LABELS[a.status]}
+                        {sc.icon} {t(STATUS_KEYS[a.status])}
                       </span>
-                      {queueByAppointment.get(a.id)?.being_seen && <span className="queue-badge queue-badge--live">In consultation</span>}
-                      {(queueByAppointment.get(a.id)?.position ?? null) !== null && <span className="queue-badge">Queue #{queueByAppointment.get(a.id)?.position}</span>}
+                      {queueByAppointment.get(a.id)?.being_seen && <span className="queue-badge queue-badge--live">{t("appointments.inConsultation")}</span>}
+                      {(queueByAppointment.get(a.id)?.position ?? null) !== null && <span className="queue-badge">{t("appointments.queuePosition", { position: queueByAppointment.get(a.id)?.position })}</span>}
                     </div>
                   </div>
                   {a.reason && (
                     <div className="patient-appt-card__reason">{a.reason}</div>
                   )}
                   <div className="patient-appt-card__footer">
-                    <span className="patient-appt-card__view">View Details →</span>
+                    <span className="patient-appt-card__view">{t("appointments.viewDetails")}</span>
                   </div>
                 </div>
               </Link>
@@ -1051,6 +1076,7 @@ export function AppointmentsListScreen() {
    ====================================== */
 
 export function AppointmentDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { user } = useSession();
   const { notify } = useToast();
@@ -1109,7 +1135,7 @@ export function AppointmentDetailScreen() {
     setQueueBusy(true);
     try {
       const result = await checkIn(appointment.id);
-      notify("success", result.message || "Checked in.");
+      notify("success", result.message || t("appointments.checkedInToast"));
       load();
       setQueueTick((tick) => tick + 1);
     } catch (e) {
@@ -1125,13 +1151,13 @@ export function AppointmentDetailScreen() {
     try {
       if (appointment.appointment_type === "EMERGENCY") {
         await respondToEmergency(appointment.id, "in-progress");
-        notify("success", "Emergency consultation started.");
+        notify("success", t("appointments.emergencyStartedToast"));
         load();
         navigate(`/doctor/medical-treatment/emergency?patient=${appointment.patient}&appointment=${appointment.id}`);
         return;
       }
       await startConsultation(appointment.id);
-      notify("success", "Consultation started.");
+      notify("success", t("appointments.consultationStartedToast"));
       load();
       setQueueTick((tick) => tick + 1);
       if (isDoctor) navigate(`/doctor/medical-treatment?patient=${appointment.patient}&appointment=${appointment.id}`);
@@ -1149,7 +1175,7 @@ export function AppointmentDetailScreen() {
       setQueueTick((tick) => tick + 1);
     }
     if (event === "appointment.deleted" && Number(payload.id) === Number(id)) {
-      notify("info", "This appointment was deleted.");
+      notify("info", t("appointments.deletedByOtherToast"));
       navigate("/appointments");
     }
   });
@@ -1182,7 +1208,7 @@ export function AppointmentDetailScreen() {
     if (appointment) setAppointment({ ...appointment, status: "cancelled" });
     try {
       await cancelAppointment(Number(id), cancelReason);
-      notify("success", "Appointment cancelled.");
+      notify("success", t("appointments.cancelledToast"));
       navigate("/appointments");
     } catch (e) {
       if (snapshot) setAppointment(snapshot);
@@ -1198,7 +1224,7 @@ export function AppointmentDetailScreen() {
     setError(null);
     try {
       await deleteAppointment(Number(id));
-      notify("success", "Appointment deleted.");
+      notify("success", t("appointments.deletedToast"));
       navigate("/appointments");
     } catch (e) {
       setError(message(e));
@@ -1216,65 +1242,65 @@ export function AppointmentDetailScreen() {
 
   return (
     <div className="page">
-      <Link to={isDoctor ? "/doctor/appointments" : "/appointments"}><ArrowLeft size={16} /> Back to {isDoctor ? "appointments" : "appointments"}</Link>
+      <Link to={isDoctor ? "/doctor/appointments" : "/appointments"}><ArrowLeft size={16} /> {t("appointments.back")}</Link>
 
       <Card>
         <div className="appt-detail__header">
-          <h1 className="page__title">{isHomeService ? "Home Service details" : "Appointment details"}</h1>
+          <h1 className="page__title">{isHomeService ? t("appointments.homeDetails") : t("appointments.details")}</h1>
           <StatusBadge status={appointment.status} />
         </div>
 
         <div className="appt-detail__grid">
           <div className="appt-detail__field">
-            <span className="appt-detail__label">Doctor</span>
+            <span className="appt-detail__label">{t("appointments.doctor")}</span>
             <DoctorName doctorId={appointment.doctor} />
             <DoctorPhone doctorId={appointment.doctor} appointmentId={appointment.id} />
           </div>
           <div className="appt-detail__field">
-            <span className="appt-detail__label">Date</span>
+            <span className="appt-detail__label">{t("appointments.date")}</span>
             {formatDate(appointment.appointment_date)}
           </div>
           <div className="appt-detail__field">
-            <span className="appt-detail__label">Time</span>
+            <span className="appt-detail__label">{t("appointments.time")}</span>
             {formatTime(appointment.start_time)} – {formatTime(appointment.end_time)}
           </div>
           {isHomeService ? (
             appointment.home_service_latitude != null && appointment.home_service_longitude != null && (
               <div className="appt-detail__field appt-detail__location">
-                <span className="appt-detail__label">Patient home location</span>
-                <strong>Saved for this appointment</strong>
+                <span className="appt-detail__label">{t("appointments.patientHomeLocation")}</span>
+                <strong>{t("appointments.savedForAppointment")}</strong>
                 <span>{appointment.home_service_latitude.toFixed(5)}, {appointment.home_service_longitude.toFixed(5)}</span>
                 <a className="btn btn--secondary appt-detail__directions" href={`https://www.google.com/maps/dir/?api=1&destination=${appointment.home_service_latitude},${appointment.home_service_longitude}`} target="_blank" rel="noreferrer">
-                  <MapPin size={16} /> Open patient location in Google Maps
+                  <MapPin size={16} /> {t("appointments.openPatientLocation")}
                 </a>
               </div>
             )
           ) : (
             <div className="appt-detail__field appt-detail__location">
-              <span className="appt-detail__label">Hospital location</span>
+              <span className="appt-detail__label">{t("appointments.hospitalLocation")}</span>
               <strong>Dhuran Special Need Centre</strong>
               <span>Jambiani Main Road, Kibigija, Tanzania</span>
               <span>MGPW+2C Jambiani, Tanzania</span>
               <a className="btn btn--secondary appt-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=-6.3024%2C39.5402" target="_blank" rel="noreferrer">
-                <MapPin size={16} /> Get directions in Google Maps
+                <MapPin size={16} /> {t("appointments.getDirections")}
               </a>
             </div>
           )}
           {appointment.reason && (
             <div className="appt-detail__field">
-              <span className="appt-detail__label">Reason</span>
+              <span className="appt-detail__label">{t("appointments.reason")}</span>
               {appointment.reason}
             </div>
           )}
           {appointment.notes && (
             <div className="appt-detail__field">
-              <span className="appt-detail__label">Notes</span>
+              <span className="appt-detail__label">{t("appointments.notes")}</span>
               {appointment.notes}
             </div>
           )}
           {appointment.cancel_reason && (
             <div className="appt-detail__field">
-              <span className="appt-detail__label">Cancel reason</span>
+              <span className="appt-detail__label">{t("appointments.cancelReason")}</span>
               {appointment.cancel_reason}
             </div>
           )}
@@ -1283,32 +1309,32 @@ export function AppointmentDetailScreen() {
 
       {isHomeService && isDoctor && appointment.status === "accepted" && (
         <Card className="queue-card">
-          <div className="queue-card__head"><span className="queue-card__title"><House size={16} /> Home Service consultation</span></div>
-          <p className="queue-card__msg">Start the visit on its scheduled date. The saved patient location is shown below.</p>
+          <div className="queue-card__head"><span className="queue-card__title"><House size={16} /> {t("appointments.homeConsultation")}</span></div>
+          <p className="queue-card__msg">{t("appointments.homeConsultationDesc")}</p>
           <Button variant="primary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleStartConsultation()}>
-            <Play size={14} /> {isAppointmentDay ? "Start consultation" : "Start on appointment day"}
+            <Play size={14} /> {isAppointmentDay ? t("appointments.startConsultation") : t("appointments.startOnDay")}
           </Button>
         </Card>
       )}
 
       {appointment.appointment_type === "EMERGENCY" && isDoctor && (appointment.status === "accepted" || appointment.status === "in_progress") && (
         <Card className="queue-card">
-          <div className="queue-card__head"><span className="queue-card__title"><Users size={16} /> Emergency consultation</span></div>
+          <div className="queue-card__head"><span className="queue-card__title"><Users size={16} /> {t("appointments.emergencyConsultation")}</span></div>
           {appointment.status === "accepted" ? (
             <Button variant="primary" loading={queueBusy} onClick={() => void handleStartConsultation()}>
-              <Play size={14} /> Start emergency consultation
+              <Play size={14} /> {t("appointments.startEmergency")}
             </Button>
           ) : (
             <Button variant="primary" loading={queueBusy} onClick={async () => {
               setQueueBusy(true);
               try {
                 await completeAppointment(appointment.id);
-                notify("success", "Emergency appointment completed.");
+                notify("success", t("appointments.emergencyCompleted"));
                 load();
               } catch (e) { notify("error", message(e)); }
               finally { setQueueBusy(false); }
             }}>
-              <CheckCircle2 size={14} /> Done
+              <CheckCircle2 size={14} /> {t("appointments.status.done")}
             </Button>
           )}
         </Card>
@@ -1319,10 +1345,10 @@ export function AppointmentDetailScreen() {
         <Card className="queue-card">
           <div className="queue-card__head">
             <span className="queue-card__title">
-              <Users size={16} /> Waiting room
+              <Users size={16} /> {t("appointments.waitingRoom")}
             </span>
             {queueSlot.being_seen && (
-              <span className="queue-badge queue-badge--live">In consultation</span>
+              <span className="queue-badge queue-badge--live">{t("appointments.inConsultation")}</span>
             )}
             {!queueSlot.being_seen && queueSlot.position !== null && (
               <span className="queue-badge">#{queueSlot.position}</span>
@@ -1331,35 +1357,35 @@ export function AppointmentDetailScreen() {
 
           {queueSlot.being_seen ? (
             <p className="queue-card__msg">
-              {isDoctor ? "The patient is with you now." : "You are with the doctor now."}
+              {isDoctor ? t("appointments.patientWithYou") : t("appointments.withDoctor")}
             </p>
           ) : queueSlot.position !== null ? (
             <>
               <p className="queue-card__pos">
                 {isDoctor
-                  ? `Patient is #${queueSlot.position} in line`
-                  : `You are #${queueSlot.position} in line`}
+                  ? t("appointments.patientPosition", { position: queueSlot.position })
+                  : t("appointments.yourPosition", { position: queueSlot.position })}
                 {queueSlot.position > 1 && !isDoctor
-                  ? ` — ${queueSlot.position - 1} ahead of you`
+                  ? ` — ${t("appointments.aheadOfYou", { count: queueSlot.position - 1 })}`
                   : ""}
               </p>
               <p className="queue-card__meta">
-                {queueSlot.waiting_count} waiting
-                {queueSlot.waited_minutes !== null && ` · waited ${queueSlot.waited_minutes} min`}
+                {t("appointments.waitingCount", { count: queueSlot.waiting_count })}
+                {queueSlot.waited_minutes !== null && ` · ${t("appointments.waitedMinutes", { count: queueSlot.waited_minutes })}`}
               </p>
             </>
           ) : (
             <p className="queue-card__msg">
               {isDoctor
-                ? "The patient has not checked in yet."
-                : "You have not checked in yet."}
+                ? t("appointments.notCheckedInDoctor")
+                : t("appointments.notCheckedInPatient")}
             </p>
           )}
 
           <div className="queue-card__acts">
             {!queueSlot.checked_in && appointment.status === "accepted" && canCancel && (
               <Button variant="primary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleCheckIn()}>
-                <UserCheck size={14} /> {isAppointmentDay ? (isDoctor ? "Check patient in" : "Check in") : "Check in on appointment day"}
+                <UserCheck size={14} /> {isAppointmentDay ? (isDoctor ? t("appointments.checkPatientIn") : t("appointments.checkIn")) : t("appointments.checkInOnDay")}
               </Button>
             )}
             {isDoctor && queueSlot.checked_in && !queueSlot.being_seen && (
@@ -1368,7 +1394,7 @@ export function AppointmentDetailScreen() {
                 loading={queueBusy}
                 onClick={() => void handleStartConsultation()}
               >
-                <Play size={14} /> Start consultation
+                <Play size={14} /> {t("appointments.startConsultation")}
               </Button>
             )}
           </div>
@@ -1379,48 +1405,48 @@ export function AppointmentDetailScreen() {
         <Card>
           <button type="button" className="appt-card__medical-toggle" onClick={toggleMedical}>
             <User size={14} />
-            {showMedical ? "Hide" : "View"} Patient Medical Info
+            {showMedical ? t("appointments.hideMedical") : t("appointments.viewMedical")}
           </button>
           {showMedical && (
             <div className="treat-patient-fields" style={{ marginTop: "0.75rem" }}>
               {medicalLoading ? (
                 <Skeleton lines={3} />
               ) : !patientMedical ? (
-                <p className="form-note">{medicalNote ?? "No medical information available."}</p>
+                <p className="form-note">{medicalNote ?? t("appointments.noMedicalInfo")}</p>
               ) : (
                 <>
                   {patientMedical.blood_group && (
                     <div className="treat-pf">
-                      <span><Droplet size={13} /> Blood Group</span>
+                      <span><Droplet size={13} /> {t("appointments.bloodGroup")}</span>
                       <strong>{patientMedical.blood_group}</strong>
                     </div>
                   )}
                   {patientMedical.gender && (
                     <div className="treat-pf">
-                      <span>Gender</span>
+                      <span>{t("settings.gender")}</span>
                       <strong>{patientMedical.gender}</strong>
                     </div>
                   )}
                   {patientMedical.date_of_birth && (
                     <div className="treat-pf">
-                      <span>Date of Birth</span>
+                      <span>{t("settings.dateOfBirth")}</span>
                       <strong>{formatDate(patientMedical.date_of_birth)}</strong>
                     </div>
                   )}
                   {patientMedical.allergies && (
                     <div className="treat-pf treat-pf--warn">
-                      <span><AlertTriangle size={13} /> Allergies</span>
+                      <span><AlertTriangle size={13} /> {t("settings.allergies")}</span>
                       <strong>{patientMedical.allergies}</strong>
                     </div>
                   )}
                   {patientMedical.medical_history && (
                     <div className="treat-pf">
-                      <span><FileText size={13} /> Medical History</span>
+                      <span><FileText size={13} /> {t("settings.medicalHistory")}</span>
                       <strong>{patientMedical.medical_history}</strong>
                     </div>
                   )}
                   {!patientMedical.blood_group && !patientMedical.allergies && !patientMedical.medical_history && (
-                    <p className="form-note">No medical details filled yet.</p>
+                    <p className="form-note">{t("booking.noMedicalDetails")}</p>
                   )}
                 </>
               )}
@@ -1430,34 +1456,34 @@ export function AppointmentDetailScreen() {
       )}
 
       <Card>
-        <h2>Manage appointment</h2>
+        <h2>{t("appointments.manage")}</h2>
         <div className="appt-manage-actions">
           {canReschedule && (
             <Link className="btn btn--secondary appt-manage-actions__link" to={`/appointments/${id}/reschedule`}>
-              Reschedule
+              {t("appointments.reschedule")}
             </Link>
           )}
           {canCancel && !showCancelForm && (
             <Button variant="danger" onClick={() => setShowCancelForm(true)}>
-              Cancel appointment
+              {t("appointments.cancel")}
             </Button>
           )}
           {!showDeleteConfirm && (
             <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-              Delete appointment
+              {t("appointments.delete")}
             </Button>
           )}
         </div>
         {showDeleteConfirm && (
           <div className="appt-delete-confirm">
-            <p>Are you sure you want to permanently delete this appointment?</p>
+            <p>{t("appointments.deleteConfirm")}</p>
             {error && <p className="form-note--error">{error}</p>}
             <div className="form__row form__row--actions appt-manage-confirm-actions">
               <Button variant="danger" loading={deleting} onClick={handleDelete}>
-                Yes, delete
+                {t("appointments.yesDelete")}
               </Button>
               <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)} type="button">
-                Keep appointment
+                {t("appointments.keep")}
               </Button>
             </div>
           </div>
@@ -1465,7 +1491,7 @@ export function AppointmentDetailScreen() {
         {showCancelForm && (
           <form className="form" onSubmit={(e) => { e.preventDefault(); handleCancel(); }}>
             <div className="field">
-              <label className="field__label" htmlFor="cancel-reason">Reason for cancellation (optional)</label>
+              <label className="field__label" htmlFor="cancel-reason">{t("appointments.cancelReasonLabel")}</label>
               <textarea
                 id="cancel-reason"
                 className="field__input"
@@ -1476,8 +1502,8 @@ export function AppointmentDetailScreen() {
             </div>
             {error && <p className="form-note--error">{error}</p>}
             <div className="form__row form__row--actions appt-manage-confirm-actions">
-              <Button variant="danger" loading={cancelling}>Confirm cancellation</Button>
-              <Button variant="secondary" onClick={() => setShowCancelForm(false)} type="button">Keep appointment</Button>
+              <Button variant="danger" loading={cancelling}>{t("appointments.confirmCancel")}</Button>
+              <Button variant="secondary" onClick={() => setShowCancelForm(false)} type="button">{t("appointments.keep")}</Button>
             </div>
           </form>
         )}

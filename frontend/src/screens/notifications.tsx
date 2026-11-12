@@ -4,6 +4,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   deleteNotification,
   listNotifications,
@@ -25,17 +27,17 @@ import {
 } from "lucide-react";
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
 }
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diff = Math.floor((now - then) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 60) return i18n.t("notifications.justNow");
+  if (diff < 3600) return i18n.t("notifications.minutesAgo", { count: Math.floor(diff / 60) });
+  if (diff < 86400) return i18n.t("notifications.hoursAgo", { count: Math.floor(diff / 3600) });
+  return i18n.t("notifications.daysAgo", { count: Math.floor(diff / 86400) });
 }
 
 const TYPE_ICONS: Record<NotificationType, React.ReactNode> = {
@@ -62,6 +64,7 @@ function NotificationRow({
   onDelete: (id: number) => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   function handleClick() {
     if (!notification.is_read) onRead(notification.id);
@@ -89,7 +92,7 @@ function NotificationRow({
       <button
         className="notif-row__delete"
         onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
-        aria-label="Delete notification"
+        aria-label={t("notifications.deleteAria")}
       >
         <Trash2 size={16} />
       </button>
@@ -102,6 +105,7 @@ function NotificationRow({
    ====================================== */
 
 export function NotificationsScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
@@ -149,7 +153,7 @@ export function NotificationsScreen() {
         const row = {
           id,
           notification_type: String(payload.notification_type ?? "system"),
-          title: String(payload.title ?? "MediBook update"),
+          title: String(payload.title ?? t("notifications.mediBookUpdate")),
           message: String(payload.message ?? ""),
           related_appointment: payload.related_appointment != null ? Number(payload.related_appointment) : null,
           is_read: payload.is_read === true,
@@ -176,7 +180,7 @@ export function NotificationsScreen() {
     try {
       await deleteNotification(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-      notify("success", "Notification deleted.");
+      notify("success", t("notifications.deleted"));
     } catch (e) {
       notify("error", message(e));
     }
@@ -186,7 +190,7 @@ export function NotificationsScreen() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Notifications</h1>
+      <h1 className="page__title">{t("notifications.title")}</h1>
 
       {/* Filter tabs */}
       <div className="tabs">
@@ -194,13 +198,13 @@ export function NotificationsScreen() {
           className={`tabs__tab${filter === "all" ? " tabs__tab--active" : ""}`}
           onClick={() => setFilter("all")}
         >
-          All
+          {t("notifications.all")}
         </button>
         <button
           className={`tabs__tab${filter === "unread" ? " tabs__tab--active" : ""}`}
           onClick={() => setFilter("unread")}
         >
-          Unread ({unreadCount})
+          {t("notifications.unread", { count: unreadCount })}
         </button>
       </div>
 
@@ -211,11 +215,11 @@ export function NotificationsScreen() {
       ) : notifications.length === 0 ? (
         <EmptyState
           icon={<Bell size={40} />}
-          title={filter === "unread" ? "No unread notifications" : "No notifications"}
+          title={filter === "unread" ? t("notifications.noUnread") : t("notifications.noNotifications")}
           description={
             filter === "unread"
-              ? "You're all caught up!"
-              : "Notifications about your appointments and activity will appear here."
+              ? t("notifications.noNotificationsDesc")
+              : t("notifications.emptyDesc")
           }
         />
       ) : (

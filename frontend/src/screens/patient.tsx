@@ -17,6 +17,7 @@ import { myVitals, type Vital } from "../api/vitals";
 import { myLabOrders, type LabOrder } from "../api/lab-orders";
 import { downloadFullPatientReport, viewFullPatientReport } from "../api/reports";
 import { vitalChips, vitalDate } from "../lib/vitals";
+import { formatDate } from "../lib/intl";
 import { statusLabel, flagLabel, referenceLabel, resultLabel } from "../lib/lab-orders";
 import type { Gender, GeoInput, LinkedDoctor, PatientProfile } from "../api/types";
 import { ApiError } from "../api/client";
@@ -76,7 +77,7 @@ function formatDateOfBirth(d: string | null): string {
   if (!d) return "Not specified";
   const dt = new Date(d + "T00:00:00");
   const age = Math.floor((Date.now() - dt.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-  return `${dt.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} (${age} yrs)`;
+  return `${formatDate(dt, { year: "numeric", month: "long", day: "numeric" })} (${age} yrs)`;
 }
 
 function fieldErrors(error: unknown): Record<string, string> {
@@ -681,7 +682,7 @@ export function SettingsScreen() {
               <div key={rx.id} className="rx-card">
                 <div className="rx-card__head">
                   <span className="rx-card__date">
-                    <Calendar size={13} /> {new Date(rx.created_at).toLocaleDateString()}
+                    <Calendar size={13} /> {formatDate(rx.created_at)}
                   </span>
                   <span className="rx-card__count">
                     {rx.items.length} medication{rx.items.length === 1 ? "" : "s"}
@@ -954,7 +955,7 @@ export function SettingsScreen() {
                   <span className="health-record-item__meta">
                     {record.doctor_name ? `Dr. ${record.doctor_name}` : "Not shared yet"}
                     {" · "}
-                    {new Date(record.created_at).toLocaleDateString()}
+                    {formatDate(record.created_at)}
                   </span>
                 </div>
                 <div className="health-record-item__actions">

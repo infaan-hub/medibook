@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { formatDate as intlDate } from "../lib/intl";
 import { completeAppointment } from "../api/appointments";
 import { getPatientProfileById } from "../api/patients";
 import {
@@ -75,7 +77,7 @@ function fmtDate(d: string | null): string {
   // ISO datetimes (created_at/updated_at) already carry one.
   const dt = new Date(d.length <= 10 ? `${d}T00:00:00` : d);
   if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleDateString(undefined, {
+  return intlDate(dt, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -1123,6 +1125,7 @@ function HcRecord({ record, appointmentId, onAttach }: { record: HealthRecord; a
    ====================================== */
 
 export function DoctorMedicalTreatmentScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const navigate = useNavigate();
   const [finishingVisit, setFinishingVisit] = useState(false);
@@ -1611,7 +1614,7 @@ export function DoctorMedicalTreatmentScreen() {
         <div className="doctor-page-header">
           <div>
             <p className="doctor-eyebrow">Treatment Records</p>
-            <h1>Medical Treatments</h1>
+            <h1>{t("doctorMedicalTreatments.medicalTreatments")}</h1>
             <p>Select a patient to view and manage their treatment records.</p>
           </div>
         </div>

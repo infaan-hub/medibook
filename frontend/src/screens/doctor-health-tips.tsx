@@ -11,6 +11,7 @@ import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../co
 import { useToast } from "../state/app-context";
 import { Heart, Newspaper } from "lucide-react";
 import { BlogCover } from "./blog";
+import { formatDate } from "../lib/intl";
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -252,7 +253,7 @@ export function DoctorHealthTipsScreen() {
                 <div className="blog__card-footer">
                   <time className="blog__card-date">
                     {(article.published_at ?? article.created_at) &&
-                      new Date(article.published_at ?? article.created_at).toLocaleDateString()}
+                      formatDate(article.published_at ?? article.created_at)}
                   </time>
                   {/* Read-only tally for the author — patients do the liking. */}
                   <span className="blog__likes-static" title={t("blog.likes", { count: article.likes_count ?? 0 })}>

@@ -92,19 +92,27 @@ vi.mock("../api/treatments", () => ({
 }));
 
 // patient.tsx reads translated strings; keep them stable for assertions.
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) =>
-      (
-        {
-          "settings.healthRecords": "Health Records",
-          "settings.noRecords": "No health records yet",
-          "settings.noRecordsDesc": "Upload lab reports, prescriptions, and X-rays here.",
-        } as Record<string, string>
-      )[key] ?? key,
-    i18n: { language: "en" },
-  }),
-}));
+vi.mock("react-i18next", () => {
+  const en = require("../locales/en.json");
+  const flat = (value: unknown, prefix = ""): Record<string, string> => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return { [prefix]: String(value) };
+    }
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>(
+      (acc, [key, child]) => ({ ...acc, ...flat(child, prefix ? `${prefix}.${key}` : key) }),
+      {}
+    );
+  };
+  const map = flat(en);
+  map["settings.noRecordsDesc"] = "Upload lab reports, prescriptions, and X-rays here.";
+  return {
+    initReactI18next: { type: "3rdParty", init: vi.fn() },
+    useTranslation: () => ({
+      t: (key: string) => map[key] ?? key,
+      i18n: { language: "en" },
+    }),
+  };
+});
 
 function envelope<T>(data: T) {
   return { success: true, message: "", data };

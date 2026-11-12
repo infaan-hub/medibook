@@ -14,6 +14,8 @@
 
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   confirmPasswordReset,
   requestPasswordReset,
@@ -26,6 +28,7 @@ import { InstallAppButton } from "../components/InstallAppButton";
 import { getPushPlatform } from "../lib/platform";
 import { collectLoginPush } from "../push/loginPush";
 import { TextField } from "../components/ui";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 
 /* ---------------- shared helpers ---------------- */
 
@@ -119,11 +122,15 @@ function AuthLayout({
   footer?: ReactNode;
   hideBack?: boolean;
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <main className="ab-page">
+      <div className="ab-language">
+        <LanguageSwitcher variant="inline" />
+      </div>
       {!hideBack && (
-        <button className="ab-back" type="button" aria-label="Go back" onClick={() => navigate(-1)}>
+        <button className="ab-back" type="button" aria-label={t("auth.goBack")} onClick={() => navigate(-1)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
@@ -423,6 +430,7 @@ const onboardingSlides: readonly OnboardingSlide[] = [
 ];
 
 export function OnboardingScreen() {
+  const { t } = useTranslation();
   const [slide, setSlide] = useState(0);
   // Tab selection — starts on the safe default and snaps to the real device
   // after mount (never blocks rendering or hydration on detection).
@@ -515,13 +523,16 @@ export function OnboardingScreen() {
           />
           <span className="ab-onboarding__brand-name">Medibook</span>
         </div>
-        <button
-          className="ab-onboarding__skip"
-          type="button"
-          onClick={completeAndGoWelcome}
-        >
-          Skip
-        </button>
+        <div className="ab-onboarding__top-actions">
+          <LanguageSwitcher variant="inline" />
+          <button
+            className="ab-onboarding__skip"
+            type="button"
+            onClick={completeAndGoWelcome}
+          >
+            {t("onboarding.skip")}
+          </button>
+        </div>
       </div>
       <div
         ref={trackRef}
@@ -728,7 +739,7 @@ export function OnboardingScreen() {
       <div
         className="ab-dots"
         role="group"
-        aria-label={`Slide ${slide + 1} of ${onboardingSlides.length}`}
+        aria-label={t("onboarding.slideOf", { current: slide + 1, total: onboardingSlides.length })}
       >
         {onboardingSlides.map((item, index) => (
           <button
@@ -737,7 +748,7 @@ export function OnboardingScreen() {
             className={`ab-dots__dot${
               index === slide ? " ab-dots__dot--active" : ""
             }`}
-            aria-label={`Go to slide ${index + 1}: ${item.title}`}
+            aria-label={t("onboarding.goToSlide", { current: index + 1, title: item.title })}
             aria-current={index === slide ? "step" : undefined}
             onClick={() => setSlide(index)}
           />
@@ -751,13 +762,13 @@ export function OnboardingScreen() {
           onClick={goBack}
           disabled={slide === 0}
         >
-          Back
+          {t("onboarding.back")}
         </button>
         <button type="button" className="ab-btn ab-btn--outline" onClick={goSignIn}>
-          Sign In
+          {t("onboarding.signIn")}
         </button>
         <button type="button" className="ab-btn ab-btn--primary" onClick={goNext}>
-          {isLast ? "Get Started" : "Next"}
+          {isLast ? t("onboarding.getStarted") : t("onboarding.next")}
         </button>
       </footer>
     </main>
@@ -765,6 +776,7 @@ export function OnboardingScreen() {
 }
 
 export function WelcomeScreen() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const googleLogin = useGoogleLogin();
   return (
@@ -772,20 +784,23 @@ export function WelcomeScreen() {
       {/* First-run CTA (§69) — sits above the brand, opposite the Skip button
           of the onboarding carousel. */}
       <InstallAppButton variant="floating" />
+      <div className="ab-welcome__language">
+        <LanguageSwitcher variant="inline" />
+      </div>
       <div className="ab-welcome__content">
         <AbLogo large />
-        <h1 className="ab-welcome__title">Medibook Hospital</h1>
-        <p className="ab-welcome__subtitle">Your Health, Our Priority</p>
+        <h1 className="ab-welcome__title">{t("auth.welcomeTitle")}</h1>
+        <p className="ab-welcome__subtitle">{t("auth.welcomeSubtitle")}</p>
       </div>
       <div className="ab-welcome__actions">
-        <button className="ab-btn ab-btn--primary" type="button" onClick={() => navigate("/register")}>Create new account</button>
-<span className="ab-divider">or</span>
-        <div className="ab-social-btns" aria-label="Social sign-in options">
+        <button className="ab-btn ab-btn--primary" type="button" onClick={() => navigate("/register")}>{t("auth.createNewAccount")}</button>
+<span className="ab-divider">{t("auth.or")}</span>
+        <div className="ab-social-btns" aria-label={t("auth.socialOptions")}>
           <button className="ab-social-btn" type="button" aria-label="Google" data-google-btn onClick={googleLogin}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l2.85-2.22.81-.62z" fill="#EA4335"/></svg> Continue with Google
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l2.85-2.22.81-.62z" fill="#EA4335"/></svg> {t("auth.continueWithGoogle")}
           </button>
         </div>
-        <button className="ab-btn ab-btn--outline" type="button" onClick={() => navigate("/login")}>Sign In</button>
+        <button className="ab-btn ab-btn--outline" type="button" onClick={() => navigate("/login")}>{t("auth.login")}</button>
       </div>
     </main>
   );
@@ -817,12 +832,13 @@ function loadScript(src: string, id: string): Promise<void> {
 }
 
 function useGoogleLogin() {
+  const { t } = useTranslation();
   const { socialLogin } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
   return useCallback(async () => {
     if (!GOOGLE_CLIENT_ID) {
-      notify("error", "Google sign-in is not configured.");
+      notify("error", t("auth.googleNotConfigured"));
       return;
     }
     try {
@@ -835,8 +851,8 @@ function useGoogleLogin() {
         callback: (response: { credential?: string }) => {
           if (response.credential) {
             socialLogin("google", response.credential)
-              .then(() => { notify("success", "Welcome to MediBook."); navigate(freshHomeForRole(), { replace: true }); })
-              .catch((err: unknown) => { notify("error", err instanceof Error ? err.message : "Google sign-in failed."); });
+              .then(() => { notify("success", t("auth.googleWelcomeToast")); navigate(freshHomeForRole(), { replace: true }); })
+              .catch((err: unknown) => { notify("error", err instanceof Error ? err.message : t("auth.googleFailed")); });
           }
         },
         auto_select: false,           // Show account picker for returning users
@@ -860,9 +876,9 @@ function useGoogleLogin() {
       // Show One Tap (account picker for signed-in Google users)
       google.accounts.id.prompt();
     } catch {
-      notify("error", "Could not load Google sign-in.");
+      notify("error", t("auth.googleLoadFailed"));
     }
-  }, [socialLogin, notify, navigate]);
+  }, [socialLogin, notify, navigate, t]);
 }
 
 /* ---------------- Login ---------------- */
@@ -889,20 +905,19 @@ interface OtpDelivery {
 
 /** Sentence telling the user where the code went (never claims a failed channel). */
 function otpDeliverySummary(delivery: OtpDelivery | null): string {
-  if (!delivery || !delivery.emailSent && !delivery.pushSent) return "Sent to your email.";
-  const email = delivery.emailSent
-    ? delivery.emailHint
-      ? `your email (${delivery.emailHint})`
-      : "your email"
-    : null;
-  const push = delivery.pushSent ? "your devices" : null;
-  if (email && push) return `Sent to ${email} and ${push}.`;
-  if (email) return `Sent to ${email}.`;
-  if (push) return `Sent to ${push}.`;
-  return "We couldn't deliver the code to your email or devices.";
+  if (!delivery || (!delivery.emailSent && !delivery.pushSent)) return i18n.t("auth.sentToEmail");
+  const emailHint = delivery.emailSent ? delivery.emailHint : null;
+  const push = delivery.pushSent;
+  if (emailHint && push) return i18n.t("auth.sentToEmailAndDevices", { email: emailHint });
+  if (delivery.emailSent && push) return i18n.t("auth.sentToEmailAndDevicesNoHint");
+  if (emailHint) return i18n.t("auth.sentToEmailHint", { email: emailHint });
+  if (delivery.emailSent) return i18n.t("auth.sentToEmail");
+  if (push) return i18n.t("auth.sentToDevices");
+  return i18n.t("auth.couldNotDeliver");
 }
 
 export function LoginScreen() {
+  const { t } = useTranslation();
   const { login, verifyLogin } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -1029,7 +1044,7 @@ export function LoginScreen() {
       return;
     }
 
-    notify("success", "Welcome back to MediBook.");
+    notify("success", t("auth.welcomeBackToast"));
     const target = from && canReturnTo(from) ? from : freshHomeForRole();
     navigate(target, { replace: true });
   }
@@ -1044,7 +1059,7 @@ export function LoginScreen() {
     setOtpError("");
     try {
       await verifyLogin(challenge.token, code);
-      notify("success", "Welcome back to MediBook.");
+      notify("success", t("auth.welcomeBackToast"));
       const target = from && canReturnTo(from) ? from : freshHomeForRole();
       navigate(target, { replace: true });
     } catch (error) {
@@ -1110,28 +1125,28 @@ export function LoginScreen() {
 
   return (
     <AuthLayout
-      title={challenge ? "Verify your email" : "Sign In"}
+      title={challenge ? t("auth.verifyTitle") : t("auth.login")}
       subtitle={
         challenge
-          ? "Enter the code below."
-          : "Welcome back! Please sign in\nto continue."
+          ? t("auth.verifySubtitle")
+          : t("auth.welcomeBackSubtitle")
       }
       footer={
-        <span>Don't have an account? <Link to="/register">Sign Up</Link></span>
+        <span>{t("auth.noAccount")} <Link to="/register">{t("auth.register")}</Link></span>
       }
     >
       {challenge ? (
         <form className="ab-form__inner" onSubmit={onVerify} noValidate>
           {otpTopError && <ErrorNote message={otpTopError} />}
           <p className="form-note" role="status" aria-live="polite">
-            {otpAction === "verify" && "Verifying code…"}
-            {otpAction === "resend" && "Sending a new code…"}
+            {otpAction === "verify" && t("auth.verifyingCode")}
+            {otpAction === "resend" && t("auth.sendingNewCode")}
             {!otpAction && (otpRemaining > 0
-              ? `${otpDeliverySummary(delivery)} Expires in ${formatCountdown(otpRemaining)}.`
-              : "This code has expired. Request a new one.")}
+              ? `${otpDeliverySummary(delivery)} ${t("auth.codeExpiresIn", { time: formatCountdown(otpRemaining) })}`
+              : t("auth.codeExpired"))}
           </p>
           <div className="ab-field">
-            <label className="ab-field__label" htmlFor="login-otp">Verification code</label>
+            <label className="ab-field__label" htmlFor="login-otp">{t("auth.verificationCode")}</label>
             <div className="otp-code" data-filled={otpValue.length > 0}>
               <div className="otp-code__digits" aria-hidden="true">
                 {Array.from({ length: 6 }, (_, index) => {
@@ -1170,10 +1185,10 @@ export function LoginScreen() {
             onClick={onResend}
             disabled={submitting}
           >
-            {otpAction === "resend" ? "Sending…" : "Resend code"}
+            {otpAction === "resend" ? t("auth.sending") : t("auth.resendCode")}
           </button>
           <button type="button" className="ab-forgot" onClick={backToPassword}>
-            ← Back to password
+            {t("auth.backToPassword")}
           </button>
         </form>
       ) : (
@@ -1182,8 +1197,8 @@ export function LoginScreen() {
           <ErrorNote
             message={
               lock.requires_admin
-                ? "Too many failed sign-in attempts. This account stays locked until an administrator unlocks it."
-                : `Too many failed sign-in attempts. Try again in ${formatCountdown(waitSeconds ?? 0)}.`
+                ? t("auth.lockedAdmin")
+                : t("auth.lockedCountdown", { time: formatCountdown(waitSeconds ?? 0) })
             }
           />
         ) : (
@@ -1191,12 +1206,11 @@ export function LoginScreen() {
         )}
         {!lock && attemptsLeft !== null && attemptsLeft > 0 && (
           <p className="form-note" role="status">
-            {attemptsLeft} {attemptsLeft === 1 ? "attempt" : "attempts"} left before this
-            account is locked.
+            {t("auth.attemptsLeft", { count: attemptsLeft })}
           </p>
         )}
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="login-username">Username</label>
+          <label className="ab-field__label" htmlFor="login-username">{t("auth.username")}</label>
           <input
             id="login-username"
             className="ab-field__input"
@@ -1211,7 +1225,7 @@ export function LoginScreen() {
         <div className="ab-field">
           <TextField
             id="login-password"
-            label="Password"
+            label={t("auth.password")}
             type="password"
             autoComplete="current-password"
             required
@@ -1220,18 +1234,18 @@ export function LoginScreen() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <Link className="ab-forgot" to="/forgot-password">Forgot Password?</Link>
+        <Link className="ab-forgot" to="/forgot-password">{t("auth.forgotPassword")}</Link>
         <button
           type="submit"
           className="ab-btn ab-btn--primary ab-btn--full"
           disabled={submitting || countingDown}
         >
-          {submitting ? "Signing In…" : "Sign In"}
+          {submitting ? t("auth.signingIn") : t("auth.login")}
         </button>
-        <span className="ab-divider">or</span>
+        <span className="ab-divider">{t("auth.or")}</span>
 <div className="ab-social-btns">
           <button className="ab-social-btn" type="button" data-google-btn onClick={googleLogin}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#EA4335"/></svg> Continue with Google
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#EA4335"/></svg> {t("auth.continueWithGoogle")}
           </button>
         </div>
       </form>
@@ -1243,6 +1257,7 @@ export function LoginScreen() {
 /* ---------------- Register ---------------- */
 
 export function RegisterScreen() {
+  const { t } = useTranslation();
   const { register } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -1269,11 +1284,11 @@ export function RegisterScreen() {
     setTopError("");
     const errors: Record<string, string> = {};
     const nameParts = values.first_name.trim().split(/\s+/).filter(Boolean);
-    if (nameParts.length < 2) errors.first_name = "Enter your full name.";
-    if (values.username.trim().length < 3) errors.username = "Username must be at least 3 characters.";
-    if (values.password.length < 8) errors.password = "Use at least 8 characters.";
+    if (nameParts.length < 2) errors.first_name = t("auth.fullNameRequired");
+    if (values.username.trim().length < 3) errors.username = t("auth.usernameMin");
+    if (values.password.length < 8) errors.password = t("auth.passwordMin");
     if (values.password !== values.password_confirm)
-      errors.password_confirm = "Passwords do not match.";
+      errors.password_confirm = t("auth.passwordsDoNotMatch");
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
 
@@ -1291,7 +1306,7 @@ export function RegisterScreen() {
 
     try {
       await register(payload);
-      notify("success", "Welcome to MediBook.");
+      notify("success", t("auth.welcomeToast"));
       navigate(freshHomeForRole(), { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);
@@ -1304,11 +1319,11 @@ export function RegisterScreen() {
 
   return (
     <AuthLayout
-      title="Sign Up"
-      subtitle="Create your account to get started."
+      title={t("auth.register")}
+      subtitle={t("auth.registerSubtitle")}
       footer={
         <span>
-          Already registered? <Link to="/login">Sign In</Link>
+          {t("auth.hasAccount")} <Link to="/login">{t("auth.login")}</Link>
         </span>
       }
     >
@@ -1330,7 +1345,7 @@ export function RegisterScreen() {
         </div>
 
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-username">Username</label>
+          <label className="ab-field__label" htmlFor="reg-username">{t("auth.username")}</label>
           <input
             id="reg-username"
             className="ab-field__input"
@@ -1343,7 +1358,7 @@ export function RegisterScreen() {
           {formErrors.username && <span className="ab-field__error">{formErrors.username}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-name">Full Name</label>
+          <label className="ab-field__label" htmlFor="reg-name">{t("auth.fullName")}</label>
           <input
             id="reg-name"
             className="ab-field__input"
@@ -1355,7 +1370,7 @@ export function RegisterScreen() {
           {formErrors.first_name && <span className="ab-field__error">{formErrors.first_name}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-email">Email Address</label>
+          <label className="ab-field__label" htmlFor="reg-email">{t("auth.emailAddress")}</label>
           <input
             id="reg-email"
             className="ab-field__input"
@@ -1368,7 +1383,7 @@ export function RegisterScreen() {
           {formErrors.email && <span className="ab-field__error">{formErrors.email}</span>}
         </div>
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="reg-phone">Phone Number</label>
+          <label className="ab-field__label" htmlFor="reg-phone">{t("auth.phoneNumber")}</label>
           <input
             id="reg-phone"
             className="ab-field__input"
@@ -1382,7 +1397,7 @@ export function RegisterScreen() {
         <div className="ab-field">
           <TextField
             id="reg-password"
-            label="Password"
+            label={t("auth.password")}
             type="password"
             autoComplete="new-password"
             required
@@ -1394,7 +1409,7 @@ export function RegisterScreen() {
         <div className="ab-field">
           <TextField
             id="reg-confirm"
-            label="Confirm Password"
+            label={t("auth.confirmPassword")}
             type="password"
             autoComplete="new-password"
             required
@@ -1405,10 +1420,10 @@ export function RegisterScreen() {
         </div>
         <label className="ab-terms">
           <input type="checkbox" required />
-          <span>I agree to the Terms &amp; Conditions and Privacy Policy</span>
+          <span>{t("auth.terms")}</span>
         </label>
         <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
-          {submitting ? "Creating Account…" : "Create Account"}
+          {submitting ? t("auth.creatingAccount") : t("auth.createAccount")}
         </button>
       </form>
     </AuthLayout>
@@ -1418,6 +1433,7 @@ export function RegisterScreen() {
 /* ---------------- Forgot password ---------------- */
 
 export function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -1448,14 +1464,14 @@ export function ForgotPasswordScreen() {
 
   return (
     <AuthLayout
-      title="Forgot Password"
-      subtitle={"Enter your email address and we'll take\nyou to a new password."}
-      footer={<span><Link to="/login">Back to Login</Link></span>}
+      title={t("auth.forgotTitle")}
+      subtitle={t("auth.forgotSubtitle")}
+      footer={<span><Link to="/login">{t("auth.backToLogin")}</Link></span>}
     >
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {topError && <ErrorNote message={topError} />}
         <div className="ab-field">
-          <label className="ab-field__label" htmlFor="forgot-email">Email Address</label>
+          <label className="ab-field__label" htmlFor="forgot-email">{t("auth.emailAddress")}</label>
           <input
             id="forgot-email"
             className="ab-field__input"
@@ -1468,7 +1484,7 @@ export function ForgotPasswordScreen() {
           {formErrors.email && <span className="ab-field__error">{formErrors.email}</span>}
         </div>
         <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
-          {submitting ? "Sending…" : "Reset Password"}
+          {submitting ? t("auth.sending") : t("auth.resetPassword")}
         </button>
       </form>
     </AuthLayout>
@@ -1478,6 +1494,7 @@ export function ForgotPasswordScreen() {
 /* ---------------- Reset password ---------------- */
 
 export function ResetPasswordScreen() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { notify } = useToast();
   const location = useLocation();
@@ -1499,7 +1516,7 @@ export function ResetPasswordScreen() {
     setTopError("");
     setFormErrors({});
     if (newPassword !== confirm) {
-      setFormErrors({ new_password_confirm: "Passwords do not match." });
+      setFormErrors({ new_password_confirm: t("auth.passwordsDoNotMatch") });
       return;
     }
     setSubmitting(true);
@@ -1509,7 +1526,7 @@ export function ResetPasswordScreen() {
         new_password: newPassword,
         new_password_confirm: confirm,
       });
-      notify("success", "Password updated. Sign in with your new password.");
+      notify("success", t("auth.passwordResetToast"));
       navigate("/login", { replace: true });
     } catch (error) {
       const fields = fieldErrors(error);
@@ -1523,15 +1540,15 @@ export function ResetPasswordScreen() {
   if (!token) {
     return (
       <AuthLayout
-        title="Set a new password"
-        subtitle="This page needs the link from your reset email."
-        footer={<span><Link to="/login">Back to sign in</Link></span>}
+        title={t("auth.resetTitle")}
+        subtitle={t("auth.resetNeedsLink")}
+        footer={<span><Link to="/login">{t("auth.backToSignIn")}</Link></span>}
       >
         <p className="form-note">
-          Open the link we emailed you, or start again from the forgot-password form.
+          {t("auth.resetInstruction")}
         </p>
         <Link className="ab-btn ab-btn--primary ab-btn--full" to="/forgot-password">
-          Request a new link
+          {t("auth.requestNewLink")}
         </Link>
       </AuthLayout>
     );
@@ -1539,16 +1556,16 @@ export function ResetPasswordScreen() {
 
   return (
     <AuthLayout
-      title="Set a new password"
-      subtitle="Choose a new password for your account."
-      footer={<span><Link to="/login">Back to sign in</Link></span>}
+      title={t("auth.resetTitle")}
+      subtitle={t("auth.resetSubtitle")}
+      footer={<span><Link to="/login">{t("auth.backToSignIn")}</Link></span>}
     >
       <form className="ab-form__inner" onSubmit={onSubmit} noValidate>
         {topError && <ErrorNote message={topError} />}
         <div className="ab-field">
           <TextField
             id="reset-password"
-            label="New password"
+            label={t("auth.newPassword")}
             type="password"
             autoComplete="new-password"
             required
@@ -1560,7 +1577,7 @@ export function ResetPasswordScreen() {
         <div className="ab-field">
           <TextField
             id="reset-confirm"
-            label="Confirm new password"
+            label={t("auth.confirmNewPassword")}
             type="password"
             autoComplete="new-password"
             required
@@ -1570,7 +1587,7 @@ export function ResetPasswordScreen() {
           />
         </div>
         <button type="submit" className="ab-btn ab-btn--primary ab-btn--full" disabled={submitting}>
-          {submitting ? "Updating…" : "Update password"}
+          {submitting ? t("auth.updating") : t("auth.updatePassword")}
         </button>
       </form>
     </AuthLayout>

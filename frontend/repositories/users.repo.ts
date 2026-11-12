@@ -50,6 +50,7 @@ export interface CreateUserInput {
   first_name?: string;
   last_name?: string;
   role?: Role;
+  language?: string;
   is_superuser?: boolean;
   is_staff?: boolean;
 }
@@ -64,6 +65,7 @@ export const createUser = (data: CreateUserInput) =>
       first_name: data.first_name ?? "",
       last_name: data.last_name ?? "",
       role: data.role ?? "patient",
+      language: data.language ?? "en",
       is_superuser: data.is_superuser ?? false,
       is_staff: data.is_staff ?? false,
     },

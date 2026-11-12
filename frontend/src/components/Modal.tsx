@@ -7,6 +7,7 @@
  * dismiss and initial focus.
  */
 import { useEffect, useRef, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 export interface ModalProps {
@@ -35,6 +36,7 @@ export function Modal({
   onDismiss,
   className = "",
 }: ModalProps) {
+  const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   // Lock background scroll while the dialog is up.
@@ -100,7 +102,7 @@ export function Modal({
               type="button"
               className="modal__close"
               onClick={() => onDismiss?.()}
-              aria-label="Close dialog"
+              aria-label={t("common.closeDialog")}
             >
               <X size={18} />
             </button>

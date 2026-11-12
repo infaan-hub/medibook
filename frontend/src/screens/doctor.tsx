@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
+import { formatDate } from "../lib/intl";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -36,7 +39,12 @@ import { useSession, useToast } from "../state/app-context";
 import { ArrowLeft, Clock, BadgeIndianRupee, Crosshair, Check, MapPin, Phone, Plus, Search, Trash2 } from "lucide-react";
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
+}
+
+// 1 Jan 2024 was a Monday — format a stable week with the active locale.
+function weekdayName(index: number): string {
+  return formatDate(new Date(2024, 0, 1 + index), { weekday: "long" });
 }
 
 /** Meaning of a specialty for patients: friendly name, falling back to medical name. */
@@ -45,6 +53,7 @@ function specialtyMeaning(s: Specialty): string {
 }
 
 export function DoctorProfileScreen() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const route = useLocation();
   const isHomeVisit = route.pathname.startsWith("/home-visit");
@@ -62,7 +71,7 @@ export function DoctorProfileScreen() {
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
   return (
     <div className="page">
-      <Link to={isHomeVisit ? "/home-visit/doctor" : "/doctors"}><ArrowLeft size={16} /> Back to {isHomeVisit ? "Home Service doctors" : "doctors"}</Link>
+      <Link to={isHomeVisit ? "/home-visit/doctor" : "/doctors"}><ArrowLeft size={16} /> {isHomeVisit ? t("doctor.backToHomeDoctors") : t("doctor.backToDoctors")}</Link>
       <Card className="card--fit">
         <DoctorImage
           src={doctor.profile_image}
@@ -85,15 +94,15 @@ export function DoctorProfileScreen() {
               : ""}
           </p>
         ) : (
-          <p>Professional profile</p>
+          <p>{t("doctor.professionalProfile")}</p>
         )}
-        <p>{doctor.experience_years} years of experience</p>
-        <p>Consultation fee: TSh {doctor.consultation_fee}</p>
+        <p>{t("doctor.yearsExperience", { count: doctor.experience_years })}</p>
+        <p>{t("doctors.fee")}: TSh {doctor.consultation_fee}</p>
 
         {/* All selected specialties with their meanings for patients */}
         {doctor.specialties && doctor.specialties.length > 0 && (
           <div className="doctor-specialties">
-            <h3>Specialties</h3>
+            <h3>{t("doctor.specialties")}</h3>
             <div className="doctor-specialties__list">
               {doctor.specialties.map((s) => (
                 <Link key={s.id} to={`/specialties/${s.id}`} className="doctor-specialty-tag">
@@ -110,16 +119,15 @@ export function DoctorProfileScreen() {
         {doctor.is_available === false ? (
           <>
             <p className="form-note--error">
-              This doctor is not taking appointments right now. Their profile stays
-              open, but booking reopens only when they switch themselves back on.
+              {t("doctor.notTakingAppointments")}
             </p>
             <div style={{ marginTop: "var(--space-4)" }}>
-              <Button disabled>Not available for booking</Button>
+              <Button disabled>{t("doctor.notAvailableForBooking")}</Button>
             </div>
           </>
         ) : (
           <div style={{ marginTop: "var(--space-4)" }}>
-            <Link to={isHomeVisit ? `/home-visit/booking/${id}` : `/booking/${id}`}><Button>{isHomeVisit ? "Request home service" : "Book appointment"}</Button></Link>
+            <Link to={isHomeVisit ? `/home-visit/booking/${id}` : `/booking/${id}`}><Button>{isHomeVisit ? t("doctor.requestHomeService") : t("doctors.book")}</Button></Link>
           </div>
         )}
       </Card>
@@ -128,14 +136,16 @@ export function DoctorProfileScreen() {
 }
 
 export function DoctorDashboardScreen() {
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { getMyDoctorProfile().then((response) => setProfile(response.data)).catch((reason: unknown) => setError(message(reason))); }, []);
-  return <div className="page"><h1 className="page__title">Doctor dashboard</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.specialties && profile.specialties.length > 0 ? specialtyMeaning(profile.specialties[0]) : "Complete your professional profile."}</p><p><Link to="/doctor/availability">Manage availability</Link> · <Link to="/doctor/personal">Edit personal card</Link></p></Card>}</div>;
+  return <div className="page"><h1 className="page__title">{t("doctor.dashboardTitle")}</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.specialties && profile.specialties.length > 0 ? specialtyMeaning(profile.specialties[0]) : t("doctor.completeProfile")}</p><p><Link to="/doctor/availability">{t("doctor.manageAvailability")}</Link> · <Link to="/doctor/personal">{t("doctor.editPersonalCard")}</Link></p></Card>}</div>;
 }
 
 /** Doctor's own card preview block (rendered inside DoctorPersonalScreen). */
 function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
+  const { t } = useTranslation();
   return (
     <Card className="doc-preview-card">
       <div className="doc-preview-card__photo-wrap">
@@ -162,7 +172,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
         <p className="doc-preview-card__qual">
           {profile.specialties && profile.specialties.length > 0
             ? profile.specialties[0].name
-            : "Medical specialist"}
+            : t("doctor.medicalSpecialist")}
         </p>
         {profile.specialties && profile.specialties.length > 0 && (
           <p className="doc-preview-card__specialty-meaning">
@@ -186,7 +196,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
 
         <div className="doc-preview-card__meta">
           <span className="doc-preview-card__meta-item">
-            <Clock size={14} /> {profile.experience_years ?? 0} yrs exp.
+            <Clock size={14} /> {t("doctor.yrsExp", { count: profile.experience_years ?? 0 })}
           </span>
           <span className="doc-preview-card__meta-item">
             <BadgeIndianRupee size={14} /> TSh {profile.consultation_fee}
@@ -210,6 +220,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
  * plus editing for name, experience, fee and card photo.
  */
 export function DoctorPersonalScreen() {
+  const { t } = useTranslation();
   const { user, setUser } = useSession();
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
@@ -293,7 +304,7 @@ export function DoctorPersonalScreen() {
     setPlaceQuery("");
     setPlaceHits([]);
     setPlaceSearched(false);
-    notify("success", `Practice location set to ${area.name}, ${area.district}.`);
+    notify("success", t("doctor.practiceLocationSet", { name: area.name, district: area.district }));
   }
 
   function clearPlace() {
@@ -311,7 +322,7 @@ export function DoctorPersonalScreen() {
       const fix = await captureFix();
       setGeo({ latitude: fix.latitude, longitude: fix.longitude, location_accuracy: fix.accuracy });
     } catch (reason) {
-      setGeoError(reason instanceof LocationError ? reason.message : "Could not read your location.");
+      setGeoError(reason instanceof LocationError ? reason.message : t("doctor.couldNotReadLocation"));
     } finally {
       setGeoBusy(false);
     }
@@ -323,7 +334,7 @@ export function DoctorPersonalScreen() {
     // A card without coordinates can never be booked — assertBookingLocation
     // refuses it — so say so here instead of letting the API discover it.
     if (geo.latitude === null || geo.longitude === null) {
-      setFieldErrors({ latitude: "Set your practice location before saving." });
+      setFieldErrors({ latitude: t("doctor.setLocationBeforeSaving") });
       return;
     }
     setSaving(true);
@@ -340,12 +351,12 @@ export function DoctorPersonalScreen() {
         location_accuracy: geo.location_accuracy ?? null,
       });
       setProfile(envelope.data);
-      notify("success", "Your card has been updated.");
+      notify("success", t("doctor.cardUpdated"));
     } catch (reason) {
       if (reason instanceof ApiError) {
         setFieldErrors(
           Object.fromEntries(
-            Object.entries(reason.errors).map(([field, messages]) => [field, messages[0] ?? "Invalid value."])
+            Object.entries(reason.errors).map(([field, messages]) => [field, messages[0] ?? t("doctor.invalidValue")])
           )
         );
       } else {
@@ -358,11 +369,11 @@ export function DoctorPersonalScreen() {
 
   async function onPhoto(file: File) {
     if (!file.type.startsWith("image/")) {
-      notify("error", "Please select an image file.");
+      notify("error", t("doctor.selectImage"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      notify("error", "Image must be under 5 MB.");
+      notify("error", t("doctor.imageTooLarge"));
       return;
     }
     setUploading(true);
@@ -370,7 +381,7 @@ export function DoctorPersonalScreen() {
       const envelope = await uploadProfileImage(file);
       setUser(envelope.data);
       load();
-      notify("success", "Photo updated — it now appears on your doctor card.");
+      notify("success", t("doctor.photoUpdated"));
     } catch (reason) {
       notify("error", message(reason));
     } finally {
@@ -382,51 +393,50 @@ export function DoctorPersonalScreen() {
   if (!profile) return <div className="page"><Skeleton lines={6} /></div>;
   return (
     <div className="page">
-      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
-      <h1 className="page__title">My doctor card</h1>
-      <p className="page__subtitle">This is exactly how patients see you on Find a doctor.</p>
+      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> {t("nav.dashboard")}</Link>
+      <h1 className="page__title">{t("doctor.myCard")}</h1>
+      <p className="page__subtitle">{t("doctor.cardSubtitle")}</p>
       {/* First-login setup routed this doctor here to complete step 4 — hand
           control back when the card is saved (and never leave them stranded:
           the guard only allows this page until setup is finished). */}
       {user && doctorOnboardingIncomplete(user) && (
         <p className="onboarding__return">
           <Link to="/doctor/onboarding" className="btn btn--secondary">
-            Back to setup
+            {t("doctor.backToSetup")}
           </Link>
         </p>
       )}
       <div className="doctor-card-preview-wrap"><DoctorCardPreview profile={profile} /></div>
       <Card>
-        <h2 className="card__title">Edit card details</h2>
+        <h2 className="card__title">{t("doctor.editCard")}</h2>
         <form className="form" onSubmit={onSave} noValidate>
           <div className="form__row">
-            <TextField id="doc-first" label="First name" value={form.first_name} error={fieldErrors.first_name} onChange={(e) => update("first_name", e.target.value)} />
-            <TextField id="doc-last" label="Last name" value={form.last_name} error={fieldErrors.last_name} onChange={(e) => update("last_name", e.target.value)} />
+            <TextField id="doc-first" label={t("profile.firstName")} value={form.first_name} error={fieldErrors.first_name} onChange={(e) => update("first_name", e.target.value)} />
+            <TextField id="doc-last" label={t("profile.lastName")} value={form.last_name} error={fieldErrors.last_name} onChange={(e) => update("last_name", e.target.value)} />
           </div>
           <div className="form__row">
-            <TextField id="doc-exp" label="Experience (years)" type="number" min="0" value={form.experience_years} error={fieldErrors.experience_years} onChange={(e) => update("experience_years", e.target.value)} />
-            <TextField id="doc-fee" label="Consultation fee (TSh)" inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
+            <TextField id="doc-exp" label={t("doctor.experienceYears")} type="number" min="0" value={form.experience_years} error={fieldErrors.experience_years} onChange={(e) => update("experience_years", e.target.value)} />
+            <TextField id="doc-fee" label={t("doctor.consultationFeeTsh")} inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
           </div>
           {/* Real practice location — patients use it for "near me" and for
               directions, and the booking gate refuses without it. Two ways in:
               type an area, or take a fresh GPS fix. */}
           <div className="field">
-            <span className="field__label">Practice location</span>
+            <span className="field__label">{t("doctor.practiceLocation")}</span>
             <p className="page__subtitle">
-              Patients see this as a directions link, and appointments can only be booked once
-              it is set. Search for your area, or use your current position.
+              {t("doctor.practiceLocationDesc")}
             </p>
 
             {/* Method 1 — typed text, matched against the bundled ward list, so
                 nothing is sent anywhere and the answer is a real coordinate
                 pair rather than free text. */}
-            <label className="field__label" htmlFor="doc-place">Search an area</label>
+            <label className="field__label" htmlFor="doc-place">{t("doctor.searchArea")}</label>
             <div className="location-search">
               <input
                 id="doc-place"
                 className="field__input"
                 value={placeQuery}
-                placeholder="Nungwi, Chake Chake, Kaskazini A..."
+                placeholder={t("doctor.areaPlaceholder")}
                 autoComplete="off"
                 onChange={(event) => updatePlace(event.target.value)}
                 onKeyDown={(event) => {
@@ -437,17 +447,16 @@ export function DoctorPersonalScreen() {
                 }}
               />
               <Button type="button" variant="secondary" onClick={() => updatePlace(placeQuery)}>
-                <Search size={14} /> Find
+                <Search size={14} /> {t("doctor.find")}
               </Button>
             </div>
             {placeSearched && placeHits.length === 0 && (
               <p className="field__hint" role="status">
-                No area matches &quot;{placeQuery.trim()}&quot;. Try a ward, district or region —
-                or use your current position below.
+                {t("doctor.noAreaMatches", { query: placeQuery.trim() })}
               </p>
             )}
             {placeHits.length > 0 && (
-              <ul className="location-search__results" aria-label="Matching areas">
+              <ul className="location-search__results" aria-label={t("doctor.matchingAreas")}>
                 {placeHits.map((area) => (
                   <li key={`${area.region}-${area.district}-${area.name}`}>
                     <button
@@ -471,7 +480,7 @@ export function DoctorPersonalScreen() {
               <LocationLine
                 point={geo}
                 accuracy={geo.location_accuracy}
-                suffix={geo.latitude !== null ? "on your card" : undefined}
+                suffix={geo.latitude !== null ? t("doctor.onYourCard") : undefined}
               />
             </p>
             {geoError && <p className="field__error" role="alert">{geoError}</p>}
@@ -484,31 +493,29 @@ export function DoctorPersonalScreen() {
                 onClick={() => void captureLocation()}
               >
                 <Crosshair size={14} />{" "}
-                {geo.latitude !== null ? "Update from my position" : "Use my current location"}
+                {geo.latitude !== null ? t("doctor.updateFromPosition") : t("doctor.useCurrentLocation")}
               </Button>
               {geo.latitude !== null && (
                 <Button type="button" variant="ghost" onClick={clearPlace}>
-                  Clear
+                  {t("doctor.clear")}
                 </Button>
               )}
             </div>
             {!hasLocation && (
               <p className="field__hint">
-                Set your practice location before saving — patients cannot book appointments
-                without it.
+                {t("doctor.practiceLocationRequired")}
               </p>
             )}
           </div>
           <div className="form__row">
-            <TextField id="doc-phone" label="Phone number (shown on your card)" value={form.phone} error={fieldErrors.phone} onChange={(e) => update("phone", e.target.value)} />
+            <TextField id="doc-phone" label={t("doctor.phoneOnCard")} value={form.phone} error={fieldErrors.phone} onChange={(e) => update("phone", e.target.value)} />
           </div>
 
           {/* Specialty picker — list of all specialties with their meanings */}
-          <div className="specialty-picker" role="group" aria-label="Your specialties">
-            <p className="field__label">Your specialties</p>
+          <div className="specialty-picker" role="group" aria-label={t("doctor.yourSpecialties")}>
+            <p className="field__label">{t("doctor.yourSpecialties")}</p>
             <p className="page__subtitle">
-              Select the specialty(ies) you practice. Patients see the top specialty on your
-              card instead of qualifications — each entry includes what it means.
+              {t("doctor.specialtiesDesc")}
             </p>
             <div className="specialty-picker__grid">
               {allSpecialties.length === 0 && <Skeleton lines={3} />}
@@ -537,12 +544,12 @@ export function DoctorPersonalScreen() {
             {fieldErrors.specialties && <p className="field__error">{fieldErrors.specialties}</p>}
           </div>
 
-          <Button type="submit" loading={saving} disabled={!hasLocation}>Save changes</Button>
+          <Button type="submit" loading={saving} disabled={!hasLocation}>{t("doctor.saveChanges")}</Button>
         </form>
       </Card>
       <Card>
-        <h2 className="card__title">Card photo</h2>
-        <p className="page__subtitle">Upload a square photo — it appears on every doctor card.</p>
+        <h2 className="card__title">{t("doctor.cardPhoto")}</h2>
+        <p className="page__subtitle">{t("doctor.cardPhotoDesc")}</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -555,20 +562,21 @@ export function DoctorPersonalScreen() {
           }}
         />
         <Button variant="secondary" loading={uploading} onClick={() => fileInputRef.current?.click()}>
-          Upload photo
+          {t("doctor.uploadPhoto")}
         </Button>
       </Card>
     </div>
   );
 }
 
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6];
 
 function hhmm(value: string): string {
   return value ? value.slice(0, 5) : "";
 }
 
 export function DoctorAvailabilityScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [schedule, setSchedule] = useState<ScheduleItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -630,7 +638,7 @@ export function DoctorAvailabilityScreen() {
       try {
         await deleteScheduleItem(existing.id);
         if (selectedWindowId === existing.id) setSelectedWindowId(null);
-        notify("success", `${WEEKDAYS[weekdayIndex]} removed from your schedule.`);
+        notify("success", t("doctor.weekdayRemoved", { day: weekdayName(weekdayIndex) }));
         load();
       } catch (reason) {
         setError(message(reason));
@@ -639,7 +647,7 @@ export function DoctorAvailabilityScreen() {
       }
     } else {
       if (!newStart || !newEnd || newEnd <= newStart) {
-        setError("Set a valid time range before adding a day (end must be after start).");
+        setError(t("doctor.invalidTimeRange"));
         return;
       }
       setSaving(weekdayIndex);
@@ -651,7 +659,7 @@ export function DoctorAvailabilityScreen() {
           slot_duration_minutes: 30,
           is_active: true,
         });
-        notify("success", `${WEEKDAYS[weekdayIndex]} added to your schedule.`);
+        notify("success", t("doctor.weekdayAdded", { day: weekdayName(weekdayIndex) }));
         load();
       } catch (reason) {
         setError(message(reason));
@@ -665,14 +673,14 @@ export function DoctorAvailabilityScreen() {
     const draft = editTimes[item.id];
     if (!draft) return;
     if (!draft.start || !draft.end || draft.end <= draft.start) {
-      setError("End time must be after start time.");
+      setError(t("doctor.endAfterStart"));
       return;
     }
     setError(null);
     setSavingTimeId(item.id);
     try {
       await updateScheduleItem(item.id, { start_time: draft.start, end_time: draft.end });
-      notify("success", `${WEEKDAYS[item.weekday]} hours updated.`);
+      notify("success", t("doctor.hoursUpdated", { day: weekdayName(item.weekday) }));
       setEditTimes((prev) => {
         const next = { ...prev };
         delete next[item.id];
@@ -689,14 +697,14 @@ export function DoctorAvailabilityScreen() {
   async function addBreak() {
     if (selectedWindowId === null) return;
     if (!breakForm.start_time || !breakForm.end_time || breakForm.end_time <= breakForm.start_time) {
-      setError("Break end time must be after start time.");
+      setError(t("doctor.breakEndAfterStart"));
       return;
     }
     setError(null);
     setSavingBreak(true);
     try {
       await createAvailabilityBreak(selectedWindowId, breakForm);
-      notify("success", "Break added.");
+      notify("success", t("doctor.breakAdded"));
       const response = await listAvailabilityBreaks(selectedWindowId);
       setBreaks(response.data ?? []);
       setBreakForm({ start_time: "12:00", end_time: "13:00" });
@@ -712,7 +720,7 @@ export function DoctorAvailabilityScreen() {
     try {
       await deleteAvailabilityBreak(id);
       setBreaks((prev) => prev.filter((b) => b.id !== id));
-      notify("success", "Break removed.");
+      notify("success", t("doctor.breakRemoved"));
     } catch (reason) {
       setError(message(reason));
     }
@@ -720,13 +728,13 @@ export function DoctorAvailabilityScreen() {
 
   async function addException() {
     if (!exceptionForm.date || !exceptionForm.reason.trim()) {
-      setError("Exception needs a date and a reason.");
+      setError(t("doctor.exceptionNeeds"));
       return;
     }
     const hasStart = Boolean(exceptionForm.start_time);
     const hasEnd = Boolean(exceptionForm.end_time);
     if (hasStart !== hasEnd || (hasStart && hasEnd && exceptionForm.end_time <= exceptionForm.start_time)) {
-      setError("Provide both start and end times, or neither for a full-day closure.");
+      setError(t("doctor.exceptionTimes"));
       return;
     }
     setError(null);
@@ -738,7 +746,7 @@ export function DoctorAvailabilityScreen() {
         end_time: hasEnd ? exceptionForm.end_time : null,
         reason: exceptionForm.reason.trim(),
       });
-      notify("success", "Time off added.");
+      notify("success", t("doctor.exceptionAdded"));
       setExceptionForm({ date: "", start_time: "", end_time: "", reason: "" });
       const response = await listScheduleExceptions();
       setExceptions(response.data ?? []);
@@ -753,7 +761,7 @@ export function DoctorAvailabilityScreen() {
     try {
       await deleteScheduleException(id);
       setExceptions((prev) => prev.filter((e) => e.id !== id));
-      notify("success", "Exception removed.");
+      notify("success", t("doctor.exceptionRemoved"));
     } catch (reason) {
       setError(message(reason));
     }
@@ -761,17 +769,17 @@ export function DoctorAvailabilityScreen() {
 
   return (
     <div className="page">
-      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
-      <h1 className="page__title">Availability</h1>
-      <p className="page__subtitle">Select the days you are available. Patients will be able to book appointments on these days.</p>
+      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> {t("nav.dashboard")}</Link>
+      <h1 className="page__title">{t("nav.availability")}</h1>
+      <p className="page__subtitle">{t("doctor.availabilitySubtitle")}</p>
 
       {error && <ErrorState message={error} onRetry={load} />}
 
       <Card>
-        <h2>Which days are you available?</h2>
-        <p className="page__subtitle">Set hours for new days, then toggle a day to add or remove it.</p>
+        <h2>{t("doctor.whichDays")}</h2>
+        <p className="page__subtitle">{t("doctor.setHours")}</p>
         <div className="avail-default-times">
-          <label className="field__label" htmlFor="avail-default-start">Default start</label>
+          <label className="field__label" htmlFor="avail-default-start">{t("doctor.defaultStart")}</label>
           <input
             id="avail-default-start"
             className="field__input"
@@ -779,7 +787,7 @@ export function DoctorAvailabilityScreen() {
             value={newStart}
             onChange={(e) => setNewStart(e.target.value)}
           />
-          <label className="field__label" htmlFor="avail-default-end">Default end</label>
+          <label className="field__label" htmlFor="avail-default-end">{t("doctor.defaultEnd")}</label>
           <input
             id="avail-default-end"
             className="field__input"
@@ -789,13 +797,14 @@ export function DoctorAvailabilityScreen() {
           />
         </div>
         <div className="avail-days-grid">
-          {WEEKDAYS.map((day, index) => {
+          {WEEKDAY_INDEXES.map((index) => {
+            const day = weekdayName(index);
             const isActive = activeWeekdays.has(index);
             const isLoading = saving === index;
             const item = schedule?.find((s) => s.weekday === index && s.is_active);
             return (
               <button
-                key={day}
+                key={index}
                 type="button"
                 className={`avail-day-card${isActive ? " avail-day-card--active" : ""}`}
                 onClick={() => toggleWeekday(index)}
@@ -805,8 +814,8 @@ export function DoctorAvailabilityScreen() {
                 <span className="avail-day-card__time">
                   {item ? `${hhmm(item.start_time)} – ${hhmm(item.end_time)}` : `${newStart} – ${newEnd}`}
                 </span>
-                {isActive && <span className="avail-day-card__badge">Active</span>}
-                {isLoading && <span className="avail-day-card__loading">Saving…</span>}
+                {isActive && <span className="avail-day-card__badge">{t("doctor.active")}</span>}
+                {isLoading && <span className="avail-day-card__loading">{t("doctor.saving")}</span>}
               </button>
             );
           })}
@@ -814,11 +823,11 @@ export function DoctorAvailabilityScreen() {
       </Card>
 
       <Card>
-        <h2>Your weekly schedule</h2>
+        <h2>{t("doctor.weeklySchedule")}</h2>
         {schedule === null ? (
           <Skeleton lines={4} />
         ) : schedule.length === 0 ? (
-          <EmptyState title="No availability set" description="Toggle the days above to start receiving appointments." />
+          <EmptyState title={t("doctor.noAvailabilitySet")} description={t("doctor.noAvailabilitySetDesc")} />
         ) : (
           <ul className="avail-schedule-list">
             {schedule.map((item) => {
@@ -826,13 +835,13 @@ export function DoctorAvailabilityScreen() {
               const isEditing = item.id in editTimes;
               return (
                 <li key={item.id} className="avail-schedule-item avail-schedule-item--edit">
-                  <span className="avail-schedule-item__day">{WEEKDAYS[item.weekday]}</span>
+                  <span className="avail-schedule-item__day">{weekdayName(item.weekday)}</span>
                   {isEditing ? (
                     <>
                       <input
                         className="field__input avail-time-input"
                         type="time"
-                        aria-label={`${WEEKDAYS[item.weekday]} start`}
+                        aria-label={t("doctor.weekdayStart", { day: weekdayName(item.weekday) })}
                         value={draft.start}
                         onChange={(e) =>
                           setEditTimes((prev) => ({ ...prev, [item.id]: { ...draft, start: e.target.value } }))
@@ -842,7 +851,7 @@ export function DoctorAvailabilityScreen() {
                       <input
                         className="field__input avail-time-input"
                         type="time"
-                        aria-label={`${WEEKDAYS[item.weekday]} end`}
+                        aria-label={t("doctor.weekdayEnd", { day: weekdayName(item.weekday) })}
                         value={draft.end}
                         onChange={(e) =>
                           setEditTimes((prev) => ({ ...prev, [item.id]: { ...draft, end: e.target.value } }))
@@ -853,7 +862,7 @@ export function DoctorAvailabilityScreen() {
                         loading={savingTimeId === item.id}
                         onClick={() => saveWindowTimes(item)}
                       >
-                        Save
+                        {t("common.save")}
                       </Button>
                       <Button
                         variant="ghost"
@@ -865,7 +874,7 @@ export function DoctorAvailabilityScreen() {
                           })
                         }
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </Button>
                     </>
                   ) : (
@@ -882,26 +891,26 @@ export function DoctorAvailabilityScreen() {
                           }))
                         }
                       >
-                        Edit hours
+                        {t("doctor.editHours")}
                       </Button>
                       <Button
                         variant={selectedWindowId === item.id ? "secondary" : "ghost"}
                         onClick={() => setSelectedWindowId(selectedWindowId === item.id ? null : item.id)}
                       >
-                        <Clock size={14} /> Breaks
+                        <Clock size={14} /> {t("doctor.breaks")}
                       </Button>
                       <Button variant="ghost" onClick={() => toggleWeekday(item.weekday)} disabled={saving !== null}>
-                        Remove
+                        {t("doctor.remove")}
                       </Button>
                     </>
                   )}
                   {selectedWindowId === item.id && (
                     <div className="avail-breaks-panel">
-                      <h3>Breaks on {WEEKDAYS[item.weekday]}</h3>
+                      <h3>{t("doctor.breaksOn", { day: weekdayName(item.weekday) })}</h3>
                       {breaksLoading ? (
                         <Skeleton lines={2} />
                       ) : breaks.length === 0 ? (
-                        <p className="page__subtitle">No breaks yet.</p>
+                        <p className="page__subtitle">{t("doctor.noBreaks")}</p>
                       ) : (
                         <ul className="avail-break-list">
                           {breaks.map((b) => (
@@ -918,7 +927,7 @@ export function DoctorAvailabilityScreen() {
                         <input
                           className="field__input avail-time-input"
                           type="time"
-                          aria-label="Break start"
+                          aria-label={t("doctor.breakStart")}
                           value={breakForm.start_time}
                           onChange={(e) => setBreakForm((f) => ({ ...f, start_time: e.target.value }))}
                         />
@@ -926,12 +935,12 @@ export function DoctorAvailabilityScreen() {
                         <input
                           className="field__input avail-time-input"
                           type="time"
-                          aria-label="Break end"
+                          aria-label={t("doctor.breakEnd")}
                           value={breakForm.end_time}
                           onChange={(e) => setBreakForm((f) => ({ ...f, end_time: e.target.value }))}
                         />
                         <Button variant="secondary" loading={savingBreak} onClick={addBreak}>
-                          <Plus size={14} /> Add break
+                          <Plus size={14} /> {t("doctor.addBreak")}
                         </Button>
                       </div>
                     </div>
@@ -944,53 +953,53 @@ export function DoctorAvailabilityScreen() {
       </Card>
 
       <Card>
-        <h2>Time off</h2>
-        <p className="page__subtitle">Add a full day off or a time range when appointments cannot be booked.</p>
+        <h2>{t("doctor.timeOff")}</h2>
+        <p className="page__subtitle">{t("doctor.timeOffDesc")}</p>
         <div className="avail-exception-form">
           <input
             className="field__input"
             type="date"
-            aria-label="Time off date"
+            aria-label={t("doctor.timeOffDate")}
             value={exceptionForm.date}
             onChange={(e) => setExceptionForm((f) => ({ ...f, date: e.target.value }))}
           />
           <input
             className="field__input"
             type="time"
-            aria-label="Time off start (optional)"
+            aria-label={t("doctor.timeOffStart")}
             value={exceptionForm.start_time}
             onChange={(e) => setExceptionForm((f) => ({ ...f, start_time: e.target.value }))}
           />
           <input
             className="field__input"
             type="time"
-            aria-label="Time off end (optional)"
+            aria-label={t("doctor.timeOffEnd")}
             value={exceptionForm.end_time}
             onChange={(e) => setExceptionForm((f) => ({ ...f, end_time: e.target.value }))}
           />
           <input
             className="field__input"
             type="text"
-            placeholder="Reason (e.g. vacation)"
-            aria-label="Time off reason"
+            placeholder={t("doctor.timeOffReasonPlaceholder")}
+            aria-label={t("doctor.timeOffReason")}
             value={exceptionForm.reason}
             onChange={(e) => setExceptionForm((f) => ({ ...f, reason: e.target.value }))}
           />
           <Button variant="primary" loading={savingException} onClick={addException}>
-            <Plus size={14} /> Add
+            <Plus size={14} /> {t("doctor.add")}
           </Button>
         </div>
         {exceptionsLoading ? (
           <Skeleton lines={2} />
         ) : exceptions.length === 0 ? (
-          <EmptyState title="No time off" description="You have no schedule exceptions." />
+          <EmptyState title={t("doctor.noTimeOff")} description={t("doctor.noTimeOffDesc")} />
         ) : (
           <ul className="avail-exception-list">
             {exceptions.map((ex) => (
               <li key={ex.id}>
                 <span className="avail-exception-date">{ex.date}</span>
                 <span className="avail-exception-times">
-                  {ex.start_time && ex.end_time ? `${hhmm(ex.start_time)} – ${hhmm(ex.end_time)}` : "Full day"}
+                  {ex.start_time && ex.end_time ? `${hhmm(ex.start_time)} – ${hhmm(ex.end_time)}` : t("doctor.fullDay")}
                 </span>
                 <span className="avail-exception-reason">{ex.reason}</span>
                 <Button variant="ghost" onClick={() => removeException(ex.id)}>

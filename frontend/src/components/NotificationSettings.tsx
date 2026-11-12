@@ -23,18 +23,19 @@
  * device (the server enforces the same rule with a 403).
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BellRing, Check, TriangleAlert } from "lucide-react";
 import { sendTestNotification } from "../api/notifications";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { useSession, useToast } from "../state/app-context";
 import { Button, Card } from "./ui";
 
-/** Human wording for the OS permission — the raw enum means nothing to users. */
-const PERMISSION_LABEL: Record<string, string> = {
-  granted: "Allowed",
-  denied: "Blocked",
-  default: "Not asked yet",
-  unsupported: "Not supported by this browser",
+/** Translation key for the OS permission — the raw enum means nothing to users. */
+const PERMISSION_KEY: Record<string, string> = {
+  granted: "push.permission.granted",
+  denied: "push.permission.denied",
+  default: "push.permission.default",
+  unsupported: "push.permission.unsupported",
 };
 
 /** Contexts where the OS cannot present Web Push from this surface (Safari rules). */
@@ -43,6 +44,7 @@ function isInstallState(state: string): boolean {
 }
 
 export function NotificationSettings({ userId }: { userId: number | null }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   // The platform test is admin-only; everyone else gets turn-on/turn-off only.
   const { user } = useSession();
@@ -67,15 +69,14 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
 
   /** Status copy — always something readable, never an empty card. */
   const status = !probed
-    ? "Checking this device…"
+    ? t("push.checking")
     : state === "SUBSCRIBED"
-      ? "Enabled — this device is registered and receives MediBook notifications."
+      ? t("push.enabled")
       : blocked
-        ? message ||
-          "Notifications are blocked. Allow notifications for this site in your browser settings, then reload."
+        ? t("push.blocked")
         : installMode
-          ? "Notifications are delivered by the installed MediBook app — a plain browser tab cannot receive them."
-          : message || "Notifications are not enabled on this device yet.";
+          ? t("push.installOnly")
+          : message || t("push.notEnabled");
 
   /** ADMIN-ONLY platform fan-out; the toast reports the reach. */
   async function onTest() {
@@ -86,16 +87,13 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
       if (push_subscriptions > 0) {
         notify(
           "success",
-          `Test notification sent to ${push_subscriptions} device${push_subscriptions === 1 ? "" : "s"} across ${users} account${users === 1 ? "" : "s"}.`
+          t("push.testSent", { devices: push_subscriptions, users })
         );
       } else {
-        notify(
-          "info",
-          "Test notification ran, but no devices are registered for push anywhere — nothing arrived. Ask users to enable notifications from their Profile."
-        );
+        notify("info", t("push.testNone"));
       }
     } catch (e) {
-      notify("error", e instanceof Error ? e.message : "Could not send a test notification.");
+      notify("error", e instanceof Error ? e.message : t("push.testError"));
     } finally {
       setTesting(false);
     }
@@ -103,16 +101,16 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
 
   return (
     <Card>
-      <h2 className="card__title">Notifications</h2>
+      <h2 className="card__title">{t("push.title")}</h2>
       <p className="page__subtitle">
-        Appointment confirmations, rejections and reminders — even when MediBook is closed.
+        {t("push.subtitle")}
       </p>
 
       <p className="prompt__description">
         <BellRing size={15} aria-hidden="true" />{" "}
-        Browser permission: <strong>{PERMISSION_LABEL[permission] ?? permission}</strong>
+        {t("push.browserPermission")} <strong>{t(PERMISSION_KEY[permission] ?? "push.permission.default")}</strong>
         {" · "}
-        This device: <strong>{subscribed ? "registered" : "not registered"}</strong>
+        {t("push.thisDevice")} <strong>{subscribed ? t("push.registered") : t("push.notRegistered")}</strong>
       </p>
 
       <p className="prompt__description" data-push-state={state}>
@@ -136,7 +134,12 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
       <div className="prompt__actions-row">
         {actionLabel && (
           <Button type="button" loading={loading} onClick={() => void subscribe()}>
-            <Check size={14} aria-hidden="true" /> {actionLabel}
+            <Check size={14} aria-hidden="true" />{" "}
+            {actionLabel === "Allow"
+              ? t("push.allow")
+              : actionLabel === "Enable"
+                ? t("push.enable")
+                : actionLabel}
           </Button>
         )}
         {subscribed && (
@@ -146,7 +149,7 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
             loading={loading}
             onClick={() => void unsubscribe()}
           >
-            Turn off
+            {t("push.turnOff")}
           </Button>
         )}
         {isAdmin && (
@@ -157,7 +160,7 @@ export function NotificationSettings({ userId }: { userId: number | null }) {
             disabled={!probed}
             onClick={() => void onTest()}
           >
-            Send test notification
+            {t("push.sendTest")}
           </Button>
         )}
       </div>

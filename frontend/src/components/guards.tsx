@@ -12,6 +12,7 @@
  */
 
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Spinner } from "./ui";
 import { useSession, type SessionStatus } from "../state/app-context";
@@ -67,10 +68,11 @@ export function doctorOnboardingAllowed(pathname: string): boolean {
 
 /** Centered full-area spinner shown while the session boot probe runs. */
 export function BootScreen() {
+  const { t } = useTranslation();
   return (
-    <div className="boot-screen" role="status" aria-label="Checking your session">
+    <div className="boot-screen" role="status" aria-label={t("shared.checkingSession")}>
       <Spinner size={32} />
-      <p>Checking your session…</p>
+      <p>{t("shared.checkingSession")}</p>
     </div>
   );
 }

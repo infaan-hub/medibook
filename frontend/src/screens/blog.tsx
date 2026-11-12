@@ -9,6 +9,7 @@ import {
 } from "../api/blog";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { formatDate } from "../lib/intl";
 import {
   Activity,
   Apple,
@@ -223,7 +224,7 @@ export function BlogListPage() {
                 <div className="blog__card-footer">
                   {article.published_at && (
                     <time className="blog__card-date">
-                      {new Date(article.published_at).toLocaleDateString()}
+                      {formatDate(article.published_at)}
                     </time>
                   )}
                   <LikeButton
@@ -319,7 +320,7 @@ export function BlogArticlePage() {
         <div className="blog-article__meta">
           {article.author_name && <span>{authorLabel(article)}</span>}
           {article.published_at && (
-            <time>{new Date(article.published_at).toLocaleDateString()}</time>
+            <time>{formatDate(article.published_at)}</time>
           )}
           <LikeButton
             liked={article.liked_by_me ?? false}

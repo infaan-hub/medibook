@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 import { Modal } from "./Modal";
 import { useToast } from "../state/app-context";
@@ -81,17 +82,18 @@ export function InstallAppBarge({
   visible: boolean;
   onOpen: () => void;
 }) {
+  const { t } = useTranslation();
   if (!visible) return null;
   return (
     <button
       type="button"
       className="install-barge"
       onClick={onOpen}
-      aria-label="Download app"
-      title="Download app"
+      aria-label={t("nav.downloadApp")}
+      title={t("nav.downloadApp")}
     >
       <Download size={16} aria-hidden="true" />
-      <span className="install-barge__label">Download app</span>
+      <span className="install-barge__label">{t("nav.downloadApp")}</span>
     </button>
   );
 }
@@ -110,27 +112,23 @@ export interface InstallInfoDialogProps {
 
 /** Shared installation instructions shown from the barge and sidebar CTA. */
 function InstallInfoBody() {
+  const { t } = useTranslation();
   return (
     <>
-      <p className="install-info__intro">
-        Install MediBook on your device for quick and easy access anytime.
-      </p>
-      <p className="install-info__platform"><strong>For Google Chrome:</strong></p>
+      <p className="install-info__intro">{t("shared.install.intro")}</p>
+      <p className="install-info__platform"><strong>{t("shared.install.chromeTitle")}</strong></p>
       <ol className="install-info__steps">
-        <li>Tap the Download App button.</li>
-        <li>Select <strong>Install MediBook</strong>.</li>
-        <li>Follow the instructions to complete the installation.</li>
+        <li>{t("shared.install.chromeStepOne")}</li>
+        <li>{t("shared.install.chromeStepTwo")}</li>
+        <li>{t("shared.install.chromeStepThree")}</li>
       </ol>
-      <p className="install-info__platform"><strong>For Safari (Mac):</strong></p>
+      <p className="install-info__platform"><strong>{t("shared.install.safariTitle")}</strong></p>
       <ol className="install-info__steps">
-        <li>Open Safari&apos;s menu bar and click <strong>Share</strong>.</li>
-        <li>Select <strong>Add to Homescreen</strong>.</li>
-        <li>MediBook will appear in your Homescreen, ready to use.</li>
+        <li>{t("shared.install.safariStepOne")}</li>
+        <li>{t("shared.install.safariStepTwo")}</li>
+        <li>{t("shared.install.safariStepThree")}</li>
       </ol>
-      <p className="install-info__outro">
-        Once installed, you can open MediBook directly from your device without
-        searching for the website again.
-      </p>
+      <p className="install-info__outro">{t("shared.install.outro")}</p>
     </>
   );
 }
@@ -143,6 +141,7 @@ export function InstallInfoDialog({
   installable,
   install,
 }: InstallInfoDialogProps) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -155,24 +154,24 @@ export function InstallInfoDialog({
     try {
       const accepted = await install();
       if (accepted) {
-        notify("success", "Installing MediBook\u2026");
+        notify("success", t("shared.install.installing"));
         onClose();
       } else {
         // The user can follow the manual steps shown in the popup.
         notify(
           "info",
-          "This browser didn't offer a one-tap install \u2014 follow the steps above instead."
+          t("shared.install.manualHint")
         );
       }
     } finally {
       setBusy(false);
     }
-  }, [installable, install, notify, onClose, onGotIt]);
+  }, [installable, install, notify, onClose, onGotIt, t]);
 
   return (
     <Modal
       open={open}
-      title="Download the MediBook App"
+      title={t("shared.install.title")}
       className="install-info__card"
       onDismiss={onClose}
       actions={
@@ -182,7 +181,7 @@ export function InstallInfoDialog({
             className="btn btn--secondary"
             onClick={onGotIt}
           >
-            Got it
+            {t("shared.install.gotIt")}
           </button>
           <button
             type="button"
@@ -191,7 +190,7 @@ export function InstallInfoDialog({
             disabled={busy}
           >
             <Download size={16} aria-hidden="true" />
-            Download App
+            {t("shared.install.download")}
           </button>
         </>
       }

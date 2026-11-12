@@ -4,12 +4,14 @@
  */
 
 import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 /* ---------------- Spinner (§21 loading state) ---------------- */
 
 export function Spinner({ size = 20, label = "Loading" }: { size?: number; label?: string }) {
+  const { t } = useTranslation();
   return (
-    <span className="spinner" role="status" aria-label={label} style={{ width: size, height: size }}>
+    <span className="spinner" role="status" aria-label={label === "Loading" ? t("shared.spinnerLoading") : label} style={{ width: size, height: size }}>
       <span className="spinner__circle" />
     </span>
   );
@@ -98,8 +100,9 @@ export type BadgeStatus =
   | "no-show";
 
 export function Badge({ status }: { status: BadgeStatus }) {
+  const { t } = useTranslation();
   // "in_progress" reads as "in progress" — underscores are a DB artefact.
-  return <span className={`badge badge--${status}`}>{status.replace(/_/g, " ")}</span>;
+  return <span className={`badge badge--${status}`}>{t(`shared.status.${status.replace(/-/g, "_")}`)}</span>;
 }
 
 /* ---------------- EmptyState (§21 empty state) ---------------- */
@@ -130,6 +133,7 @@ export function EmptyState({
 /* ---------------- ErrorState (§21 error state) ---------------- */
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="error-state" role="alert">
       <div className="error-state__icon" aria-hidden="true">
@@ -138,7 +142,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       <p className="error-state__message">{message}</p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>
-          Retry
+          {t("shared.retry")}
         </Button>
       )}
     </div>

@@ -18,6 +18,7 @@
  *    request loop: JavaScript cannot override a system-level denial.
  */
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { NotificationPrompt } from "./NotificationPrompt";
 
@@ -41,7 +42,8 @@ function markAnswered(): void {
 }
 
 export function NotificationGate({ userId }: { userId: number | null }) {
-  const { probed, state, message, steps, actionLabel, loading, error, subscribe } =
+  const { t } = useTranslation();
+  const { probed, state, steps, actionLabel, loading, error, subscribe } =
     usePushNotifications(userId);
   const [answered, setAnswered] = useState<boolean>(() => readAnswered());
   const [visible, setVisible] = useState(false);
@@ -86,31 +88,42 @@ export function NotificationGate({ userId }: { userId: number | null }) {
 
   const installMode = state === "IOS_NOT_INSTALLED";
   const blockedMode = state === "DENIED";
+  const localizedSteps = steps?.map((_, index) =>
+    t(`shared.notificationPrompt.${installMode ? "iosStep" : "safariStep"}${index + 1}`)
+  );
+  const localizedActionLabel =
+    actionLabel === "Allow"
+      ? t("push.allow")
+      : actionLabel === "Enable"
+        ? t("push.enable")
+        : actionLabel === "Try again"
+          ? t("common.retry")
+          : actionLabel;
 
   return (
     <NotificationPrompt
       open
       busy={loading}
       error={error}
-      steps={steps}
+      steps={localizedSteps}
       onEnable={actionLabel ? enable : undefined}
       onDismiss={dismiss}
       title={
         installMode
-          ? "Install MediBook to enable notifications"
+          ? t("shared.notificationPrompt.installTitle")
           : blockedMode
-            ? "Notifications are blocked"
-            : "Turn on notifications"
+            ? t("shared.notificationPrompt.blockedTitle")
+            : t("shared.notificationPrompt.title")
       }
       description={
         installMode
-          ? "iOS delivers notifications from the MediBook app on your Home Screen. Add it once, then open MediBook from there:"
+          ? t("shared.notificationPrompt.installDescription")
           : blockedMode
-            ? message
-            : "Get appointment confirmations, rejections and reminders as soon as they happen — even when MediBook is closed."
+            ? t("shared.notificationPrompt.blockedDescription")
+            : t("shared.notificationPrompt.description")
       }
-      enableLabel={actionLabel ?? "Allow notifications"}
-      skipLabel={installMode ? "Got it" : "Maybe later"}
+      enableLabel={localizedActionLabel ?? t("shared.notificationPrompt.allow")}
+      skipLabel={installMode ? t("shared.install.gotIt") : t("shared.notificationPrompt.skip")}
     />
   );
 }

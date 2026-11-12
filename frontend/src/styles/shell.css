@@ -1101,3 +1101,79 @@ body:not(:has(.shell__nav--bottom)) .prompt-stack {
   .shell--admin .sidebar__install { background: rgba(255,255,255,.16); color: #fff; }
   .shell--admin .sidebar__install:hover { background: rgba(255,255,255,.26); }
 }
+
+/* ---- Language shortcut in the sidebar footer ---- */
+.language-menu {
+  position: relative;
+  margin: 0 var(--space-2) var(--space-1);
+}
+.language-menu__trigger {
+  margin: 0;
+  width: 100%;
+}
+.language-menu__trigger > span {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.language-menu__chevron {
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+.language-menu__chevron--open { transform: rotate(180deg); }
+.language-menu__panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
+}
+.language-menu__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #163c3c;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.language-menu__option:hover { background: #e8fbf9; }
+.language-menu__option--active {
+  background: #e8fbf9;
+  color: #06756e;
+  font-weight: 700;
+}
+
+@media (min-width: 1200px) {
+  .shell__nav--side:not(.shell__nav--side--open) .language-menu__trigger {
+    justify-content: center;
+    padding: var(--space-2);
+    margin: var(--space-1) var(--space-1) var(--space-2);
+    width: calc(100% - var(--space-2));
+  }
+  .shell__nav--side:not(.shell__nav--side--open) .language-menu__trigger > span,
+  .shell__nav--side:not(.shell__nav--side--open) .language-menu__chevron {
+    display: none;
+  }
+  .shell__nav--side:not(.shell__nav--side--open) .language-menu {
+    margin: 0 var(--space-1);
+  }
+  .shell__nav--side:not(.shell__nav--side--open) .language-menu__panel {
+    left: calc(100% + 8px);
+    bottom: 0;
+  }
+}

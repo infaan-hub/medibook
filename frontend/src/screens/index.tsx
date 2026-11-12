@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { listMyAppointments } from "../api/appointments";
 import { reasonLabel, statusLabel } from "./emergency";
 import { getPatientProfile } from "../api/patients";
@@ -15,6 +17,7 @@ import { isStandalonePWA } from "../lib/platform";
 import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
+import { formatDate } from "../lib/intl";
 import {
   ChevronRight,
   Crosshair,
@@ -56,7 +59,12 @@ export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreate
 export { BlogListPage, BlogArticlePage } from "./blog";
 
 function formatAppointment(appointment: Appointment): string {
-  return `${appointment.appointment_date} at ${appointment.start_time.slice(0, 5)}`;
+  const day = formatDate(`${appointment.appointment_date}T00:00:00`, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${day} · ${appointment.start_time.slice(0, 5)}`;
 }
 
 function formatDoctorName(doctor: DoctorProfile): string {
@@ -69,14 +77,15 @@ function formatDoctorName(doctor: DoctorProfile): string {
  * they open the profile.
  */
 function AvailabilityChip({ doctor }: { doctor: DoctorProfile }) {
+  const { t } = useTranslation();
   const available = doctor.available_today ?? doctor.is_available !== false;
   return (
     <span
       className={`home__doctor-status${available ? "" : " home__doctor-status--off"}`}
-      title={available ? "Taking appointments today" : "No availability today"}
+      title={available ? t("home.takingAppointments") : t("home.noAvailabilityToday")}
     >
       <span className="home__doctor-status-dot" aria-hidden="true" />
-      {available ? "Available" : "Not available"}
+      {available ? t("home.available") : t("home.notAvailable")}
     </span>
   );
 }
@@ -98,6 +107,7 @@ function GreetingAvatar({ user }: { user: User }) {
 }
 
 function PatientHome({ user }: { user: User | null }) {
+  const { t } = useTranslation();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +116,7 @@ function PatientHome({ user }: { user: User | null }) {
   const loadAppointments = useCallback(() => {
     listMyAppointments()
       .then((response) => { setError(null); setAppointments(response.data?.results ?? []); })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load appointments."));
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : i18n.t("common.couldNotLoadAppointments")));
   }, []);
 
   const refreshAppointments = useCallback(() => {
@@ -139,8 +149,8 @@ function PatientHome({ user }: { user: User | null }) {
           <div className="home__greeting">
             <GreetingAvatar user={user} />
             <span>
-              <strong>{new Date().getHours() < 12 ? "Good morning!" : new Date().getHours() < 18 ? "Good afternoon!" : "Good evening!"}</strong>
-              <span>{user.first_name || user.last_name || "there"}</span>
+              <strong>{new Date().getHours() < 12 ? t("home.greeting.morning") : new Date().getHours() < 18 ? t("home.greeting.afternoon") : t("home.greeting.evening")}</strong>
+              <span>{user.first_name || user.last_name || t("home.friend")}</span>
             </span>
           </div>
         </header>
@@ -148,7 +158,7 @@ function PatientHome({ user }: { user: User | null }) {
 
       <Link to="/doctors" className="home__search">
         <span className="home__search-icon"><MapPin size={18} /></span>
-        <span>Search nearest available doctor</span>
+        <span>{t("home.searchPlaceholder")}</span>
         <Search size={19} />
       </Link>
 
@@ -173,7 +183,13 @@ function PatientHome({ user }: { user: User | null }) {
           </span>
           {push.actionLabel && (
             <button type="button" className="home__push-btn" onClick={push.toggle} disabled={push.loading}>
-              {push.loading ? "Enabling…" : push.actionLabel}
+              {push.loading
+                ? t("push.enabling")
+                : push.actionLabel === "Allow"
+                  ? t("push.allow")
+                  : push.actionLabel === "Enable"
+                    ? t("push.enable")
+                    : push.actionLabel}
             </button>
           )}
         </div>
@@ -181,11 +197,11 @@ function PatientHome({ user }: { user: User | null }) {
 
       <section className="home__section">
         <div className="home__section-heading">
-          <h1>Top Doctors</h1>
-          <Link to="/doctors">See all <ChevronRight size={15} /></Link>
+          <h1>{t("home.topDoctors")}</h1>
+          <Link to="/doctors">{t("home.seeAll")} <ChevronRight size={15} /></Link>
         </div>
         {doctors === null ? <Skeleton lines={4} /> : doctors.length === 0 ? (
-          <EmptyState title="No doctors available" description="Check back soon for available doctors." />
+          <EmptyState title={t("home.noDoctors")} description={t("home.noDoctorsDesc")} />
         ) : (
           <div className="home__doctor-list">
             {doctors.map((doctor, index) => (
@@ -205,13 +221,13 @@ function PatientHome({ user }: { user: User | null }) {
                       {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
                     </span>
                   ) : (
-                    <span>Medical specialist</span>
+                    <span>{t("home.medicalSpecialist")}</span>
                   )}
                   {doctor.has_location && directionsUrl(doctor) && (
                     <span className="home__doctor-location">
                       <MapPin size={11} />
                       <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
-                        {nearestAreaName(doctor) ?? "Directions"}
+                        {nearestAreaName(doctor) ?? t("home.directions")}
                       </a>
                     </span>
                   )}
@@ -226,8 +242,8 @@ function PatientHome({ user }: { user: User | null }) {
 
       {user && upcoming.length > 0 && (<section className="home__section home__appointments-section">
         <div className="home__section-heading">
-          <h2>Upcoming Appointments</h2>
-          <Link to="/appointments">See all <ChevronRight size={15} /></Link>
+          <h2>{t("home.upcomingAppointments")}</h2>
+          <Link to="/appointments">{t("home.seeAll")} <ChevronRight size={15} /></Link>
         </div>
         <div className="home__appointment-list">
             {upcoming.slice(0, 3).map((appt) => {
@@ -241,12 +257,12 @@ function PatientHome({ user }: { user: User | null }) {
                   <span
                     className={`home__appointment-datebox${emergency ? " home__appointment-datebox--emergency" : ""}`}
                   >
-                    <strong>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { day: "2-digit" })}</strong>
-                    <span>{new Date(`${appt.appointment_date}T00:00:00`).toLocaleDateString(undefined, { month: "short" })}</span>
+                    <strong>{formatDate(`${appt.appointment_date}T00:00:00`, { day: "2-digit" })}</strong>
+                    <span>{formatDate(`${appt.appointment_date}T00:00:00`, { month: "short" })}</span>
                   </span>
                   <span className="home__appointment-info">
                     <strong className={emergency ? "home__appointment-title--emergency" : undefined}>
-                      {emergency ? "Emergency appointment" : "Doctor appointment"}
+                      {emergency ? t("home.emergencyAppointment") : t("home.doctorAppointment")}
                     </strong>
                     <span>{formatAppointment(appt)}</span>
                     {emergency && appt.emergency_reason && (
@@ -255,7 +271,7 @@ function PatientHome({ user }: { user: User | null }) {
                       </span>
                     )}
                     <span className="home__appointment-badges">
-                      {emergency && <span className="badge badge--emergency">Emergency</span>}
+                      {emergency && <span className="badge badge--emergency">{t("home.emergencyLabel")}</span>}
                       <span className={`badge badge--${appt.status}`}>{statusLabel(appt.status)}</span>
                     </span>
                   </span>
@@ -270,19 +286,19 @@ function PatientHome({ user }: { user: User | null }) {
       <div className="home__quick-actions">
         <Link to="/home-visit/doctor" className="home__quick-action">
           <House size={20} />
-          <span>Home Service</span>
+          <span>{t("nav.homeService")}</span>
         </Link>
         <Link to="/blog" className="home__quick-action">
           <Newspaper size={20} />
-          <span>Health Tips</span>
+          <span>{t("home.healthTips")}</span>
         </Link>
         <Link to="/training" className="home__quick-action">
           <GraduationCap size={20} />
-          <span>Training</span>
+          <span>{t("nav.training")}</span>
         </Link>
         <Link to="/psychotherapy" className="home__quick-action">
           <Brain size={20} />
-          <span>Psychology service</span>
+          <span>{t("nav.psychologyService")}</span>
         </Link>
       </div>
     </div>
@@ -309,6 +325,7 @@ export function HomeScreen() {
  * doctors with a fix inside the circle, nearest first, each with `distance_km`.
  */
 export function DoctorsPage() {
+  const { t } = useTranslation();
   const { user } = useSession();
   const route = useLocation();
   const isHomeVisit = route.pathname.startsWith("/home-visit");
@@ -337,7 +354,7 @@ export function DoctorsPage() {
       listDoctors(params)
         .then((response) => setResults(response.data.results))
         .catch((reason: unknown) =>
-          setError(reason instanceof Error ? reason.message : "Could not load doctors.")
+          setError(reason instanceof Error ? reason.message : i18n.t("common.couldNotLoadDoctors"))
         )
         .finally(() => setLoading(false));
     },
@@ -404,27 +421,27 @@ export function DoctorsPage() {
       load({ nearMe: true, origin: fix });
     } catch (err) {
       setOriginError(
-        err instanceof LocationError ? err.message : "Could not read your location."
+        err instanceof LocationError ? err.message : i18n.t("common.couldNotReadLocation")
       );
     }
   }
 
   return (
     <div className="page doctors-page">
-      <h1 className="page__title">{isHomeVisit ? "Find a nearby doctor" : "Find a doctor"}</h1>
+      <h1 className="page__title">{isHomeVisit ? t("home.findNearbyDoctor") : t("doctors.title")}</h1>
       <Card className="doctors__filters">
         <div className="field">
-          <label className="field__label" htmlFor="doctor-search">Name</label>
+          <label className="field__label" htmlFor="doctor-search">{t("doctors.name")}</label>
           <input
             id="doctor-search"
             className="field__input"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name"
+            placeholder={t("doctors.searchByName")}
           />
         </div>
         <div className="field">
-          <span className="field__label" id="doctor-nearby-label">Location</span>
+          <span className="field__label" id="doctor-nearby-label">{t("doctors.location")}</span>
           <button
             type="button"
             id="doctor-nearby"
@@ -435,18 +452,18 @@ export function DoctorsPage() {
             disabled={loading}
           >
             <Crosshair size={14} />
-            {nearMe ? `Near me — ${NEAR_ME_RADIUS_KM} km` : "Near me"}
+            {nearMe ? t("home.nearMeRadius", { radius: NEAR_ME_RADIUS_KM }) : t("home.nearMe")}
           </button>
         </div>
-        <Button onClick={() => load()} loading={loading}>Search</Button>
+        <Button onClick={() => load()} loading={loading}>{t("doctors.search")}</Button>
       </Card>
       {originError && <ErrorState message={originError} onRetry={() => void toggleNearMe()} />}
       {error && <ErrorState message={error} onRetry={() => load()} />}
       {loading && <Skeleton lines={5} />}
       {!loading && results?.length === 0 && (
         <EmptyState
-          title="No doctors found"
-          description={nearMe ? `No doctors within ${NEAR_ME_RADIUS_KM} km of you. Try turning off “Near me”.` : "Try another name."}
+          title={t("doctors.noResults")}
+          description={nearMe ? t("home.noDoctorsNearbyDesc", { radius: NEAR_ME_RADIUS_KM }) : t("home.tryAnotherName")}
         />
       )}
       {!loading && !!results?.length && (
@@ -467,7 +484,7 @@ export function DoctorsPage() {
                     {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
                   </span>
                 ) : (
-                  <span>Medical specialist</span>
+                  <span>{t("home.medicalSpecialist")}</span>
                 )}
                 <span className="home__doctor-location">
                   <MapPin size={11} />
@@ -475,10 +492,10 @@ export function DoctorsPage() {
                     <DistanceBadge km={doctor.distance_km} point={doctor} />
                   ) : doctor.has_location && directionsUrl(doctor) ? (
                     <a className="geo-link" href={directionsUrl(doctor)!} target="_blank" rel="noreferrer">
-                      {nearestAreaName(doctor) ?? "Directions"}
+                      {nearestAreaName(doctor) ?? t("home.directions")}
                     </a>
                   ) : (
-                    <span className="geo-missing">Location not shared yet</span>
+                    <span className="geo-missing">{t("home.locationNotShared")}</span>
                   )}
                 </span>
                 <AvailabilityChip doctor={doctor} />
@@ -492,6 +509,17 @@ export function DoctorsPage() {
   );
 }
 
-export function NotFoundPage() { return <div className="page"><EmptyState title="Page not found" description="The page you requested does not exist." action={<Link to="/">Go home</Link>} /></div>; }
+export function NotFoundPage() {
+  const { t } = useTranslation();
+  return (
+    <div className="page">
+      <EmptyState
+        title={t("home.pageNotFound")}
+        description={t("home.pageNotFoundDesc")}
+        action={<Link to="/">{t("home.goHome")}</Link>}
+      />
+    </div>
+  );
+}
 
 export { CoordinatorScreen } from "./coordinator";

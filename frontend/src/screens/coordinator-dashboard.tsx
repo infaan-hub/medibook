@@ -13,22 +13,24 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "../api/client";
 import { useRealtimeSync } from "../realtime/socket";
+import { formatDate as intlDate } from "../lib/intl";
 import type { CoordinatorAppointment, CoordinatorStats } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
 
 function formatDate(date: string) {
-  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${date.slice(0, 10)}T00:00:00`), {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 }
 
-function labelType(type: string) {
-  return type === "NORMAL" ? "Hospital appointment" : type === "EMERGENCY" ? "Emergency" : "Home service";
+function labelType(type: string, t: (k: string) => string) {
+  return type === "NORMAL" ? t("coordinatorDashboard.hospitalAppointment") : type === "EMERGENCY" ? t("coordinatorDashboard.emergency") : t("coordinatorDashboard.homeService");
 }
 
 const statusColors: Record<string, string> = {
@@ -75,6 +77,7 @@ export function CoordinatorDashboard({
   error: string | null;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation();
   const [psycho, setPsycho] = useState<any[]>([]);
   const [training, setTraining] = useState<any[]>([]);
   const loadPsychotherapy = useCallback(() => {
@@ -128,11 +131,11 @@ export function CoordinatorDashboard({
   const expiredTrainingRequests = training.filter((item) => item.status === "expired").length;
 
   const pipeline = [
-    { key: "accepted", label: "Accepted", value: accepted, color: statusColors.accepted },
-    { key: "pending", label: "Pending", value: pending, color: statusColors.pending },
-    { key: "in_progress", label: "In progress", value: inProgress, color: statusColors.in_progress },
-    { key: "done", label: "Done", value: done, color: statusColors.done },
-    { key: "closed", label: "Closed", value: closed, color: statusColors.cancelled },
+    { key: "accepted", label: t("appointments.status.accepted"), value: accepted, color: statusColors.accepted },
+    { key: "pending", label: t("appointments.status.pending"), value: pending, color: statusColors.pending },
+    { key: "in_progress", label: t("appointments.status.in_progress"), value: inProgress, color: statusColors.in_progress },
+    { key: "done", label: t("coordinatorDashboard.completed"), value: done, color: statusColors.done },
+    { key: "closed", label: t("coordinatorDashboard.closed"), value: closed, color: statusColors.cancelled },
   ];
 
   const weekly = stats.appointments.last_7_days ?? [];
@@ -145,9 +148,9 @@ export function CoordinatorDashboard({
     <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Coordination center</p>
-          <h1>Coordinator dashboard</h1>
-          <p>Live oversight of patients, doctor capacity, appointments and emergency routing.</p>
+          <p className="doctor-eyebrow">{t("coordinatorDashboard.coordinationCenter")}</p>
+          <h1>{t("coordinatorDashboard.dashboard")}</h1>
+          <p>{t("coordinatorDashboard.dashboardDesc")}</p>
         </div>
         <div className="doctor-header-actions">
           <button
@@ -157,13 +160,13 @@ export function CoordinatorDashboard({
             disabled={loading}
           >
             <RefreshCw size={16} className={loading ? "doctor-spin" : undefined} />
-            {loading ? "Refreshing..." : "Refresh data"}
+            {loading ? t("coordinatorDashboard.refreshing") : t("coordinatorDashboard.refreshData")}
           </button>
           <Link to="/coordinator/appointment" className="doctor-primary-button">
-            <CalendarDays size={16} /> Appointment desk
+            <CalendarDays size={16} /> {t("coordinatorDashboard.appointmentDesk")}
           </Link>
           <Link to="/coordinator/psychotherapy" className="doctor-outline-button">
-            <Brain size={16} /> Manage psychology service
+            <Brain size={16} /> {t("coordinatorDashboard.managePsychology")}
           </Link>
         </div>
       </div>
@@ -171,46 +174,46 @@ export function CoordinatorDashboard({
       <div className="doctor-metrics">
         <Card className="doctor-metric">
           <span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span>
-          <span>Today's appointments</span>
+          <span>{t("coordinatorDashboard.todaysAppointments")}</span>
           <strong>{stats.appointments.today}</strong>
-          <small>{total} appointments across the platform</small>
+          <small>{t("coordinatorDashboard.totalAcrossPlatform", { total })}</small>
         </Card>
         <Card className="doctor-metric">
           <span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span>
-          <span>Awaiting review</span>
+          <span>{t("coordinatorDashboard.awaitingReview")}</span>
           <strong>{pending}</strong>
-          <small>{todayPending} pending today · {accepted} accepted</small>
+          <small>{t("coordinatorDashboard.pendingToday", { count: todayPending, accepted })}</small>
         </Card>
         <Card className="doctor-metric">
           <span className="doctor-metric__icon doctor-metric__icon--blue"><Stethoscope size={19} /></span>
-          <span>Available doctors</span>
+          <span>{t("coordinatorDashboard.availableDoctors")}</span>
           <strong>{availableDoctors}/{totalDoctors}</strong>
           <small>
             {totalDoctors - availableDoctors > 0
-              ? `${totalDoctors - availableDoctors} unavailable right now`
-              : "All doctor profiles available"}
+              ? t("coordinatorDashboard.unavailableNow", { count: totalDoctors - availableDoctors })
+              : t("coordinatorDashboard.allDoctorsAvailable")}
           </small>
         </Card>
         <Card className="doctor-metric">
           <span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span>
-          <span>Registered patients</span>
+          <span>{t("coordinatorDashboard.registeredPatients")}</span>
           <strong>{stats.users.patients}</strong>
-          <small>{stats.users.coordinators} coordinator{stats.users.coordinators === 1 ? "" : "s"} on the platform</small>
+          <small>{stats.users.coordinators} {stats.users.coordinators === 1 ? t("coordinatorDashboard.coordinatorsOnPlatform", { count: stats.users.coordinators }) : t("coordinatorDashboard.coordinatorsOnPlatformPlural", { count: stats.users.coordinators })}</small>
         </Card>
       </div>
 
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">
           <div className="doctor-card-heading">
-            <div><h2>Appointment overview</h2><p>Live distribution of the platform appointment pipeline</p></div>
-            <span className="doctor-live"><Activity size={14} /> Live data</span>
+            <div><h2>{t("coordinatorDashboard.appointmentOverview")}</h2><p>{t("coordinatorDashboard.liveDistribution")}</p></div>
+            <span className="doctor-live"><Activity size={14} /> {t("coordinatorDashboard.liveData")}</span>
           </div>
           <div className="doctor-chart-layout">
             <div
               className="doctor-donut"
               style={{ background: donutBackground(pipeline) } as CSSProperties}
             >
-              <span>{completionRate}%<small>completed</small></span>
+              <span>{completionRate}%<small>{t("coordinatorDashboard.completed")}</small></span>
             </div>
             <div className="doctor-legend">
               {pipeline.map((segment) => (
@@ -226,20 +229,20 @@ export function CoordinatorDashboard({
 
         <Card className="doctor-chart-card doctor-workload-card">
           <div className="doctor-card-heading">
-            <div><h2>Platform load</h2><p>Current appointment volume</p></div>
+            <div><h2>{t("coordinatorDashboard.platformLoad")}</h2><p>{t("coordinatorDashboard.currentVolume")}</p></div>
             <Activity size={18} />
           </div>
-          <div className="doctor-workload-number"><strong>{total}</strong><span>total appointments</span></div>
+          <div className="doctor-workload-number"><strong>{total}</strong><span>{t("coordinatorDashboard.totalAppointments")}</span></div>
           <div className="doctor-progress">
             <span style={{ width: `${Math.min(completionRate, 100)}%` }} />
           </div>
           <p className="coordinator-load-note">
-            {done} completed of {total} booked · {completionRate}% completion rate
+            {done} {t("coordinatorDashboard.completed")} of {total} booked · {completionRate}% {t("coordinatorDashboard.completed")} rate
           </p>
           <div className="doctor-workload-footer coordinator-workload-footer">
-            <span><CalendarDays size={14} /> {stats.appointments.today} today</span>
-            <span><Clock3 size={14} /> {todayPending} pending today</span>
-            <span><Siren size={14} /> {activeEmergency} active</span>
+            <span><CalendarDays size={14} /> {stats.appointments.today} {t("coordinatorDashboard.today")}</span>
+            <span><Clock3 size={14} /> {todayPending} {t("coordinatorDashboard.pendingTodayLabel")}</span>
+            <span><Siren size={14} /> {activeEmergency} {t("coordinatorDashboard.active")}</span>
           </div>
         </Card>
       </div>
@@ -247,8 +250,8 @@ export function CoordinatorDashboard({
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">
           <div className="doctor-card-heading">
-            <div><h2>7-day appointment volume</h2><p>Bookings recorded each day over the last week</p></div>
-            <Link to="/coordinator/appointment"><span>Appointments</span><ArrowUpRight size={15} /></Link>
+            <div><h2>{t("coordinatorDashboard.volume7Day")}</h2><p>{t("coordinatorDashboard.volume7DayDesc")}</p></div>
+            <Link to="/coordinator/appointment"><span>{t("coordinatorDashboard.appointments")}</span><ArrowUpRight size={15} /></Link>
           </div>
           {weekly.length ? (
             <div className="coordinator-bars">
@@ -267,13 +270,13 @@ export function CoordinatorDashboard({
               ))}
             </div>
           ) : (
-            <EmptyState icon={<CalendarDays size={28} />} title="No volume data" description="Daily appointment counts will appear here." />
+            <EmptyState icon={<CalendarDays size={28} />} title={t("coordinatorDashboard.noVolumeData")} description={t("coordinatorDashboard.noVolumeDesc")} />
           )}
         </Card>
 
         <Card className="doctor-chart-card">
           <div className="doctor-card-heading">
-            <div><h2>Care service mix</h2><p>Appointment volume by service type</p></div>
+            <div><h2>{t("coordinatorDashboard.careServiceMix")}</h2><p>{t("coordinatorDashboard.volumeByType")}</p></div>
           </div>
           <div className="coordinator-service-list">
             {services.map((service) => {
@@ -292,7 +295,7 @@ export function CoordinatorDashboard({
                       }}
                     />
                   </div>
-                  <small className="coordinator-service__meta">{percentage}% of all appointments</small>
+                  <small className="coordinator-service__meta">{percentage}% {t("coordinatorDashboard.ofAllAppointments")}</small>
                 </div>
               );
             })}
@@ -302,11 +305,11 @@ export function CoordinatorDashboard({
 
       <Card className="doctor-appointments-card">
         <div className="doctor-card-heading">
-          <div><h2>Latest appointments</h2><p>Recent bookings and their current status</p></div>
-          <Link to="/coordinator/appointment"><span>View all</span><ArrowUpRight size={15} /></Link>
+          <div><h2>{t("coordinatorDashboard.latestAppointments")}</h2><p>{t("coordinatorDashboard.latestDesc")}</p></div>
+          <Link to="/coordinator/appointment"><span>{t("coordinatorDashboard.viewAll")}</span><ArrowUpRight size={15} /></Link>
         </div>
         {recent.length === 0 ? (
-          <EmptyState icon={<CalendarDays size={28} />} title="No appointments yet" description="New bookings will appear here as they are created." />
+          <EmptyState icon={<CalendarDays size={28} />} title={t("coordinatorDashboard.noAppointmentsYet")} description={t("coordinatorDashboard.noAppointmentsYetDesc")} />
         ) : (
           <div className="coordinator-recent-list">
             {recent.map((appointment) => (
@@ -316,7 +319,7 @@ export function CoordinatorDashboard({
                   style={{ background: statusColors[appointment.status] ?? "#a9b6bf" }}
                 />
                 <div className="coordinator-recent-row__main">
-                  <b>#{appointment.id} · {labelType(appointment.appointment_type)}</b>
+                  <b>#{appointment.id} · {labelType(appointment.appointment_type, t)}</b>
                   <span>
                     {formatDate(appointment.appointment_date)} · {appointment.start_time.slice(0, 5)}–{appointment.end_time.slice(0, 5)}
                     {appointment.patient_email ? ` · ${appointment.patient_email}` : ""}
@@ -332,32 +335,32 @@ export function CoordinatorDashboard({
       <div className="doctor-quick-actions">
         <Link to="/coordinator/appointment">
           <Clock3 size={18} />
-          <span><b>Review appointment requests</b><small>{pending} waiting for review</small></span>
+          <span><b>{t("coordinatorDashboard.reviewRequests")}</b><small>{pending} {t("coordinatorDashboard.waitingReview")}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/doctors">
           <Stethoscope size={18} />
-          <span><b>Doctors & availability</b><small>{availableDoctors} of {totalDoctors} doctors available</small></span>
+          <span><b>{t("coordinatorDashboard.doctorsAvailability")}</b><small>{availableDoctors} {t("coordinatorDashboard.doctorsAvailable", { available: availableDoctors, total: totalDoctors })}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/emergency">
           <Siren size={18} />
-          <span><b>Emergency coordination</b><small>{activeEmergency} active request{activeEmergency === 1 ? "" : "s"}</small></span>
+          <span><b>{t("coordinatorDashboard.emergencyCoordination")}</b><small>{activeEmergency} {activeEmergency === 1 ? t("coordinatorDashboard.activeRequests", { count: activeEmergency }) : t("coordinatorDashboard.activeRequestsPlural", { count: activeEmergency })}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/patient">
           <UserRound size={18} />
-          <span><b>Patient history</b><small>Search {stats.users.patients} patient records</small></span>
+          <span><b>{t("coordinatorDashboard.patientHistory")}</b><small>{t("coordinatorDashboard.searchPatientRecords", { count: stats.users.patients })}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/training">
           <GraduationCap size={18} />
-          <span><b>Manage training</b><small>Review and assign training requests{expiredTrainingRequests ? ` · ${expiredTrainingRequests} expired` : ""}</small></span>
+          <span><b>{t("coordinatorDashboard.manageTraining")}</b><small>{t("coordinatorDashboard.manageTraining")}...{expiredTrainingRequests ? ` · ${expiredTrainingRequests} ${t("coordinatorDashboard.trainingExpired", { count: expiredTrainingRequests })}` : ""}</small></span>
           <ArrowUpRight size={15} />
         </Link>
         <Link to="/coordinator/psychotherapy">
           <Brain size={18} />
-          <span><b>Manage psychotherapy</b><small>{psychotherapyCompletedSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming{psychotherapyExpiredSessions ? ` · ${psychotherapyExpiredSessions} expired` : ""}</small></span>
+          <span><b>{t("coordinatorDashboard.managePsychotherapy")}</b><small>{t("coordinatorDashboard.sessionsCompleted", { completed: psychotherapyCompletedSessions, upcoming: psychotherapyUpcomingSessions })}{psychotherapyExpiredSessions ? t("coordinatorDashboard.expiredSuffix", { count: psychotherapyExpiredSessions }) : ""}</small></span>
           <ArrowUpRight size={15} />
         </Link>
       </div>
@@ -365,15 +368,15 @@ export function CoordinatorDashboard({
       <Card className="doctor-chart-card" style={{ marginTop: 16 }}>
         <div className="doctor-card-heading">
           <div>
-            <h3>Psychotherapy schedule</h3>
-            <p>{psychotherapyCompletedSessions} of {psychotherapyTotalSessions} sessions completed · {psychotherapyUpcomingSessions} upcoming{psychotherapyExpiredSessions ? ` · ${psychotherapyExpiredSessions} expired` : ""}.</p>
+            <h3>{t("coordinatorDashboard.psychotherapySchedule")}</h3>
+            <p>{t("coordinatorDashboard.sessionsCompleted", { completed: psychotherapyCompletedSessions, upcoming: psychotherapyUpcomingSessions })}{psychotherapyExpiredSessions ? t("coordinatorDashboard.expiredSuffix", { count: psychotherapyExpiredSessions }) : ""}.</p>
           </div>
         </div>
         <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of scheduled psychotherapy sessions completed`}>
           <span style={{ width: `${psychotherapyProgress}%` }} />
         </div>
         {psycho.flatMap((p) => (p.sessions ?? []).filter((s: any) => s.status === "scheduled")).slice(0, 8).length === 0 ? (
-          <EmptyState title="No upcoming sessions" description="Scheduled psychotherapy sessions will appear here." />
+          <EmptyState title={t("coordinatorDashboard.noUpcomingSessions")} description={t("coordinatorDashboard.scheduledSessionsAppear")} />
         ) : (
           <ul style={{ listStyle: "none", padding: 0 }}>
             {psycho.flatMap((p) => (p.sessions ?? []).filter((s: any) => s.status === "scheduled").map((s: any) => ({ p, s }))).slice(0, 8).map(({ p, s }) => (

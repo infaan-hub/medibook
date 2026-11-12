@@ -1,29 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Brain, CalendarClock, CheckCircle2, Clock3, Download, FileText, UserRound } from "lucide-react";
 import { apiGet } from "../api/client";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 import { Card, Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
 
-const STATUS: Record<string, { label: string; tone: string }> = {
-  pending: { label: "Pending", tone: "pending" },
-  assigned: { label: "Pending", tone: "pending" },
-  accepted: { label: "Accepted", tone: "accepted" },
-  in_progress: { label: "Session started", tone: "in_progress" },
-  follow_up: { label: "Follow-up session", tone: "in_progress" },
-  completed: { label: "Done", tone: "completed" },
-  expired: { label: "Expired", tone: "expired" },
+const STATUS: Record<string, { labelKey: string; tone: string }> = {
+  pending: { labelKey: "psychotherapy.statusPending", tone: "pending" },
+  assigned: { labelKey: "psychotherapy.statusAssigned", tone: "pending" },
+  accepted: { labelKey: "psychotherapy.statusAccepted", tone: "accepted" },
+  in_progress: { labelKey: "psychotherapy.statusInProgress", tone: "in_progress" },
+  follow_up: { labelKey: "psychotherapy.statusFollowUp", tone: "in_progress" },
+  completed: { labelKey: "psychotherapy.statusCompleted", tone: "completed" },
+  expired: { labelKey: "psychotherapy.statusExpired", tone: "expired" },
 };
 
 const SESSION_STATUS: Record<string, string> = {
-  scheduled: "Scheduled",
-  in_progress: "In progress",
-  completed: "Completed",
-  expired: "Expired",
+  scheduled: "psychotherapy.sessionScheduled",
+  in_progress: "psychotherapy.sessionInProgress",
+  completed: "psychotherapy.sessionCompleted",
+  expired: "psychotherapy.sessionExpired",
 };
 
 export function PsychotherapyScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ export function PsychotherapyScreen() {
       const res = await apiGet<any[]>("/psychotherapy");
       setItems(res.data ?? []);
     } catch (e: any) {
-      setError(e?.message || "Unable to load psychology service.");
+      setError(e?.message || t("psychotherapy.unableToLoad"));
     } finally { setLoading(false); }
   }, []);
 
@@ -43,11 +45,11 @@ export function PsychotherapyScreen() {
 
   async function viewReport(id: number) {
     try { await viewPsychotherapyReport(id); }
-    catch (e: any) { notify("error", e?.message || "Failed to open report."); }
+    catch (e: any) { notify("error", e?.message || t("psychotherapy.failedToOpenReport")); }
   }
   async function downloadReport(id: number) {
     try { await downloadPsychotherapyReport(id); }
-    catch (e: any) { notify("error", e?.message || "Failed to download report."); }
+    catch (e: any) { notify("error", e?.message || t("psychotherapy.failedToDownloadReport")); }
   }
 
   if (loading) return <div className="page"><Skeleton lines={6} /></div>;
@@ -57,15 +59,15 @@ export function PsychotherapyScreen() {
     <div className="page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Psychology service</p>
-          <h1>My psychology service</h1>
-          <p>Track your psychology service request and sessions.</p>
+          <p className="doctor-eyebrow">{t("psychotherapy.service")}</p>
+          <h1>{t("psychotherapy.myService")}</h1>
+          <p>{t("psychotherapy.track")}</p>
         </div>
-        <Link to="/psychotherapy/request"><Button>Request Therapy session</Button></Link>
+        <Link to="/psychotherapy/request"><Button>{t("psychotherapy.requestTherapy")}</Button></Link>
       </div>
 
       {items.length === 0 && (
-        <EmptyState title="No psychology service requests" description="Request a psychology service session to get started." />
+        <EmptyState title={t("psychotherapy.noRequests")} description={t("psychotherapy.noRequestsDesc")} />
       )}
 
       {items.map((r) => {
@@ -78,23 +80,23 @@ export function PsychotherapyScreen() {
               <div className="psych-case-card__title">
                 <span className="psych-case-card__icon"><Brain size={20} /></span>
                 <div>
-                  <span className="psych-case-card__eyebrow">Psychology service case</span>
+                  <span className="psych-case-card__eyebrow">{t("psychotherapy.case")}</span>
                   <h2>Case #{r.id}</h2>
                 </div>
               </div>
-              <span className={`psych-case-status psych-case-status--${st.tone}`}>{st.label}</span>
+              <span className={`psych-case-status psych-case-status--${st.tone}`}>{t(st.labelKey)}</span>
             </div>
 
             {r.status === "expired" && (
               <div className="psych-plan-summary">
                 <div className="psych-plan-summary__goals">
-                  <small>Session expired</small>
+                  <small>{t("psychotherapy.sessionExpired")}</small>
                   <p>
                     This psychology service request expired because a scheduled
                     session was not started in time. Please request a new
                     psychology service session.{" "}
                     <Link to="/psychotherapy/request" style={{ fontWeight: 600 }}>
-                      Request again
+                      {t("psychotherapy.requestAgain")}
                     </Link>
                   </p>
                 </div>
@@ -104,46 +106,46 @@ export function PsychotherapyScreen() {
             <div className="psych-case-people">
               <div className="psych-case-person">
                 <span className="psych-case-person__icon"><UserRound size={16} /></span>
-                <div><small>Patient</small><strong>{r.patient?.first_name} {r.patient?.last_name}</strong></div>
+                <div><small>{t("psychotherapy.patient")}</small><strong>{r.patient?.first_name} {r.patient?.last_name}</strong></div>
               </div>
               {r.doctor && (
                 <div className="psych-case-person">
                   <span className="psych-case-person__icon"><Brain size={16} /></span>
-                  <div><small>Psychologist</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div>
+                  <div><small>{t("psychotherapy.psychologist")}</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div>
                 </div>
               )}
             </div>
 
             <div className="psych-plan-summary">
-              <div className="psych-section-heading"><span><CalendarClock size={18} /></span><div><h3>Request details</h3><p>Your submitted request and plan</p></div></div>
+              <div className="psych-section-heading"><span><CalendarClock size={18} /></span><div><h3>{t("psychotherapy.requestDetails")}</h3><p>{t("psychotherapy.yourSubmittedRequest")}</p></div></div>
               <div className="psych-plan-summary__grid">
-                <div><small>Mode</small><strong>{r.session_mode === "in_person" ? "In person" : "Online"}</strong></div>
-                <div><small>Urgency</small><strong>{r.urgency}</strong></div>
-                <div><small>Preferred start</small><strong>{String(r.preferred_start_date).slice(0, 10)}</strong></div>
-                <div><small>Language</small><strong>{r.language_preference}</strong></div>
-                <div><small>Gender preference</small><strong>{r.gender_preference}</strong></div>
-                {r.notes && <div><small>Your request notes</small><strong>{r.notes}</strong></div>}
-                <div><small>Sessions completed</small><strong>{completedSessions} of {totalSessions}</strong></div>
-                {r.plan_start_time && <div><small>Current session time</small><strong>{r.plan_start_time.slice(0, 5)}</strong></div>}
-                {r.plan_followup_time && <div><small>Follow-up session time</small><strong>{r.plan_followup_time.slice(0, 5)}</strong></div>}
-                {r.plan_session_duration && <div><small>Session length</small><strong>{r.plan_session_duration} min</strong></div>}
-                {r.plan_total_sessions && <div><small>Planned sessions</small><strong>{r.plan_total_sessions}</strong></div>}
-                {r.plan_start_date && <div><small>Current session</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>}
-                {r.plan_followup_date && <div><small>Follow-up session</small><strong>{String(r.plan_followup_date).slice(0, 10)} · {r.plan_followup_time?.slice(0, 5)}</strong></div>}
+                <div><small>{t("psychotherapy.mode")}</small><strong>{r.session_mode === "in_person" ? t("psychotherapy.inPerson") : t("psychotherapy.online")}</strong></div>
+                <div><small>{t("psychotherapy.urgency")}</small><strong>{r.urgency}</strong></div>
+                <div><small>{t("psychotherapy.preferredStart")}</small><strong>{String(r.preferred_start_date).slice(0, 10)}</strong></div>
+                <div><small>{t("psychotherapy.language")}</small><strong>{r.language_preference}</strong></div>
+                <div><small>{t("psychotherapy.genderPreference")}</small><strong>{r.gender_preference}</strong></div>
+                {r.notes && <div><small>{t("psychotherapy.requestNotes")}</small><strong>{r.notes}</strong></div>}
+                <div><small>{t("psychotherapy.sessionsCompleted")}</small><strong>{completedSessions} of {totalSessions}</strong></div>
+                {r.plan_start_time && <div><small>{t("psychotherapy.currentSessionTime")}</small><strong>{r.plan_start_time.slice(0, 5)}</strong></div>}
+                {r.plan_followup_time && <div><small>{t("psychotherapy.followUpSessionTime")}</small><strong>{r.plan_followup_time.slice(0, 5)}</strong></div>}
+                {r.plan_session_duration && <div><small>{t("psychotherapy.sessionLength")}</small><strong>{r.plan_session_duration} {t("psychotherapy.min")}</strong></div>}
+                {r.plan_total_sessions && <div><small>{t("psychotherapy.plannedSessions")}</small><strong>{r.plan_total_sessions}</strong></div>}
+                {r.plan_start_date && <div><small>{t("psychotherapy.currentSession")}</small><strong>{String(r.plan_start_date).slice(0, 10)} · {r.plan_start_time?.slice(0, 5)}</strong></div>}
+                {r.plan_followup_date && <div><small>{t("psychotherapy.followUpSession")}</small><strong>{String(r.plan_followup_date).slice(0, 10)} · {r.plan_followup_time?.slice(0, 5)}</strong></div>}
               </div>
-              {r.plan_goals && <div className="psych-plan-summary__goals"><small>Goals</small><p>{r.plan_goals}</p></div>}
+              {r.plan_goals && <div className="psych-plan-summary__goals"><small>{t("psychotherapy.goals")}</small><p>{r.plan_goals}</p></div>}
             </div>
 
             {r.sessions?.length > 0 && (
               <div className="psych-case-section">
-                <div className="psych-section-heading"><span><Clock3 size={18} /></span><div><h3>Sessions</h3><p>{completedSessions} of {r.sessions.length} completed</p></div></div>
+                <div className="psych-section-heading"><span><Clock3 size={18} /></span><div><h3>{t("psychotherapy.sessions")}</h3><p>{completedSessions} of {r.sessions.length} {t("psychotherapy.completed")}</p></div></div>
                 {r.sessions.map((s: any) => {
                   const ss = SESSION_STATUS[s.status] ?? s.status;
                   return (
                     <Card key={s.id} className={`psych-session-card psych-session-card--${s.status}`}>
                       <div className="psych-session-card__head">
-                        <strong>Session {s.session_number}</strong>
-                        <span className={`psych-case-status psych-case-status--${s.status}`}>{ss}</span>
+                        <strong>{t("psychotherapy.session")} {s.session_number}</strong>
+                        <span className={`psych-case-status psych-case-status--${s.status}`}>{t(ss)}</span>
                       </div>
                       <p className="psych-session-card__time">{String(s.scheduled_date).slice(0, 10)} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)} · {s.duration_minutes} min</p>
                     </Card>
@@ -154,8 +156,8 @@ export function PsychotherapyScreen() {
 
             {r.status === "completed" && (
               <div className="psych-case-actions">
-                <Button variant="secondary" onClick={() => void viewReport(r.id)}><FileText size={16} /> View report</Button>
-                <Button variant="secondary" onClick={() => void downloadReport(r.id)}><Download size={16} /> Download report</Button>
+                <Button variant="secondary" onClick={() => void viewReport(r.id)}><FileText size={16} /> {t("psychotherapy.viewReport")}</Button>
+                <Button variant="secondary" onClick={() => void downloadReport(r.id)}><Download size={16} /> {t("psychotherapy.downloadReport")}</Button>
               </div>
             )}
           </Card>

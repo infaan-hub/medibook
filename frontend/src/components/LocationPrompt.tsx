@@ -12,6 +12,7 @@
  * a doctor profile update, or a retry of the appointment.
  */
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Crosshair, MapPin, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "./ui";
 import { Modal } from "./Modal";
@@ -37,16 +38,23 @@ export interface LocationPromptProps {
 const DEFAULT_DESCRIPTION =
   "MediBook needs your position to find doctors near you and to route emergency requests. Nothing is shared with other patients.";
 
+const DEFAULT_DESCRIPTION_KEY = "locationPrompt.description";
+
 export function LocationPrompt({
   open,
   onCaptured,
   onDismiss,
   saving = false,
-  title = "Set your location",
-  description = DEFAULT_DESCRIPTION,
-  actionLabel = "Use my current location",
-  privacyNote = "Your location is stored on your profile and shown only to the doctors you book with.",
+  title,
+  description,
+  actionLabel,
+  privacyNote,
 }: LocationPromptProps) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t("locationPrompt.title");
+  const resolvedDescription = description ?? t("locationPrompt.description");
+  const resolvedActionLabel = actionLabel ?? t("locationPrompt.actionLabel");
+  const resolvedPrivacyNote = privacyNote ?? t("locationPrompt.privacyNote");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFix, setLastFix] = useState<CapturedFix | null>(null);
@@ -66,7 +74,7 @@ export function LocationPrompt({
       setError(
         err instanceof LocationError
           ? err.message
-          : "We could not read your location. Please try again."
+          : t("locationPrompt.readFailed")
       );
     } finally {
       setBusy(false);
@@ -76,7 +84,7 @@ export function LocationPrompt({
   return (
     <Modal
       open={open}
-      title={title}
+      title={resolvedTitle}
       dismissible={Boolean(onDismiss)}
       onDismiss={onDismiss}
       className="modal__card--prompt"
@@ -84,15 +92,15 @@ export function LocationPrompt({
         onDismiss ? (
           <>
             <Button variant="ghost" onClick={onDismiss}>
-              Not now
+              {t("common.notNow")}
             </Button>
             <Button variant="primary" loading={working} onClick={grab}>
-              {actionLabel}
+              {resolvedActionLabel}
             </Button>
           </>
         ) : (
           <Button variant="primary" fullWidth loading={working} onClick={grab}>
-            {actionLabel}
+            {resolvedActionLabel}
           </Button>
         )
       }
@@ -101,12 +109,14 @@ export function LocationPrompt({
         <div className="prompt__icon" aria-hidden="true">
           <MapPin size={26} />
         </div>
-        <p className="prompt__description">{description}</p>
+        <p className="prompt__description">{resolvedDescription}</p>
 
         {lastFix && (
           <p className="prompt__fix">
             <Crosshair size={14} aria-hidden="true" />
-            {capturedArea ? `Location captured · ${capturedArea}` : "Location captured"}
+            {capturedArea
+              ? t("locationPrompt.capturedArea", { area: capturedArea })
+              : t("locationPrompt.captured")}
           </p>
         )}
 
@@ -119,7 +129,7 @@ export function LocationPrompt({
 
         <p className="prompt__privacy">
           <ShieldCheck size={14} aria-hidden="true" />
-          {privacyNote}
+          {resolvedPrivacyNote}
         </p>
       </div>
     </Modal>

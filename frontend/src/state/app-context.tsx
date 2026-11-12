@@ -27,6 +27,7 @@ import {
 } from "../api/auth";
 import { tokenStore } from "../api/tokens";
 import { realtime } from "../realtime/socket";
+import i18n, { changeAppLanguage, normalizeLanguage } from "../i18n";
 import type { LoginPushPayload, RegisterPayload, User } from "../api/types";
 
 /* ---------------- Toasts ---------------- */
@@ -120,6 +121,21 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+/** The guest/device language currently on screen (never throws). */
+function currentLanguage() {
+  return normalizeLanguage(i18n.resolvedLanguage ?? i18n.language) ?? "en";
+}
+
+/**
+ * After sign-in the ACCOUNT language wins over whatever the device had.
+ * The switch is instant and also updates localStorage, so a later guest view
+ * keeps the same language.
+ */
+function applyAccountLanguage(language: unknown): void {
+  const next = normalizeLanguage(typeof language === "string" ? language : null);
+  if (next && next !== currentLanguage()) void changeAppLanguage(next);
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>("booting");
   const [user, setUserState] = useState<User | null>(null);
@@ -140,6 +156,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((envelope) => {
         setUserState(envelope.data);
         tokenStore.setUser(envelope.data);
+        applyAccountLanguage(envelope.data.language);
         setStatus("authed");
       })
       .catch(() => {
@@ -154,6 +171,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       tokenStore.setPair({ access: payload.access, refresh: payload.refresh });
       tokenStore.setUser(payload.user);
       setUserState(payload.user);
+      applyAccountLanguage(payload.user.language);
       setStatus("authed");
     },
     []
@@ -195,7 +213,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (payload: RegisterPayload) => {
-      const envelope = await registerRequest(payload);
+      // Start the new account in the language the guest picked before signing up.
+      const envelope = await registerRequest({
+        ...payload,
+        language: payload.language ?? currentLanguage(),
+      });
       applyAuth(envelope.data);
     },
     [applyAuth]
@@ -203,7 +225,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const socialLogin = useCallback(
     async (provider: "google", token: string) => {
-      const envelope = await socialLoginRequest(provider, token);
+      const envelope = await socialLoginRequest(provider, token, currentLanguage());
       applyAuth(envelope.data);
     },
     [applyAuth]
@@ -246,4 +268,13 @@ export function useSession(): SessionContextValue {
   const context = useContext(SessionContext);
   if (!context) throw new Error("useSession must be used inside <SessionProvider>");
   return context;
+}
+
+/**
+ * Session when one exists, `null` otherwise. Used by components that also
+ * render on guest screens (the language switcher on onboarding/auth) outside
+ * the signed-in app shell.
+ */
+export function useOptionalSession(): SessionContextValue | null {
+  return useContext(SessionContext);
 }

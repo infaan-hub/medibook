@@ -4474,3 +4474,105 @@ button.treat-rec-link:disabled { opacity: 0.55; cursor: not-allowed; }
 .psych-history-item__body p { display: flex; flex-direction: column; gap: 3px; margin: 0; color: #536b7a; font-size: 13px; line-height: 1.5; }
 .psych-history-item__body b { color: #365365; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
 @media (max-width: 640px) { .psych-case-card { padding: 16px !important; gap: 15px; }.psych-plan-form, .psych-plan-summary, .psych-history { padding: 15px; }.psych-plan-grid, .psych-plan-summary__grid { grid-template-columns: 1fr; }.psych-plan-field--wide, .psych-plan-actions { grid-column: auto; }.psych-plan-actions .btn { width: 100%; }.psych-case-actions { align-items: stretch; flex-direction: column; }.psych-case-actions .btn, .psych-case-actions .btn:first-child { width: 100%; margin-right: 0; }.psych-case-card__head { align-items: flex-start; }.psych-case-status { padding: 5px 9px; }.psych-followup-form { grid-template-columns: 1fr; }.psych-followup-form .btn { width: 100%; } }
+
+/* ============================================================
+   Language switcher (shared)
+   ============================================================ */
+.language-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  border-radius: var(--radius-full, 999px);
+  background: rgba(9, 169, 158, 0.08);
+  color: #087f79;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.language-inline svg { flex-shrink: 0; }
+.language-inline select {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 2px;
+  max-width: 132px;
+}
+.language-inline select:focus-visible {
+  outline: 2px solid #09a99e;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.language-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.language-card__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: var(--color-primary-soft, #e8fbf9);
+  color: #078b82;
+  flex-shrink: 0;
+}
+.language-card__head .page__subtitle { margin: 4px 0 0; }
+.language-card__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.language-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--color-border, #dce7ec);
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #163c3c);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.language-chip:hover:not(:disabled) {
+  border-color: #09a99e;
+  background: #f0fbfb;
+}
+.language-chip--active {
+  border-color: #09a99e;
+  background: #e8fbf9;
+  color: #06756e;
+  font-weight: 700;
+}
+.language-chip:disabled { opacity: 0.62; cursor: progress; }
+
+/* Fixed guest selector on login/register/forgot/reset screens. */
+.ab-language {
+  position: fixed;
+  top: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 12px);
+  right: max(18px, calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 18px));
+  z-index: 6;
+}
+.ab-welcome__language {
+  position: fixed;
+  top: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 12px);
+  left: max(18px, calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 18px));
+  z-index: 6;
+}
+.ab-onboarding__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

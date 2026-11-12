@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import i18n from "../i18n";
 import { useRealtimeSync } from "../realtime/socket";
 import { getCoordinatorAppointments, getCoordinatorDoctors, getCoordinatorOverview, getCoordinatorPatientHistory, getCoordinatorPatients, invalidateCoordinatorCache, type CoordinatorAppointment, type CoordinatorDoctor, type CoordinatorHistory, type CoordinatorPatient, type CoordinatorStats } from "../api/coordinator";
 import { CoordinatorDashboard } from "./coordinator-dashboard";
@@ -8,7 +9,7 @@ import { CoordinatorAppointments } from "./coordinator-appointments";
 import { CoordinatorEmergency } from "./coordinator-emergency";
 import { CoordinatorPatients } from "./coordinator-patients";
 
-function errorText(e: unknown) { return e instanceof Error ? e.message : "Unable to load data."; }
+function errorText(e: unknown) { return e instanceof Error ? e.message : i18n.t("common.tryAgainError"); }
 
 export function CoordinatorScreen() {
   const location = useLocation();

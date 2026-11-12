@@ -18,6 +18,7 @@
  * already accounts for.
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import Image from "next/image";
 
 /** Text rendered instead of a picture. */
@@ -76,6 +77,7 @@ export function DoctorImage({
   className,
   emptyClassName,
 }: DoctorImageProps) {
+  const { t } = useTranslation();
   // Remember WHICH source failed, so a new upload (same component instance)
   // is retried instead of inheriting the previous failure.
   const [failure, setFailure] = useState<{ src: string | null | undefined } | null>(null);
@@ -87,10 +89,10 @@ export function DoctorImage({
       <span
         className={[className, emptyClassName, "doctor-photo-empty"].filter(Boolean).join(" ")}
         role="img"
-        aria-label={NO_IMAGE_LABEL}
-        title={NO_IMAGE_LABEL}
+        aria-label={t("shared.noImage")}
+        title={t("shared.noImage")}
       >
-        {NO_IMAGE_LABEL}
+        {t("shared.noImage")}
       </span>
     );
   }

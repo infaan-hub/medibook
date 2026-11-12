@@ -32,6 +32,7 @@ import {
   type RegisterInput,
 } from "@/validators/auth";
 import { parse } from "@/validators/base";
+import { normalizeLanguage } from "@/lib/languages";
 
 const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 const refreshLifetimeMs = () => Number(process.env.JWT_REFRESH_DAYS ?? 7) * 86_400_000;
@@ -76,6 +77,7 @@ export async function register(body: unknown): Promise<{ user: AuthUser; pair: {
     first_name: input.first_name ?? "",
     last_name: input.last_name ?? "",
     role,
+    language: input.language ?? "en",
   });
   if (role === "doctor" && !(await doctors.doctorExists(user.id))) {
     await doctors.createDoctor(user.id); // Doctor.objects.get_or_create(user=user)
@@ -430,13 +432,26 @@ export async function passwordResetConfirm(body: unknown): Promise<void> {
 /** PATCH /api/auth/me/ — profile fields + optional avatar upload/removal. */
 export async function updateMe(
   user: AuthUser,
-  patch: { phone?: string; first_name?: string; last_name?: string; profile_image?: string | null },
+  patch: {
+    phone?: string;
+    first_name?: string;
+    last_name?: string;
+    profile_image?: string | null;
+    language?: string;
+  },
   file?: File | null
 ): Promise<AuthUser> {
   const data: Record<string, unknown> = {};
   if (patch.phone !== undefined) data.phone = patch.phone;
   if (patch.first_name !== undefined) data.first_name = String(patch.first_name).trim();
   if (patch.last_name !== undefined) data.last_name = String(patch.last_name).trim();
+  if (patch.language !== undefined) {
+    const language = normalizeLanguage(patch.language);
+    if (!language) {
+      throw new ValidationError({ language: ["Unsupported language."] });
+    }
+    data.language = language;
+  }
 
   const wantsImage = Boolean(file && file.size > 0);
   const wantsClear = !wantsImage && patch.profile_image === null;

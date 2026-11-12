@@ -5,6 +5,9 @@
 
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
+import { formatDate as intlDate } from "../lib/intl";
 import {
   cancelAppointment,
   completeAppointment,
@@ -58,11 +61,11 @@ import {
 } from "lucide-react";
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  return error instanceof Error ? error.message : i18n.t("common.tryAgainError");
 }
 
 function formatDate(d: string): string {
-  return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
+  return intlDate(new Date(d + "T00:00:00"), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -92,7 +95,7 @@ function PatientName({ patientId }: { patientId: number }) {
         const fn = r.data.first_name || "";
         const ln = r.data.last_name || "";
         const full = `${fn} ${ln}`.trim();
-        setName(full || r.data.email || `Patient #${patientId}`);
+        setName(full || r.data.email || i18n.t("appointments.doctorNumber", { id: patientId }));
       })
       .catch(() => setName(`Patient #${patientId}`));
   }, [patientId]);
@@ -105,16 +108,17 @@ function PatientName({ patientId }: { patientId: number }) {
 
 /** Compact waiting-room chip: "#2 in line · 12 min" / "In consultation". */
 function QueueChip({ queue }: { queue: QueueSlot }) {
+  const { t } = useTranslation();
   if (queue.being_seen) {
-    return <span className="queue-badge queue-badge--live">In consultation</span>;
+    return <span className="queue-badge queue-badge--live">{t("appointments.inConsultation")}</span>;
   }
   if (queue.position === null) {
-    return <span className="queue-badge queue-badge--idle">Not checked in</span>;
+    return <span className="queue-badge queue-badge--idle">{t("appointments.notCheckedInPatient")}</span>;
   }
   return (
     <span className="queue-badge">
-      #{queue.position} in line
-      {queue.waited_minutes !== null ? ` · ${queue.waited_minutes} min` : ""}
+      {t("appointments.queuePosition", { position: queue.position })}
+      {queue.waited_minutes !== null ? ` · ${t("appointments.waitedMinutes", { count: queue.waited_minutes })}` : ""}
     </span>
   );
 }
@@ -130,6 +134,7 @@ function AppointmentRow({
   onChanged?: () => void;
   queue?: QueueSlot | null;
 }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const navigate = useNavigate();
   const [acting, setActing] = useState(false);
@@ -162,7 +167,7 @@ function AppointmentRow({
     setQueueBusy(true);
     try {
       const result = await checkIn(appointment.id);
-      notify("success", result.message || "Patient checked in.");
+      notify("success", result.message || t("appointments.checkedInToast"));
       onChanged?.();
     } catch (e) {
       notify("error", message(e));
@@ -176,13 +181,13 @@ function AppointmentRow({
     try {
       if (appointment.appointment_type === "EMERGENCY") {
         await respondToEmergency(appointment.id, "in-progress");
-        notify("success", "Emergency consultation started.");
+        notify("success", t("appointments.emergencyStartedToast"));
         onChanged?.();
         navigate(`/doctor/medical-treatment/emergency?patient=${appointment.patient}&appointment=${appointment.id}`);
         return;
       }
       await startConsultation(appointment.id);
-      notify("success", "Consultation started.");
+      notify("success", t("appointments.consultationStartedToast"));
       onChanged?.();
       navigate(`/doctor/medical-treatment?patient=${appointment.patient}&appointment=${appointment.id}`);
     } catch (e) {
@@ -242,7 +247,7 @@ function AppointmentRow({
         start_time: startTime,
         end_time: endTime,
       });
-      notify("success", "Appointment rescheduled — the patient sees the new time instantly.");
+      notify("success", t("appointments.rescheduledToast"));
       setShowReschedule(false);
       onChanged?.();
     } catch (e) {
@@ -261,13 +266,13 @@ function AppointmentRow({
   const canDelete = !isEmergency || appointment.status === "done";
 
   const statusConfig = {
-    pending: { icon: <Clock3 size={14} />, label: "Awaiting review", color: "var(--color-status-pending)" },
-    accepted: { icon: <CheckCircle2 size={14} />, label: "Accepted", color: "var(--color-status-accepted)" },
-    in_progress: { icon: <Play size={14} />, label: "In progress", color: "var(--color-status-in-progress, #2563eb)" },
-    done: { icon: <CheckCircle2 size={14} />, label: "Done", color: "var(--color-status-done)" },
-    cancelled: { icon: <Ban size={14} />, label: "Cancelled", color: "var(--color-status-cancelled)" },
-    rejected: { icon: <XCircle size={14} />, label: "Rejected", color: "var(--color-status-rejected)" },
-    expired: { icon: <Clock3 size={14} />, label: "Expired", color: "var(--color-status-expired, #6b7280)" },
+    pending: { icon: <Clock3 size={14} />, label: t("appointments.status.pending"), color: "var(--color-status-pending)" },
+    accepted: { icon: <CheckCircle2 size={14} />, label: t("appointments.status.accepted"), color: "var(--color-status-accepted)" },
+    in_progress: { icon: <Play size={14} />, label: t("appointments.status.in_progress"), color: "var(--color-status-in-progress, #2563eb)" },
+    done: { icon: <CheckCircle2 size={14} />, label: t("appointments.status.done"), color: "var(--color-status-done)" },
+    cancelled: { icon: <Ban size={14} />, label: t("appointments.status.cancelled"), color: "var(--color-status-cancelled)" },
+    rejected: { icon: <XCircle size={14} />, label: t("appointments.status.rejected"), color: "var(--color-status-rejected)" },
+    expired: { icon: <Clock3 size={14} />, label: t("appointments.status.expired"), color: "var(--color-status-expired, #6b7280)" },
   };
 
   const currentStatus = statusConfig[appointment.status] || statusConfig.pending;
@@ -293,28 +298,28 @@ function AppointmentRow({
 
       <div className="appt-card__body">
         <div className="appt-card__patient">
-          <span className="appt-card__patient-label">Patient</span>
+          <span className="appt-card__patient-label">{t("appointments.patient")}</span>
           <span className="appt-card__patient-name">
             <PatientName patientId={appointment.patient} />
           </span>
         </div>
         {appointment.reason && (
           <div className="appt-card__reason">
-            <span className="appt-card__reason-label">Reason</span>
+            <span className="appt-card__reason-label">{t("appointments.reason")}</span>
             <span className="appt-card__reason-text">{appointment.reason}</span>
           </div>
         )}
         {isHomeService && appointment.home_service_latitude != null && appointment.home_service_longitude != null && (
           <div className="appt-card__reason">
-            <span className="appt-card__reason-label">Home visit location</span>
+            <span className="appt-card__reason-label">{t("appointments.homeLocation")}</span>
             <a href={`https://www.google.com/maps/dir/?api=1&destination=${appointment.home_service_latitude},${appointment.home_service_longitude}`} target="_blank" rel="noreferrer">
-              <MapPin size={13} /> Open patient location in Google Maps
+              <MapPin size={13} /> {t("appointments.openPatientLocation")}
             </a>
           </div>
         )}
         {appointment.notes && (
           <div className="appt-card__notes">
-            <span className="appt-card__notes-label">Clinical notes</span>
+            <span className="appt-card__notes-label">{t("appointments.clinicalNotes")}</span>
             <span className="appt-card__notes-text">{appointment.notes}</span>
           </div>
         )}
@@ -322,19 +327,19 @@ function AppointmentRow({
         <div className="appt-card__patient-medical">
           <button type="button" className="appt-card__medical-toggle" onClick={toggleMedical}>
             <User size={13} />
-            {showMedical ? "Hide" : "View"} Patient Medical Info
+            {showMedical ? t("appointments.hideMedical") : t("appointments.viewMedical")}
           </button>
           {showMedical && (
             <div className="appt-card__medical-details">
               {medicalLoading ? (
-                <span className="appt-card__medical-loading">Loading medical info…</span>
+                <span className="appt-card__medical-loading">{t("appointments.loadingMedical")}</span>
               ) : !patientMedical ? (
-                <span className="appt-card__medical-loading">{medicalNote ?? "No medical information available."}</span>
+                <span className="appt-card__medical-loading">{medicalNote ?? t("appointments.noMedicalAvailable")}</span>
               ) : (
                 <>
                   {patientMedical.blood_group && (
                     <div className="appt-card__medical-row">
-                      <span className="appt-card__medical-label"><Droplet size={11} /> Blood</span>
+                      <span className="appt-card__medical-label"><Droplet size={11} /> {t("appointments.blood")}</span>
                       <span className="appt-card__medical-value">{patientMedical.blood_group}</span>
                     </div>
                   )}
@@ -342,30 +347,30 @@ function AppointmentRow({
                     <div className="appt-card__medical-row">
                       <span className="appt-card__medical-label"><Clock3 size={11} /> Age</span>
                       <span className="appt-card__medical-value">
-                        {Math.floor((Date.now() - new Date(patientMedical.date_of_birth + "T00:00:00").getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years
+                        {Math.floor((Date.now() - new Date(patientMedical.date_of_birth + "T00:00:00").getTime()) / (365.25 * 24 * 60 * 60 * 1000))} {t("appointments.years")}
                       </span>
                     </div>
                   )}
                   {patientMedical.gender && (
                     <div className="appt-card__medical-row">
-                      <span className="appt-card__medical-label"><User size={11} /> Gender</span>
+                      <span className="appt-card__medical-label"><User size={11} /> {t("settings.gender")}</span>
                       <span className="appt-card__medical-value">{patientMedical.gender}</span>
                     </div>
                   )}
                   {patientMedical.allergies && (
                     <div className="appt-card__medical-row">
-                      <span className="appt-card__medical-label"><AlertTriangle size={11} /> Allergies</span>
+                      <span className="appt-card__medical-label"><AlertTriangle size={11} /> {t("settings.allergies")}</span>
                       <span className="appt-card__medical-value">{patientMedical.allergies}</span>
                     </div>
                   )}
                   {patientMedical.medical_history && (
                     <div className="appt-card__medical-row">
-                      <span className="appt-card__medical-label"><FileText size={11} /> History</span>
+                      <span className="appt-card__medical-label"><FileText size={11} /> {t("settings.medicalHistory")}</span>
                       <span className="appt-card__medical-value">{patientMedical.medical_history}</span>
                     </div>
                   )}
                   {!patientMedical.blood_group && !patientMedical.allergies && !patientMedical.medical_history && (
-                    <span className="appt-card__medical-loading">No medical details filled yet.</span>
+                    <span className="appt-card__medical-loading">{t("booking.noMedicalDetails")}</span>
                   )}
                 </>
               )}
@@ -382,12 +387,12 @@ function AppointmentRow({
               : `/doctor/medical-treatment?patient=${appointment.patient}&appointment=${appointment.id}`}
             className="btn btn--secondary"
           >
-            <Stethoscope size={14} /> Visit record
+            <Stethoscope size={14} /> {t("appointments.visitRecord")}
           </Link>
         ) : null}
         {!isEmergency && !isHomeService && appointment.status === "accepted" && !appointment.checked_in_at && (
           <Button variant="secondary" disabled={!isAppointmentDay} loading={queueBusy} onClick={() => void handleCheckIn()}>
-            <UserCheck size={14} /> {isAppointmentDay ? "Check in" : "Check in on appointment day"}
+            <UserCheck size={14} /> {isAppointmentDay ? t("appointments.checkIn") : t("appointments.checkInOnDay")}
           </Button>
         )}
         {!isEmergency && appointment.status === "accepted" && (isHomeService || appointment.checked_in_at) && !consultationStarted && (
@@ -397,58 +402,58 @@ function AppointmentRow({
               loading={queueBusy}
               onClick={() => void handleStartConsultation()}
             >
-              <Play size={14} /> {isHomeService ? isAppointmentDay ? "Start home visit consultation" : "Start consultation on visit day" : "Start consultation"}
+              <Play size={14} /> {isHomeService ? isAppointmentDay ? t("appointments.startConsultation") : t("appointments.startOnDay") : t("appointments.startConsultation")}
             </Button>
         )}
         {isEmergency && appointment.status === "accepted" && (
           <Button variant="primary" loading={queueBusy} onClick={() => void handleStartConsultation()}>
-            <Play size={14} /> Start emergency consultation
+            <Play size={14} /> {t("appointments.startEmergency")}
           </Button>
         )}
         {isEmergency && appointment.status === "in_progress" && (
           <Button variant="primary" loading={acting} onClick={() => void handleAction("complete")}>
-            <CheckCircle2 size={14} /> Done
+            <CheckCircle2 size={14} /> {t("appointments.done")}
           </Button>
         )}
         {appointment.status === "pending" && (
           <>
             <Button variant="primary" loading={acting} onClick={() => handleAction("confirm")}>
-              <CheckCircle2 size={14} /> Accept
+              <CheckCircle2 size={14} /> {t("appointments.accept")}
             </Button>
             <Button variant="danger" loading={acting} onClick={() => handleAction("reject")}>
-              <XCircle size={14} /> Reject
+              <XCircle size={14} /> {t("appointments.reject")}
             </Button>
           </>
         )}
         {appointment.status === "accepted" && (
           <>
             <Button variant="secondary" loading={acting} onClick={() => setShowNotes(!showNotes)}>
-              <Pencil size={14} /> {showNotes ? "Close notes" : "Notes"}
+              <Pencil size={14} /> {showNotes ? t("appointments.closeNotes") : t("appointments.notes")}
             </Button>
             <Button variant="danger" loading={acting} onClick={() => handleAction("cancel")}>
-              <Ban size={14} /> Cancel
+              <Ban size={14} /> {t("appointments.cancel")}
             </Button>
           </>
         )}
         {!isEmergency && appointment.status === "accepted" && consultationStarted && (
           <Button variant="primary" loading={acting} onClick={() => handleAction("complete")}>
-            <CheckCircle2 size={14} /> Done
+            <CheckCircle2 size={14} /> {t("appointments.done")}
           </Button>
         )}
         {appointment.status === "done" && (
           <Button variant="secondary" onClick={() => setShowNotes(!showNotes)}>
-            <FileText size={14} /> {showNotes ? "Close notes" : "View notes"}
+            <FileText size={14} /> {showNotes ? t("appointments.closeNotes") : t("appointments.viewNotes")}
           </Button>
         )}
         {canReschedule && (
           <Button variant="secondary" onClick={() => setShowReschedule(!showReschedule)}>
-            <CalendarClock size={14} /> {showReschedule ? "Close" : "Reschedule"}
+            <CalendarClock size={14} /> {showReschedule ? t("appointments.close") : t("appointments.reschedule")}
           </Button>
         )}
         {appointment.status !== "done" && appointment.status !== "cancelled" && appointment.status !== "rejected" && (
           <Link to={`/appointments/${appointment.id}`} className="appt-card__detail-link">
             <Button variant="ghost">
-              <ArrowUpRight size={14} /> Details
+              <ArrowUpRight size={14} /> {t("appointments.details")}
             </Button>
           </Link>
         )}
@@ -456,19 +461,19 @@ function AppointmentRow({
           <div className="appt-delete-confirm">
             <span>
               {isEmergency
-                ? "Delete this finished emergency? This cannot be undone."
-                : "Delete this appointment?"}
+                ? t("appointments.deleteFinishedEmergency")
+                : t("appointments.deleteAppointment")}
             </span>
             <Button variant="danger" loading={acting} onClick={() => handleAction("delete")}>
-              Yes
+              {t("appointments.yes")}
             </Button>
             <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
-              No
+              {t("appointments.no")}
             </Button>
           </div>
         ) : (
           <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-            Delete
+            {t("appointments.delete")}
           </Button>
         ))}
       </div>
@@ -477,7 +482,7 @@ function AppointmentRow({
         <form className="appt-row__notes-form" onSubmit={handleSaveNotes}>
           <div className="field">
             <label className="field__label" htmlFor={`notes-${appointment.id}`}>
-              Appointment notes
+              {t("appointments.appointmentNotes")}
             </label>
             <textarea
               id={`notes-${appointment.id}`}
@@ -485,11 +490,11 @@ function AppointmentRow({
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add clinical notes..."
+              placeholder={t("appointments.addClinicalNotes")}
             />
           </div>
           <Button type="submit" variant="secondary" loading={acting}>
-            Save notes
+            {t("appointments.saveNotes")}
           </Button>
         </form>
       )}
@@ -498,7 +503,7 @@ function AppointmentRow({
         <div className="appt-reschedule">
           <div className="field">
             <label className="field__label" htmlFor={`resched-date-${appointment.id}`}>
-              New date
+              {t("appointments.newDate")}
             </label>
             <input
               id={`resched-date-${appointment.id}`}
@@ -516,7 +521,7 @@ function AppointmentRow({
             Enter any start time. The appointment lasts 30 minutes; the server checks working hours, breaks, exceptions, and other appointments when you save.
           </p>
           <div className="field">
-            <label className="field__label" htmlFor={`resched-time-${appointment.id}`}>New appointment start time</label>
+            <label className="field__label" htmlFor={`resched-time-${appointment.id}`}>{t("appointments.newStartTime")}</label>
             <input
               id={`resched-time-${appointment.id}`}
               className="field__input"
@@ -528,7 +533,7 @@ function AppointmentRow({
           </div>
           {reschedTime && (
             <Button loading={reschedBusy} onClick={handleReschedule}>
-              Save new time
+              {t("appointments.saveNewTime")}
             </Button>
           )}
           {reschedError && <p className="form-note--error">{reschedError}</p>}
@@ -562,6 +567,7 @@ async function queueMapForAppointments(rows: Appointment[]): Promise<Map<number,
 }
 
 export function DoctorDashboardScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -724,54 +730,54 @@ export function DoctorDashboardScreen() {
     <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Practice overview</p>
-          <h1>{new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening"}{profile ? `, Dr. ${profile.first_name}` : ""}</h1>
-          <p>Here is what is happening in your practice today.</p>
+          <p className="doctor-eyebrow">{t("doctor.dashboardTitle")}</p>
+          <h1>{new Date().getHours() < 12 ? t("home.greeting.morning") : new Date().getHours() < 18 ? t("home.greeting.afternoon") : t("home.greeting.evening")}{profile ? `, Dr. ${profile.first_name}` : ""}</h1>
+          <p>{t("doctor.dashboardSubtitle")}</p>
         </div>
         <div className="doctor-header-actions">
-          <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> Availability</Link>
-          <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> Review requests</Link>
-          <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> Training</Link>
-          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> Psychology service</Link>
+          <Link to="/doctor/availability" className="doctor-outline-button"><Settings2 size={16} /> {t("doctor.availability")}</Link>
+          <Link to="/doctor/appointments?tab=pending" className="doctor-primary-button"><CalendarDays size={16} /> {t("doctor.reviewRequests")}</Link>
+          <Link to="/doctor/training" className="doctor-outline-button"><GraduationCap size={16} /> {t("doctor.training")}</Link>
+          <Link to="/doctor/psychotherapy" className="doctor-outline-button"><Brain size={16} /> {t("doctor.psychologyService")}</Link>
         </div>
       </div>
 
       <div className="doctor-metrics">
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>Today's visits</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? "Schedule is active" : "No visits scheduled"}</small></Card>
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span><span>Pending requests</span><strong>{pending.length}</strong><small>{pending.length ? "Needs your review" : "All caught up"}</small></Card>
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span><span>Accepted</span><strong>{accepted.length}</strong><small>Upcoming appointments</small></Card>
-        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>Visits done</span><strong>{done.length}</strong><small>Recorded in your practice</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span><span>{t("doctor.todaysVisits")}</span><strong>{todayAppts.length}</strong><small>{todayAppts.length ? t("doctor.scheduleActive") : t("doctor.noVisitsScheduled")}</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span><span>{t("doctor.pendingRequests")}</span><strong>{pending.length}</strong><small>{pending.length ? t("doctor.needsReview") : t("doctor.allCaughtUp")}</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span><span>{t("doctor.accepted")}</span><strong>{accepted.length}</strong><small>{t("doctor.upcomingAppointments")}</small></Card>
+        <Card className="doctor-metric"><span className="doctor-metric__icon doctor-metric__icon--violet"><Users size={19} /></span><span>{t("doctor.visitsDone")}</span><strong>{done.length}</strong><small>{t("doctor.recordedPractice")}</small></Card>
       </div>
 
       <Card className="doctor-chart-card" style={{ marginBottom: 16 }}>
-        <div className="doctor-card-heading"><div><h3>Psychology service</h3><p>{psycho.length} assigned case(s) · {completedPsychotherapySessions} session(s) completed · {upcomingPsychotherapySessions} upcoming{expiredPsychotherapySessions ? ` · ${expiredPsychotherapySessions} expired` : ""}</p></div><Brain size={18} /></div>
+        <div className="doctor-card-heading"><div><h3>{t("doctor.psychologyServiceTitle")}</h3><p>{psycho.length} {t("doctor.assignedCases")} · {completedPsychotherapySessions} {t("doctor.sessionsCompleted")} · {upcomingPsychotherapySessions} {t("doctor.upcoming")}{expiredPsychotherapySessions ? ` · ${expiredPsychotherapySessions} ${t("doctor.expired")}` : ""}</p></div><Brain size={18} /></div>
         <div className="doctor-progress" role="img" aria-label={`${psychotherapyProgress}% of psychology service sessions completed`}>
           <span style={{ width: `${psychotherapyProgress}%` }} />
         </div>
       </Card>
       <div className="doctor-dashboard-grid">
         <Card className="doctor-chart-card">
-          <div className="doctor-card-heading"><div><h2>Appointment overview</h2><p>Live distribution of your appointment pipeline</p></div><span className="doctor-live"><Activity size={14} /> Live data</span></div>
+          <div className="doctor-card-heading"><div><h2>{t("doctor.appointmentOverview")}</h2><p>{t("doctor.liveDistribution")}</p></div><span className="doctor-live"><Activity size={14} /> {t("doctor.liveData")}</span></div>
           <div className="doctor-chart-layout">
-            <div className="doctor-donut" style={{ "--doctor-donut": `${(done.length / statusTotal) * 100}%` } as CSSProperties}><span>{Math.round((done.length / statusTotal) * 100)}%<small>done</small></span></div>
-            <div className="doctor-legend"><span><i className="doctor-dot doctor-dot--teal" /> Accepted <b>{accepted.length}</b></span><span><i className="doctor-dot doctor-dot--amber" /> Pending <b>{pending.length}</b></span><span><i className="doctor-dot doctor-dot--blue" /> Done <b>{done.length}</b></span><span><i className="doctor-dot doctor-dot--muted" /> Closed <b>{cancelled.length}</b></span></div>
+            <div className="doctor-donut" style={{ "--doctor-donut": `${(done.length / statusTotal) * 100}%` } as CSSProperties}><span>{Math.round((done.length / statusTotal) * 100)}%<small>{t("doctor.done")}</small></span></div>
+            <div className="doctor-legend"><span><i className="doctor-dot doctor-dot--teal" /> {t("doctor.acceptedLabel")} <b>{accepted.length}</b></span><span><i className="doctor-dot doctor-dot--amber" /> {t("doctor.pendingLabel")} <b>{pending.length}</b></span><span><i className="doctor-dot doctor-dot--blue" /> {t("doctor.done")} <b>{done.length}</b></span><span><i className="doctor-dot doctor-dot--muted" /> {t("doctor.closed")} <b>{cancelled.length}</b></span></div>
           </div>
         </Card>
         <Card className="doctor-chart-card doctor-workload-card">
-          <div className="doctor-card-heading"><div><h2>Practice workload</h2><p>Current appointment volume</p></div><MoreHorizontal size={18} /></div>
-          <div className="doctor-workload-number"><strong>{appointments.length}</strong><span>total visits</span></div>
+          <div className="doctor-card-heading"><div><h2>{t("doctor.practiceWorkload")}</h2><p>{t("doctor.currentVolume")}</p></div><MoreHorizontal size={18} /></div>
+          <div className="doctor-workload-number"><strong>{appointments.length}</strong><span>{t("doctor.totalVisits")}</span></div>
           <div className="doctor-progress"><span style={{ width: `${Math.min((accepted.length / statusTotal) * 100, 100)}%` }} /></div>
-          <div className="doctor-workload-footer"><span><CheckCircle2 size={14} /> {done.length} done</span><span><Clock3 size={14} /> {pending.length} pending</span></div>
+          <div className="doctor-workload-footer"><span><CheckCircle2 size={14} /> {done.length} {t("doctor.done")}</span><span><Clock3 size={14} /> {pending.length} {t("doctor.pendingLabel")}</span></div>
         </Card>
       </div>
 
       <Card className="doctor-appointments-card">
-        <div className="doctor-card-heading"><div><h2>Today's schedule</h2><p>Appointments that need your attention</p></div><Link to="/doctor/appointments"><span>View all</span><ArrowUpRight size={15} /></Link></div>
-        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title="No appointments today" description="Your schedule for today is clear." action={<Link to="/doctor/availability">Manage availability</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
+        <div className="doctor-card-heading"><div><h2>{t("doctor.todaySchedule")}</h2><p>{t("doctor.todayScheduleDesc")}</p></div><Link to="/doctor/appointments"><span>{t("doctor.viewAll")}</span><ArrowUpRight size={15} /></Link></div>
+        {visibleAppointments.length === 0 ? <EmptyState icon={<CalendarDays size={28} />} title={t("doctor.noAppointmentsToday")} description={t("doctor.scheduleClear")} action={<Link to="/doctor/availability">{t("doctor.manageAvailability")}</Link>} /> : <div className="appt-card-list appt-card-list--dashboard">{visibleAppointments.map((appointment) => <AppointmentRow key={appointment.id} appointment={appointment} onAction={handleAction} onChanged={load} queue={queueByAppointment.get(appointment.id) ?? null} />)}</div>}
       </Card>
 
       <Card className="doctor-reports-card">
-        <div className="doctor-card-heading"><div><h2>Reports</h2><p>Download or preview your practice summary PDF</p></div></div>
+        <div className="doctor-card-heading"><div><h2>{t("doctor.reports")}</h2><p>{t("doctor.reportsDesc")}</p></div></div>
         <div className="doctor-report-actions">
           <Button
             variant="secondary"
@@ -780,7 +786,7 @@ export function DoctorDashboardScreen() {
             onClick={() => void runSummaryReport("download")}
           >
             <Download size={16} />
-            {summaryBusy === "download" ? "Downloading report..." : "Download Doctor Report"}
+            {summaryBusy === "download" ? t("doctor.downloadingReport") : t("doctor.downloadDoctorReport")}
           </Button>
           <Button
             variant="secondary"
@@ -789,13 +795,13 @@ export function DoctorDashboardScreen() {
             onClick={() => void runSummaryReport("view")}
           >
             <Eye size={16} />
-            {summaryBusy === "view" ? "Opening report..." : "View Report"}
+            {summaryBusy === "view" ? t("doctor.openingReport") : t("doctor.viewReport")}
           </Button>
         </div>
         {summaryError && <p className="form-note form-note--error">{summaryError}</p>}
       </Card>
 
-      <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>Pending requests</b><small>{pending.length} waiting for review</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>Manage availability</b><small>Keep your schedule current</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/home-visit"><House size={18} /><span><b>Manage Home Service</b><small>Review and run home visits</small></span><ArrowUpRight size={15} /></Link></div>
+      <div className="doctor-quick-actions"><Link to="/doctor/appointments?tab=pending"><FileText size={18} /><span><b>{t("doctor.pendingRequestsQuick")}</b><small>{pending.length} {t("doctor.waitingReview")}</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/availability"><Stethoscope size={18} /><span><b>{t("doctor.manageAvailability")}</b><small>{t("doctor.keepScheduleCurrent")}</small></span><ArrowUpRight size={15} /></Link><Link to="/doctor/home-visit"><House size={18} /><span><b>{t("doctor.manageHomeService")}</b><small>{t("doctor.reviewRunHomeVisits")}</small></span><ArrowUpRight size={15} /></Link></div>
     </div>
   );
 }
@@ -807,6 +813,7 @@ export function DoctorDashboardScreen() {
 type Tab = "pending" | "accepted" | "done";
 
 export function DoctorAppointmentsScreen() {
+  const { t } = useTranslation();
   const route = useLocation();
   const isHomeVisitPage = route.pathname === "/doctor/home-visit";
   const { notify } = useToast();
@@ -912,9 +919,9 @@ export function DoctorAppointmentsScreen() {
   const serviceAppointments = appointments.filter((a) => isHomeVisitPage ? a.appointment_type === "HOME_SERVICE" : a.appointment_type !== "HOME_SERVICE");
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: "pending", label: "Pending", count: serviceAppointments.filter((a) => a.status === "pending").length },
-    { key: "accepted", label: "Accepted", count: serviceAppointments.filter((a) => a.status === "accepted").length },
-    { key: "done", label: "Done", count: serviceAppointments.filter((a) => a.status === "done").length },
+    { key: "pending", label: t("appointments.status.pending"), count: serviceAppointments.filter((a) => a.status === "pending").length },
+    { key: "accepted", label: t("appointments.status.accepted"), count: serviceAppointments.filter((a) => a.status === "accepted").length },
+    { key: "done", label: t("appointments.status.done"), count: serviceAppointments.filter((a) => a.status === "done").length },
   ];
   const filtered = serviceAppointments.filter((a) => a.status === activeTab);
 
@@ -922,8 +929,8 @@ export function DoctorAppointmentsScreen() {
 
   return (
     <div className="page">
-      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> Dashboard</Link>
-      <h1 className="page__title">{isHomeVisitPage ? "Home Service" : "Appointments"}</h1>
+      <Link to="/doctor/dashboard"><ArrowLeft size={16} /> {t("nav.dashboard")}</Link>
+      <h1 className="page__title">{isHomeVisitPage ? t("nav.homeService") : t("nav.appointments")}</h1>
 
       {/* Tabs */}
       <div className="tabs">
@@ -943,13 +950,13 @@ export function DoctorAppointmentsScreen() {
         <Skeleton lines={4} />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={`No ${activeTab} ${isHomeVisitPage ? "home service visits" : "appointments"}`}
+          title={`No ${activeTab} ${isHomeVisitPage ? t("nav.homeService").toLowerCase() : t("nav.appointments").toLowerCase()}`.replace(/^./, (c) => c.toUpperCase())}
           description={
             activeTab === "pending"
-              ? "No new appointment requests to review."
+              ? t("doctor.noPendingRequests")
               : activeTab === "accepted"
-              ? "No accepted appointments."
-              : "No done appointments yet."
+              ? t("appointments.noAccepted")
+              : t("appointments.noDoneYet")
           }
         />
       ) : (

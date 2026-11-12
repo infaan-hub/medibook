@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 import { apiGet, apiPost } from "../api/client";
 import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui";
@@ -18,6 +19,7 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 export function AdminPsychotherapyScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export function AdminPsychotherapyScreen() {
     try {
       const res = await apiGet<any[]>("/psychotherapy");
       setItems(res.data ?? []);
-    } catch (e: any) { setError(e?.message || "Failed."); }
+    } catch (e: any) { setError(e?.message || t("common.tryAgainError")); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -63,9 +65,9 @@ export function AdminPsychotherapyScreen() {
     if (!window.confirm("Delete this psychology service request?")) return;
     try {
       await apiPost("/psychotherapy/?action=delete", { id });
-      notify("success", "Psychology service deleted.");
+      notify("success", t("admin.psychologyDeleted"));
       setItems((cur) => cur.filter((r) => r.id !== id));
-    } catch (e: any) { notify("error", e?.message || "Unable to delete."); }
+    } catch (e: any) { notify("error", e?.message || t("admin.unableToDelete")); }
   }
 
   if (loading) return <div className="page admin-workspace"><Skeleton lines={6} /></div>;
@@ -75,11 +77,11 @@ export function AdminPsychotherapyScreen() {
     <div className="admin-workspace">
       <div className="admin-page-header">
         <div>
-          <p className="admin-eyebrow">MediBook control center</p>
-          <h1>Psychology service</h1>
-          <p>View and manage all psychology service requests and sessions.</p>
+          <p className="admin-eyebrow">{t("admin.controlCenter")}</p>
+          <h1>{t("admin.psychologyService")}</h1>
+          <p>{t("admin.psychologyServiceDesc")}</p>
         </div>
-        <Link to="/admin" className="admin-outline-button"><ArrowLeft size={16} /> Back to overview</Link>
+        <Link to="/admin" className="admin-outline-button"><ArrowLeft size={16} /> {t("admin.backToOverview")}</Link>
       </div>
       <Card className="admin-table-card">
         <div className="admin-table-toolbar">
@@ -88,7 +90,7 @@ export function AdminPsychotherapyScreen() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by ID, patient, psychologist, mode or language..."
+              placeholder={t("admin.searchPsychology")}
             />
           </div>
           <div className="admin-filter-tabs">
@@ -113,7 +115,7 @@ export function AdminPsychotherapyScreen() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <EmptyState title="No psychology service requests" description="Try a different search or filter." />
+          <EmptyState title={t("admin.noPsychology")} description={t("admin.tryDifferent")} />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {filtered.map((r) => (
@@ -127,6 +129,7 @@ export function AdminPsychotherapyScreen() {
 }
 
 function PsychotherapyCard({ r, onDelete }: { r: any; onDelete: () => void }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [deleting, setDeleting] = useState(false);
   const tone = STATUS_TONE[r.status] ?? "#82909d";
@@ -137,7 +140,7 @@ function PsychotherapyCard({ r, onDelete }: { r: any; onDelete: () => void }) {
     setDeleting(true);
     try {
       await onDelete();
-    } catch (e: any) { notify("error", e?.message || "Unable to delete."); }
+    } catch (e: any) { notify("error", e?.message || t("admin.unableToDelete")); }
     finally { setDeleting(false); }
   }
 

@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { Link } from "react-router-dom";
+import { formatDate as intlDate } from "../lib/intl";
 import {
   ArrowRightLeft,
   CalendarDays,
@@ -41,11 +44,11 @@ const statusLabels: Record<string, string> = {
 };
 
 function message(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to update this appointment.";
+  return error instanceof Error ? error.message : i18n.t("coordinatorAppointments.unableToUpdate");
 }
 
 function formatDate(date: string) {
-  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${date.slice(0, 10)}T00:00:00`), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -74,6 +77,7 @@ function AppointmentCard({
   doctors: CoordinatorDoctor[];
   onReassigned: (appointment: CoordinatorAppointment) => void;
 }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [target, setTarget] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
@@ -102,7 +106,7 @@ function AppointmentCard({
 
   async function transfer() {
     if (!target) {
-      notify("error", "Select a doctor first.");
+      notify("error", t("coordinatorAppointments.selectDoctorFirst"));
       return;
     }
     setSaving(true);
@@ -110,7 +114,7 @@ function AppointmentCard({
       const response = await reassignCoordinatorAppointment(appointment.id, target);
       onReassigned(response.data);
       setTarget("");
-      notify("success", "Appointment reassigned. The new doctor must accept it.");
+      notify("success", t("coordinatorAppointments.reassigned"));
     } catch (error) {
       notify("error", message(error));
     } finally {
@@ -142,28 +146,28 @@ function AppointmentCard({
 
       <div className="coordinator-appointment-card__details">
         <div>
-          <span>Patient</span>
+          <span>{t("coordinatorAppointments.patient")}</span>
           <b>{appointment.patient_email || `Patient #${appointment.patient}`}</b>
         </div>
         <div>
-          <span>Doctor</span>
+          <span>{t("coordinatorAppointments.doctor")}</span>
           <b>{currentDoctor ? `Dr. ${currentDoctor.name}` : appointment.doctor_name ? `Dr. ${appointment.doctor_name}` : `Doctor #${appointment.doctor}`}</b>
         </div>
         <div className="coordinator-appointment-card__reason">
-          <span>Reason</span>
-          <p>{appointment.reason || "No reason provided."}</p>
+          <span>{t("coordinatorAppointments.reason")}</span>
+          <p>{appointment.reason || t("coordinatorAppointments.noReasonProvided")}</p>
         </div>
       </div>
 
       {appointment.checked_in_at && (
         <div className="coordinator-appointment-card__checked">
-          <CheckCircle2 size={14} /> Patient checked in
+          <CheckCircle2 size={14} /> {t("coordinatorAppointments.patientCheckedIn")}
         </div>
       )}
 
       {appointment.consultation_started_at && (
         <div className="coordinator-appointment-card__locked">
-          <Lock size={14} /> Consultation has started; reassignment is locked.
+          <Lock size={14} /> {t("coordinatorAppointments.consultationStarted")}
         </div>
       )}
 
@@ -179,14 +183,14 @@ function AppointmentCard({
             >
               <option value="">
                 {loadingDateDoctors
-                  ? "Checking availability for appointment date…"
+                  ? t("coordinatorAppointments.checkingAvailability")
                   : doctorLoadError
-                    ? "Could not check availability — focus to retry"
+                    ? t("coordinatorAppointments.couldNotCheckAvailability")
                     : dateDoctors
                       ? availableDoctors.length
-                        ? "Choose doctor available at this date and time"
-                        : "No doctors free at this date and time"
-                      : "Check availability for this appointment"}
+                        ? t("coordinatorAppointments.selectDoctor")
+                        : t("coordinatorAppointments.noDoctorsFree")
+                      : t("coordinatorAppointments.checkAvailability")}
               </option>
               {availableDoctors.map((doctor) => (
                 <option key={doctor.id} value={doctor.id}>Dr. {doctor.name}</option>
@@ -199,11 +203,11 @@ function AppointmentCard({
             disabled={!target || !dateDoctors || loadingDateDoctors}
             onClick={() => void transfer()}
           >
-            <ArrowRightLeft size={14} /> Transfer
+            <ArrowRightLeft size={14} /> {t("coordinatorAppointments.transfer")}
           </Button>
           {dateDoctors && availableDoctors.length === 0 && (
             <div className="coordinator-appointment-card__closed">
-              <Stethoscope size={14} /> No other doctor is available for this appointment's date and time.
+              <Stethoscope size={14} /> {t("coordinatorAppointments.noOtherDoctor")}
             </div>
           )}
           {doctorLoadError && <div className="coordinator-appointment-card__closed"><Stethoscope size={14} /> {doctorLoadError}</div>}
@@ -212,7 +216,7 @@ function AppointmentCard({
 
       {!reassignable && !appointment.consultation_started_at && (
         <div className="coordinator-appointment-card__closed">
-          <UserRound size={14} /> This appointment is {statusLabels[appointment.status]?.toLowerCase() ?? appointment.status}; no reassignment is needed.
+          <UserRound size={14} /> This appointment is {t(`appointments.status.${appointment.status}`)}; no reassignment is needed.
         </div>
       )}
     </Card>
@@ -234,6 +238,7 @@ export function CoordinatorAppointments({
   onRetry: () => void;
   onReassigned: (appointment: CoordinatorAppointment) => void;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
@@ -245,14 +250,14 @@ export function CoordinatorAppointments({
   const homeService = rows.filter((appointment) => appointment.appointment_type === "HOME_SERVICE").length;
 
   const filters = [
-    { key: "all", label: "All", count: rows.length },
-    { key: "pending", label: "Pending", count: pending },
-    { key: "accepted", label: "Accepted", count: accepted },
-    { key: "in_progress", label: "In progress", count: inProgress },
-    { key: "done", label: "Done", count: rows.filter((appointment) => appointment.status === "done").length },
+    { key: "all", label: t("coordinatorAppointments.all"), count: rows.length },
+    { key: "pending", label: t("coordinatorAppointments.pending"), count: pending },
+    { key: "accepted", label: t("coordinatorAppointments.accepted"), count: accepted },
+    { key: "in_progress", label: t("coordinatorAppointments.inProgress"), count: inProgress },
+    { key: "done", label: t("coordinatorAppointments.done"), count: rows.filter((appointment) => appointment.status === "done").length },
     {
       key: "closed",
-      label: "Closed",
+      label: t("coordinatorAppointments.closed"),
       count: rows.filter((appointment) => ["cancelled", "rejected", "expired"].includes(appointment.status)).length,
     },
   ];
@@ -276,13 +281,13 @@ export function CoordinatorAppointments({
     <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Coordination center</p>
-          <h1>Appointments</h1>
-          <p>Review hospital and home-service bookings and transfer unstarted appointments when coordination is needed.</p>
+          <p className="doctor-eyebrow">{t("coordinatorDashboard.coordinationCenter")}</p>
+          <h1>{t("coordinatorAppointments.appointments")}</h1>
+          <p>{t("coordinatorAppointments.appointmentsDesc")}</p>
         </div>
         <div className="doctor-header-actions">
           <Link to="/coordinator/doctors" className="doctor-outline-button">
-            <Stethoscope size={16} /> Doctor availability
+            <Stethoscope size={16} /> {t("coordinatorAppointments.doctorAvailability")}
           </Link>
         </div>
       </div>
@@ -296,27 +301,27 @@ export function CoordinatorAppointments({
           <div className="doctor-metrics">
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--teal"><CalendarDays size={19} /></span>
-              <span>Total appointments</span>
+              <span>{t("coordinatorAppointments.totalAppointments")}</span>
               <strong>{rows.length}</strong>
-              <small>{homeService} home service · {rows.length - homeService} hospital</small>
+              <small>{homeService} {t("coordinatorAppointments.homeService")} · {rows.length - homeService} {t("coordinatorAppointments.hospital")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span>
-              <span>Awaiting review</span>
+              <span>{t("coordinatorAppointments.awaitingReview")}</span>
               <strong>{pending}</strong>
-              <small>{pending ? "Waiting for doctor acceptance" : "Nothing waiting for review"}</small>
+              <small>{pending ? t("coordinatorAppointments.waitingForAcceptance") : t("coordinatorAppointments.nothingWaiting")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--blue"><CheckCircle2 size={19} /></span>
-              <span>Accepted</span>
+              <span>{t("coordinatorAppointments.accepted")}</span>
               <strong>{accepted}</strong>
-              <small>{inProgress} consultation{inProgress === 1 ? "" : "s"} in progress</small>
+              <small>{inProgress} {t("coordinatorAppointments.consultationsInProgress")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--violet"><ArrowRightLeft size={19} /></span>
-              <span>Ready to reassign</span>
+              <span>{t("coordinatorAppointments.readyToReassign")}</span>
               <strong>{readyToReassign}</strong>
-              <small>Before consultation starts</small>
+              <small>{t("coordinatorAppointments.beforeConsultationStarts")}</small>
             </Card>
           </div>
 
@@ -326,8 +331,8 @@ export function CoordinatorAppointments({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by patient, doctor, reason or appointment ID"
-                aria-label="Search appointments"
+                placeholder={t("coordinatorAppointments.searchPlaceholder")}
+                aria-label={t("coordinatorAppointments.searchAria")}
               />
             </div>
             <div className="coordinator-appointments-filters">
@@ -345,14 +350,14 @@ export function CoordinatorAppointments({
           </Card>
 
           <p className="coordinator-appointments-count">
-            Showing {filtered.length} of {rows.length} appointments
+            {t("coordinatorAppointments.showing", { filtered: filtered.length, total: rows.length })}
           </p>
 
           {filtered.length === 0 ? (
             <EmptyState
               icon={<CalendarDays size={28} />}
-              title="No matching appointments"
-              description={rows.length === 0 ? "There are no appointments to coordinate." : "Try a different status filter or search term."}
+              title={t("coordinatorAppointments.noMatching")}
+              description={rows.length === 0 ? t("coordinatorAppointments.noAppointmentsToCoordinate") : t("coordinatorAppointments.tryDifferentFilter")}
             />
           ) : (
             <div className="coordinator-appointment-grid">

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlarmClock, Ban, CalendarClock, CheckCircle2, Download, FileText, Play } from "lucide-react";
 import { apiGet, apiPost } from "../api/client";
+import { formatDate as intlDate } from "../lib/intl";
 import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, TextField, EmptyState, Skeleton, ErrorState } from "../components/ui";
 
@@ -70,7 +72,7 @@ const statusOf = (status: string) => STATUS[status] ?? STATUS.pending;
 function formatDay(value: string | null | undefined): string {
   if (!value) return "—";
   const day = String(value).slice(0, 10);
-  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${day}T00:00:00`), {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -79,6 +81,7 @@ function formatDay(value: string | null | undefined): string {
 }
 
 export function DoctorTrainingScreen() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -96,7 +99,7 @@ export function DoctorTrainingScreen() {
     try {
       const res = await apiGet<any[]>("/training/");
       setItems(res.data ?? []);
-    } catch (e: any) { setError(e?.message || "Failed."); }
+    } catch (e: any) { setError(e?.message || t("common.tryAgainError")); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
@@ -207,9 +210,9 @@ export function DoctorTrainingScreen() {
     <div className="page">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Training service</p>
-          <h1>My training sessions</h1>
-          <p>Review your assigned training sessions and record questions for each session.</p>
+          <p className="doctor-eyebrow">{t("training.service")}</p>
+          <h1>{t("doctorTraining.myTrainingSessions")}</h1>
+          <p>{t("doctorTraining.planDeliverFinalize")}</p>
         </div>
       </div>
 

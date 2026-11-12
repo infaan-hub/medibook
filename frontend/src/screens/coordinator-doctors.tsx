@@ -1,11 +1,14 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Stethoscope } from "lucide-react";
 import type { CoordinatorDoctor } from "../api/coordinator";
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type BadgeStatus } from "../components/ui";
 import { DoctorImage } from "../components/DoctorImage";
+import { formatDate as intlDate } from "../lib/intl";
 
 function formatDate(date: string) {
-  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${date.slice(0, 10)}T00:00:00`), {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -14,7 +17,11 @@ function formatDate(date: string) {
 }
 
 function labelType(type: string) {
-  return type === "NORMAL" ? "Hospital" : type === "EMERGENCY" ? "Emergency" : "Home service";
+  return type === "NORMAL"
+    ? i18n.t("coordinatorDashboard.hospitalAppointment")
+    : type === "EMERGENCY"
+    ? i18n.t("coordinatorDashboard.emergency")
+    : i18n.t("coordinatorDashboard.homeService");
 }
 
 function shortTime(time: string) {
@@ -62,22 +69,23 @@ function freeIntervals(doctor: CoordinatorDoctor) {
 
 function doctorState(doctor: CoordinatorDoctor) {
   const closedAllDay = doctor.exceptions.some((x) => x.start_time === null || x.end_time === null);
-  if (!doctor.is_available) return { label: "Unavailable", tone: "off" as const };
-  if (closedAllDay) return { label: "Closed today", tone: "closed" as const };
-  if (!doctor.windows.length) return { label: "No schedule", tone: "off" as const };
-  return { label: "Available", tone: "available" as const };
+  if (!doctor.is_available) return { label: i18n.t("coordinatorDoctors.unavailable"), tone: "off" as const };
+  if (closedAllDay) return { label: i18n.t("coordinatorDoctors.closedToday"), tone: "closed" as const };
+  if (!doctor.windows.length) return { label: i18n.t("coordinatorDoctors.noSchedule"), tone: "off" as const };
+  return { label: i18n.t("coordinatorDoctors.availableStatus"), tone: "available" as const };
 }
 
 function exceptionLabel(doctor: CoordinatorDoctor) {
   return doctor.exceptions
     .map((exception) => {
-      if (!exception.start_time || !exception.end_time) return exception.reason || "Closed all day";
-      return `${shortTime(exception.start_time)}–${shortTime(exception.end_time)}${exception.reason ? ` · ${exception.reason}` : " · Time off"}`;
+      if (!exception.start_time || !exception.end_time) return exception.reason || i18n.t("coordinatorDoctors.closedAllDayLabel");
+      return `${shortTime(exception.start_time)}–${shortTime(exception.end_time)}${exception.reason ? ` · ${exception.reason}` : ` · ${i18n.t("coordinatorDoctors.timeOff")}`}`;
     })
     .join(" · ");
 }
 
 function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
+  const { t } = useTranslation();
   const free = useMemo(() => freeIntervals(doctor), [doctor]);
   const state = doctorState(doctor);
 
@@ -114,7 +122,7 @@ function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
       )}
 
       <div className="coordinator-doctor-section">
-        <h3>Working hours</h3>
+        <h3>{t("coordinatorDoctors.workingHours")}</h3>
         {doctor.windows.length ? (
           <div className="coordinator-window-list">
             {doctor.windows.map((window, index) => (
@@ -125,30 +133,30 @@ function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
                 </span>
                 {window.breaks.length > 0 && (
                   <span className="coordinator-window__break">
-                    Break {window.breaks.map((b) => `${shortTime(b.start_time)}–${shortTime(b.end_time)}`).join(", ")}
+                    {t("coordinatorDoctors.break")} {window.breaks.map((b) => `${shortTime(b.start_time)}–${shortTime(b.end_time)}`).join(", ")}
                   </span>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <p className="coordinator-doctor-empty">No working hours for this weekday.</p>
+          <p className="coordinator-doctor-empty">{t("coordinatorDoctors.noWorkingHours")}</p>
         )}
       </div>
 
       <div className="coordinator-doctor-section">
-        <h3>Free times <span>{free.length ? `${free.length} open` : "Fully booked"}</span></h3>
+        <h3>{t("coordinatorDoctors.freeTimes")} <span>{free.length ? `${free.length} ${t("coordinatorDoctors.open")}` : t("coordinatorDoctors.fullyBooked")}</span></h3>
         {free.length ? (
           <div className="coordinator-slot-list">
             {free.map((range, index) => <span className="coordinator-slot" key={`${range}-${index}`}>{range}</span>)}
           </div>
         ) : (
-          <p className="coordinator-doctor-empty">No free working time on this date.</p>
+          <p className="coordinator-doctor-empty">{t("coordinatorDoctors.noFreeTime")}</p>
         )}
       </div>
 
       <div className="coordinator-doctor-section">
-        <h3>Appointments <span>{doctor.appointments.length}</span></h3>
+        <h3>{t("coordinatorDoctors.appointments")} <span>{doctor.appointments.length}</span></h3>
         {doctor.appointments.length ? (
           <div className="coordinator-doctor-appointments">
             {doctor.appointments.map((appointment) => (
@@ -165,7 +173,7 @@ function DoctorCard({ doctor }: { doctor: CoordinatorDoctor }) {
             ))}
           </div>
         ) : (
-          <p className="coordinator-doctor-empty">No booked appointments on this date.</p>
+          <p className="coordinator-doctor-empty">{t("coordinatorDoctors.noBookedAppointments")}</p>
         )}
       </div>
     </Card>
@@ -187,6 +195,7 @@ export function CoordinatorDoctors({
   error: string | null;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
   const freeByDoctor = useMemo(() => doctors.map((doctor) => freeIntervals(doctor)), [doctors]);
   const available = doctors.filter((doctor) => doctorState(doctor).tone === "available").length;
   const booked = doctors.reduce((sum, doctor) => sum + doctor.appointments.length, 0);
@@ -196,14 +205,14 @@ export function CoordinatorDoctors({
     <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Coordination center</p>
-          <h1>Doctors & availability</h1>
-          <p>Review working hours, breaks, bookings and open time for {formatDate(date)}.</p>
+          <p className="doctor-eyebrow">{t("coordinatorDashboard.coordinationCenter")}</p>
+          <h1>{t("coordinatorDoctors.doctorsAvailability")}</h1>
+          <p>{t("coordinatorDoctors.doctorsAvailabilityDesc", { date: formatDate(date) })}</p>
         </div>
         <div className="doctor-header-actions">
           <label className="coordinator-date-control">
             <CalendarDays size={16} />
-            <span>Schedule date</span>
+            <span>{t("coordinatorDoctors.scheduleDate")}</span>
             <input
               type="date"
               value={date}
@@ -221,42 +230,42 @@ export function CoordinatorDoctors({
       ) : doctors.length === 0 ? (
         <EmptyState
           icon={<Stethoscope size={28} />}
-          title="No doctors"
-          description="There are no doctor profiles to display."
+          title={t("coordinatorDoctors.noDoctors")}
+          description={t("coordinatorDoctors.noDoctorsDesc")}
         />
       ) : (
         <>
           <div className="doctor-metrics">
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--teal"><Stethoscope size={19} /></span>
-              <span>Doctors on roster</span>
+              <span>{t("coordinatorDoctors.doctorsOnRoster")}</span>
               <strong>{doctors.length}</strong>
-              <small>{available} available · {doctors.length - available} unavailable or off</small>
+              <small>{available} {t("coordinatorDoctors.available")} · {doctors.length - available} {t("coordinatorDoctors.unavailableOrOff")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--amber"><CheckCircle2 size={19} /></span>
-              <span>Available today</span>
+              <span>{t("coordinatorDoctors.availableToday")}</span>
               <strong>{available}</strong>
-              <small>{available === 0 ? "No doctors scheduled" : "Ready to take bookings"}</small>
+              <small>{available === 0 ? t("coordinatorDoctors.noDoctorsScheduled") : t("coordinatorDoctors.readyToTakeBookings")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--blue"><CalendarDays size={19} /></span>
-              <span>Booked appointments</span>
+              <span>{t("coordinatorDoctors.bookedAppointments")}</span>
               <strong>{booked}</strong>
-              <small>Across {doctors.length} doctor profile{doctors.length === 1 ? "" : "s"}</small>
+              <small>{t("coordinatorDoctors.acrossProfiles", { count: doctors.length })}{doctors.length === 1 ? "" : "s"}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--violet"><Clock3 size={19} /></span>
-              <span>Open time slots</span>
+              <span>{t("coordinatorDoctors.openTimeSlots")}</span>
               <strong>{openSlots}</strong>
-              <small>{loading ? "Updating schedule..." : "Available after breaks and bookings"}</small>
+              <small>{loading ? t("coordinatorDoctors.updatingSchedule") : t("coordinatorDoctors.availableAfterBreaks")}</small>
             </Card>
           </div>
 
           <p className="coordinator-doctors-note">
             {loading
-              ? "Updating schedule for the selected date..."
-              : "Free time is calculated from active working windows after breaks, time-off exceptions and pending or accepted appointments."}
+              ? t("coordinatorDoctors.updatingScheduleForDate")
+              : t("coordinatorDoctors.freeTimeCalculated")}
           </p>
 
           <div className="coordinator-doctor-grid">

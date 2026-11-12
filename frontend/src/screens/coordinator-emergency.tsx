@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { Link } from "react-router-dom";
+import { formatDate as intlDate, formatTime as intlTime, formatDateTime as intlDateTime } from "../lib/intl";
 import {
   Activity,
   ArrowRightLeft,
@@ -31,11 +34,11 @@ const statusColors: Record<string, string> = {
 };
 
 function message(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to transfer this emergency.";
+  return error instanceof Error ? error.message : i18n.t("coordinatorEmergency.unableToTransfer");
 }
 
 function formatDate(date: string) {
-  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+  return intlDate(new Date(`${date.slice(0, 10)}T00:00:00`), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -45,12 +48,12 @@ function formatDate(date: string) {
 
 function formatTime(value?: string | null) {
   if (!value) return "";
-  return new Date(value).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return intlTime(new Date(value), { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) return "";
-  return new Date(value).toLocaleString(undefined, {
+  return intlDateTime(new Date(value), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -75,6 +78,7 @@ function EmergencyCard({
   doctors: CoordinatorDoctor[];
   onReassigned: (appointment: CoordinatorAppointment) => void;
 }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [target, setTarget] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
@@ -87,7 +91,7 @@ function EmergencyCard({
 
   async function transfer() {
     if (!target) {
-      notify("error", "Select a doctor first.");
+      notify("error", t("coordinatorEmergency.selectDoctorFirst"));
       return;
     }
     setSaving(true);
@@ -95,7 +99,7 @@ function EmergencyCard({
       const response = await reassignCoordinatorAppointment(appointment.id, target, true);
       onReassigned(response.data);
       setTarget("");
-      notify("success", "Emergency transferred. The new doctor must accept it.");
+      notify("success", t("coordinatorEmergency.transferred"));
     } catch (error) {
       notify("error", message(error));
     } finally {
@@ -111,7 +115,7 @@ function EmergencyCard({
       <div className="coordinator-emergency-card__head">
         <div className="coordinator-emergency-card__flag">
           <span className="coordinator-emergency-card__flag-icon"><Siren size={15} /></span>
-          <span>Emergency #{appointment.id}</span>
+          <span>{t("coordinatorEmergency.emergency")} #{appointment.id}</span>
         </div>
         <Badge status={appointment.status as BadgeStatus} />
       </div>
@@ -120,24 +124,24 @@ function EmergencyCard({
         <span><CalendarDays size={15} /> {formatDate(appointment.appointment_date)}</span>
         <span><Clock3 size={15} /> {appointment.start_time.slice(0, 5)}–{appointment.end_time.slice(0, 5)}</span>
         {appointment.emergency_requested_at && (
-          <span><Activity size={15} /> Requested {formatTime(appointment.emergency_requested_at)}</span>
+          <span><Activity size={15} /> {t("coordinatorEmergency.requested")} {formatTime(appointment.emergency_requested_at)}</span>
         )}
       </div>
 
       <div className="coordinator-emergency-card__details">
         <div>
-          <span>Patient</span>
+          <span>{t("coordinatorEmergency.patient")}</span>
           <b>{appointment.patient_email || `Patient #${appointment.patient}`}</b>
         </div>
         <div>
-          <span>Assigned doctor</span>
+          <span>{t("coordinatorEmergency.assignedDoctor")}</span>
           <b>{currentDoctor ? `Dr. ${currentDoctor.name}` : appointment.doctor_name ? `Dr. ${appointment.doctor_name}` : `Doctor #${appointment.doctor}`}</b>
         </div>
       </div>
 
       <div className="coordinator-emergency-card__reason">
-        <span>Emergency reason</span>
-        <p>{appointment.emergency_reason || appointment.reason || "No reason provided."}</p>
+        <span>{t("coordinatorEmergency.reason")}</span>
+        <p>{appointment.emergency_reason || appointment.reason || t("coordinatorEmergency.noReasonProvided")}</p>
         {appointment.emergency_description && (
           <small>{appointment.emergency_description}</small>
         )}
@@ -159,7 +163,7 @@ function EmergencyCard({
 
       {appointment.checked_in_at && (
         <div className="coordinator-emergency-card__checked">
-          <CheckCircle2 size={14} /> Patient checked in
+          <CheckCircle2 size={14} /> {t("coordinatorEmergency.patientCheckedIn")}
         </div>
       )}
 
@@ -167,10 +171,10 @@ function EmergencyCard({
         <div className="coordinator-emergency-card__locked">
           <Lock size={14} />
           {startedAt
-            ? `Emergency care started at ${startedAt}; reassignment is locked.`
+            ? t("coordinatorEmergency.startedAt", { time: startedAt })
             : appointment.status === "in_progress"
-              ? "Emergency care is in progress; reassignment is locked."
-              : "Consultation has started; reassignment is locked."}
+              ? t("coordinatorEmergency.inProgressLocked")
+              : t("coordinatorEmergency.consultationStarted")}
         </div>
       )}
 
@@ -237,6 +241,7 @@ export function CoordinatorEmergency({
   onRetry: () => void;
   onReassigned: (appointment: CoordinatorAppointment) => void;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
@@ -250,13 +255,13 @@ export function CoordinatorEmergency({
   const todayCount = rows.filter((appointment) => appointment.appointment_date.slice(0, 10) === today).length;
 
   const filters = [
-    { key: "all", label: "All", count: rows.length },
-    { key: "pending", label: "Awaiting", count: pending },
-    { key: "accepted", label: "Accepted", count: accepted },
-    { key: "in_progress", label: "In progress", count: inProgress },
+    { key: "all", label: t("coordinatorEmergency.all"), count: rows.length },
+    { key: "pending", label: t("coordinatorEmergency.awaitingReview"), count: pending },
+    { key: "accepted", label: t("coordinatorEmergency.accepted"), count: accepted },
+    { key: "in_progress", label: t("coordinatorEmergency.inProgressCount"), count: inProgress },
     {
       key: "closed",
-      label: "Closed",
+      label: t("coordinatorEmergency.closed"),
       count: rows.filter((appointment) => ["done", "cancelled", "rejected", "expired"].includes(appointment.status)).length,
     },
   ];
@@ -281,13 +286,13 @@ export function CoordinatorEmergency({
     <div className="page doctor-workspace">
       <div className="doctor-page-header">
         <div>
-          <p className="doctor-eyebrow">Coordination center</p>
-          <h1>Emergency coordination</h1>
-          <p>Monitor active emergency requests and transfer an unstarted case when a doctor is unavailable.</p>
+          <p className="doctor-eyebrow">{t("coordinatorDashboard.coordinationCenter")}</p>
+          <h1>{t("coordinatorEmergency.emergencyCoordination")}</h1>
+          <p>{t("coordinatorEmergency.emergencyCoordinationDesc")}</p>
         </div>
         <div className="doctor-header-actions">
           <Link to="/coordinator/doctors" className="doctor-outline-button">
-            <Stethoscope size={16} /> Doctor availability
+            <Stethoscope size={16} /> {t("coordinatorDoctors.doctorAvailability")}
           </Link>
         </div>
       </div>
@@ -301,21 +306,21 @@ export function CoordinatorEmergency({
           <div className="doctor-metrics">
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--red"><Siren size={19} /></span>
-              <span>Active emergencies</span>
+              <span>{t("coordinatorEmergency.activeEmergencies")}</span>
               <strong>{active}</strong>
-              <small>{todayCount} today · {pending} awaiting · {accepted} accepted · {inProgress} in progress</small>
+              <small>{todayCount} {t("coordinatorDashboard.today")} · {pending} {t("coordinatorEmergency.awaitingReview")} · {accepted} {t("coordinatorEmergency.accepted")} · {inProgress} {t("coordinatorEmergency.inProgressCount")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--amber"><Clock3 size={19} /></span>
-              <span>Awaiting acceptance</span>
+              <span>{t("coordinatorEmergency.awaitingReview")}</span>
               <strong>{pending}</strong>
-              <small>{pending ? "Waiting for a doctor to respond" : "No requests waiting for a doctor"}</small>
+              <small>{pending ? t("coordinatorEmergency.waitingForAcceptance") : t("coordinatorEmergency.nothingWaiting")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--violet"><Activity size={19} /></span>
-              <span>Care in progress</span>
+              <span>{t("coordinatorEmergency.careInProgress")}</span>
               <strong>{inProgress}</strong>
-              <small>{inProgress ? "Started emergencies are locked from transfer" : "No emergency care underway"}</small>
+              <small>{inProgress ? t("coordinatorEmergency.inProgressLocked") : t("coordinatorEmergency.noEmergencyCare")}</small>
             </Card>
             <Card className="doctor-metric">
               <span className="doctor-metric__icon doctor-metric__icon--teal"><ArrowRightLeft size={19} /></span>
@@ -331,8 +336,8 @@ export function CoordinatorEmergency({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by patient, doctor, reason or emergency ID"
-                aria-label="Search emergencies"
+                placeholder={t("coordinatorEmergency.searchPlaceholder")}
+                aria-label={t("coordinatorEmergency.searchAria")}
               />
             </div>
             <div className="coordinator-appointments-filters">
@@ -350,13 +355,13 @@ export function CoordinatorEmergency({
           </Card>
 
           <p className="coordinator-appointments-count">
-            Showing {filtered.length} of {rows.length} emergency request{rows.length === 1 ? "" : "s"}
+            {t("coordinatorEmergency.showing", { filtered: filtered.length, total: rows.length })}
           </p>
 
           {filtered.length === 0 ? (
             <EmptyState
               icon={<Siren size={28} />}
-              title={rows.length === 0 ? "No emergency requests" : "No matching emergencies"}
+              title={rows.length === 0 ? t("coordinatorEmergency.noEmergenciesToCoordinate") : t("coordinatorEmergency.noMatching")}
               description={
                 rows.length === 0
                   ? "There are no emergency requests to coordinate right now."

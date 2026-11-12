@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PHASE 5 — Profile screens (§54).
  *
  * ProfileScreen — account details, edit name/phone, change password, sign out.
@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { changePassword, updateMe, uploadProfileImage, removeProfileImage } from "../api/auth";
 import { getPatientProfile, updatePatientProfile } from "../api/patients";
 import type { GeoInput } from "../api/types";
@@ -15,6 +16,7 @@ import { useSession, useToast } from "../state/app-context";
 import { Button, Card, TextField } from "../components/ui";
 import { LocationLine } from "../components/Location";
 import { NotificationSettings } from "../components/NotificationSettings";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { Crosshair } from "lucide-react";
 
 function fieldErrors(error: unknown): Record<string, string> {
@@ -30,6 +32,7 @@ function fieldErrors(error: unknown): Record<string, string> {
 }
 
 export function ProfileScreen() {
+  const { t } = useTranslation();
   const { user, setUser, logout } = useSession();
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -104,11 +107,11 @@ export function ProfileScreen() {
         phone: name.phone.trim(),
       });
       setUser(envelope.data);
-      notify("success", "Profile updated.");
+      notify("success", t("profile.profileUpdated"));
     } catch (error) {
       const fields = fieldErrors(error);
       setNameErrors(fields);
-      if (!Object.keys(fields).length) notify("error", "Could not update profile.");
+      if (!Object.keys(fields).length) notify("error", t("profile.couldNotUpdateProfile"));
     } finally {
       setSavingName(false);
     }
@@ -125,7 +128,7 @@ export function ProfileScreen() {
       fix = await captureFix();
     } catch (reason) {
       setGeoError(
-        reason instanceof LocationError ? reason.message : "Could not read your location."
+        reason instanceof LocationError ? reason.message : t("profile.couldNotReadLocation")
       );
       setSavingLoc(false);
       return;
@@ -141,11 +144,11 @@ export function ProfileScreen() {
         longitude: envelope.data.longitude,
         location_accuracy: envelope.data.location_accuracy,
       });
-      notify("success", "Location saved — doctors near you now sort first on Find a doctor.");
+      notify("success", t("profile.locationSaved"));
     } catch (error) {
       const fields = fieldErrors(error);
       setLocErrors(fields);
-      if (!Object.keys(fields).length) notify("error", "Could not save your location.");
+      if (!Object.keys(fields).length) notify("error", t("profile.couldNotSaveLocation"));
     } finally {
       setSavingLoc(false);
     }
@@ -157,9 +160,9 @@ export function ProfileScreen() {
     try {
       await updatePatientProfile({ latitude: null, longitude: null, location_accuracy: null });
       setGeo({ latitude: null, longitude: null, location_accuracy: null });
-      notify("info", "Location cleared.");
+      notify("info", t("profile.locationCleared"));
     } catch (error) {
-      notify("error", fieldErrors(error).latitude ?? "Could not clear your location.");
+      notify("error", fieldErrors(error).latitude ?? t("profile.couldNotClearLocation"));
     } finally {
       setSavingLoc(false);
     }
@@ -169,7 +172,7 @@ export function ProfileScreen() {
     event.preventDefault();
     setPwErrors({});
     if (passwords.new_password !== passwords.new_password_confirm) {
-      setPwErrors({ new_password_confirm: "Passwords do not match." });
+      setPwErrors({ new_password_confirm: t("profile.passwordsDoNotMatch") });
       return;
     }
     setSavingPw(true);
@@ -180,11 +183,11 @@ export function ProfileScreen() {
         new_password_confirm: passwords.new_password_confirm,
       });
       setPasswords({ old_password: "", new_password: "", new_password_confirm: "" });
-      notify("success", "Password updated.");
+      notify("success", t("profile.passwordUpdated"));
     } catch (error) {
       const fields = fieldErrors(error);
       setPwErrors(fields);
-      if (!Object.keys(fields).length) notify("error", "Could not change password.");
+      if (!Object.keys(fields).length) notify("error", t("profile.couldNotChangePassword"));
     } finally {
       setSavingPw(false);
     }
@@ -192,21 +195,21 @@ export function ProfileScreen() {
 
   const onLogout = useCallback(async () => {
     await logout();
-    notify("info", "Signed out.");
+    notify("info", t("profile.signedOut"));
     // Sign-out always → login (guest-only). Tokens are cleared so a refresh
     // cannot restore another role's session.
     navigate("/login", { replace: true });
-  }, [logout, notify, navigate]);
+  }, [logout, notify, navigate, t]);
 
   function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      notify("error", "Please select an image file.");
+      notify("error", t("profile.selectImageFile"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      notify("error", "Image must be under 5 MB.");
+      notify("error", t("profile.imageTooLarge"));
       return;
     }
     setPreview(URL.createObjectURL(file));
@@ -220,10 +223,10 @@ export function ProfileScreen() {
       // Success → drop the local blob and render the canonical /media/{id}.
       setPreview(null);
       setUser(envelope.data);
-      notify("success", "Profile picture updated.");
+      notify("success", t("profile.pictureUpdated"));
     } catch {
       setPreview(null);
-      notify("error", "Could not upload profile picture.");
+      notify("error", t("profile.couldNotUploadPicture"));
     } finally {
       setUploading(false);
     }
@@ -235,9 +238,9 @@ export function ProfileScreen() {
     removeProfileImage()
       .then((envelope) => {
         setUser(envelope.data);
-        notify("success", "Profile picture removed.");
+        notify("success", t("profile.pictureRemoved"));
       })
-      .catch(() => notify("error", "Could not remove profile picture."))
+      .catch(() => notify("error", t("profile.couldNotRemovePicture")))
       .finally(() => setUploading(false));
   }
 
@@ -247,8 +250,8 @@ export function ProfileScreen() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Profile</h1>
-      <p className="page__subtitle">Account settings and security.</p>
+      <h1 className="page__title">{t("profile.title")}</h1>
+      <p className="page__subtitle">{t("profile.subtitle")}</p>
 
       <Card>
         <div className="profile-hero">
@@ -271,7 +274,7 @@ export function ProfileScreen() {
                 </span>
               )}
               <div className="profile-hero__overlay">
-                {uploading ? "Uploading…" : "Change photo"}
+                {uploading ? t("profile.uploading") : t("profile.changePhoto")}
               </div>
             </div>
             <input
@@ -286,9 +289,9 @@ export function ProfileScreen() {
                 type="button"
                 className="profile-hero__remove"
                 onClick={onRemoveImage}
-                aria-label="Remove profile picture"
+                aria-label={t("profile.removeProfilePicture")}
               >
-                Remove
+                {t("profile.remove")}
               </button>
             )}
           </div>
@@ -297,18 +300,20 @@ export function ProfileScreen() {
               {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
             </h2>
             <p className="profile-hero__email">{user.email}</p>
-            <span className={`role-pill role-pill--${user.role}`}>{user.role}</span>
+            <span className={`role-pill role-pill--${user.role}`}>{t(`roles.${user.role}`)}</span>
           </div>
         </div>
       </Card>
 
+      <LanguageSwitcher variant="card" />
+
       <Card>
-        <h2 className="card__title">Personal details</h2>
+        <h2 className="card__title">{t("profile.personalDetails")}</h2>
         <form className="form" onSubmit={onSaveName} noValidate>
           <div className="form__row">
             <TextField
               id="prof-first"
-              label="First name"
+              label={t("profile.firstName")}
               autoComplete="given-name"
               value={name.first_name}
               error={nameErrors.first_name}
@@ -316,7 +321,7 @@ export function ProfileScreen() {
             />
             <TextField
               id="prof-last"
-              label="Last name"
+              label={t("profile.lastName")}
               autoComplete="family-name"
               value={name.last_name}
               error={nameErrors.last_name}
@@ -325,7 +330,7 @@ export function ProfileScreen() {
           </div>
           <TextField
             id="prof-phone"
-            label="Phone"
+            label={t("profile.phone")}
             type="tel"
             autoComplete="tel"
             value={name.phone}
@@ -333,17 +338,16 @@ export function ProfileScreen() {
             onChange={(e) => setName({ ...name, phone: e.target.value })}
           />
           <Button type="submit" loading={savingName}>
-            Save details
+            {t("profile.saveDetails")}
           </Button>
         </form>
       </Card>
 
       {user.role === "patient" && (
         <Card>
-          <h2 className="card__title">Location</h2>
+          <h2 className="card__title">{t("profile.location")}</h2>
           <p className="page__subtitle">
-            Your real position (not a typed address) — used to sort doctors near you and to route
-            emergency requests. Appointments cannot be booked without it.
+            {t("profile.locationHint")}
           </p>
           <form className="form" onSubmit={onSaveLocation} noValidate>
             <p className="doctor-profile__location">
@@ -355,11 +359,11 @@ export function ProfileScreen() {
             ))}
             <div className="prompt__actions-row">
               <Button type="submit" loading={savingLoc}>
-                <Crosshair size={14} /> {geo.latitude != null ? "Update my location" : "Share my location"}
+                <Crosshair size={14} /> {geo.latitude != null ? t("profile.updateMyLocation") : t("profile.shareMyLocation")}
               </Button>
               {geo.latitude != null && (
                 <Button type="button" variant="ghost" onClick={() => void onClearLocation()}>
-                  Clear
+                  {t("profile.clear")}
                 </Button>
               )}
             </div>
@@ -370,11 +374,11 @@ export function ProfileScreen() {
       <NotificationSettings userId={user.id} />
 
       <Card>
-        <h2 className="card__title">Change password</h2>
+        <h2 className="card__title">{t("profile.changePassword")}</h2>
         <form className="form" onSubmit={onChangePassword} noValidate>
           <TextField
             id="pw-old"
-            label="Current password"
+            label={t("profile.currentPassword")}
             type="password"
             autoComplete="current-password"
             required
@@ -385,7 +389,7 @@ export function ProfileScreen() {
           <div className="form__row">
             <TextField
               id="pw-new"
-              label="New password"
+              label={t("profile.newPassword")}
               type="password"
               autoComplete="new-password"
               required
@@ -395,7 +399,7 @@ export function ProfileScreen() {
             />
             <TextField
               id="pw-confirm"
-              label="Confirm new password"
+              label={t("profile.confirmNewPassword")}
               type="password"
               autoComplete="new-password"
               required
@@ -405,15 +409,15 @@ export function ProfileScreen() {
             />
           </div>
           <Button type="submit" loading={savingPw}>
-            Update password
+            {t("profile.updatePassword")}
           </Button>
         </form>
       </Card>
 
       <Card>
-        <h2 className="card__title">Account</h2>
+        <h2 className="card__title">{t("profile.account")}</h2>
         <Button variant="danger" onClick={onLogout}>
-          Sign out
+          {t("profile.signOut")}
         </Button>
       </Card>
     </div>

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
+import { formatDate as intlDate, formatDateTime as intlDateTime } from "../lib/intl";
 import { getPatientProfileById } from "../api/patients";
 import { getVisitHistory, type VisitHistoryEntry } from "../api/treatments";
 import { viewDoctorReport } from "../api/reports";
@@ -35,7 +38,7 @@ function msg(error: unknown): string {
 }
 
 function fmtDate(d: string): string {
-  return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
+  return intlDate(new Date(d + "T00:00:00"), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -59,6 +62,7 @@ function fmtGender(g: string): string {
    ====================================== */
 
 function PatientInfo({ profile }: { profile: PatientProfile }) {
+  const { t } = useTranslation();
   const age = profile.date_of_birth
     ? Math.floor(
         (Date.now() - new Date(profile.date_of_birth + "T00:00:00").getTime()) /
@@ -75,25 +79,25 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
         <div className="treat-patient-info">
           <h3>{profile.first_name || profile.last_name ? `${profile.first_name} ${profile.last_name}`.trim() : profile.email}</h3>
           <span className="treat-patient-meta">
-            {fmtGender(profile.gender)} {age !== null ? ` · ${age} years` : ""} {profile.blood_group ? ` · ${profile.blood_group}` : ""}
+            {fmtGender(profile.gender)} {age !== null ? ` · ${age} ${t("visitHistory.years")}` : ""} {profile.blood_group ? ` · ${profile.blood_group}` : ""}
           </span>
         </div>
       </div>
       {profile.has_location && (
         <div className="treat-patient-row">
-          <span className="treat-patient-label">Location</span>
+          <span className="treat-patient-label">{t("visitHistory.location")}</span>
           <LocationLine point={profile} accuracy={profile.location_accuracy} directions={false} />
         </div>
       )}
       {profile.medical_history && (
         <div className="treat-patient-row">
-          <span className="treat-patient-label">Medical History</span>
+          <span className="treat-patient-label">{t("visitHistory.medicalHistory")}</span>
           <span>{profile.medical_history}</span>
         </div>
       )}
       {profile.allergies && (
         <div className="treat-patient-row">
-          <span className="treat-patient-label">Allergies</span>
+          <span className="treat-patient-label">{t("visitHistory.allergies")}</span>
           <span>{profile.allergies}</span>
         </div>
       )}
@@ -106,6 +110,7 @@ function PatientInfo({ profile }: { profile: PatientProfile }) {
    ====================================== */
 
 function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewReport: (entry: VisitHistoryEntry) => void }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const hasDetails = entry.diagnosis || entry.prescription || entry.treatment_notes || entry.doctor_description || entry.reason || entry.notes || entry.patient || entry.treatments?.length || entry.vitals?.length || entry.lab_orders?.length || entry.patient_reports?.length;
 
@@ -131,15 +136,15 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
             <Clock size={14} />
             <span>{fmtTime(entry.start_time)} – {fmtTime(entry.end_time)}</span>
           </div>
-          <span className={`visit-status visit-status--${entry.deleted_at ? "deleted" : entry.status}`}>{entry.deleted_at ? "deleted" : entry.status}</span>
+          <span className={`visit-status visit-status--${entry.deleted_at ? "deleted" : entry.status}`}>{entry.deleted_at ? t("visitHistory.deleted") : entry.status}</span>
         </div>
 
         <div className="visit-card-field">
           <span className="visit-field-label"><Calendar size={12} /> Appointment</span>
-          <span className="visit-field-value">{entry.appointment_type === "EMERGENCY" ? "Emergency" : entry.appointment_type === "HOME_SERVICE" ? "Home Service" : "Normal"} · {entry.reason || "No reason recorded"}{entry.hospital_name ? ` · ${entry.hospital_name}` : ""}</span>
+          <span className="visit-field-value">{entry.appointment_type === "EMERGENCY" ? t("visitHistory.emergency") : entry.appointment_type === "HOME_SERVICE" ? t("visitHistory.homeService") : t("visitHistory.normal")} · {entry.reason || t("visitHistory.noReason")}{entry.hospital_name ? ` · ${entry.hospital_name}` : ""}</span>
         </div>
-        <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> Treating doctor</span><span className="visit-field-value">Dr. {[entry.doctor_first_name, entry.doctor_last_name].filter(Boolean).join(" ") || "Doctor"}</span></div>
-        {entry.booked_at && <div className="visit-card-field"><span className="visit-field-label"><Clock size={12} /> Booked</span><span className="visit-field-value">{new Date(entry.booked_at).toLocaleString()}</span></div>}
+        <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> {t("visitHistory.treatingDoctor")}</span><span className="visit-field-value">Dr. {[entry.doctor_first_name, entry.doctor_last_name].filter(Boolean).join(" ") || t("visitHistory.doctor")}</span></div>
+        {entry.booked_at && <div className="visit-card-field"><span className="visit-field-label"><Clock size={12} /> Booked</span><span className="visit-field-value">{intlDateTime(new Date(entry.booked_at))}</span></div>}
         {entry.notes && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Appointment notes</span><span className="visit-field-value">{entry.notes}</span></div>}
         {entry.cancel_reason && <div className="visit-card-field"><span className="visit-field-label"><FileText size={12} /> Cancellation / deletion reason</span><span className="visit-field-value">{entry.cancel_reason}</span></div>}
         {entry.patient && <div className="visit-card-field"><span className="visit-field-label"><User size={12} /> Patient at booking</span><span className="visit-field-value">{[entry.patient.first_name, entry.patient.last_name].filter(Boolean).join(" ")} · {String(entry.patient.email ?? "")} · {String(entry.patient.phone ?? "")}{entry.patient.date_of_birth ? ` · DOB ${String(entry.patient.date_of_birth)}` : ""}{entry.patient.gender ? ` · ${String(entry.patient.gender)}` : ""}{entry.patient.blood_group ? ` · ${String(entry.patient.blood_group)}` : ""}</span></div>}
@@ -158,7 +163,7 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
         {hasDetails && (
           <button type="button" className="visit-expand-toggle" onClick={() => setExpanded(!expanded)}>
             <Stethoscope size={13} />
-            {expanded ? "Hide treatment details" : "View treatment details"}
+            {expanded ? t("visitHistory.hideTreatment") : t("visitHistory.viewTreatment")}
             <ChevronRight size={14} className={`visit-chevron ${expanded ? "visit-chevron--open" : ""}`} />
           </button>
         )}
@@ -174,7 +179,7 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
             {!entry.treatments?.length && entry.doctor_description !== undefined && (
               <div className="visit-detail-field">
                 <span className="visit-detail-label"><FileText size={12} /> Doctor description</span>
-                <span>{entry.doctor_description || "Not provided"}</span>
+                <span>{entry.doctor_description || t("visitHistory.notProvided")}</span>
               </div>
             )}
             {!entry.treatments?.length && entry.treatment_notes && (
@@ -192,15 +197,15 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
             {entry.treatments?.map((treatment) => (
               <div key={treatment.id} className="visit-treatment-record">
                 <h4>Treatment recorded {fmtDate(treatment.created_at.slice(0, 10))}</h4>
-                <div className="visit-detail-field"><span className="visit-detail-label"><Stethoscope size={12} /> Diagnosis</span><span>{treatment.diagnosis || "Not recorded"}</span></div>
-                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Doctor description</span><span>{treatment.doctor_description || "Not provided"}</span></div>
-                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Treatment notes</span><span>{treatment.treatment_notes || "Not provided"}</span></div>
+                <div className="visit-detail-field"><span className="visit-detail-label"><Stethoscope size={12} /> Diagnosis</span><span>{treatment.diagnosis || t("visitHistory.notRecorded")}</span></div>
+                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Doctor description</span><span>{treatment.doctor_description || t("visitHistory.notProvided")}</span></div>
+                <div className="visit-detail-field"><span className="visit-detail-label"><FileText size={12} /> Treatment notes</span><span>{treatment.treatment_notes || t("visitHistory.notProvided")}</span></div>
                 {treatment.prescription && <div className="visit-detail-field"><span className="visit-detail-label"><Pill size={12} /> Prescription</span><span>{treatment.prescription}</span></div>}
                 {treatment.prescriptions?.flatMap((rx) => rx.items).map((item, index) => <div key={`${treatment.id}-rx-${index}`} className="visit-detail-field"><span className="visit-detail-label"><Pill size={12} /> {item.medication}</span><span>{[item.dosage, item.route, item.frequency, item.duration_days ? `${item.duration_days} days` : "", item.instructions].filter(Boolean).join(" · ")}</span></div>)}
                 <div className="visit-detail-field"><span className="visit-detail-label"><Calendar size={12} /> Follow-up</span><span>{treatment.follow_up_date ? `${fmtDate(treatment.follow_up_date)}${treatment.follow_up_time ? ` at ${treatment.follow_up_time.slice(0, 5)}` : ""}` : "Not scheduled"}</span></div>
               </div>
             ))}
-            {entry.vitals?.length ? <div className="visit-detail-group"><h4>Vitals</h4>{entry.vitals.map((vital) => <div key={vital.id} className="visit-detail-field"><span className="visit-detail-label">{new Date(vital.recorded_at).toLocaleString()}</span><span>{[
+            {entry.vitals?.length ? <div className="visit-detail-group"><h4>Vitals</h4>{entry.vitals.map((vital) => <div key={vital.id} className="visit-detail-field"><span className="visit-detail-label">{intlDateTime(new Date(vital.recorded_at))}</span><span>{[
               vital.blood_pressure ? `BP ${vital.blood_pressure}` : "",
               vital.pulse_bpm != null ? `Pulse ${vital.pulse_bpm} bpm` : "",
               vital.temperature_c != null ? `Temp ${vital.temperature_c} °C` : "",
@@ -218,7 +223,7 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
               lab.result_due_date ? `Due ${fmtDate(lab.result_due_date)}` : "",
               lab.reference_min != null || lab.reference_max != null ? `Reference ${lab.reference_min ?? "—"}–${lab.reference_max ?? "—"}${lab.unit ? ` ${lab.unit}` : ""}` : "",
             ].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
-            {entry.patient_reports?.length ? <div className="visit-detail-group"><h4>Patient reports and attached records</h4>{entry.patient_reports.map((report) => <div key={report.id} className="visit-detail-field"><span className="visit-detail-label">{report.record_type.replaceAll("_", " ")} · {report.title}</span><span>{[report.description, report.file_name ? `File: ${report.file_name}` : "No file attached", new Date(report.created_at).toLocaleString()].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
+            {entry.patient_reports?.length ? <div className="visit-detail-group"><h4>Patient reports and attached records</h4>{entry.patient_reports.map((report) => <div key={report.id} className="visit-detail-field"><span className="visit-detail-label">{report.record_type.replaceAll("_", " ")} · {report.title}</span><span>{[report.description, report.file_name ? `File: ${report.file_name}` : "No file attached", intlDateTime(new Date(report.created_at))].filter(Boolean).join(" · ")}</span></div>)}</div> : null}
             {!entry.treatments?.length && <div className="visit-detail-field">
               <span className="visit-detail-label"><Calendar size={12} /> Follow-up</span>
               <span>
@@ -241,15 +246,20 @@ function VisitEntry({ entry, onViewReport }: { entry: VisitHistoryEntry; onViewR
    HEALTH RECORDS (doctor upload / delete)
    ====================================== */
 
-const RECORD_TYPE_OPTIONS = [
-  { value: "lab_report", label: "Lab report" },
-  { value: "prescription", label: "Prescription" },
-  { value: "xray", label: "X-ray" },
-  { value: "imaging", label: "Imaging" },
-  { value: "other", label: "Other" },
-] as const;
+const RECORD_TYPE_OPTIONS = ["lab_report", "prescription", "xray", "imaging", "other"] as const;
+
+function recordTypeLabel(value: string, t: (k: string) => string): string {
+  switch (value) {
+    case "lab_report": return t("visitHistory.recordTypeLab");
+    case "prescription": return t("visitHistory.recordTypePrescription");
+    case "xray": return t("visitHistory.recordTypeXray");
+    case "imaging": return t("visitHistory.recordTypeImaging");
+    default: return t("visitHistory.recordTypeOther");
+  }
+}
 
 function HealthRecordsSection({ patientId, visits }: { patientId: number; visits: VisitHistoryEntry[] }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,11 +285,11 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
   async function handleUpload(e: FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) {
-      setError("Title is required.");
+      setError(t("visitHistory.titleRequired"));
       return;
     }
     if (!appointmentId) {
-      setError("Select the appointment this patient report belongs to.");
+      setError(t("visitHistory.selectVisit"));
       return;
     }
     setSaving(true);
@@ -293,7 +303,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
       fd.append("appointment", appointmentId);
       if (file) fd.append("file", file);
       await uploadHealthRecord(fd);
-      notify("success", "Health record uploaded.");
+      notify("success", t("visitHistory.recordUploaded"));
       setForm({ title: "", description: "", record_type: "other" });
       setFile(null);
       setAppointmentId("");
@@ -311,7 +321,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
     try {
       await deleteHealthRecord(id);
       setRecords((prev) => prev.filter((r) => r.id !== id));
-      notify("success", "Health record deleted.");
+      notify("success", t("visitHistory.recordDeleted"));
     } catch (reason) {
       setError(msg(reason));
     } finally {
@@ -323,9 +333,9 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
     <Card className="visit-records-card">
       <div className="visit-card-header">
         <div>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Health records</h3>
+          <h3 style={{ margin: 0, fontSize: 15 }}>{t("visitHistory.healthRecords")}</h3>
           <p className="page__subtitle" style={{ margin: "4px 0 0" }}>
-            Lab reports, prescriptions, and imaging for this patient
+            {t("visitHistory.healthRecordsDesc")}
           </p>
         </div>
         <Button variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
@@ -338,19 +348,19 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
       {showForm && (
         <form className="visit-record-form" onSubmit={handleUpload}>
           <div className="treat-pf">
-            <label htmlFor="hr-title">Title *</label>
+            <label htmlFor="hr-title">{t("visitHistory.title")}</label>
             <input
               id="hr-title"
               className="field__input"
               type="text"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. CBC panel — March 2026"
+              placeholder={t("visitHistory.titlePlaceholder")}
               required
             />
           </div>
           <div className="treat-pf">
-            <label htmlFor="hr-type">Type</label>
+            <label htmlFor="hr-type">{t("visitHistory.type")}</label>
             <select
               id="hr-type"
               className="field__input"
@@ -358,14 +368,14 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
               onChange={(e) => setForm({ ...form, record_type: e.target.value })}
             >
               {RECORD_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o} value={o}>{recordTypeLabel(o, t)}</option>
               ))}
             </select>
           </div>
           <div className="treat-pf">
-            <label htmlFor="hr-appointment">Appointment *</label>
+            <label htmlFor="hr-appointment">{t("visitHistory.appointmentField")}</label>
             <select id="hr-appointment" className="field__input" value={appointmentId} onChange={(e) => setAppointmentId(e.target.value)} required>
-              <option value="">Select the visit</option>
+              <option value="">{t("visitHistory.selectVisitOption")}</option>
               {visits.filter((visit) => !visit.deleted_at).map((visit) => (
                 <option key={visit.appointment_id} value={visit.appointment_id}>
                   {visit.appointment_date} · {visit.start_time.slice(0, 5)} · {visit.appointment_type === "EMERGENCY" ? "Emergency" : visit.appointment_type === "HOME_SERVICE" ? "Home Service" : "Normal"} · {visit.status}
@@ -374,18 +384,18 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
             </select>
           </div>
           <div className="treat-pf">
-            <label htmlFor="hr-desc">Description</label>
+            <label htmlFor="hr-desc">{t("visitHistory.description")}</label>
             <textarea
               id="hr-desc"
               className="field__input"
               rows={2}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Optional notes…"
+              placeholder={t("visitHistory.descriptionPlaceholder")}
             />
           </div>
           <div className="treat-pf">
-            <label htmlFor="hr-file">File (optional)</label>
+            <label htmlFor="hr-file">{t("visitHistory.file")}</label>
             <input
               id="hr-file"
               className="field__input"
@@ -395,7 +405,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
           </div>
           <div className="treat-actions-row">
             <Button type="submit" variant="primary" loading={saving}>
-              Upload
+              {t("visitHistory.upload")}
             </Button>
             <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
               Cancel
@@ -409,8 +419,8 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
       ) : records.length === 0 ? (
         <EmptyState
           icon={<FileText size={24} />}
-          title="No health records"
-          description="Upload lab reports, prescriptions, or imaging for this patient."
+          title={t("visitHistory.noHealthRecords")}
+          description={t("visitHistory.noHealthRecordsDesc")}
         />
       ) : (
         <div className="health-records-list">
@@ -423,7 +433,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
                   <span className="health-record-item__desc">{record.description}</span>
                 )}
                 <span className="health-record-item__date">
-                  {new Date(record.created_at).toLocaleDateString()}
+                  {intlDate(new Date(record.created_at))}
                 </span>
               </div>
               <div className="health-record-item__actions">
@@ -480,6 +490,7 @@ function HealthRecordsSection({ patientId, visits }: { patientId: number; visits
    ====================================== */
 
 export default function VisitHistoryPage() {
+  const { t } = useTranslation();
   const { patientId } = useParams<{ patientId: string }>();
   const { notify } = useToast();
   const [patient, setPatient] = useState<PatientProfile | null>(null);
@@ -513,9 +524,9 @@ export default function VisitHistoryPage() {
     return (
       <div className="page doctor-workspace">
         <div className="doctor-page-header">
-          <Link to="/doctor/medical-treatment" className="treat-back-btn"><ArrowLeft size={16} /> Back to patients</Link>
-          <p className="doctor-eyebrow">Visit History</p>
-          <h1>Loading…</h1>
+          <Link to="/doctor/medical-treatment" className="treat-back-btn"><ArrowLeft size={16} /> {t("visitHistory.backToPatients")}</Link>
+          <p className="doctor-eyebrow">{t("visitHistory.visitHistory")}</p>
+          <h1>{t("common.loading")}</h1>
         </div>
         <Skeleton lines={6} />
       </div>
@@ -526,9 +537,9 @@ export default function VisitHistoryPage() {
     return (
       <div className="page doctor-workspace">
         <div className="doctor-page-header">
-          <Link to="/doctor/medical-treatment" className="treat-back-btn"><ArrowLeft size={16} /> Back to patients</Link>
-          <p className="doctor-eyebrow">Visit History</p>
-          <h1>Error</h1>
+          <Link to="/doctor/medical-treatment" className="treat-back-btn"><ArrowLeft size={16} /> {t("visitHistory.backToPatients")}</Link>
+          <p className="doctor-eyebrow">{t("visitHistory.visitHistory")}</p>
+          <h1>{t("visitHistory.error")}</h1>
         </div>
         <ErrorState message={error} onRetry={load} />
       </div>
@@ -540,17 +551,17 @@ export default function VisitHistoryPage() {
       <div className="doctor-page-header">
         <div>
           <Link to="/doctor/medical-treatment" className="treat-back-btn">
-            <ArrowLeft size={16} /> Back to patients
+            <ArrowLeft size={16} /> {t("visitHistory.backToPatients")}
           </Link>
-          <p className="doctor-eyebrow">Visit History</p>
+          <p className="doctor-eyebrow">{t("visitHistory.visitHistory")}</p>
           <h1>{patient ? `${patient.first_name || ""} ${patient.last_name || ""}`.trim() || patient.email : `Patient #${patientId}`}</h1>
-          <p>Complete timeline of past appointments and treatments.</p>
+          <p>{t("visitHistory.completeTimeline")}</p>
         </div>
       </div>
 
       {patient && <PatientInfo profile={patient} />}
 
-      <h2 className="visit-section-title">Patient History</h2>
+      <h2 className="visit-section-title">{t("visitHistory.patientHistory")}</h2>
       <div style={{ marginBottom: 12 }}>
         <Button
           variant="secondary"
@@ -560,7 +571,7 @@ export default function VisitHistoryPage() {
             setReportBusy(true);
             try {
               const r = await viewDoctorReport(Number(patientId));
-              notify("success", `Report opened in a new tab — ${r.filename}`);
+              notify("success", t("visitHistory.reportOpened", { filename: r.filename }));
             } catch (e) {
               notify("error", msg(e));
             } finally {
@@ -568,7 +579,7 @@ export default function VisitHistoryPage() {
             }
           }}
         >
-          Preview patient report
+          {t("visitHistory.previewReport")}
         </Button>
       </div>
 
@@ -577,8 +588,8 @@ export default function VisitHistoryPage() {
       {history.length === 0 ? (
         <EmptyState
           icon={<Calendar size={28} />}
-          title="No visits yet"
-          description="There are no saved visits in this patient’s history yet."
+          title={t("visitHistory.noVisits")}
+          description={t("visitHistory.noVisitsDesc")}
         />
       ) : (
         <div className="visit-timeline">
@@ -590,7 +601,7 @@ export default function VisitHistoryPage() {
                 if (!patientId) return;
                 setReportBusy(true);
                 void viewDoctorReport(Number(patientId), { appointmentId: visit.appointment_id })
-                  .then((r) => notify("success", `Visit report opened — ${r.filename}`))
+                  .then((r) => notify("success", t("visitHistory.visitReportOpened", { filename: r.filename })))
                   .catch((e) => notify("error", msg(e)))
                   .finally(() => setReportBusy(false));
               }}

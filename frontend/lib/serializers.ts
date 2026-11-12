@@ -28,6 +28,7 @@ import type {
 } from "@prisma/client";
 import { dateStr, dec2, iso, mediaUrl } from "./serialize";
 import { hasLocation, haversineKm, type GeoPoint } from "./geo";
+import { normalizeLanguage } from "./languages";
 
 /** accounts.serializers.user_payload / UserSerializer. */
 export function userPayload(user: User, req: Request): Record<string, unknown> {
@@ -39,6 +40,8 @@ export function userPayload(user: User, req: Request): Record<string, unknown> {
     first_name: user.first_name,
     last_name: user.last_name,
     role: user.role,
+    /** UI language preference — hydrated by the client after /auth/me. */
+    language: normalizeLanguage(user.language) ?? "en",
     /**
      * Doctor first-login setup — server-verified, so the route guard can make
      * its decision synchronously from the session payload instead of guessing

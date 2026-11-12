@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 import { apiGet, apiPost } from "../api/client";
 import { Card, Button, EmptyState, Skeleton, ErrorState } from "../components/ui";
@@ -16,6 +17,7 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 export function AdminTrainingScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export function AdminTrainingScreen() {
     try {
       const res = await apiGet<any[]>("/training");
       setItems(res.data ?? []);
-    } catch (e: any) { setError(e?.message || "Failed."); }
+    } catch (e: any) { setError(e?.message || t("common.tryAgainError")); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -59,9 +61,9 @@ export function AdminTrainingScreen() {
     if (!window.confirm("Delete this training request?")) return;
     try {
       await apiPost("/training/?action=delete", { id });
-      notify("success", "Training deleted.");
+      notify("success", t("admin.trainingDeleted"));
       setItems((cur) => cur.filter((t) => t.id !== id));
-    } catch (e: any) { notify("error", e?.message || "Unable to delete."); }
+    } catch (e: any) { notify("error", e?.message || t("admin.unableToDelete")); }
   }
 
   if (loading) return <div className="page admin-workspace"><Skeleton lines={6} /></div>;
@@ -71,11 +73,11 @@ export function AdminTrainingScreen() {
     <div className="admin-workspace">
       <div className="admin-page-header">
         <div>
-          <p className="admin-eyebrow">MediBook control center</p>
-          <h1>Training</h1>
-          <p>View and manage all training requests.</p>
+          <p className="admin-eyebrow">{t("admin.controlCenter")}</p>
+          <h1>{t("admin.training")}</h1>
+          <p>{t("admin.trainingDesc")}</p>
         </div>
-        <Link to="/admin" className="admin-outline-button"><ArrowLeft size={16} /> Back to overview</Link>
+        <Link to="/admin" className="admin-outline-button"><ArrowLeft size={16} /> {t("admin.backToOverview")}</Link>
       </div>
       <Card className="admin-table-card">
         <div className="admin-table-toolbar">
@@ -84,7 +86,7 @@ export function AdminTrainingScreen() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by ID, topic, patient or specialist..."
+              placeholder={t("admin.searchTraining")}
             />
           </div>
           <div className="admin-filter-tabs">
@@ -108,7 +110,7 @@ export function AdminTrainingScreen() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <EmptyState title="No training requests" description="Try a different search or filter." />
+          <EmptyState title={t("admin.noTraining")} description={t("admin.tryDifferent")} />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {filtered.map((t) => (
@@ -122,6 +124,7 @@ export function AdminTrainingScreen() {
 }
 
 function TrainingCard({ t, onDelete }: { t: any; onDelete: () => void }) {
+  const { t: tx } = useTranslation();
   const { notify } = useToast();
   const [deleting, setDeleting] = useState(false);
   const tone = STATUS_TONE[t.status] ?? "#82909d";
@@ -132,7 +135,7 @@ function TrainingCard({ t, onDelete }: { t: any; onDelete: () => void }) {
     setDeleting(true);
     try {
       await onDelete();
-    } catch (e: any) { notify("error", e?.message || "Unable to delete."); }
+    } catch (e: any) { notify("error", e?.message || tx("admin.unableToDelete")); }
     finally { setDeleting(false); }
   }
 

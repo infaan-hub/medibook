@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { blankable, drfDate, drfTime, parse, REQUIRED } from "./base";
+import { APP_LANGUAGES } from "@/lib/languages";
 
 export const registerSchema = z
   .object({
@@ -23,6 +24,8 @@ export const registerSchema = z
     first_name: z.string().optional(),
     last_name: z.string().optional(),
     role: z.enum(["patient", "doctor"]).optional(),
+    /** Guest UI language at registration time — becomes the account default. */
+    language: z.enum(APP_LANGUAGES).optional(),
   })
   .strict()
   .passthrough();
@@ -90,6 +93,7 @@ export const updateMeSchema = z
     first_name: z.string().optional(),
     last_name: z.string().optional(),
     profile_image: z.string().nullable().optional(),
+    language: z.enum(APP_LANGUAGES).optional(),
   })
   .passthrough();
 

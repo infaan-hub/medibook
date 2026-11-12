@@ -12,6 +12,7 @@
  * printed for patients or doctors.
  */
 import { Crosshair, MapPin, Navigation } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { directionsUrl, formatCoords, formatDistance } from "../lib/location";
 import { nearestAreaName } from "../lib/zanzibar";
 
@@ -44,6 +45,7 @@ export function LocationLine({
   suffix,
   className = "",
 }: LocationLineProps) {
+  const { t } = useTranslation();
   // The formatted coordinates are only a presence check here — never rendered.
   const hasFix = formatCoords(point) !== null;
   const area = nearestAreaName(point);
@@ -53,20 +55,20 @@ export function LocationLine({
     return (
       <span className={`geo-missing ${className}`.trim()}>
         <Crosshair size={13} aria-hidden="true" />
-        Location not shared yet
+        {t("shared.location.notShared")}
       </span>
     );
   }
 
   return (
     <span className={className || undefined}>
-      <MapPin size={13} aria-hidden="true" /> {area ?? "Location shared"}
+      <MapPin size={13} aria-hidden="true" /> {area ?? t("shared.location.shared")}
       {suffix ? ` — ${suffix}` : ""}
       {href && (
         <>
           {" "}
           <a className="geo-link" href={href} target="_blank" rel="noreferrer">
-            <Navigation size={12} aria-hidden="true" /> Directions
+            <Navigation size={12} aria-hidden="true" /> {t("home.directions")}
           </a>
         </>
       )}

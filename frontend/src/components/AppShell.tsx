@@ -13,12 +13,14 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useSession, useToast } from "../state/app-context";
 import type { User } from "../api/types";
 import { listUnreadNotifications } from "../api/notifications";
 import { tokenStore } from "../api/tokens";
 import { ensureServerSubscription } from "../push/sync";
 import { useRealtimeEvent, useRealtimeSync } from "../realtime/socket";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
   InstallAppBarge,
   InstallInfoDialog,
@@ -55,67 +57,69 @@ const STORAGE_KEY = "medibook_sidebar_collapsed";
 export interface NavItem {
   to: string;
   label: string;
+  /** Translation key; `label` stays the English fallback used by tests. */
+  labelKey?: string;
   icon: ReactNode;
 }
 
 export function guestNavItemsFor(): NavItem[] {
   return [
-    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
-    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
+    { to: "/dashboard", label: "Home", labelKey: "nav.home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
   ];
 }
 
 export function navItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
-      { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
-      { to: "/admin/users", label: "Users", icon: <UsersIcon size={20} /> },
-      { to: "/admin/users/new", label: "Add user", icon: <UserPlus size={20} /> },
-      { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-      { to: "/admin/doctors/new", label: "Add doctor", icon: <FilePlus2 size={20} /> },
-      { to: "/admin/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/admin/home-visit", label: "Home Service", icon: <House size={20} /> },
-      { to: "/admin/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/admin/psychotherapy", label: "Psychology service", icon: <Brain size={20} /> },
-      { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
-      { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
+      { to: "/admin", label: "Overview", labelKey: "nav.overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/admin/users", label: "Users", labelKey: "nav.users", icon: <UsersIcon size={20} /> },
+      { to: "/admin/users/new", label: "Add user", labelKey: "nav.addUser", icon: <UserPlus size={20} /> },
+      { to: "/admin/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+      { to: "/admin/doctors/new", label: "Add doctor", labelKey: "nav.addDoctor", icon: <FilePlus2 size={20} /> },
+      { to: "/admin/appointments", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+      { to: "/admin/home-visit", label: "Home Service", labelKey: "nav.homeService", icon: <House size={20} /> },
+      { to: "/admin/training", label: "Training", labelKey: "nav.training", icon: <GraduationCap size={20} /> },
+      { to: "/admin/psychotherapy", label: "Psychology service", labelKey: "nav.psychologyService", icon: <Brain size={20} /> },
+      { to: "/notifications", label: "Notifications", labelKey: "nav.notifications", icon: <Bell size={20} /> },
+      { to: "/admin/audit", label: "Audit log", labelKey: "nav.auditLog", icon: <Activity size={20} /> },
     ];
   }
   if (user?.role === "coordinator") {
     return [
-      { to: "/coordinator/dashboard", label: "Coordinator dashboard", icon: <LayoutDashboard size={20} /> },
-      { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-      { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
-      { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
-      { to: "/coordinator/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/coordinator/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
+      { to: "/coordinator/dashboard", label: "Coordinator dashboard", labelKey: "nav.coordinatorDashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+      { to: "/coordinator/appointment", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+      { to: "/coordinator/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+      { to: "/coordinator/patient", label: "Patients", labelKey: "nav.patients", icon: <UsersIcon size={20} /> },
+      { to: "/coordinator/training", label: "Training", labelKey: "nav.training", icon: <GraduationCap size={20} /> },
+      { to: "/coordinator/psychotherapy", label: "Psychotherapy", labelKey: "nav.psychotherapy", icon: <Brain size={20} /> },
     ];
   }
   if (user?.role === "doctor") {
     return [
-      { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-      { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
-      { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/doctor/home-visit", label: "Home Service", icon: <House size={20} /> },
-      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
-      { to: "/doctor/medical-treatment", label: "Treatments", icon: <HeartPulse size={20} /> },
-      { to: "/doctor/health-tips", label: "Health Tips", icon: <Newspaper size={20} /> },
-      { to: "/doctor/training", label: "Training", icon: <GraduationCap size={20} /> },
-      { to: "/doctor/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
-      { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+      { to: "/doctor/dashboard", label: "Dashboard", labelKey: "nav.dashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/doctor/personal", label: "My card", labelKey: "nav.myCard", icon: <UserIcon size={20} /> },
+      { to: "/doctor/appointments", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/home-visit", label: "Home Service", labelKey: "nav.homeService", icon: <House size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+      { to: "/doctor/medical-treatment", label: "Treatments", labelKey: "nav.treatments", icon: <HeartPulse size={20} /> },
+      { to: "/doctor/health-tips", label: "Health Tips", labelKey: "nav.blog", icon: <Newspaper size={20} /> },
+      { to: "/doctor/training", label: "Training", labelKey: "nav.training", icon: <GraduationCap size={20} /> },
+      { to: "/doctor/psychotherapy", label: "Psychotherapy", labelKey: "nav.psychotherapy", icon: <Brain size={20} /> },
+      { to: "/notifications", label: "Notifications", labelKey: "nav.notifications", icon: <Bell size={20} /> },
     ];
   }
   return [
-    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
-    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-    { to: "/home-visit/doctor", label: "Home Service", icon: <House size={20} /> },
-    { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
-    { to: "/settings", label: "Medical", icon: <HeartPulse size={20} /> },
-    { to: "/training", label: "Training", icon: <GraduationCap size={20} /> },
-    { to: "/psychotherapy", label: "Psychotherapy", icon: <Brain size={20} /> },
-    { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+    { to: "/dashboard", label: "Home", labelKey: "nav.home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+    { to: "/home-visit/doctor", label: "Home Service", labelKey: "nav.homeService", icon: <House size={20} /> },
+    { to: "/appointments", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+    { to: "/settings", label: "Medical", labelKey: "nav.medical", icon: <HeartPulse size={20} /> },
+    { to: "/training", label: "Training", labelKey: "nav.training", icon: <GraduationCap size={20} /> },
+    { to: "/psychotherapy", label: "Psychotherapy", labelKey: "nav.psychotherapy", icon: <Brain size={20} /> },
+    { to: "/notifications", label: "Notifications", labelKey: "nav.notifications", icon: <Bell size={20} /> },
   ];
 }
 
@@ -123,37 +127,37 @@ export function navItemsFor(user: User | null): NavItem[] {
 export function bottomNavItemsFor(user: User | null): NavItem[] {
   if (user?.role === "admin" && user.is_superuser) {
     return [
-      { to: "/admin", label: "Overview", icon: <LayoutDashboard size={20} /> },
-      { to: "/admin/users", label: "Users", icon: <UsersIcon size={20} /> },
-      { to: "/admin/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-      { to: "/admin/audit", label: "Audit log", icon: <Activity size={20} /> },
-      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+      { to: "/admin", label: "Overview", labelKey: "nav.overview", icon: <LayoutDashboard size={20} /> },
+      { to: "/admin/users", label: "Users", labelKey: "nav.users", icon: <UsersIcon size={20} /> },
+      { to: "/admin/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+      { to: "/admin/audit", label: "Audit log", labelKey: "nav.auditLog", icon: <Activity size={20} /> },
+      { to: "/profile", label: "Profile", labelKey: "nav.profile", icon: <UserIcon size={20} /> },
     ];
   }
   if (user?.role === "coordinator") {
     return [
-      { to: "/coordinator/dashboard", label: "Coordinator dashboard", icon: <LayoutDashboard size={20} /> },
-      { to: "/coordinator/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-      { to: "/coordinator/appointment", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/coordinator/emergency", label: "Emergency", icon: <Siren size={20} /> },
-      { to: "/coordinator/patient", label: "Patients", icon: <UsersIcon size={20} /> },
+      { to: "/coordinator/dashboard", label: "Coordinator dashboard", labelKey: "nav.coordinatorDashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/coordinator/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+      { to: "/coordinator/appointment", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+      { to: "/coordinator/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+      { to: "/coordinator/patient", label: "Patients", labelKey: "nav.patients", icon: <UsersIcon size={20} /> },
     ];
   }
   if (user?.role === "doctor") {
     return [
-      { to: "/doctor/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-      { to: "/doctor/personal", label: "My card", icon: <UserIcon size={20} /> },
-      { to: "/doctor/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-      { to: "/doctor/emergency", label: "Emergency", icon: <Siren size={20} /> },
-      { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+      { to: "/doctor/dashboard", label: "Dashboard", labelKey: "nav.dashboard", icon: <LayoutDashboard size={20} /> },
+      { to: "/doctor/personal", label: "My card", labelKey: "nav.myCard", icon: <UserIcon size={20} /> },
+      { to: "/doctor/appointments", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+      { to: "/doctor/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+      { to: "/profile", label: "Profile", labelKey: "nav.profile", icon: <UserIcon size={20} /> },
     ];
   }
   return [
-    { to: "/dashboard", label: "Home", icon: <Home size={20} /> },
-    { to: "/doctors", label: "Doctors", icon: <Stethoscope size={20} /> },
-    { to: "/appointments", label: "Appointments", icon: <Calendar size={20} /> },
-    { to: "/emergency", label: "Emergency", icon: <Siren size={20} /> },
-    { to: "/profile", label: "Profile", icon: <UserIcon size={20} /> },
+    { to: "/dashboard", label: "Home", labelKey: "nav.home", icon: <Home size={20} /> },
+    { to: "/doctors", label: "Doctors", labelKey: "nav.doctors", icon: <Stethoscope size={20} /> },
+    { to: "/appointments", label: "Appointments", labelKey: "nav.appointments", icon: <Calendar size={20} /> },
+    { to: "/emergency", label: "Emergency", labelKey: "nav.emergency", icon: <Siren size={20} /> },
+    { to: "/profile", label: "Profile", labelKey: "nav.profile", icon: <UserIcon size={20} /> },
   ];
 }
 
@@ -180,6 +184,7 @@ function useIsDesktop(): boolean {
 
 /** Notification bell with unread count badge (live via WebSocket + poll fallback). */
 function NotificationBell() {
+  const { t } = useTranslation();
   const [unreadCount, setUnreadCount] = useState(0);
   const { notify } = useToast();
 
@@ -200,13 +205,13 @@ function NotificationBell() {
       setUnreadCount((count) => count + 1);
       notify(
         "info",
-        typeof payload.message === "string" ? payload.message : "New notification"
+        typeof payload.message === "string" ? payload.message : t("notifications.newNotification")
       );
     }
   });
 
   return (
-    <Link to="/notifications" className="notif-bell" title="Notifications">
+    <Link to="/notifications" className="notif-bell" title={t("notifications.title")}>
       <Bell size={20} />
       {unreadCount > 0 && (
         <span className="notif-bell__badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
@@ -344,6 +349,7 @@ export function activeNavTo(items: NavItem[], pathname: string): string | null {
 
 function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[]; side?: boolean; onNavigate?: () => void; user?: User | null }) {
   const { pathname } = useLocation();
+  const { t } = useTranslation();
   const activeTo = activeNavTo(items, pathname);
   return (
     <>
@@ -372,7 +378,7 @@ function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[];
                 item.icon
               )}
             </span>
-            <span className="nav-item__label">{item.label}</span>
+            <span className="nav-item__label">{item.labelKey ? t(item.labelKey) : item.label}</span>
             {!side && <span className="nav-item__bar" aria-hidden="true" />}
           </Link>
         );
@@ -382,6 +388,7 @@ function NavLinks({ items, side = false, onNavigate, user }: { items: NavItem[];
 }
 
 export function AppShell({ children, guestMode = false }: { children: ReactNode; guestMode?: boolean }) {
+  const { t } = useTranslation();
   const online = useOnline();
   const { user, logout } = useSession();
   usePushResync(user?.id ?? null);
@@ -454,7 +461,7 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
           <button
             className="shell__hamburger"
             type="button"
-            aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-label={sidebarOpen ? t("nav.closeNavigation") : t("nav.openNavigation")}
             aria-expanded={sidebarOpen}
             aria-controls="shell-sidebar"
             onClick={toggleSidebar}
@@ -478,7 +485,7 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
           ref={sidebarRef}
           id="shell-sidebar"
           className={`shell__nav--side${sidebarOpen ? " shell__nav--side--open" : ""}`}
-          aria-label="Primary"
+          aria-label={t("nav.primary")}
         >
           <div className="sidebar__header">
             <img className="sidebar__logo" src="/images/logo.jpeg" alt="" width={32} height={32} draggable={false} />
@@ -488,7 +495,7 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
                 type="button"
                 className="sidebar__close"
                 onClick={closeSidebar}
-                aria-label="Close navigation"
+                aria-label={t("nav.closeNavigation")}
               >
                 <X size={20} />
               </button>
@@ -505,18 +512,19 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
               onClick={installCta.show}
             >
               <Download size={18} aria-hidden="true" />
-              <span>Download app</span>
+              <span>{t("nav.downloadApp")}</span>
             </button>
           )}
+          <LanguageSwitcher variant="sidebar" />
           {guestMode ? (
             <div className="sidebar__auth-actions">
               <Link to="/login" className="sidebar__signout sidebar__auth-link" onClick={closeSidebar}>
                 <LogIn size={18} />
-                <span>Log in</span>
+                <span>{t("nav.logIn")}</span>
               </Link>
               <Link to="/register" className="sidebar__auth-register" onClick={closeSidebar}>
                 <UserPlus size={18} />
-                <span>Register</span>
+                <span>{t("nav.register")}</span>
               </Link>
             </div>
           ) : (
@@ -531,7 +539,9 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
                   <span className="sidebar__user-name">
                     {user ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email : ""}
                   </span>
-                  <span className="sidebar__user-role">{user?.role ?? ""}</span>
+                  <span className="sidebar__user-role">
+                    {user?.role ? t(`roles.${user.role}`) : ""}
+                  </span>
                 </div>
                 <ChevronRight size={16} className="sidebar__user-chevron" aria-hidden="true" />
               </Link>
@@ -546,7 +556,7 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
                 }}
               >
                 <LogOut size={18} />
-                <span>Sign out</span>
+                <span>{t("nav.signOut")}</span>
               </button>
             </>
           )}
@@ -555,14 +565,14 @@ export function AppShell({ children, guestMode = false }: { children: ReactNode;
         <main className="shell__content" id="main">
           {!online && (
             <div className="offline-banner" role="alert">
-              You're offline â€” some features are unavailable.
+              {t("common.offline")}
             </div>
           )}
           {children}
         </main>
       </div>
 
-      <nav className="shell__nav--bottom" aria-label="Primary">
+      <nav className="shell__nav--bottom" aria-label={t("nav.primary")}>
         <NavLinks items={bottomItems} user={user} />
       </nav>
 

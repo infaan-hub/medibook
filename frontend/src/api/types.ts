@@ -2,6 +2,9 @@
  * Shared API types (Â§28 envelope).
  */
 
+/** Supported UI languages (must match the locale catalogs). */
+export type UserLanguage = "en" | "sw" | "fr" | "es" | "de";
+
 export interface User {
   id: number;
   username: string;
@@ -9,6 +12,8 @@ export interface User {
   first_name: string;
   last_name: string;
   role: "patient" | "doctor" | "admin" | "coordinator";
+  /** Preferred UI language — follows the account across devices. */
+  language?: UserLanguage;
   phone: string;
   is_superuser: boolean;
   profile_image: string | null;
@@ -88,6 +93,8 @@ export interface RegisterPayload {
   last_name: string;
   phone?: string;
   role: "patient" | "doctor";
+  /** Guest UI language at registration time; becomes the account default. */
+  language?: UserLanguage;
 }
 
 export interface ChangePasswordPayload {

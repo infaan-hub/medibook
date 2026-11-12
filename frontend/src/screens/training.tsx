@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   AlarmClock,
   CalendarCheck,
@@ -15,6 +16,7 @@ import { apiGet } from "../api/client";
 import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, Skeleton, ErrorState } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { formatDate } from "../lib/intl";
 
 /**
  * Patient training cards — same shell, spacing and status language as the
@@ -77,7 +79,7 @@ const isActive = (status: string): boolean =>
 function formatDay(value: string | null | undefined): string {
   if (!value) return "—";
   const day = String(value).slice(0, 10);
-  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+  return formatDate(new Date(`${day}T00:00:00`), {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -91,7 +93,7 @@ function dateBox(value: string | null | undefined): { day: string; month: string
   if (Number.isNaN(date.getTime())) return { day: "—", month: "" };
   return {
     day: String(date.getDate()),
-    month: date.toLocaleDateString(undefined, { month: "short" }),
+    month: formatDate(date, { month: "short" }),
   };
 }
 
@@ -105,6 +107,7 @@ function audienceLabel(training: any): string {
 type Tab = "active" | "past";
 
 export function TrainingScreen() {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +121,7 @@ export function TrainingScreen() {
       const res = await apiGet<any[]>("/training/");
       setItems(res.data ?? []);
     } catch (e: any) {
-      setError(e?.message || "Failed to load trainings.");
+      setError(e?.message || t("common.tryAgainError"));
     } finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
@@ -150,7 +153,7 @@ export function TrainingScreen() {
   if (error) {
     return (
       <div className="page patient-appointments">
-        <h1 className="page__title">My Trainings</h1>
+        <h1 className="page__title">{t("training.myTrainings")}</h1>
         <ErrorState message={error} onRetry={load} />
       </div>
     );
@@ -159,10 +162,10 @@ export function TrainingScreen() {
   return (
     <div className="page patient-appointments">
       <div className="patient-appt-header">
-        <h1 className="page__title">My Trainings</h1>
+        <h1 className="page__title">{t("training.myTrainings")}</h1>
         {activeItems.length === 0 && (
           <Link to="/training/request" className="patient-appt-book-btn">
-            + Request Training
+            + {t("training.requestTraining")}
           </Link>
         )}
       </div>

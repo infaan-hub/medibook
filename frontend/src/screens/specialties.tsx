@@ -7,6 +7,7 @@ Public screens:
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { getSpecialty, listSpecialties } from "../api/specialties";
 import type { Specialty } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -19,6 +20,7 @@ function formatSpecialties(
 }
 
 export function SpecialtyListPage() {
+  const { t } = useTranslation();
   const [specialties, setSpecialties] = useState<Specialty[] | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -50,8 +52,8 @@ export function SpecialtyListPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Medical Specialties</h1>
-      <p className="page__subtitle">Explore healthcare specialties and find the right care.</p>
+      <h1 className="page__title">{t("specialties.title")}</h1>
+      <p className="page__subtitle">{t("specialties.subtitle")}</p>
 
       {error && <ErrorState message={error} onRetry={() => load(page)} />}
       {loading && specialties === null && <Skeleton lines={6} />}
@@ -59,8 +61,8 @@ export function SpecialtyListPage() {
       {!loading && specialties && specialties.length === 0 && (
         <EmptyState
           icon={<Stethoscope size={40} />}
-          title="No specialties found"
-          description="Specialty catalog is empty."
+          title={t("specialties.none")}
+          description={t("specialties.empty")}
         />
       )}
 
@@ -94,7 +96,7 @@ export function SpecialtyListPage() {
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
           >
-            Previous
+            {t("common.previous")}
           </Button>
           <span className="pagination__info">
             Page {page} of {totalPages}
@@ -104,7 +106,7 @@ export function SpecialtyListPage() {
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
+            {t("common.next")}
           </Button>
         </div>
       )}
@@ -113,6 +115,7 @@ export function SpecialtyListPage() {
 }
 
 export function SpecialtyDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [specialty, setSpecialty] = useState<Specialty | null>(null);
   const [loading, setLoading] = useState(false);
@@ -163,22 +166,22 @@ export function SpecialtyDetailPage() {
           </Card>
 
           <Card className="specialty-detail__info">
-            <h2 className="card__title">What this doctor treats</h2>
+            <h2 className="card__title">{t("specialties.treats")}</h2>
             {specialty.what_to_expect ? (
               <p className="specialty-detail__full-description">{specialty.what_to_expect}</p>
             ) : specialty.description ? (
               <p className="specialty-detail__full-description">{specialty.description}</p>
             ) : (
-              <p className="specialty-detail__empty">No description available.</p>
+              <p className="specialty-detail__empty">{t("specialties.noDescription")}</p>
             )}
           </Card>
 
           <div className="specialty-detail__actions">
             <Link to={`/doctors?specialty=${specialty.id}`} className="btn btn--secondary">
-              Find {specialty.patient_friendly_name || specialty.name} doctors
+              {t("specialties.findDoctors", { specialty: specialty.patient_friendly_name || specialty.name })}
             </Link>
             <Link to="/specialties" className="btn btn--ghost">
-              Back to specialties
+              {t("specialties.backToSpecialties")}
             </Link>
           </div>
         </div>
@@ -187,9 +190,9 @@ export function SpecialtyDetailPage() {
       {!loading && !specialty && !error && (
         <EmptyState
           icon={<Search size={40} />}
-          title="Specialty not found"
-          description="This specialty doesn't exist or is no longer available."
-          action={<Link to="/specialties">Browse all specialties</Link>}
+          title={t("specialties.notFound")}
+          description={t("specialties.notFoundDesc")}
+          action={<Link to="/specialties">{t("specialties.browseAll")}</Link>}
         />
       )}
     </div>

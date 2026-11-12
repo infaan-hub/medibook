@@ -3,6 +3,7 @@
  * rendered on both the doctor's patient chart and the patient's own history.
  */
 import type { Vital } from "../api/vitals";
+import { formatDate } from "./intl";
 
 export interface VitalChip {
   label: string;
@@ -47,5 +48,5 @@ export function vitalDate(value: string): string {
   // Date-only values ("YYYY-MM-DD") parse as UTC midnight and would render a
   // day early in negative-offset timezones — give them a local time part.
   const dt = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
-  return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString();
+  return formatDate(dt);
 }

@@ -91,6 +91,9 @@ model User {
   first_name                  String     @default("") @db.VarChar(150)
   last_name                   String     @default("") @db.VarChar(150)
   role                        Role       @default(patient)
+  /// UI language preference (en, sw, fr, es, de). Follows the account across
+  /// devices; guests keep their choice in localStorage until they sign in.
+  language                    String     @default("en") @db.VarChar(8)
   /// Doctor first-login setup (onboarding). FALSE until the server has
   /// VERIFIED every required step (notification subscription, valid practice
   /// location, uploaded profile image, completed My Doctor information) —

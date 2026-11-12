@@ -10,6 +10,7 @@ import * as users from "@/repositories/users.repo";
 import * as doctors from "@/repositories/doctors.repo";
 import { issuePair } from "./auth.service";
 import type { AuthUser } from "@/lib/auth";
+import { normalizeLanguage } from "@/lib/languages";
 
 interface ProviderIdentity {
   email: string;
@@ -84,9 +85,10 @@ async function saveProfileImage(userId: number, url: string): Promise<void> {
 export async function socialLogin(
   body: unknown
 ): Promise<{ user: AuthUser; pair: { access: string; refresh: string } }> {
-  const input = (body ?? {}) as { provider?: string; token?: string };
+  const input = (body ?? {}) as { provider?: string; token?: string; language?: string };
   const provider = (input.provider ?? "").trim().toLowerCase();
   const token = (input.token ?? "").trim();
+  const language = normalizeLanguage(input.language) ?? "en";
 
   if (!(PROVIDERS as readonly string[]).includes(provider)) {
     throw new ValidationError(
@@ -126,6 +128,7 @@ export async function socialLogin(
       first_name: identity.first_name ?? "",
       last_name: identity.last_name ?? "",
       role: "patient",
+      language,
     });
     if (user.role === "doctor" && !(await doctors.doctorExists(user.id))) {
       await doctors.createDoctor(user.id);

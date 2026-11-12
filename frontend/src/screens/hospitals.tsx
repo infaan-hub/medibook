@@ -7,12 +7,15 @@ Public screens:
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { getHospital, listHospitals } from "../api/specialties";
 import type { Hospital } from "../api/types";
 import { Button, Card, EmptyState, ErrorState, Skeleton, TextField } from "../components/ui";
 import { Hospital as HospitalIcon, Phone, Search } from "lucide-react";
 
 export function HospitalListPage() {
+  const { t } = useTranslation();
   const [hospitals, setHospitals] = useState<Hospital[] | null>(null);
   const [city, setCity] = useState("");
   const [page, setPage] = useState(1);
@@ -50,16 +53,16 @@ export function HospitalListPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">Healthcare Facilities</h1>
-      <p className="page__subtitle">Find hospitals and clinics in your area.</p>
+      <h1 className="page__title">{t("hospitals.title")}</h1>
+      <p className="page__subtitle">{t("hospitals.subtitle")}</p>
 
       <Card className="hospitals__filters">
         <TextField
           id="hospital-city"
-          label="Filter by city"
+          label={t("hospitals.filterCity")}
           value={city}
           onChange={(event) => handleSearch(event.target.value)}
-          placeholder="Enter city name..."
+          placeholder={t("hospitals.cityPlaceholder")}
           className="hospitals__search-input"
         />
       </Card>
@@ -70,8 +73,8 @@ export function HospitalListPage() {
       {!loading && hospitals && hospitals.length === 0 && (
         <EmptyState
           icon={<HospitalIcon size={40} />}
-          title="No hospitals found"
-          description={city ? `No hospitals found in ${city}.` : "Hospital catalog is empty."}
+          title={t("hospitals.noHospitals")}
+          description={city ? t("hospitals.noHospitalsIn", { city }) : t("hospitals.empty")}
         />
       )}
 
@@ -108,17 +111,17 @@ export function HospitalListPage() {
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
           >
-            Previous
+            {t("common.previous")}
           </Button>
           <span className="pagination__info">
-            Page {page} of {totalPages}
+            {t("hospitals.pageOf", { page, total: totalPages })}
           </span>
           <Button
             variant="secondary"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
+            {t("common.next")}
           </Button>
         </div>
       )}
@@ -127,6 +130,7 @@ export function HospitalListPage() {
 }
 
 export function HospitalDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [hospital, setHospital] = useState<Hospital | null>(null);
   const [loading, setLoading] = useState(false);
@@ -171,16 +175,16 @@ export function HospitalDetailPage() {
 
           <div className="hospital-detail__grid">
             <Card className="hospital-detail__info">
-              <h2 className="card__title">Contact Information</h2>
+              <h2 className="card__title">{t("hospitals.contactInformation")}</h2>
               {hospital.address && (
                 <div className="hospital-detail__field">
-                  <span className="hospital-detail__label">Address</span>
+                  <span className="hospital-detail__label">{t("settings.address")}</span>
                   <p className="hospital-detail__value">{hospital.address}</p>
                 </div>
               )}
               {hospital.phone && (
                 <div className="hospital-detail__field">
-                  <span className="hospital-detail__label">Phone</span>
+                  <span className="hospital-detail__label">{t("profile.phone")}</span>
                   <a
                     href={`tel:${hospital.phone}`}
                     className="hospital-detail__link"
@@ -191,7 +195,7 @@ export function HospitalDetailPage() {
               )}
               {hospital.email && (
                 <div className="hospital-detail__field">
-                  <span className="hospital-detail__label">Email</span>
+                  <span className="hospital-detail__label">{t("hospitals.email")}</span>
                   <a
                     href={`mailto:${hospital.email}`}
                     className="hospital-detail__link"
@@ -204,7 +208,7 @@ export function HospitalDetailPage() {
 
             {hospital.location_details && Object.keys(hospital.location_details).length > 0 && (
               <Card className="hospital-detail__info">
-                <h2 className="card__title">Location Details</h2>
+                <h2 className="card__title">{t("hospitals.locationDetails")}</h2>
                 <div className="hospital-detail__fields">
                   {Object.entries(hospital.location_details).map(([key, value]) => (
                     <div key={key} className="hospital-detail__field">
@@ -223,7 +227,7 @@ export function HospitalDetailPage() {
 
           <div className="hospital-detail__actions">
             <Link to="/hospitals" className="btn btn--ghost">
-              Back to hospitals
+              {t("hospitals.backToHospitals")}
             </Link>
           </div>
         </div>
@@ -232,9 +236,9 @@ export function HospitalDetailPage() {
       {!loading && !hospital && !error && (
         <EmptyState
           icon={<Search size={40} />}
-          title="Hospital not found"
-          description="This hospital doesn't exist or is no longer available."
-          action={<Link to="/hospitals">Browse all hospitals</Link>}
+          title={t("hospitals.notFound")}
+          description={t("hospitals.notFoundDesc")}
+          action={<Link to="/hospitals">{t("hospitals.browseAll")}</Link>}
         />
       )}
     </div>
