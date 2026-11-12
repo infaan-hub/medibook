@@ -93,6 +93,34 @@ export const bookedSlotKeysForDate = async (doctorId: number, date: string): Pro
   return new Set(rows.map((row) => `${row.start_time}|${row.end_time}`));
 };
 
+export const bookedSlotKeysForMonth = async (
+  doctorId: number,
+  year: number,
+  month: number
+): Promise<Map<string, Set<string>>> => {
+  const lastDay = new Date(year, month, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const rows = await prisma.appointment.findMany({
+    where: {
+      doctor_id: doctorId,
+      appointment_date: {
+        gte: new Date(`${year}-${pad(month)}-01T00:00:00Z`),
+        lte: new Date(`${year}-${pad(month)}-${pad(lastDay)}T23:59:59Z`),
+      },
+      status: { notIn: ["cancelled", "rejected"] },
+      deleted_at: null,
+    },
+    select: { appointment_date: true, start_time: true, end_time: true },
+  });
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const date = row.appointment_date.toISOString().slice(0, 10);
+    if (!map.has(date)) map.set(date, new Set());
+    map.get(date)!.add(`${row.start_time}|${row.end_time}`);
+  }
+  return map;
+};
+
 export interface AppointmentListScope {
   role: string;
   userId: number;

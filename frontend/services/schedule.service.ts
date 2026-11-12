@@ -16,7 +16,7 @@ import { ValidationError, notFound } from "@/lib/errors";
 import { broadcastAvailabilityUpdated } from "@/lib/notify";
 import { secondsToTime, timeToSeconds, normalizeTime, isoWeekday, daysInMonth } from "@/lib/dates";
 import * as doctors from "@/repositories/doctors.repo";
-import { bookedSlotKeysForDate } from "@/repositories/appointments.repo";
+import { bookedSlotKeysForDate, bookedSlotKeysForMonth } from "@/repositories/appointments.repo";
 import type { AuthUser } from "@/lib/auth";
 
 export interface Slot {
@@ -137,18 +137,69 @@ export async function availableDays(
   month: number,
   today: string
 ): Promise<string[]> {
-  const windows = await doctors.listWindows(doctorId);
+  if (!isAvailable) return [];
+  const windows = await doctors.listWindowsWithBreaks(doctorId);
   const activeWeekdays = new Set(windows.filter((w) => w.is_active).map((w) => w.weekday));
   const total = daysInMonth(year, month);
-  const available: string[] = [];
+  const pad = (n: number) => String(n).padStart(2, "0");
 
+  // Fetch every exception and booked slot for the whole month in two queries
+  // instead of one per day — the previous loop issued 2 queries per day.
+  const [monthExceptions, bookedByDate] = await Promise.all([
+    doctors.listExceptionsForMonth(doctorId, year, month),
+    bookedSlotKeysForMonth(doctorId, year, month),
+  ]);
+  const exceptionsByDate = new Map<string, typeof monthExceptions>();
+  for (const exception of monthExceptions) {
+    const date = exception.date.toISOString().slice(0, 10);
+    if (!exceptionsByDate.has(date)) exceptionsByDate.set(date, []);
+    exceptionsByDate.get(date)!.push(exception);
+  }
+
+  const available: string[] = [];
   for (let day = 1; day <= total; day += 1) {
-    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const iso = `${year}-${pad(month)}-${pad(day)}`;
     if (iso < today) continue;
-    if (!activeWeekdays.has(isoWeekday(iso))) continue;
-    const exceptions = await doctors.listExceptionsForDate(doctorId, iso);
-    if (exceptions.some((item) => item.start_time === null)) continue;
-    if ((await availableSlots(doctorId, isAvailable, iso)).length > 0) available.push(iso);
+    const weekday = isoWeekday(iso);
+    if (!activeWeekdays.has(weekday)) continue;
+    const dayExceptions = exceptionsByDate.get(iso) ?? [];
+    if (dayExceptions.some((item) => item.start_time === null)) continue;
+    const dayWindows = windows.filter((w) => w.is_active && w.weekday === weekday);
+    const dayBooked = bookedByDate.get(iso) ?? new Set<string>();
+    const exceptionRanges = dayExceptions
+      .filter((item) => item.start_time && item.end_time)
+      .map((item) => ({
+        start: timeToSeconds(item.start_time as string),
+        end: timeToSeconds(item.end_time as string),
+      }));
+    let hasSlot = false;
+    for (const window of dayWindows) {
+      const windowStart = timeToSeconds(window.start_time);
+      const windowEnd = timeToSeconds(window.end_time);
+      const duration = APPOINTMENT_DURATION_SECONDS;
+      const breaks = window.breaks.map((item) => ({
+        start: timeToSeconds(item.start_time),
+        end: timeToSeconds(item.end_time),
+      }));
+      for (let cursor = windowStart; cursor + duration <= windowEnd; cursor += 60) {
+        const startSec = cursor;
+        const endSec = cursor + duration;
+        const overlapsBreak = breaks.some((b) => startSec < b.end && endSec > b.start);
+        const overlapsException = exceptionRanges.some((e) => startSec < e.end && endSec > e.start);
+        const overlapsAppointment = [...dayBooked].some((key) => {
+          const [s = "00:00:00", e = "00:00:00"] = key.split("|");
+          const bs = timeToSeconds(s);
+          const be = timeToSeconds(e);
+          return startSec < be && endSec > bs;
+        });
+        if (!overlapsBreak && !overlapsException && !overlapsAppointment) {
+          hasSlot = true;
+          break;
+        }
+      }
+      if (hasSlot) break;
+    }
+    if (hasSlot) available.push(iso);
   }
   return available;
 }

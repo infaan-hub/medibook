@@ -160,6 +160,13 @@ export const listWindows = (doctorId: number) =>
     orderBy: [{ weekday: "asc" }, { start_time: "asc" }],
   });
 
+export const listWindowsWithBreaks = (doctorId: number) =>
+  prisma.availability.findMany({
+    where: { doctor_id: doctorId },
+    orderBy: [{ weekday: "asc" }, { start_time: "asc" }],
+    include: { breaks: { orderBy: { start_time: "asc" } } },
+  });
+
 export const listActiveWindowsForWeekday = (doctorId: number, weekday: number) =>
   prisma.availability.findMany({
     where: { doctor_id: doctorId, weekday, is_active: true },
@@ -241,6 +248,20 @@ export const listExceptionsForDate = (doctorId: number, date: string) =>
   prisma.scheduleException.findMany({
     where: { doctor_id: doctorId, date: new Date(`${date}T00:00:00Z`) },
   });
+
+export const listExceptionsForMonth = (doctorId: number, year: number, month: number) => {
+  const lastDay = new Date(year, month, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return prisma.scheduleException.findMany({
+    where: {
+      doctor_id: doctorId,
+      date: {
+        gte: new Date(`${year}-${pad(month)}-01T00:00:00Z`),
+        lte: new Date(`${year}-${pad(month)}-${pad(lastDay)}T23:59:59Z`),
+      },
+    },
+  });
+};
 
 export const listActiveWindowDoctorIds = (weekday: number, doctorIds: number[]) =>
   prisma.availability
