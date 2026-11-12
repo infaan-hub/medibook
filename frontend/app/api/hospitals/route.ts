@@ -7,7 +7,7 @@ import { hospitalDto } from "@/lib/serializers";
 export const GET = handler(async (ctx) => {
   const qs = new URL(ctx.req.url).searchParams;
   const city = qs.get("city") ?? undefined;
-  return paginate({
+  const res = await paginate({
     req: ctx.req,
     where: { ...(city ? { city } : {}) },
     count: () => content.countHospitalRows(city),
@@ -16,6 +16,8 @@ export const GET = handler(async (ctx) => {
     fetchAll: async () =>
       content.listHospitalPage(city, 0, 1000).then((rows) => rows.map(hospitalDto)),
   });
+  res.headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+  return res;
 });
 
 export const POST = handler(async (ctx) => {

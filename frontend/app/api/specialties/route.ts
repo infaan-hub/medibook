@@ -5,7 +5,7 @@ import * as content from "@/services/content.service";
 import { specialtyDto } from "@/lib/serializers";
 
 export const GET = handler(async (ctx) => {
-  return paginate({
+  const res = await paginate({
     req: ctx.req,
     where: {},
     count: () => content.countSpecialtyRows(),
@@ -14,6 +14,8 @@ export const GET = handler(async (ctx) => {
     fetchAll: async () =>
       content.listSpecialtyPage(0, 1000).then((rows) => rows.map(specialtyDto)),
   });
+  res.headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+  return res;
 });
 
 export const POST = handler(async (ctx) => {
