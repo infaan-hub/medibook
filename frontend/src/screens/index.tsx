@@ -612,7 +612,6 @@ export function ListDoctorsPage() {
       <Link to="/" className="home__back-link">
         <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} /> {t("common.back", { defaultValue: "Back" })}
       </Link>
-      <h1 className="page__title">{t("doctors.title")}</h1>
       <Card className="doctors__filters">
         <div className="field">
           <label className="field__label" htmlFor="doctor-search">{t("doctors.name")}</label>
