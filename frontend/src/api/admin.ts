@@ -3,7 +3,7 @@
  * Backend: /api/admin/stats/, /api/admin/users/, /api/admin/doctors/{id}/approve/.
  */
 
-import { apiDelete, apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
 import type { AuditEvent, DoctorProfile, Envelope, Paginated, User } from "./types";
 
 /** Admin dashboard statistics. */
@@ -46,7 +46,14 @@ export interface CreateUserPayload {
   role: "patient" | "doctor" | "coordinator";
 }
 
-export interface CreateDoctorPayload {
+export interface DoctorFeePayload {
+  appointment_fee?: string;
+  home_service_fee?: string;
+  psychotherapy_fee?: string;
+  training_fee?: string;
+}
+
+export interface CreateDoctorPayload extends DoctorFeePayload {
   username: string;
   email: string;
   password: string;
@@ -54,8 +61,25 @@ export interface CreateDoctorPayload {
   last_name: string;
   qualifications?: string;
   experience_years?: number;
+  /** Legacy single fee; the admin form now sends `appointment_fee`. */
   consultation_fee?: string;
   bio?: string;
+}
+
+/** GET /api/admin/doctors/{id}/ — full profile for the admin detail page. */
+export function getAdminDoctor(doctorId: number): Promise<Envelope<DoctorProfile>> {
+  return apiGet<DoctorProfile>(`/admin/doctors/${doctorId}/`);
+}
+
+/**
+ * PATCH /api/admin/doctors/{id}/ — the only path that can change service fees.
+ * Doctor-facing profile endpoints ignore these fields.
+ */
+export function updateAdminDoctorFees(
+  doctorId: number,
+  fees: DoctorFeePayload
+): Promise<Envelope<DoctorProfile>> {
+  return apiPatch<DoctorProfile>(`/admin/doctors/${doctorId}/`, fees);
 }
 
 export function createAdminUser(payload: CreateUserPayload): Promise<Envelope<User>> {

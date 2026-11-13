@@ -3,7 +3,7 @@
  */
 import { z } from "zod";
 import { drfDate, drfInteger, parse, REQUIRED } from "./base";
-import { geoFields, refineGeoPair } from "./doctor";
+import { doctorFeeFields, feeField, geoFields, refineGeoPair } from "./doctor";
 
 /** reports AdminUserCreateSerializer (role limited to patient|doctor). */
 export const adminUserCreateSchema = z
@@ -42,17 +42,9 @@ export const adminDoctorCreateSchema = z
         message: "Ensure this value is greater than or equal to 0.",
       })
       .transform((v) => (v === undefined ? 0 : Number(v))),
-    consultation_fee: z
-      .union([z.string(), z.number()])
-      .optional()
-      .refine((v) => {
-        if (v === undefined || v === "") return true;
-        const n = Number(v);
-        if (!Number.isFinite(n) || n < 0) return false;
-        const decimals = String(v).split(".")[1];
-        return decimals === undefined || decimals.length <= 2;
-      }, { message: "Ensure this number has at most 2 decimal places." })
-      .transform((v) => (v === undefined ? 0 : Number(v))),
+    /** Legacy single fee — treated as the appointment fee when supplied. */
+    consultation_fee: feeField,
+    ...doctorFeeFields,
     bio: z.string().optional(),
     /** Real practice coordinates (replaces the dropped `city`/`office_address`). */
     ...geoFields,

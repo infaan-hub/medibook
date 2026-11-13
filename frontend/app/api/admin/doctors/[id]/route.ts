@@ -24,8 +24,8 @@ export const PATCH = handler(async (ctx) => {
   if (!doctor) throw notFound();
   const body = await readJson(ctx.req);
   const input = parseDoctorWrite(body);
-  await applyDoctorWrite(id, input);
-  await adminRepo.recordAudit(actor.id, "doctor.updated", String(id), "Updated doctor profile");
+  await applyDoctorWrite(id, input, { allowFees: true });
+  await adminRepo.recordAudit(actor.id, "doctor.updated", String(id), "Updated doctor profile and service fees");
   const refreshed = await doctors.findDoctorById(id);
   broadcastPlatformDataUpdated("doctors");
   return ok(doctorDto(refreshed ?? doctor, ctx.req), "Doctor updated.");

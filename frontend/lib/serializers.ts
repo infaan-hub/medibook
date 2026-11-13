@@ -143,7 +143,13 @@ export function doctorDto(
     hospitals: doctor.hospitals.map((row) => row.hospital_id),
     qualifications: doctor.qualifications,
     experience_years: doctor.experience_years,
-    consultation_fee: dec2(doctor.consultation_fee),
+    /** Legacy alias kept for older clients — the appointment fee is the source. */
+    consultation_fee: dec2(doctor.appointment_fee ?? doctor.consultation_fee),
+    /** Admin-managed fees, one per service the platform offers. */
+    appointment_fee: dec2(doctor.appointment_fee ?? doctor.consultation_fee),
+    home_service_fee: dec2(doctor.home_service_fee),
+    psychotherapy_fee: dec2(doctor.psychotherapy_fee),
+    training_fee: dec2(doctor.training_fee),
     bio: doctor.bio,
     /** REAL practice coordinates (city/office_address strings were dropped). */
     latitude: doctor.latitude,

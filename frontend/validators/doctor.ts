@@ -131,6 +131,27 @@ export const scheduleExceptionSchema = z
     timePairRefine({ start_time: hasStart ? String(data.start_time) : "", end_time: hasEnd ? String(data.end_time) : "" }, ctx);
   });
 
+/** A non-negative money amount with at most two decimal places. */
+export const feeField = z
+  .union([z.string(), z.number()])
+  .optional()
+  .refine((v) => {
+    if (v === undefined || v === "") return true;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return false;
+    const decimals = String(v).split(".")[1];
+    return decimals === undefined || decimals.length <= 2;
+  }, { message: "A valid number is required." })
+  .transform((v) => (v === undefined || v === "" ? undefined : Number(v)));
+
+/** Admin-managed service fees. Doctors may never write these. */
+export const doctorFeeFields = {
+  appointment_fee: feeField,
+  home_service_fee: feeField,
+  psychotherapy_fee: feeField,
+  training_fee: feeField,
+} as const;
+
 /** doctors write payload (DoctorWriteSerializer / my-profile PATCH extras). */
 export const doctorWriteSchema = z
   .object({
@@ -144,17 +165,7 @@ export const doctorWriteSchema = z
         message: "Ensure this value is greater than or equal to 0 and less than or equal to 80.",
       })
       .transform((v) => (v === undefined ? undefined : Number(v))),
-    consultation_fee: z
-      .union([z.string(), z.number()])
-      .optional()
-      .refine((v) => {
-        if (v === undefined || v === "") return true;
-        const n = Number(v);
-        if (!Number.isFinite(n) || n < 0) return false;
-        const decimals = String(v).split(".")[1];
-        return decimals === undefined || decimals.length <= 2;
-      }, { message: "A valid number is required." })
-      .transform((v) => (v === undefined || v === "" ? undefined : Number(v))),
+    ...doctorFeeFields,
     bio: z.string().optional(),
     ...geoFields,
     is_available: z

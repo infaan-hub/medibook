@@ -55,7 +55,7 @@ export { SpecialtyListPage, SpecialtyDetailPage } from "./specialties";
 export { HospitalListPage, HospitalDetailPage } from "./hospitals";
 export { BookingScreen, BookingSuccessScreen, RescheduleScreen, AppointmentsListScreen, AppointmentDetailScreen } from "./appointments";
 export { NotificationsScreen } from "./notifications";
-export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen, AdminAppointmentsScreen } from "./admin-dashboard";
+export { AdminDashboardScreen, AdminUsersScreen, AdminDoctorsScreen, AdminDoctorDetailScreen, AdminCreateUserScreen, AdminCreateDoctorScreen, AdminAuditScreen, AdminAppointmentsScreen } from "./admin-dashboard";
 export { BlogListPage, BlogArticlePage } from "./blog";
 
 function formatAppointment(appointment: Appointment): string {
@@ -127,6 +127,9 @@ const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: Doc
         ) : (
           <span>{t("home.medicalSpecialist")}</span>
         )}
+        <span className="home__doctor-fee">
+          {t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}
+        </span>
         {doctor.has_location && directionsUrl(doctor) && (
           <span className="home__doctor-location">
             <MapPin size={11} />
@@ -493,6 +496,9 @@ export function DoctorsPage() {
                 ) : (
                   <span>{t("home.medicalSpecialist")}</span>
                 )}
+                <span className="home__doctor-fee">
+                  {t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}
+                </span>
                 <span className="home__doctor-location">
                   <MapPin size={11} />
                   {doctor.distance_km != null ? (

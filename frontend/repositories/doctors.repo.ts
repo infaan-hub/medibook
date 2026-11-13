@@ -329,6 +329,10 @@ export const applyDoctorFields = (
     qualifications?: string;
     experience_years?: number;
     consultation_fee?: number;
+    appointment_fee?: number;
+    home_service_fee?: number;
+    psychotherapy_fee?: number;
+    training_fee?: number;
     bio?: string;
     /** Real practice coordinates (the `city`/`office_address` strings are gone). */
     latitude?: number | null;

@@ -302,7 +302,13 @@ export interface DoctorProfile extends GeoFields {
   hospitals: number[];
   qualifications: string;
   experience_years: number | null;
+  /** Legacy alias of `appointment_fee`, kept for older payloads. */
   consultation_fee: string;
+  /** Admin-managed fees — doctors can view but never edit them. */
+  appointment_fee?: string;
+  home_service_fee?: string;
+  psychotherapy_fee?: string;
+  training_fee?: string;
   bio: string;
   is_available: boolean;
   available_today?: boolean;

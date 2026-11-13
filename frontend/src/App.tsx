@@ -132,6 +132,7 @@ const DoctorPsychotherapyScreen = lazyWithRetry(() => import("./screens/doctor-p
 const AdminDashboardScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDashboardScreen })));
 const AdminUsersScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminUsersScreen })));
 const AdminDoctorsScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorsScreen })));
+const AdminDoctorDetailScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminDoctorDetailScreen })));
 const AdminCreateUserScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminCreateUserScreen })));
 const AdminCreateDoctorScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminCreateDoctorScreen })));
 const AdminAuditScreen = lazyWithRetry(() => import("./screens").then((m) => ({ default: m.AdminAuditScreen })));
@@ -362,6 +363,7 @@ export default function App() {
                 <Route path="/admin" element={<RequireRole role="admin"><AdminDashboardScreen /></RequireRole>} />
                 <Route path="/admin/users" element={<RequireRole role="admin"><AdminUsersScreen /></RequireRole>} />
                 <Route path="/admin/doctors" element={<RequireRole role="admin"><AdminDoctorsScreen /></RequireRole>} />
+                <Route path="/admin/doctors/:id" element={<RequireRole role="admin"><AdminDoctorDetailScreen /></RequireRole>} />
                 <Route path="/admin/users/new" element={<RequireRole role="admin"><AdminCreateUserScreen /></RequireRole>} />
                 <Route path="/admin/doctors/new" element={<RequireRole role="admin"><AdminCreateDoctorScreen /></RequireRole>} />
                 <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAuditScreen /></RequireRole>} />

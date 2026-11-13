@@ -97,7 +97,12 @@ export function DoctorProfileScreen() {
           <p>{t("doctor.professionalProfile")}</p>
         )}
         <p>{t("doctor.yearsExperience", { count: doctor.experience_years })}</p>
-        <p>{t("doctors.fee")}: TSh {doctor.consultation_fee}</p>
+        <dl className="doctor-profile__fees">
+          <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {doctor.home_service_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</dt><dd>TSh {doctor.psychotherapy_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.trainingFee", { defaultValue: "Training fee" })}</dt><dd>TSh {doctor.training_fee ?? "0"}</dd></div>
+        </dl>
 
         {/* All selected specialties with their meanings for patients */}
         {doctor.specialties && doctor.specialties.length > 0 && (
@@ -199,7 +204,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
             <Clock size={14} /> {t("doctor.yrsExp", { count: profile.experience_years ?? 0 })}
           </span>
           <span className="doc-preview-card__meta-item">
-            <BadgeIndianRupee size={14} /> TSh {profile.consultation_fee}
+            <BadgeIndianRupee size={14} /> TSh {profile.appointment_fee ?? profile.consultation_fee}
           </span>
           {profile.phone && (
             <span className="doc-preview-card__meta-item">
@@ -207,6 +212,12 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
             </span>
           )}
         </div>
+        <dl className="doc-preview-card__fees">
+          <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {profile.appointment_fee ?? profile.consultation_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {profile.home_service_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</dt><dd>TSh {profile.psychotherapy_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.trainingFee", { defaultValue: "Training fee" })}</dt><dd>TSh {profile.training_fee ?? "0"}</dd></div>
+        </dl>
         <p className="doc-preview-card__location">
           <LocationLine point={profile} accuracy={profile.location_accuracy} />
         </p>
@@ -225,7 +236,7 @@ export function DoctorPersonalScreen() {
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", consultation_fee: "", phone: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", experience_years: "", phone: "" });
   /** Real practice coordinates — the city/office-address text fields are gone. */
   const [geo, setGeo] = useState<GeoInput>({ latitude: null, longitude: null, location_accuracy: null });
   const [geoBusy, setGeoBusy] = useState(false);
@@ -252,7 +263,6 @@ export function DoctorPersonalScreen() {
           first_name: response.data.first_name ?? "",
           last_name: response.data.last_name ?? "",
           experience_years: response.data.experience_years?.toString() ?? "",
-          consultation_fee: response.data.consultation_fee?.toString() ?? "",
           phone: response.data.phone ?? "",
         });
         setGeo({
@@ -345,7 +355,6 @@ export function DoctorPersonalScreen() {
         phone: form.phone.trim(),
         specialties: selectedSpecialtyIds,
         experience_years: form.experience_years === "" ? 0 : Number(form.experience_years),
-        consultation_fee: form.consultation_fee.trim() === "" ? "0" : form.consultation_fee.trim(),
         latitude: geo.latitude ?? null,
         longitude: geo.longitude ?? null,
         location_accuracy: geo.location_accuracy ?? null,
@@ -416,8 +425,10 @@ export function DoctorPersonalScreen() {
           </div>
           <div className="form__row">
             <TextField id="doc-exp" label={t("doctor.experienceYears")} type="number" min="0" value={form.experience_years} error={fieldErrors.experience_years} onChange={(e) => update("experience_years", e.target.value)} />
-            <TextField id="doc-fee" label={t("doctor.consultationFeeTsh")} inputMode="decimal" value={form.consultation_fee} error={fieldErrors.consultation_fee} onChange={(e) => update("consultation_fee", e.target.value)} />
           </div>
+          <p className="field__hint">
+            {t("doctor.feesSetByAdmin", { defaultValue: "Service fees are set by an administrator and appear on your card automatically." })}
+          </p>
           {/* Real practice location — patients use it for "near me" and for
               directions, and the booking gate refuses without it. Two ways in:
               type an area, or take a fresh GPS fix. */}

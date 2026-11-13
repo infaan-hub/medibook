@@ -105,10 +105,15 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
     role: "doctor",
   });
   const profile = await doctors.createDoctor(user.id);
+  const appointmentFee = input.appointment_fee ?? input.consultation_fee ?? 0;
   await doctors.applyDoctorFields(profile.id, {
     qualifications: input.qualifications,
     experience_years: input.experience_years,
-    consultation_fee: input.consultation_fee,
+    consultation_fee: appointmentFee,
+    appointment_fee: appointmentFee,
+    home_service_fee: input.home_service_fee ?? 0,
+    psychotherapy_fee: input.psychotherapy_fee ?? 0,
+    training_fee: input.training_fee ?? 0,
     bio: input.bio,
     // Real coordinates — the admin form may leave these blank, in which case
     // the doctor is prompted for their location on first sign-in.

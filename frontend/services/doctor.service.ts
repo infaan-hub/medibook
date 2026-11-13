@@ -59,14 +59,36 @@ async function validateRelationIds(input: DoctorWriteInput) {
   if (Object.keys(errors).length > 0) throw new ValidationError(errors);
 }
 
-/** Applies DoctorWriteSerializer fields (including M2M replacement). */
-export async function applyDoctorWrite(doctorId: number, input: DoctorWriteInput) {
+/**
+ * Applies DoctorWriteSerializer fields (including M2M replacement).
+ *
+ * Service fees are admin-only. The schema accepts them so the admin PATCH can
+ * transport them, but `allowFees` must be explicitly set by an admin route —
+ * owner/doctor writes silently ignore the fee keys.
+ */
+export async function applyDoctorWrite(
+  doctorId: number,
+  input: DoctorWriteInput,
+  options: { allowFees?: boolean } = {}
+) {
   await validateRelationIds(input);
   const data: Record<string, unknown> = {};
-  for (const key of [
-    "qualifications", "experience_years", "consultation_fee", "bio", "is_available",
-  ] as const) {
+  for (const key of ["qualifications", "experience_years", "bio", "is_available"] as const) {
     if (input[key] !== undefined) data[key] = input[key];
+  }
+  if (options.allowFees) {
+    for (const key of [
+      "appointment_fee",
+      "home_service_fee",
+      "psychotherapy_fee",
+      "training_fee",
+    ] as const) {
+      if (input[key] !== undefined) data[key] = input[key];
+    }
+    // Keep the legacy column in sync with the appointment fee.
+    if (input.appointment_fee !== undefined) {
+      data.consultation_fee = input.appointment_fee;
+    }
   }
   if (input.phone !== undefined) data.phone = input.phone;
   if (input.phone_secondary !== undefined) data.phone_secondary = input.phone_secondary;
