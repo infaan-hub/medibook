@@ -98,10 +98,11 @@ export function DoctorProfileScreen() {
         )}
         <p>{t("doctor.yearsExperience", { count: doctor.experience_years })}</p>
         <dl className="doctor-profile__fees">
-          <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {doctor.home_service_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</dt><dd>TSh {doctor.psychotherapy_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.trainingFee", { defaultValue: "Training fee" })}</dt><dd>TSh {doctor.training_fee ?? "0"}</dd></div>
+          {isHomeVisit ? (
+            <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {doctor.home_service_fee ?? "0"}</dd></div>
+          ) : (
+            <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}</dd></div>
+          )}
         </dl>
 
         {/* All selected specialties with their meanings for patients */}

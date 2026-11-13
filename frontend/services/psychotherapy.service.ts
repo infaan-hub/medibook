@@ -15,6 +15,7 @@ import type { AuthUser } from "@/lib/auth";
 import * as doctorsRepo from "@/repositories/doctors.repo";
 import { normalizeTime, timeToSeconds, secondsToTime, todayIso } from "@/lib/dates";
 import { treatmentDto } from "@/lib/serializers";
+import { dec2 } from "@/lib/serialize";
 import { Prisma } from "@prisma/client";
 import { expireStaleSessions } from "@/services/session-expiry.service";
 
@@ -60,7 +61,12 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
     patient: req.patient,
     doctor_id: req.doctor_id,
     doctor: req.doctor
-      ? { id: req.doctor.id, user: req.doctor.user }
+      ? {
+          id: req.doctor.id,
+          user: req.doctor.user,
+          /** Admin-managed fee shown on the patient's psychology service card. */
+          psychotherapy_fee: dec2(req.doctor.psychotherapy_fee),
+        }
       : null,
     session_mode: req.session_mode,
     preferred_start_date: req.preferred_start_date,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Brain, CalendarClock, CheckCircle2, Clock3, Download, FileText, UserRound } from "lucide-react";
+import { Brain, CalendarClock, CheckCircle2, CircleDollarSign, Clock3, Download, FileText, UserRound } from "lucide-react";
 import { apiGet } from "../api/client";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 import { Card, Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -16,6 +16,12 @@ const STATUS: Record<string, { labelKey: string; tone: string }> = {
   completed: { labelKey: "psychotherapy.statusCompleted", tone: "completed" },
   expired: { labelKey: "psychotherapy.statusExpired", tone: "expired" },
 };
+
+/** Decimal field serialized as a string ("15000.00") → "TSh 15,000". */
+function formatFee(value: unknown): string {
+  const num = Number(value ?? 0);
+  return `TSh ${Number.isFinite(num) ? num.toLocaleString() : "0"}`;
+}
 
 const SESSION_STATUS: Record<string, string> = {
   scheduled: "psychotherapy.sessionScheduled",
@@ -109,10 +115,19 @@ export function PsychotherapyScreen() {
                 <div><small>{t("psychotherapy.patient")}</small><strong>{r.patient?.first_name} {r.patient?.last_name}</strong></div>
               </div>
               {r.doctor && (
-                <div className="psych-case-person">
-                  <span className="psych-case-person__icon"><Brain size={16} /></span>
-                  <div><small>{t("psychotherapy.psychologist")}</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div>
-                </div>
+                <>
+                  <div className="psych-case-person">
+                    <span className="psych-case-person__icon"><Brain size={16} /></span>
+                    <div><small>{t("psychotherapy.psychologist")}</small><strong>{r.doctor.user.first_name} {r.doctor.user.last_name}</strong></div>
+                  </div>
+                  <div className="psych-case-person">
+                    <span className="psych-case-person__icon"><CircleDollarSign size={16} /></span>
+                    <div>
+                      <small>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</small>
+                      <strong>{formatFee(r.doctor.psychotherapy_fee)}</strong>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 

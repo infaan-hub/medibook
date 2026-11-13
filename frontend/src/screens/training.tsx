@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { apiGet } from "../api/client";
+import i18n from "../i18n";
 import { downloadTrainingReport, viewTrainingReport } from "../api/reports";
 import { Card, Button, Skeleton, ErrorState } from "../components/ui";
 import { useToast } from "../state/app-context";
@@ -102,6 +103,12 @@ function audienceLabel(training: any): string {
     return training.company_name ? `Company · ${training.company_name}` : "Company";
   }
   return "Individual";
+}
+
+/** Decimal field serialized as a string ("15000.00") → "TSh 15,000". */
+function formatFee(value: unknown): string {
+  const num = Number(value ?? 0);
+  return `TSh ${Number.isFinite(num) ? num.toLocaleString() : "0"}`;
 }
 
 type Tab = "active" | "past";
@@ -271,6 +278,12 @@ export function TrainingScreen() {
                       <span>Specialist</span>
                       <b>{specialist ?? "Not yet assigned"}</b>
                     </div>
+                    {t.doctor && (
+                      <div>
+                        <span>{i18n.t("doctor.trainingFee", { defaultValue: "Training fee" })}</span>
+                        <b>{formatFee(t.doctor.training_fee)}</b>
+                      </div>
+                    )}
                     <div>
                       <span>Starts</span>
                       <b>{formatDay(t.preferred_start_date)}</b>

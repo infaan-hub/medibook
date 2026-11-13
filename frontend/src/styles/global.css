@@ -3236,6 +3236,8 @@ a { color: var(--color-primary); }
   border-radius: 10px;
   background: #f0f7f6;
 }
+/* The public profile shows exactly one service fee (appointment or home visit). */
+.doctor-profile__fees { grid-template-columns: 1fr; }
 .doc-preview-card__fees > div,
 .doctor-profile__fees > div {
   display: flex;

@@ -106,7 +106,7 @@ function GreetingAvatar({ user }: { user: User }) {
   );
 }
 
-const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: number }) {
+const DoctorCard = memo(function DoctorCard({ doctor, index = 0, showFee = false }: { doctor: DoctorProfile; index?: number; showFee?: boolean }) {
   const { t } = useTranslation();
   return (
     <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
@@ -127,9 +127,11 @@ const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: Doc
         ) : (
           <span>{t("home.medicalSpecialist")}</span>
         )}
-        <span className="home__doctor-fee">
-          {t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}
-        </span>
+        {showFee && (
+          <span className="home__doctor-fee">
+            {t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}
+          </span>
+        )}
         {doctor.has_location && directionsUrl(doctor) && (
           <span className="home__doctor-location">
             <MapPin size={11} />
@@ -497,7 +499,9 @@ export function DoctorsPage() {
                   <span>{t("home.medicalSpecialist")}</span>
                 )}
                 <span className="home__doctor-fee">
-                  {t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}
+                  {isHomeVisit
+                    ? `${t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}: TSh ${doctor.home_service_fee ?? "0"}`
+                    : `${t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}: TSh ${doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}`}
                 </span>
                 <span className="home__doctor-location">
                   <MapPin size={11} />
@@ -658,7 +662,7 @@ export function ListDoctorsPage() {
       {!loading && !!results?.length && (
         <div className="home__doctor-list">
           {results.map((doctor, index) => (
-            <DoctorCard key={doctor.id} doctor={doctor} index={index} />
+            <DoctorCard key={doctor.id} doctor={doctor} index={index} showFee />
           ))}
         </div>
       )}
