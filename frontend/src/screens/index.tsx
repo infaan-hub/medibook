@@ -532,39 +532,131 @@ export function NotFoundPage() {
 export { CoordinatorScreen } from "./coordinator";
 export function ListDoctorsPage() {
   const { t } = useTranslation();
-  const [doctors, setDoctors] = useState<DoctorProfile[] | null>(null);
+  const [search, setSearch] = useState("");
+  const [origin, setOrigin] = useState<Origin | null>(null);
+  const [nearMe, setNearMe] = useState(false);
+  const [originError, setOriginError] = useState<string | null>(null);
+  const [results, setResults] = useState<DoctorProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    listDoctors()
-      .then((response) => setDoctors(response.data?.results ?? []))
+  const buildParams = useCallback(
+    (opts: { search: string; nearMe: boolean; origin: Origin | null }): ListDoctorsParams => ({
+      search: opts.search || undefined,
+      ...(opts.nearMe && opts.origin
+        ? { latitude: opts.origin.latitude, longitude: opts.origin.longitude, radius_km: NEAR_ME_RADIUS_KM }
+        : {}),
+    }),
+    []
+  );
+
+  const fetchDoctors = useCallback((params: ListDoctorsParams) => {
+    setLoading(true);
+    setError(null);
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== undefined)
+    ) as ListDoctorsParams;
+    const request = Object.keys(clean).length > 0 ? listDoctors(clean) : listDoctors();
+    request
+      .then((response) => setResults(response.data?.results ?? []))
       .catch((reason: unknown) =>
         setError(reason instanceof Error ? reason.message : i18n.t("common.couldNotLoadDoctors"))
-      );
+      )
+      .finally(() => setLoading(false));
   }, []);
 
+  const load = useCallback(
+    (opts?: { search?: string; nearMe?: boolean; origin?: Origin | null }) => {
+      fetchDoctors(
+        buildParams({
+          search: opts?.search ?? search,
+          nearMe: opts?.nearMe ?? nearMe,
+          origin: opts?.origin ?? origin,
+        })
+      );
+    },
+    [buildParams, fetchDoctors, search, nearMe, origin]
+  );
+
+  // First visit: show the full directory. "Near me" is only applied when the
+  // user explicitly asks for it (no automatic location-based filtering).
+  useEffect(() => {
+    load();
+    // Only on mount — later changes ride the explicit Search/toggle handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Turn "Near me" on: reuse the stored fix, or ask the browser for one. */
+  async function toggleNearMe() {
+    if (nearMe) {
+      setNearMe(false);
+      setOriginError(null);
+      load({ nearMe: false });
+      return;
+    }
+    setOriginError(null);
+    try {
+      const fix = origin ?? (await captureFix());
+      setOrigin(fix);
+      setNearMe(true);
+      load({ nearMe: true, origin: fix });
+    } catch (err) {
+      setOriginError(
+        err instanceof LocationError ? err.message : i18n.t("common.couldNotReadLocation")
+      );
+    }
+  }
+
   return (
-    <div className="page home-page">
+    <div className="page home-page doctors-page">
       <Link to="/" className="home__back-link">
         <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} /> {t("common.back", { defaultValue: "Back" })}
       </Link>
-      <section className="home__section">
-        <div className="home__section-heading">
-          <h1>{t("doctors.title")}</h1>
+      <h1 className="page__title">{t("doctors.title")}</h1>
+      <Card className="doctors__filters">
+        <div className="field">
+          <label className="field__label" htmlFor="doctor-search">{t("doctors.name")}</label>
+          <input
+            id="doctor-search"
+            className="field__input"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t("doctors.searchByName")}
+          />
         </div>
-        {error && <ErrorState message={error} />}
-        {doctors === null ? (
-          <Skeleton lines={6} />
-        ) : doctors.length === 0 ? (
-          <EmptyState title={t("home.noDoctors")} description={t("home.noDoctorsDesc")} />
-        ) : (
-          <div className="home__doctor-list">
-            {doctors.map((doctor, index) => (
-              <DoctorCard key={doctor.id} doctor={doctor} index={index} />
-            ))}
-          </div>
-        )}
-      </section>
+        <div className="field">
+          <span className="field__label" id="doctor-nearby-label">{t("doctors.location")}</span>
+          <button
+            type="button"
+            id="doctor-nearby"
+            className="btn btn--secondary doctors__nearby"
+            aria-pressed={nearMe}
+            aria-labelledby="doctor-nearby-label"
+            onClick={() => void toggleNearMe()}
+            disabled={loading}
+          >
+            <Crosshair size={14} />
+            {nearMe ? t("home.nearMeRadius", { radius: NEAR_ME_RADIUS_KM }) : t("home.nearMe")}
+          </button>
+        </div>
+        <Button onClick={() => load()} loading={loading}>{t("doctors.search")}</Button>
+      </Card>
+      {originError && <ErrorState message={originError} onRetry={() => void toggleNearMe()} />}
+      {error && <ErrorState message={error} onRetry={() => load()} />}
+      {loading && <Skeleton lines={5} />}
+      {!loading && results?.length === 0 && (
+        <EmptyState
+          title={t("doctors.noResults")}
+          description={nearMe ? t("home.noDoctorsNearbyDesc", { radius: NEAR_ME_RADIUS_KM }) : t("home.tryAnotherName")}
+        />
+      )}
+      {!loading && !!results?.length && (
+        <div className="home__doctor-list">
+          {results.map((doctor, index) => (
+            <DoctorCard key={doctor.id} doctor={doctor} index={index} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
