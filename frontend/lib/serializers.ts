@@ -150,6 +150,10 @@ export function doctorDto(
     home_service_fee: dec2(doctor.home_service_fee),
     psychotherapy_fee: dec2(doctor.psychotherapy_fee),
     training_fee: dec2(doctor.training_fee),
+    appointment_fee_usd: dec2(doctor.appointment_fee_usd),
+    home_service_fee_usd: dec2(doctor.home_service_fee_usd),
+    psychotherapy_fee_usd: dec2(doctor.psychotherapy_fee_usd),
+    training_fee_usd: dec2(doctor.training_fee_usd),
     bio: doctor.bio,
     /** REAL practice coordinates (city/office_address strings were dropped). */
     latitude: doctor.latitude,

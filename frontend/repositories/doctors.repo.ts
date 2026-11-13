@@ -333,6 +333,10 @@ export const applyDoctorFields = (
     home_service_fee?: number;
     psychotherapy_fee?: number;
     training_fee?: number;
+    appointment_fee_usd?: number;
+    home_service_fee_usd?: number;
+    psychotherapy_fee_usd?: number;
+    training_fee_usd?: number;
     bio?: string;
     /** Real practice coordinates (the `city`/`office_address` strings are gone). */
     latitude?: number | null;

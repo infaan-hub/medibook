@@ -18,6 +18,7 @@ import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
 import { formatDate } from "../lib/intl";
+import { formatFeePair } from "../lib/money";
 import {
   ChevronRight,
   Crosshair,
@@ -495,7 +496,7 @@ export function DoctorsPage() {
                 )}
                 {isHomeVisit && (
                   <span className="home__doctor-fee">
-                    {t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}: TSh {doctor.home_service_fee ?? "0"}
+                    {t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}: {formatFeePair(doctor.home_service_fee, doctor.home_service_fee_usd)}
                   </span>
                 )}
                 <span className="home__doctor-location">

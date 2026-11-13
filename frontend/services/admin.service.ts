@@ -114,6 +114,10 @@ export async function createDoctor(req: Request, actor: AuthUser, body: unknown)
     home_service_fee: input.home_service_fee ?? 0,
     psychotherapy_fee: input.psychotherapy_fee ?? 0,
     training_fee: input.training_fee ?? 0,
+    appointment_fee_usd: input.appointment_fee_usd ?? 0,
+    home_service_fee_usd: input.home_service_fee_usd ?? 0,
+    psychotherapy_fee_usd: input.psychotherapy_fee_usd ?? 0,
+    training_fee_usd: input.training_fee_usd ?? 0,
     bio: input.bio,
     // Real coordinates — the admin form may leave these blank, in which case
     // the doctor is prompted for their location on first sign-in.

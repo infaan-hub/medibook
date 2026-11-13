@@ -51,6 +51,10 @@ export interface DoctorFeePayload {
   home_service_fee?: string;
   psychotherapy_fee?: string;
   training_fee?: string;
+  appointment_fee_usd?: string;
+  home_service_fee_usd?: string;
+  psychotherapy_fee_usd?: string;
+  training_fee_usd?: string;
 }
 
 export interface CreateDoctorPayload extends DoctorFeePayload {

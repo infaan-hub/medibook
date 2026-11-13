@@ -238,6 +238,11 @@ model Doctor {
   home_service_fee     Decimal   @default(0) @db.Decimal(10, 2)
   psychotherapy_fee    Decimal   @default(0) @db.Decimal(10, 2)
   training_fee         Decimal   @default(0) @db.Decimal(10, 2)
+  /// USD prices for the same services, set alongside the TSh amounts.
+  appointment_fee_usd     Decimal @default(0) @db.Decimal(10, 2)
+  home_service_fee_usd    Decimal @default(0) @db.Decimal(10, 2)
+  psychotherapy_fee_usd   Decimal @default(0) @db.Decimal(10, 2)
+  training_fee_usd        Decimal @default(0) @db.Decimal(10, 2)
   bio                  String    @default("")
   latitude             Float?
   longitude            Float?

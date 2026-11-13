@@ -66,6 +66,7 @@ function serializeRequest(req: any, actor: AuthUser, doctorId: number | null) {
           user: req.doctor.user,
           /** Admin-managed fee shown on the patient's psychology service card. */
           psychotherapy_fee: dec2(req.doctor.psychotherapy_fee),
+          psychotherapy_fee_usd: dec2(req.doctor.psychotherapy_fee_usd),
         }
       : null,
     session_mode: req.session_mode,

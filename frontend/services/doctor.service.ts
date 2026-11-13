@@ -82,6 +82,10 @@ export async function applyDoctorWrite(
       "home_service_fee",
       "psychotherapy_fee",
       "training_fee",
+      "appointment_fee_usd",
+      "home_service_fee_usd",
+      "psychotherapy_fee_usd",
+      "training_fee_usd",
     ] as const) {
       if (input[key] !== undefined) data[key] = input[key];
     }

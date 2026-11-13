@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { formatDate } from "../lib/intl";
+import { formatFeePair } from "../lib/money";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -99,9 +100,9 @@ export function DoctorProfileScreen() {
         <p>{t("doctor.yearsExperience", { count: doctor.experience_years })}</p>
         <dl className="doctor-profile__fees">
           {isHomeVisit ? (
-            <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {doctor.home_service_fee ?? "0"}</dd></div>
+            <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>{formatFeePair(doctor.home_service_fee, doctor.home_service_fee_usd)}</dd></div>
           ) : (
-            <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {doctor.appointment_fee ?? doctor.consultation_fee ?? "0"}</dd></div>
+            <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>{formatFeePair(doctor.appointment_fee ?? doctor.consultation_fee, doctor.appointment_fee_usd)}</dd></div>
           )}
         </dl>
 
@@ -205,7 +206,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
             <Clock size={14} /> {t("doctor.yrsExp", { count: profile.experience_years ?? 0 })}
           </span>
           <span className="doc-preview-card__meta-item">
-            <BadgeIndianRupee size={14} /> TSh {profile.appointment_fee ?? profile.consultation_fee}
+            <BadgeIndianRupee size={14} /> {formatFeePair(profile.appointment_fee ?? profile.consultation_fee, profile.appointment_fee_usd)}
           </span>
           {profile.phone && (
             <span className="doc-preview-card__meta-item">
@@ -214,10 +215,10 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
           )}
         </div>
         <dl className="doc-preview-card__fees">
-          <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>TSh {profile.appointment_fee ?? profile.consultation_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>TSh {profile.home_service_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</dt><dd>TSh {profile.psychotherapy_fee ?? "0"}</dd></div>
-          <div><dt>{t("doctor.trainingFee", { defaultValue: "Training fee" })}</dt><dd>TSh {profile.training_fee ?? "0"}</dd></div>
+          <div><dt>{t("doctor.appointmentFee", { defaultValue: "Appointment fee" })}</dt><dd>{formatFeePair(profile.appointment_fee ?? profile.consultation_fee, profile.appointment_fee_usd)}</dd></div>
+          <div><dt>{t("doctor.homeServiceFee", { defaultValue: "Home service fee" })}</dt><dd>{formatFeePair(profile.home_service_fee, profile.home_service_fee_usd)}</dd></div>
+          <div><dt>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</dt><dd>{formatFeePair(profile.psychotherapy_fee, profile.psychotherapy_fee_usd)}</dd></div>
+          <div><dt>{t("doctor.trainingFee", { defaultValue: "Training fee" })}</dt><dd>{formatFeePair(profile.training_fee, profile.training_fee_usd)}</dd></div>
         </dl>
         <p className="doc-preview-card__location">
           <LocationLine point={profile} accuracy={profile.location_accuracy} />

@@ -11,6 +11,7 @@ import { Card, EmptyState, ErrorState, Skeleton, TextField } from "../components
 import { useToast } from "../state/app-context";
 import { useRealtimeSync } from "../realtime/socket";
 import { formatDate as formatIntlDate, formatNumber } from "../lib/intl";
+import { formatFeePair } from "../lib/money";
 
 function message(error: unknown): string { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 /** Format a stored doctor rating (Decimal may arrive as a string) for display. */
@@ -23,9 +24,8 @@ function formatRating(value: number | string | null | undefined): string {
 function doctorAppointmentFee(doctor: DoctorProfile): string {
   return doctor.appointment_fee ?? doctor.consultation_fee ?? "0";
 }
-function formatFee(value: string | number | null | undefined): string {
-  const num = Number(value ?? 0);
-  return `TSh ${Number.isFinite(num) ? num.toLocaleString() : "0"}`;
+function doctorAppointmentFeeUsd(doctor: DoctorProfile): string {
+  return doctor.appointment_fee_usd ?? "0";
 }
 function formatDate(value: string): string { return formatIntlDate(value, { month: "short", day: "numeric", year: "numeric" }); }
 function formatTime(value: string): string { return formatIntlDate(value, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
@@ -92,7 +92,7 @@ export function AdminDoctorsScreen() {
     setDeletingId(doctor.id);
     try { await deleteAdminDoctor(doctor.id); notify("success", "Doctor deleted."); setDoctors((current) => current.filter((item) => item.id !== doctor.id)); } catch (reason) { notify("error", message(reason)); } finally { setDeletingId(null); }
   }
-  return <div className="admin-workspace"><AdminHeader title="Doctors" description="Review professional profiles and availability." action={<Link to="/admin/doctors/new" className="admin-primary-button"><Plus size={16} /> Add doctor</Link>} /><Card className="admin-table-card">{error && <ErrorState message={error} onRetry={load} />}{loading ? <Skeleton lines={6} /> : doctors.length === 0 ? <EmptyState title="No doctors yet" description="Create the first doctor profile to get started." /> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Doctor</th><th>Experience</th><th>Rating</th><th>Appointment fee</th><th>Status</th><th>Actions</th></tr></thead><tbody>{doctors.map((doctor) => <tr key={doctor.id}><td><span className="admin-table-user"><span className="admin-doctor-avatar"><Stethoscope size={16} /></span><b><Link to={`/admin/doctors/${doctor.id}`} className="admin-table-doctor-link">Dr. {doctor.first_name} {doctor.last_name}</Link></b><small>{doctor.specialties && doctor.specialties.length > 0 ? doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ") : "Profile details pending"}</small></span></td><td>{doctor.experience_years ?? 0} years</td><td>{formatRating(doctor.average_rating)}</td><td>{formatFee(doctorAppointmentFee(doctor))}</td><td>{doctor.is_available ? <span className="admin-status admin-status--good"><CheckCircle2 size={14} /> Active</span> : <span className="admin-status admin-status--pending"><XCircle size={14} /> Suspended</span>}</td><td><button className="admin-table-action" onClick={() => toggle(doctor)}>{doctor.is_available ? "Suspend" : "Approve"}</button><button className="admin-table-action" style={{ color: "var(--color-danger, #dc2626)", margin: "0 0 0 12px" }} disabled={deletingId === doctor.id} onClick={() => handleDelete(doctor)}><Trash2 size={14} /> {deletingId === doctor.id ? "Deleting..." : "Delete"}</button><Link className="admin-table-action admin-table-action--quiet" to={`/admin/doctors/${doctor.id}`}>View</Link></td></tr>)}</tbody></table></div>}</Card></div>;
+  return <div className="admin-workspace"><AdminHeader title="Doctors" description="Review professional profiles and availability." action={<Link to="/admin/doctors/new" className="admin-primary-button"><Plus size={16} /> Add doctor</Link>} /><Card className="admin-table-card">{error && <ErrorState message={error} onRetry={load} />}{loading ? <Skeleton lines={6} /> : doctors.length === 0 ? <EmptyState title="No doctors yet" description="Create the first doctor profile to get started." /> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Doctor</th><th>Experience</th><th>Rating</th><th>Appointment fee</th><th>Status</th><th>Actions</th></tr></thead><tbody>{doctors.map((doctor) => <tr key={doctor.id}><td><span className="admin-table-user"><span className="admin-doctor-avatar"><Stethoscope size={16} /></span><b><Link to={`/admin/doctors/${doctor.id}`} className="admin-table-doctor-link">Dr. {doctor.first_name} {doctor.last_name}</Link></b><small>{doctor.specialties && doctor.specialties.length > 0 ? doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ") : "Profile details pending"}</small></span></td><td>{doctor.experience_years ?? 0} years</td><td>{formatRating(doctor.average_rating)}</td><td>{formatFeePair(doctorAppointmentFee(doctor), doctorAppointmentFeeUsd(doctor))}</td><td>{doctor.is_available ? <span className="admin-status admin-status--good"><CheckCircle2 size={14} /> Active</span> : <span className="admin-status admin-status--pending"><XCircle size={14} /> Suspended</span>}</td><td><button className="admin-table-action" onClick={() => toggle(doctor)}>{doctor.is_available ? "Suspend" : "Approve"}</button><button className="admin-table-action" style={{ color: "var(--color-danger, #dc2626)", margin: "0 0 0 12px" }} disabled={deletingId === doctor.id} onClick={() => handleDelete(doctor)}><Trash2 size={14} /> {deletingId === doctor.id ? "Deleting..." : "Delete"}</button><Link className="admin-table-action admin-table-action--quiet" to={`/admin/doctors/${doctor.id}`}>View</Link></td></tr>)}</tbody></table></div>}</Card></div>;
 }
 
 export function AdminDoctorDetailScreen() {
@@ -107,6 +107,10 @@ export function AdminDoctorDetailScreen() {
     home_service_fee: "0",
     psychotherapy_fee: "0",
     training_fee: "0",
+    appointment_fee_usd: "0",
+    home_service_fee_usd: "0",
+    psychotherapy_fee_usd: "0",
+    training_fee_usd: "0",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,6 +133,10 @@ export function AdminDoctorDetailScreen() {
           home_service_fee: response.data.home_service_fee ?? "0",
           psychotherapy_fee: response.data.psychotherapy_fee ?? "0",
           training_fee: response.data.training_fee ?? "0",
+          appointment_fee_usd: response.data.appointment_fee_usd ?? "0",
+          home_service_fee_usd: response.data.home_service_fee_usd ?? "0",
+          psychotherapy_fee_usd: response.data.psychotherapy_fee_usd ?? "0",
+          training_fee_usd: response.data.training_fee_usd ?? "0",
         });
       })
       .catch((reason) => setError(message(reason)))
@@ -151,6 +159,10 @@ export function AdminDoctorDetailScreen() {
         home_service_fee: response.data.home_service_fee ?? "0",
         psychotherapy_fee: response.data.psychotherapy_fee ?? "0",
         training_fee: response.data.training_fee ?? "0",
+        appointment_fee_usd: response.data.appointment_fee_usd ?? "0",
+        home_service_fee_usd: response.data.home_service_fee_usd ?? "0",
+        psychotherapy_fee_usd: response.data.psychotherapy_fee_usd ?? "0",
+        training_fee_usd: response.data.training_fee_usd ?? "0",
       });
       notify("success", "Service fees updated.");
     } catch (reason) {
@@ -224,9 +236,13 @@ export function AdminDoctorDetailScreen() {
         <form onSubmit={saveFees}>
           <div className="admin-form-grid">
             <TextField id="admin-fee-appointment" label="Appointment fee (TSh)" name="appointment_fee" inputMode="decimal" value={fees.appointment_fee ?? ""} onChange={(e) => updateFee("appointment_fee", e.target.value)} />
+            <TextField id="admin-fee-appointment-usd" label="Appointment fee (USD $)" name="appointment_fee_usd" inputMode="decimal" value={fees.appointment_fee_usd ?? ""} onChange={(e) => updateFee("appointment_fee_usd", e.target.value)} />
             <TextField id="admin-fee-home" label="Home service fee (TSh)" name="home_service_fee" inputMode="decimal" value={fees.home_service_fee ?? ""} onChange={(e) => updateFee("home_service_fee", e.target.value)} />
+            <TextField id="admin-fee-home-usd" label="Home service fee (USD $)" name="home_service_fee_usd" inputMode="decimal" value={fees.home_service_fee_usd ?? ""} onChange={(e) => updateFee("home_service_fee_usd", e.target.value)} />
             <TextField id="admin-fee-psychotherapy" label="Psychological service fee (TSh)" name="psychotherapy_fee" inputMode="decimal" value={fees.psychotherapy_fee ?? ""} onChange={(e) => updateFee("psychotherapy_fee", e.target.value)} />
+            <TextField id="admin-fee-psychotherapy-usd" label="Psychological service fee (USD $)" name="psychotherapy_fee_usd" inputMode="decimal" value={fees.psychotherapy_fee_usd ?? ""} onChange={(e) => updateFee("psychotherapy_fee_usd", e.target.value)} />
             <TextField id="admin-fee-training" label="Training fee (TSh)" name="training_fee" inputMode="decimal" value={fees.training_fee ?? ""} onChange={(e) => updateFee("training_fee", e.target.value)} />
+            <TextField id="admin-fee-training-usd" label="Training fee (USD $)" name="training_fee_usd" inputMode="decimal" value={fees.training_fee_usd ?? ""} onChange={(e) => updateFee("training_fee_usd", e.target.value)} />
           </div>
           <div className="admin-form-actions"><button className="admin-primary-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save fees"}</button></div>
         </form>
@@ -254,6 +270,10 @@ const EMPTY_DOCTOR_FORM = {
   home_service_fee: "0",
   psychotherapy_fee: "0",
   training_fee: "0",
+  appointment_fee_usd: "0",
+  home_service_fee_usd: "0",
+  psychotherapy_fee_usd: "0",
+  training_fee_usd: "0",
   bio: "",
 };
 
@@ -261,7 +281,7 @@ export function AdminCreateDoctorScreen() {
   const { notify } = useToast(); const [saving, setSaving] = useState(false); const [form, setForm] = useState(EMPTY_DOCTOR_FORM);
   function update(name: string, value: string) { setForm((current) => ({ ...current, [name]: value })); }
   async function submit(event: FormEvent) { event.preventDefault(); setSaving(true); try { await createAdminDoctor({ ...form, experience_years: Number(form.experience_years) }); notify("success", "Doctor profile created successfully."); setForm(EMPTY_DOCTOR_FORM); } catch (reason) { notify("error", message(reason)); } finally { setSaving(false); } }
-  return <div className="admin-workspace admin-form-page"><AdminHeader title="Add doctor" description="Create an account and professional profile together." action={<Link to="/admin/doctors" className="admin-outline-button">Back to doctors</Link>} /><Card className="admin-form-card"><form onSubmit={submit}><div className="admin-form-grid"><TextField id="admin-doctor-first-name" label="First name" name="first_name" value={form.first_name} onChange={(e) => update("first_name", e.target.value)} required /><TextField id="admin-doctor-last-name" label="Last name" name="last_name" value={form.last_name} onChange={(e) => update("last_name", e.target.value)} required /><TextField id="admin-doctor-username" label="Username" name="username" value={form.username} onChange={(e) => update("username", e.target.value)} required /><TextField id="admin-doctor-email" label="Email" name="email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required /><TextField id="admin-doctor-password" label="Temporary password" name="password" type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required /><TextField id="admin-doctor-experience" label="Experience (years)" name="experience_years" type="number" value={form.experience_years} onChange={(e) => update("experience_years", e.target.value)} /><TextField id="admin-doctor-appointment-fee" label="Appointment fee (TSh)" name="appointment_fee" inputMode="decimal" value={form.appointment_fee} onChange={(e) => update("appointment_fee", e.target.value)} /><TextField id="admin-doctor-home-fee" label="Home service fee (TSh)" name="home_service_fee" inputMode="decimal" value={form.home_service_fee} onChange={(e) => update("home_service_fee", e.target.value)} /><TextField id="admin-doctor-psychotherapy-fee" label="Psychological service fee (TSh)" name="psychotherapy_fee" inputMode="decimal" value={form.psychotherapy_fee} onChange={(e) => update("psychotherapy_fee", e.target.value)} /><TextField id="admin-doctor-training-fee" label="Training fee (TSh)" name="training_fee" inputMode="decimal" value={form.training_fee} onChange={(e) => update("training_fee", e.target.value)} /><TextField id="admin-doctor-qualifications" label="Qualifications" name="qualifications" value={form.qualifications} onChange={(e) => update("qualifications", e.target.value)} /><label className="admin-field admin-field--wide"><span>Professional bio</span><textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} rows={4} /></label></div><div className="admin-form-actions"><Link to="/admin/doctors" className="admin-outline-button">Cancel</Link><button className="admin-primary-button" disabled={saving} type="submit"><Stethoscope size={16} /> {saving ? "Creating..." : "Create doctor"}</button></div></form></Card></div>;
+  return <div className="admin-workspace admin-form-page"><AdminHeader title="Add doctor" description="Create an account and professional profile together." action={<Link to="/admin/doctors" className="admin-outline-button">Back to doctors</Link>} /><Card className="admin-form-card"><form onSubmit={submit}><div className="admin-form-grid"><TextField id="admin-doctor-first-name" label="First name" name="first_name" value={form.first_name} onChange={(e) => update("first_name", e.target.value)} required /><TextField id="admin-doctor-last-name" label="Last name" name="last_name" value={form.last_name} onChange={(e) => update("last_name", e.target.value)} required /><TextField id="admin-doctor-username" label="Username" name="username" value={form.username} onChange={(e) => update("username", e.target.value)} required /><TextField id="admin-doctor-email" label="Email" name="email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required /><TextField id="admin-doctor-password" label="Temporary password" name="password" type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required /><TextField id="admin-doctor-experience" label="Experience (years)" name="experience_years" type="number" value={form.experience_years} onChange={(e) => update("experience_years", e.target.value)} /><TextField id="admin-doctor-appointment-fee" label="Appointment fee (TSh)" name="appointment_fee" inputMode="decimal" value={form.appointment_fee} onChange={(e) => update("appointment_fee", e.target.value)} /><TextField id="admin-doctor-appointment-fee-usd" label="Appointment fee (USD $)" name="appointment_fee_usd" inputMode="decimal" value={form.appointment_fee_usd} onChange={(e) => update("appointment_fee_usd", e.target.value)} /><TextField id="admin-doctor-home-fee" label="Home service fee (TSh)" name="home_service_fee" inputMode="decimal" value={form.home_service_fee} onChange={(e) => update("home_service_fee", e.target.value)} /><TextField id="admin-doctor-home-fee-usd" label="Home service fee (USD $)" name="home_service_fee_usd" inputMode="decimal" value={form.home_service_fee_usd} onChange={(e) => update("home_service_fee_usd", e.target.value)} /><TextField id="admin-doctor-psychotherapy-fee" label="Psychological service fee (TSh)" name="psychotherapy_fee" inputMode="decimal" value={form.psychotherapy_fee} onChange={(e) => update("psychotherapy_fee", e.target.value)} /><TextField id="admin-doctor-psychotherapy-fee-usd" label="Psychological service fee (USD $)" name="psychotherapy_fee_usd" inputMode="decimal" value={form.psychotherapy_fee_usd} onChange={(e) => update("psychotherapy_fee_usd", e.target.value)} /><TextField id="admin-doctor-training-fee" label="Training fee (TSh)" name="training_fee" inputMode="decimal" value={form.training_fee} onChange={(e) => update("training_fee", e.target.value)} /><TextField id="admin-doctor-training-fee-usd" label="Training fee (USD $)" name="training_fee_usd" inputMode="decimal" value={form.training_fee_usd} onChange={(e) => update("training_fee_usd", e.target.value)} /><TextField id="admin-doctor-qualifications" label="Qualifications" name="qualifications" value={form.qualifications} onChange={(e) => update("qualifications", e.target.value)} /><label className="admin-field admin-field--wide"><span>Professional bio</span><textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} rows={4} /></label></div><div className="admin-form-actions"><Link to="/admin/doctors" className="admin-outline-button">Cancel</Link><button className="admin-primary-button" disabled={saving} type="submit"><Stethoscope size={16} /> {saving ? "Creating..." : "Create doctor"}</button></div></form></Card></div>;
 }
 
 const AUDIT_PAGE_SIZE = 20;

@@ -150,6 +150,10 @@ export const doctorFeeFields = {
   home_service_fee: feeField,
   psychotherapy_fee: feeField,
   training_fee: feeField,
+  appointment_fee_usd: feeField,
+  home_service_fee_usd: feeField,
+  psychotherapy_fee_usd: feeField,
+  training_fee_usd: feeField,
 } as const;
 
 /** doctors write payload (DoctorWriteSerializer / my-profile PATCH extras). */

@@ -6,6 +6,7 @@ import { apiGet } from "../api/client";
 import { downloadPsychotherapyReport, viewPsychotherapyReport } from "../api/reports";
 import { Card, Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { useToast } from "../state/app-context";
+import { formatFeePair } from "../lib/money";
 
 const STATUS: Record<string, { labelKey: string; tone: string }> = {
   pending: { labelKey: "psychotherapy.statusPending", tone: "pending" },
@@ -16,12 +17,6 @@ const STATUS: Record<string, { labelKey: string; tone: string }> = {
   completed: { labelKey: "psychotherapy.statusCompleted", tone: "completed" },
   expired: { labelKey: "psychotherapy.statusExpired", tone: "expired" },
 };
-
-/** Decimal field serialized as a string ("15000.00") → "TSh 15,000". */
-function formatFee(value: unknown): string {
-  const num = Number(value ?? 0);
-  return `TSh ${Number.isFinite(num) ? num.toLocaleString() : "0"}`;
-}
 
 const SESSION_STATUS: Record<string, string> = {
   scheduled: "psychotherapy.sessionScheduled",
@@ -124,7 +119,7 @@ export function PsychotherapyScreen() {
                     <span className="psych-case-person__icon"><CircleDollarSign size={16} /></span>
                     <div>
                       <small>{t("doctor.psychotherapyFee", { defaultValue: "Psychological service fee" })}</small>
-                      <strong>{formatFee(r.doctor.psychotherapy_fee)}</strong>
+                      <strong>{formatFeePair(r.doctor.psychotherapy_fee, r.doctor.psychotherapy_fee_usd)}</strong>
                     </div>
                   </div>
                 </>
