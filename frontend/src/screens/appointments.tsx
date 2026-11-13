@@ -20,6 +20,7 @@ import { getHospital } from "../api/specialties";
 import { getPatientProfile, getPatientProfileById, updatePatientProfile } from "../api/patients";
 import { ApiError } from "../api/client";
 import { formatDate as formatIntlDate } from "../lib/intl";
+import { specialtyLabel } from "../lib/specialty-translations";
 import { getQueue, checkIn, startConsultation, type QueueSlot } from "../api/queue";
 import { respondToEmergency } from "../api/emergency";
 import type {
@@ -197,7 +198,7 @@ function CurrentLocationPanel({
 }
 
 export function BookingScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const route = useLocation();
   const isHomeService = route.pathname.startsWith("/home-visit");
@@ -535,7 +536,7 @@ export function BookingScreen() {
         <p className="page__subtitle">
           Dr. {doctor.first_name} {doctor.last_name}
           {doctor.specialties && doctor.specialties.length > 0
-            ? ` — ${doctor.specialties.map((s) => s.patient_friendly_name || s.name).join(", ")}`
+            ? ` — ${doctor.specialties.map((s) => specialtyLabel(s, i18n.language)).join(", ")}`
             : ""}
         </p>
       </Card>

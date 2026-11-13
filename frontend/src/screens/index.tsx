@@ -18,6 +18,7 @@ import { useRealtimeSync } from "../realtime/socket";
 import { usePushNotifications } from "../push/usePushNotifications";
 import { pushStateNeedsPrompt } from "../push/prompt";
 import { formatDate } from "../lib/intl";
+import { localizeSpecialty, specialtyLabel } from "../lib/specialty-translations";
 import { formatFeePair } from "../lib/money";
 import {
   ChevronRight,
@@ -108,7 +109,7 @@ function GreetingAvatar({ user }: { user: User }) {
 }
 
 const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: DoctorProfile; index?: number }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <Link key={doctor.id} to={`/doctors/${doctor.id}`} className="home__doctor-card">
       <DoctorImage
@@ -123,7 +124,7 @@ const DoctorCard = memo(function DoctorCard({ doctor, index = 0 }: { doctor: Doc
         <strong>{formatDoctorName(doctor)}</strong>
         {doctor.specialties && doctor.specialties.length > 0 ? (
           <span className="home__doctor-specialties">
-            {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
+            {specialtyLabel(doctor.specialties[0], i18n.language)}
           </span>
         ) : (
           <span>{t("home.medicalSpecialist")}</span>
@@ -333,7 +334,7 @@ export function HomeScreen() {
  * doctors with a fix inside the circle, nearest first, each with `distance_km`.
  */
 export function DoctorsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useSession();
   const route = useLocation();
   const isHomeVisit = route.pathname.startsWith("/home-visit");
@@ -489,7 +490,7 @@ export function DoctorsPage() {
                 <strong>{formatDoctorName(doctor)}</strong>
                 {doctor.specialties && doctor.specialties.length > 0 ? (
                   <span className="home__doctor-specialties">
-                    {doctor.specialties[0].patient_friendly_name || doctor.specialties[0].name}
+                    {specialtyLabel(doctor.specialties[0], i18n.language)}
                   </span>
                 ) : (
                   <span>{t("home.medicalSpecialist")}</span>

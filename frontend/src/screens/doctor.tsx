@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { formatDate } from "../lib/intl";
 import { formatFeePair } from "../lib/money";
+import { localizeSpecialty, specialtyLabel } from "../lib/specialty-translations";
 import {
   createScheduleItem,
   deleteScheduleItem,
@@ -49,12 +50,10 @@ function weekdayName(index: number): string {
 }
 
 /** Meaning of a specialty for patients: friendly name, falling back to medical name. */
-function specialtyMeaning(s: Specialty): string {
-  return s.patient_friendly_name || s.name;
-}
+// `specialtyLabel` from ../lib/specialty-translations localizes that label.
 
 export function DoctorProfileScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const route = useLocation();
   const isHomeVisit = route.pathname.startsWith("/home-visit");
@@ -70,6 +69,7 @@ export function DoctorProfileScreen() {
 
   if (error) return <div className="page"><ErrorState message={error} onRetry={load} /></div>;
   if (!doctor) return <div className="page"><Skeleton lines={6} /></div>;
+  const specialties = (doctor.specialties ?? []).map((s) => localizeSpecialty(s, i18n.language));
   return (
     <div className="page">
       <Link to={isHomeVisit ? "/home-visit/doctor" : "/doctors"}><ArrowLeft size={16} /> {isHomeVisit ? t("doctor.backToHomeDoctors") : t("doctor.backToDoctors")}</Link>
@@ -87,11 +87,11 @@ export function DoctorProfileScreen() {
         <p className="doctor-profile__location">
           <LocationLine point={doctor} accuracy={doctor.location_accuracy} />
         </p>
-        {doctor.specialties && doctor.specialties.length > 0 ? (
+        {specialties.length > 0 ? (
           <p>
-            <strong>{doctor.specialties[0].name}</strong>
-            {doctor.specialties[0].patient_friendly_name
-              ? ` — ${doctor.specialties[0].patient_friendly_name}`
+            <strong>{specialties[0].name}</strong>
+            {specialties[0].patient_friendly_name
+              ? ` — ${specialties[0].patient_friendly_name}`
               : ""}
           </p>
         ) : (
@@ -107,11 +107,11 @@ export function DoctorProfileScreen() {
         </dl>
 
         {/* All selected specialties with their meanings for patients */}
-        {doctor.specialties && doctor.specialties.length > 0 && (
+        {specialties.length > 0 && (
           <div className="doctor-specialties">
             <h3>{t("doctor.specialties")}</h3>
             <div className="doctor-specialties__list">
-              {doctor.specialties.map((s) => (
+              {specialties.map((s) => (
                 <Link key={s.id} to={`/specialties/${s.id}`} className="doctor-specialty-tag">
                   <span className="doctor-specialty-tag__name">{s.patient_friendly_name || s.name}</span>
                   <span className="doctor-specialty-tag__medical">{s.name}</span>
@@ -143,16 +143,17 @@ export function DoctorProfileScreen() {
 }
 
 export function DoctorDashboardScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { getMyDoctorProfile().then((response) => setProfile(response.data)).catch((reason: unknown) => setError(message(reason))); }, []);
-  return <div className="page"><h1 className="page__title">{t("doctor.dashboardTitle")}</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.specialties && profile.specialties.length > 0 ? specialtyMeaning(profile.specialties[0]) : t("doctor.completeProfile")}</p><p><Link to="/doctor/availability">{t("doctor.manageAvailability")}</Link> · <Link to="/doctor/personal">{t("doctor.editPersonalCard")}</Link></p></Card>}</div>;
+  return <div className="page"><h1 className="page__title">{t("doctor.dashboardTitle")}</h1>{error && <ErrorState message={error} />}{!profile ? <Skeleton lines={4} /> : <Card><h2>Dr. {profile.first_name} {profile.last_name}</h2><p>{profile.specialties && profile.specialties.length > 0 ? specialtyLabel(profile.specialties[0], i18n.language) : t("doctor.completeProfile")}</p><p><Link to="/doctor/availability">{t("doctor.manageAvailability")}</Link> · <Link to="/doctor/personal">{t("doctor.editPersonalCard")}</Link></p></Card>}</div>;
 }
 
 /** Doctor's own card preview block (rendered inside DoctorPersonalScreen). */
 function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const specialties = (profile.specialties ?? []).map((s) => localizeSpecialty(s, i18n.language));
   return (
     <Card className="doc-preview-card">
       <div className="doc-preview-card__photo-wrap">
@@ -177,25 +178,25 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
 
         {/* Front of card: top (first) specialty — never qualifications */}
         <p className="doc-preview-card__qual">
-          {profile.specialties && profile.specialties.length > 0
-            ? profile.specialties[0].name
+          {specialties.length > 0
+            ? specialties[0].name
             : t("doctor.medicalSpecialist")}
         </p>
-        {profile.specialties && profile.specialties.length > 0 && (
+        {specialties.length > 0 && (
           <p className="doc-preview-card__specialty-meaning">
-            {[profile.specialties[0].patient_friendly_name, profile.specialties[0].description]
+            {[specialties[0].patient_friendly_name, specialties[0].description]
               .filter(Boolean)
               .join(" — ")}
           </p>
         )}
 
         {/* Inside the card: ALL selected specialties with meanings */}
-        {profile.specialties && profile.specialties.length > 0 && (
+        {specialties.length > 0 && (
           <div className="doc-preview-card__specialties">
-            {profile.specialties.map((s) => (
+            {specialties.map((s) => (
               <span key={s.id} className="doctor-specialty-tag doctor-specialty-tag--small">
                 <span className="doctor-specialty-tag__name">{s.name}</span>
-                <span className="doctor-specialty-tag__medical">{specialtyMeaning(s)}</span>
+                <span className="doctor-specialty-tag__medical">{specialtyLabel(s, i18n.language)}</span>
               </span>
             ))}
           </div>
@@ -233,7 +234,7 @@ function DoctorCardPreview({ profile }: { profile: DoctorProfile }) {
  * plus editing for name, experience, fee and card photo.
  */
 export function DoctorPersonalScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, setUser } = useSession();
   const { notify } = useToast();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
@@ -533,6 +534,7 @@ export function DoctorPersonalScreen() {
             <div className="specialty-picker__grid">
               {allSpecialties.length === 0 && <Skeleton lines={3} />}
               {allSpecialties.map((s) => {
+                const localized = localizeSpecialty(s, i18n.language);
                 const active = selectedSpecialtyIds.includes(s.id);
                 return (
                   <button
@@ -545,11 +547,11 @@ export function DoctorPersonalScreen() {
                     <span className="specialty-picker__check" aria-hidden="true">
                       <Check size={12} />
                     </span>
-                    <span className="specialty-picker__name">{s.name}</span>
-                    {s.patient_friendly_name && (
-                      <span className="specialty-picker__friendly">{s.patient_friendly_name}</span>
+                    <span className="specialty-picker__name">{localized.name}</span>
+                    {localized.patient_friendly_name && (
+                      <span className="specialty-picker__friendly">{localized.patient_friendly_name}</span>
                     )}
-                    {s.description && <span className="specialty-picker__desc">{s.description}</span>}
+                    {localized.description && <span className="specialty-picker__desc">{localized.description}</span>}
                   </button>
                 );
               })}
